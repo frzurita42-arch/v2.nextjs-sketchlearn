@@ -20,7 +20,7 @@ function normalizeStructuredSuggestion(raw: any = {}) {
   return {
     prompt: String(raw.prompt || '').trim() || 'Bayes theorem for medical testing decisions',
     exampleType: allowedExample.includes(raw.exampleType) ? raw.exampleType : 'proof',
-    level: LEVELS.includes(raw.level) ? raw.level : 'Upper Intermediate',
+    level: LEVELS.includes(raw.level) ? raw.level : 'Lower Intermediate',
     tone: TONES.includes(raw.tone) ? raw.tone : 'Friendly lecture',
     complexity: allowedComplexity.includes(raw.complexity) ? raw.complexity : 'standard',
     paragraphLength: allowedParagraph.includes(raw.paragraphLength) ? raw.paragraphLength : 'medium',
@@ -79,7 +79,7 @@ export function StructuredExplanations() {
     const prompt = (ml.prompt || '').trim();
     if (!prompt) { alert('Please enter a formula, concept, or example type first.'); return; }
     const exampleType = ml.exampleType || 'proof';
-    const level = ml.level || 'Upper Intermediate';
+    const level = ml.level || 'Lower Intermediate';
     const tone = ml.tone || 'Friendly lecture';
     const complexity = ml.complexity || 'standard';
     const totalSlides = Math.min(20, Math.max(2, parseInt(ml.totalSlides, 10) || 8));
@@ -87,9 +87,10 @@ export function StructuredExplanations() {
     const imageDensity = ml.imageDensity || 'balanced';
     const continuation = ml.continuation || 'related-topics';
     const alternate = !!ml.alternateVisualMath;
-    const paragraphCount = complexity === 'scholarly' ? 4 : (complexity === 'simple' ? 2 : 3);
+    // Default 1 paragraph (respect an explicit choice if one was set).
+    const paragraphCount = Math.min(7, Math.max(1, parseInt(ml.paragraphCount, 10) || 1));
 
-    appState.latexLab = { prompt, exampleType, level, tone, complexity, paragraphLength, imageDensity, totalSlides, continuation, alternateVisualMath: alternate };
+    appState.latexLab = { prompt, exampleType, level, tone, complexity, paragraphLength, paragraphCount, imageDensity, totalSlides, continuation, alternateVisualMath: alternate };
 
     const modeMap: Record<string, string> = {
       proof: 'formal proof steps and derivations',

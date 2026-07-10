@@ -34,7 +34,7 @@ export function SuggestedTopic() {
   const settings = s?.settings || {};
   const hasSuggestion = !!(s && s.topic && !s.error);
   const setupReceipt = [
-    `Level: ${settings.level || 'Upper Intermediate'}`,
+    `Level: ${settings.level || 'Lower Intermediate'}`,
     `Slides: ${String(settings.totalSlides || 7)}`,
     `Paragraph: ${settings.paragraphLength || 'medium'}`,
     `Para/slide: ${String(settings.paragraphCount || 3)}`,
@@ -56,7 +56,7 @@ export function SuggestedTopic() {
       tone: s.settings?.tone || 'Friendly lecture',
       complexity: s.settings?.complexity || 'standard',
       paragraphLength: s.settings?.paragraphLength || 'medium',
-      paragraphCount: parseInt(s.settings?.paragraphCount, 10) || 3,
+      paragraphCount: parseInt(s.settings?.paragraphCount, 10) || 1,
       imageDensity: s.settings?.imageDensity || 'balanced',
       language: '',
       audience: '',
