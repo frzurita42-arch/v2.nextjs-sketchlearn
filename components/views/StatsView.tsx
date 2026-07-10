@@ -23,6 +23,7 @@ export function StatsView() {
   const [games, setGames] = useState<any[] | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [page, setPage] = useState(0);   // 0 = most recent 5
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +42,13 @@ export function StatsView() {
   const totalTime = mine.reduce((s: number, g: any) => s + (g.durationSec || 0), 0);
   const isAdmin = API.user?.role === 'admin';
   const emptyColspan = isAdmin ? 11 : 10;
+
+  // History newest-first, paginated 5 per page (page 0 = the latest 5).
+  const PAGE_SIZE = 5;
+  const ordered = mine.slice().reverse();
+  const pageCount = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(0, page), pageCount - 1);
+  const pageGames = ordered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
   const changePass = async () => {
     const p = prompt('New password:');
@@ -71,7 +79,7 @@ export function StatsView() {
                 <th>Date</th><th>Time</th><th>Topic</th><th>Concept</th><th>Level</th><th>Score</th>
                 <th>Question summary</th><th>Answer summary</th><th>AI notes</th><th>Share</th>{isAdmin && <th>Admin</th>}
               </tr>
-              {mine.length ? mine.slice().reverse().map((g: any, idx: number) => {
+              {mine.length ? pageGames.map((g: any, idx: number) => {
                 const shareHref = g.shareUrl || (g.shareId || g.id ? `/report/${encodeURIComponent(g.shareId || g.id)}` : '');
                 return (
                   <tr className="stats-row" data-game-id={g.id || ''} key={g.id || idx}>
@@ -89,6 +97,15 @@ export function StatsView() {
               }) : <tr><td colSpan={emptyColspan}>Nothing yet — go learn something!</td></tr>}
             </tbody>
           </table></div>
+          {pageCount > 1 && (
+            <div className="slide-actions" style={{ justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 10 }}>
+              <button className="btn small ghost" id="stats-prev" disabled={safePage === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>← Newer</button>
+              <span style={{ opacity: 0.8, fontSize: '.95rem' }}>
+                Page {safePage + 1} of {pageCount} · showing {pageGames.length} of {ordered.length}
+              </span>
+              <button className="btn small ghost" id="stats-next" disabled={safePage >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Older →</button>
+            </div>
+          )}
           <div className="slide-actions" style={{ justifyContent: 'flex-start' }}>
             <button className="btn small" id="export-csv" onClick={downloadCsv}>⬇ Download progress spreadsheet (CSV)</button>
             <button className="btn small ghost" id="change-pass" onClick={changePass}>Change my password</button>
