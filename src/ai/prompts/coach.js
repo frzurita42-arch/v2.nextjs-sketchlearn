@@ -11,6 +11,16 @@ Recommendations must reference the actual mistakes made. questionSummary should 
   };
 }
 
+// A single follow-up note generated right after one question is answered, so the
+// coach builds up its read of the learner's gaps incrementally (instead of one slow
+// grading call at the end). Returns a short plain-text sentence.
+function buildAnswerNotePrompt({ topic, concept, level, question, chosen, correct, misconception, index, total }) {
+  return {
+    system: `You are a learning coach observing one quiz answer at a time. In ONE concise sentence (max 25 words, plain text, no preamble), note what this answer reveals about the learner's understanding: if correct, what concept they've demonstrated; if wrong, the specific knowledge gap or misconception to address. Be specific to the content.`,
+    user: `Topic: ${topic}. Concept: ${concept}. Level: ${level}. Question ${index || '?'}/${total || '?'}.\nQuestion: "${question}"\nLearner chose: "${chosen}" — ${correct ? 'CORRECT' : `WRONG (misconception: ${misconception || 'unknown'})`}.\nWrite the one-sentence note.`
+  };
+}
+
 // System message for the coach chat. `progress` is a compact array of recent
 // games; `username` is the learner's name.
 function buildCoachChatSystem({ progress, username }) {
@@ -20,4 +30,4 @@ ${JSON.stringify(progress, null, 1)}
 Use it to give concrete, personal guidance: point out strong/weak topics, suggest which concept and level to try next, and explain which settings to use. Keep replies short and warm (under 150 words unless asked for more). The learner is "${username}".`;
 }
 
-module.exports = { buildRecommendPrompt, buildCoachChatSystem };
+module.exports = { buildRecommendPrompt, buildAnswerNotePrompt, buildCoachChatSystem };

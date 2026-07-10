@@ -129,6 +129,8 @@ export function GameView() {
       slideNumber: 1,
       history: [] as any[],
       answers: [] as any[],
+      answerNotes: [] as string[],   // one coach note per answer, generated as we go
+      notePromises: [] as Promise<any>[],
       prefetch: null as any,
       prefetchReady: {} as any,
       startTime: Date.now(),
@@ -169,6 +171,19 @@ export function GameView() {
       chosen: opt.text, correct: !!opt.correct, misconception: opt.misconception || '',
     });
     gg.history.push(branch.historyEntry);
+
+    // Generate this answer's coach note in the background, right now — so the notes
+    // accumulate during the lesson and the final report always has them, without a
+    // single slow grading call at the end.
+    const noteIdx = gg.answers.length - 1;
+    const notePromise = API.post('/api/ai/answer-note', {
+      topic: gg.topic, concept: gg.concept, level: gg.level,
+      question: slide.quiz.question, chosen: opt.text, correct: !!opt.correct,
+      misconception: opt.misconception || '', index: gg.answers.length, total: gg.settings.totalSlides,
+    }).then((r: any) => { gg.answerNotes[noteIdx] = String(r?.note || '').trim(); })
+      .catch(() => { gg.answerNotes[noteIdx] = ''; });
+    gg.notePromises.push(notePromise);
+
     setAnswered({ idx, opt, correctIdx, branch });
   };
 
@@ -206,16 +221,33 @@ export function GameView() {
     setUi('loading');
     setLoadingMsg('Grading your sketchbook…');
 
+    // The per-answer notes were generated during play; give any still in-flight a
+    // brief moment to land, then collect them. These are the coach notes shown in the
+    // report — they no longer depend on the final recommendation call succeeding.
+    await Promise.race([
+      Promise.allSettled(gg.notePromises || []),
+      new Promise(res => setTimeout(res, 8000)),
+    ]);
+    const incrementalNotes: string[] = (gg.answerNotes || []).filter(Boolean);
+
     let rec: any = null;
     let gradingNote = '';
     try {
+      // Final call only needs the summary + next-step recommendations now; the
+      // per-answer gap analysis is already done, so this is lighter.
       rec = await withTimeout(API.post('/api/ai/recommend', {
         topic: gg.topic, concept: gg.concept, level: gg.level,
         correct, total, durationSec, slides: gg.answers,
-      }), 12000, 'Coach grading took too long. Showing report without coach notes.');
+      }), 20000, 'Coach recommendations took too long — showing your notes without next-step suggestions.');
     } catch (e: any) {
-      gradingNote = e.message || 'Coach grading was unavailable. Showing report without coach notes.';
+      gradingNote = e.message || 'Coach recommendations were unavailable.';
     }
+
+    // Notes come from the incremental per-answer analysis; fall back to whatever the
+    // final call returned only if we somehow collected none.
+    rec = rec || {};
+    if (incrementalNotes.length) rec.aiNotes = incrementalNotes;
+    else if (!Array.isArray(rec.aiNotes)) rec.aiNotes = [];
 
     let saveNote = '';
     let saved: any = null;
