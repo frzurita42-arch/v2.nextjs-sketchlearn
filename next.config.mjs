@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   // The AI/DB libs use Node built-ins; keep them on the Node.js server runtime.
-  serverExternalPackages: ['pg'],
+  serverExternalPackages: ['pg', '@neondatabase/serverless', 'ws'],
 };
 
 export default nextConfig;

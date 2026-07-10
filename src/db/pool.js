@@ -6,24 +6,37 @@
  * expose a MUTABLE HOLDER (`db.pool`) rather than the Pool itself. Every consumer
  * reads `db.pool`, and the boot downgrade does `db.pool = null`, which all
  * consumers then see. Never destructure the pool out by value. */
-const { Pool } = require('pg');
 const { DATABASE_URL, dbEnabled } = require('../config');
 
-const db = {
-  pool: dbEnabled
-    ? new Pool({
-        connectionString: DATABASE_URL,
-        ssl: /localhost|127\.0\.0\.1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false },
-        // Cap how long we wait to establish a connection so a truly unreachable DB fails
-        // fast at boot (then we downgrade to file storage) instead of hanging. Individual
-        // slow queries (e.g. a cold-starting free-tier DB) are bounded per-call by
-        // withDbTimeout so the boot DDL is never killed mid-flight.
-        max: 5,
-        connectionTimeoutMillis: 6000,
-        idleTimeoutMillis: 30000
-      })
-    : null
-};
+// Neon's serverless driver talks to Neon over HTTP/WebSocket instead of a raw TCP
+// Postgres connection. On Vercel this wakes a suspended free-tier Neon database
+// fast and avoids the connection stalls that made saves (My Stats history) hang and
+// fall back to throwaway per-instance storage. We use it whenever DATABASE_URL points
+// at a Neon host, and fall back to node-postgres for any other Postgres (e.g. a local
+// dev database), since the Neon driver only speaks to Neon endpoints.
+const isNeon = /\.neon\.tech/i.test(DATABASE_URL || '');
+
+function makePool() {
+  if (!dbEnabled) return null;
+  if (isNeon) {
+    const neon = require('@neondatabase/serverless');
+    // Node needs a WebSocket implementation for pooled sessions/transactions.
+    try { neon.neonConfig.webSocketConstructor = require('ws'); } catch { /* global WebSocket on newer Node */ }
+    return new neon.Pool({ connectionString: DATABASE_URL });
+  }
+  const { Pool } = require('pg');
+  return new Pool({
+    connectionString: DATABASE_URL,
+    ssl: /localhost|127\.0\.0\.1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false },
+    // Fail an unreachable non-Neon DB fast at boot (then downgrade to file storage);
+    // slow queries are bounded per-call by withDbTimeout.
+    max: 5,
+    connectionTimeoutMillis: 6000,
+    idleTimeoutMillis: 30000,
+  });
+}
+
+const db = { pool: makePool() };
 
 if (db.pool) {
   // A pool 'error' on an idle client would otherwise crash the process.
