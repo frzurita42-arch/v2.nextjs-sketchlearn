@@ -27,7 +27,7 @@ export async function loadPath(app: FlowApp, topic: string, guidance?: string, l
       topic, guidance, levels,
       fromHistory: !!opts.fromHistory,
       freshSeed: opts.fresh ? Math.random().toString(36).slice(2, 8) : undefined,
-    }), 30000, 'Path generation timed out. Please try again.');
+    }), 55000, 'Path generation timed out. Please try again.');
     if (!path) return;
     appState.path = path;
     appState.pathLoading = null;

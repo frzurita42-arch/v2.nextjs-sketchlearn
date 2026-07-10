@@ -39,7 +39,9 @@ class ApiClient {
   async call(method: string, url: string, body?: any): Promise<any> {
     this.hydrate();
     const controller = new AbortController();
-    const timeoutMs = 30000;
+    // AI lesson/slide generation can run close to the server's 60s function limit,
+    // so the client must not abort earlier. Fast endpoints still return immediately.
+    const timeoutMs = 60000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Response;
     try {

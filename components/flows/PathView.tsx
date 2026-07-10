@@ -55,7 +55,7 @@ export function PathView() {
     try {
       const refreshed = await withTimeout(API.post('/api/ai/path/level-refresh', {
         topic: appState.topic, level, count, avoidConcepts: avoid, guidance: g,
-      }), 25000, `${level} refresh timed out. Please retry.`);
+      }), 45000, `${level} refresh timed out. Please retry.`);
       appState.path.levels = (appState.path.levels || []).map((x: any) => x.level === level
         ? { ...x, description: refreshed.description || x.description, concepts: (refreshed.concepts || []).length ? refreshed.concepts : x.concepts }
         : x);

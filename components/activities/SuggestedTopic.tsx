@@ -15,7 +15,7 @@ export async function refreshSuggestedTopic(app: FlowApp, { silent = false, forc
       avoidTopics: [appState.topic].filter(Boolean),
       refresh: !!forceRefresh,
       triggerTopic: appState.topic || '',
-    }), 25000, 'Suggested topic timed out. Please retry.');
+    }), 45000, 'Suggested topic timed out. Please retry.');
     appState.homeSuggestion = (r && r.topic)
       ? r
       : { error: true, why: 'Suggestion service returned an incomplete result. Press refresh to retry.' };

@@ -31,7 +31,7 @@ export function LearningPath() {
         avoid: appState.homeTopics,
         refresh: true,
         triggerTopic: appState.topic || '',
-      }), 25000, 'Topic refresh timed out. Please retry.');
+      }), 45000, 'Topic refresh timed out. Please retry.');
       if (r && Array.isArray(r.topics)) {
         const fromAI: string[] = r.topics.map((t: any) => t.name).filter(Boolean);
         if (fromAI.length) appState.homeTopics = shuffled<string>(fromAI).slice(0, 12);

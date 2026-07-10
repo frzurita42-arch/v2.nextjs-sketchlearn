@@ -67,7 +67,7 @@ export function StructuredExplanations() {
     try {
       const r = await withTimeout(API.post('/api/ai/structured-explanation-suggest', {
         avoidPrompts: [appState.latexLab?.prompt, ml.prompt].filter(Boolean),
-      }), 15000, 'Suggestion timed out.');
+      }), 45000, 'Suggestion timed out.');
       patch(normalizeStructuredSuggestion(r));
     } catch {
       patch(localStructuredSuggestion());

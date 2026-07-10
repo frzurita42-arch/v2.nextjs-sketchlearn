@@ -95,7 +95,9 @@ const dbEnabled = hasConfiguredKey(DATABASE_URL);
 // and real generated images (Gemini's native image models). Set GEMINI_API_KEY to use it.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_BASE = process.env.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash';
+// Default to the stable, broadly-available baseline (works on free-tier keys).
+// Override with GEMINI_TEXT_MODEL to use a newer model your key has access to.
+const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image';
 const forceFallback = /^(1|true|yes)$/i.test(String(process.env.SKETCHLEARN_FORCE_FALLBACK || '').trim());
 const geminiEnabled = !forceFallback && hasConfiguredKey(GEMINI_API_KEY);

@@ -77,7 +77,7 @@ export function TimeTravel() {
     try {
       const r = await withTimeout(API.post('/api/ai/time-travel-headline', {
         period, avoidHeadlines: [tt.headline, tt.headline].filter(Boolean),
-      }), 15000, 'Headline generation timed out.');
+      }), 45000, 'Headline generation timed out.');
       headline = String(r?.headline || '').trim();
     } catch {
       headline = randomLocalHeadline(period, [tt.headline]);
