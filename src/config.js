@@ -25,7 +25,12 @@ function hasConfiguredKey(value) {
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_URL = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions';
-const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  // Vercel Storage integrations can inject custom-prefixed URLs like SKETCHDB_URL.
+  process.env.SKETCHDB_URL ||
+  '';
 
 const SUGGESTED_STORE_FILE = 'suggested_topics.json';
 const HOME_TOPICS_STORE_FILE = 'home_topics.json';
