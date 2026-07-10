@@ -29,6 +29,7 @@ export interface AppState {
   timeTravel: any;
   latexLab: any;
   languageLearning: any;
+  languageLesson?: any;
   suggestedSettings: any;
   suggestedGuidance: string;
   concept: string | null;

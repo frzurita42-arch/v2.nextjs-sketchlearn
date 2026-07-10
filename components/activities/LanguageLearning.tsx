@@ -104,27 +104,12 @@ export function LanguageLearning() {
     const language = (st.language || 'Spanish').trim() || 'Spanish';
     const grammarTopic = (st.grammarTopic || '').trim();
     const topic = (st.topic || '').trim() || 'everyday life';
-    // Phase 1: generate the Reading activity through the shared slide engine.
-    const totalSlides = Math.min(MAX_SLIDES, Math.max(1, Number(counts.reading) || 1));
-    appState.topic = `${language} — ${topic}`;
-    appState.concept = grammarTopic || `${language} reading (${st.level})`;
-    appState.level = st.level;
-    appState.suggestedSettings = null;
-    appState.suggestedGuidance = '';
-    appState.settings = {
-      totalSlides,
-      tone: 'Friendly lecture',
-      activityType: 'language-reading',
-      complexity: 'standard',
-      paragraphLength: st.level === 'Zero' ? 'brief' : 'medium',
-      paragraphCount: 1,
-      imageDensity: 'balanced',
-      language: '',
-      audience: `${st.level} learner of ${language}`,
-      customInstructions: readingInstructions(language, st.level, topic, grammarTopic),
-    };
+    // Ensure at least one activity slide; grammar renders first, the rest shuffle.
+    const c = { ...counts };
+    if (!ACTIVITIES.reduce((a, [k]) => a + Number(c[k] || 0), 0)) c.reading = 1;
+    appState.languageLesson = { language, level: st.level, topic, grammarTopic, counts: c };
     appState.game = null;
-    app.nav('activity');
+    app.nav('language');
   };
 
   const grammarUnavailable = !st.customGrammar && loadingTopics;

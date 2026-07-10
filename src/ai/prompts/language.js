@@ -51,4 +51,32 @@ function buildReadingInstructions({ language, level, topic, grammarTopic }) {
     ` Keep the lesson oriented to what a ${level} learner actually needs (Zero: survival basics; A1/A2: greetings and daily life; B1/B2: experiences and opinions; C1/C2: negotiation, study, travel, business).`;
 }
 
-module.exports = { LEVEL_GUIDANCE, levelGuidance, buildGrammarTopicsPrompt, buildLanguageTopicPrompt, buildReadingInstructions };
+// One interactive language slide of a given type (grammar | vocabulary | reading).
+function buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slideNumber, totalSlides, priorSummary }) {
+  const guide = levelGuidance(level);
+  const inEnglish = ['Zero', 'Beginner', 'A1'].includes(level)
+    ? 'Explain in clear English and translate every target-language example.'
+    : 'Use mostly the target language, with brief English glosses only where needed.';
+  const base = `Target language: ${language}. Learner level: ${level} — ${guide} ${inEnglish} Lesson theme: "${topic || 'everyday life'}". Grammar focus: "${grammarTopic || 'general'}". Slide ${slideNumber} of ${totalSlides}.${priorSummary ? ` Progress so far: ${priorSummary}.` : ''} Make distractors tempting but wrong on a precise point, and RANDOMIZE which option is correct (do not always put it first).`;
+  const sticky = `Include "sticky": {"color": "yellow"|"pink"|"blue"|"green"|"orange", "title": short, "note": a short encouraging comment on progress OR a level-appropriate quote about the theme OR a quick motivational cheer}.`;
+
+  if (type === 'grammar') {
+    return {
+      system: `You are a ${language} grammar teacher. Respond ONLY with JSON: {"title": string, "sticky": {...}, "questions": [{"prompt": string, "options": [{"text": string, "correct": boolean, "explanation": string}]}]}. EXACTLY 4 questions; each has EXACTLY 2 options with exactly one "correct": true. Vary the 4 question kinds: (1) fill in the blank with the best word, (2) best translation of a phrase, (3) is this grammar structure correct? (yes/no), (4) judge whether a stated grammar rule/explanation is correct. Keep it at the ${level} level. ${sticky}`,
+      user: base,
+    };
+  }
+  if (type === 'vocabulary') {
+    return {
+      system: `You are a ${language} vocabulary teacher. Respond ONLY with JSON: {"title": string, "sticky": {...}, "items": [item, item, item, item]}. EXACTLY 4 items about the theme. Items 1-2: {"kind": "mcq", "imagePrompt": string (a clear illustration of ONE object alone, or ONE isolated action so it is obvious), "question": string, "options": [{"text": string, "correct": boolean, "explanation": string}] (4 options, one correct)}. Items 3-4: {"kind": "input", "imagePrompt": string, "question": string (ask the learner to TYPE the ${language} word for it), "answer": string (the target word), "accept": [string, ...] (lowercased acceptable spellings/variants)}. ${sticky}`,
+      user: base,
+    };
+  }
+  // reading
+  return {
+    system: `You are a ${language} reading teacher. Respond ONLY with JSON: {"title": string, "passage": string (a short reading sized to the level — Zero: a few words/short sentences; higher: more sentences/paragraphs), "support": ONE of {"type":"image","prompt":string} | {"type":"table","headers":[string,...],"rows":[[string,...],...],"caption":string} | {"type":"code","language":string,"content":string}, "sticky": {...}, "quiz": {"question": string, "options": [{"text": string, "correct": boolean, "explanation": string}] (4 options, one correct)}}. ${sticky}`,
+    user: base,
+  };
+}
+
+module.exports = { LEVEL_GUIDANCE, levelGuidance, buildGrammarTopicsPrompt, buildLanguageTopicPrompt, buildReadingInstructions, buildLangSlidePrompt };

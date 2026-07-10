@@ -13,6 +13,7 @@ import { HomeView } from '@/components/views/HomeView';
 import { PathView } from '@/components/flows/PathView';
 import { SettingsView } from '@/components/flows/SettingsView';
 import { GameView } from '@/components/game/GameView';
+import { LanguageGameView } from '@/components/game/LanguageGameView';
 import { ChatView } from '@/components/views/ChatView';
 import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
@@ -83,6 +84,7 @@ export default function AppRoot() {
     path: <PathView />,
     settings: <SettingsView />,
     activity: <GameView />,
+    language: <LanguageGameView />,
     chat: <ChatView />,
     stats: <StatsView />,
     dashboard: <DashboardView />,

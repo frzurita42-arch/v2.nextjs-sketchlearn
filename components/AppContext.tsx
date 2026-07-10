@@ -2,7 +2,7 @@
 import { createContext, useContext } from 'react';
 import type { SessionUser } from '@/lib/api';
 
-export type ViewName = 'home' | 'path' | 'settings' | 'activity' | 'chat' | 'stats' | 'dashboard';
+export type ViewName = 'home' | 'path' | 'settings' | 'activity' | 'language' | 'chat' | 'stats' | 'dashboard';
 
 export interface AppContextValue {
   view: ViewName;
