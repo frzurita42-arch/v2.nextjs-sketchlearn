@@ -464,6 +464,38 @@ label.field > span { display: block; margin-bottom: 4px; }
 }
 .loading p { margin-top: 10px; opacity: .8; }
 
+/* Indeterminate loading bar shown while a lesson/slide is being created. */
+.loading-bar {
+  height: 10px; max-width: 320px; margin: 18px auto 0;
+  background: var(--paper-2); border: 2px solid var(--ink);
+  border-radius: 8px; overflow: hidden;
+}
+.loading-bar > span {
+  display: block; height: 100%; width: 40%;
+  background: var(--orange); border-radius: 8px;
+  animation: loadingslide 1.1s ease-in-out infinite;
+}
+@keyframes loadingslide {
+  0% { margin-left: -42%; }
+  100% { margin-left: 100%; }
+}
+
+/* Countdown bar that fills over the auto-retry delay before retrying. */
+.countdown-bar {
+  height: 10px; max-width: 320px; margin: 14px auto 4px;
+  background: var(--paper-2); border: 2px solid var(--ink);
+  border-radius: 8px; overflow: hidden;
+}
+.countdown-bar > span {
+  display: block; height: 100%; width: 0;
+  background: var(--orange);
+  animation: countdownfill 3s linear forwards;
+}
+@keyframes countdownfill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
 /* ---------- stats / tables ---------- */
 .stat-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 18px 0; }
 .stat-tile {

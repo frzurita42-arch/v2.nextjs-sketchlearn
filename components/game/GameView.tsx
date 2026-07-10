@@ -64,7 +64,10 @@ function branchFor(slide: any, option: any) {
   };
 }
 
-type Ui = 'loading' | 'slide' | 'error' | 'finished';
+type Ui = 'loading' | 'slide' | 'error' | 'finished' | 'retrying';
+
+const MAX_AUTO_RETRIES = 3;
+const AUTO_RETRY_MS = 3000;
 
 export function GameView() {
   const app = useApp();
@@ -72,11 +75,16 @@ export function GameView() {
   const [ui, setUi] = useState<Ui>('loading');
   const [loadingMsg, setLoadingMsg] = useState('The AI is sketching slide 1…');
   const [answered, setAnswered] = useState<any>(null);
-  const [errInfo, setErrInfo] = useState<{ message: string; retry: () => void } | null>(null);
+  const [errInfo, setErrInfo] = useState<{ message: string; retry: () => void; attempt?: number } | null>(null);
   const [results, setResults] = useState<any>(null);
   const [, bump] = useState(0);
   const [nowTick, setNowTick] = useState(0);
   const started = useRef(false);
+  const attempt = useRef(0);            // consecutive auto-retries used
+  const retryTimer = useRef<any>(null); // pending auto-retry timeout
+
+  // Cancel any pending auto-retry when the view unmounts.
+  useEffect(() => () => { if (retryTimer.current) clearTimeout(retryTimer.current); }, []);
 
   const requestSlide = useCallback((branch: any, slideNumber?: number) => {
     const gg = g.current;
@@ -91,12 +99,24 @@ export function GameView() {
   }, []);
 
   const gameError = useCallback((e: any, retry: () => void) => {
-    setErrInfo({ message: e.message, retry });
-    setUi('error');
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    // Auto-retry up to MAX_AUTO_RETRIES times with a short countdown before falling
+    // back to a manual "Try again". Timeouts/transient load failures usually clear
+    // on a retry (e.g. a cold serverless function or a sleeping DB waking up).
+    if (attempt.current < MAX_AUTO_RETRIES) {
+      attempt.current += 1;
+      setErrInfo({ message: e.message, retry, attempt: attempt.current });
+      setUi('retrying');
+      retryTimer.current = setTimeout(() => { setUi('loading'); retry(); }, AUTO_RETRY_MS);
+    } else {
+      setErrInfo({ message: e.message, retry });
+      setUi('error');
+    }
   }, []);
 
   const showSlide = useCallback((slide: any) => {
     const gg = g.current;
+    attempt.current = 0; // a slide loaded successfully — reset the auto-retry budget
     window.scrollTo(0, 0);
     slide = enforceGraphOnlyClient(slide, gg);
     if (slide.quiz && Array.isArray(slide.quiz.options)) shuffleInPlace(slide.quiz.options);
@@ -275,13 +295,30 @@ export function GameView() {
   // ---------------- render ----------------
   if (ui === 'loading') return <Loading text={loadingMsg} />;
 
+  if (ui === 'retrying' && errInfo) {
+    const retryNow = () => { if (retryTimer.current) clearTimeout(retryTimer.current); setUi('loading'); errInfo.retry(); };
+    return (
+      <div className="card" style={{ textAlign: 'center' }}>
+        <p>✏️ That took too long. Trying again automatically…</p>
+        <p style={{ opacity: 0.75, fontSize: '.95rem' }}>Attempt {errInfo.attempt} of {MAX_AUTO_RETRIES}</p>
+        {/* key restarts the 3s fill animation on each new attempt */}
+        <div className="countdown-bar" key={errInfo.attempt}><span /></div>
+        <div className="slide-actions" style={{ justifyContent: 'center' }}>
+          <button className="btn" onClick={() => { if (retryTimer.current) clearTimeout(retryTimer.current); appState.game = null; app.nav('home'); }}>Quit</button>
+          <button className="btn primary" onClick={retryNow}>Retry now</button>
+        </div>
+      </div>
+    );
+  }
+
   if (ui === 'error' && errInfo) {
+    const manualRetry = () => { attempt.current = 0; setUi('loading'); errInfo.retry(); };
     return (
       <div className="card">
-        <p>😖 The AI pencil broke: {errInfo.message}</p>
+        <p>😖 The AI pencil broke after {MAX_AUTO_RETRIES} tries: {errInfo.message}</p>
         <div className="slide-actions">
           <button className="btn" id="ge-home" onClick={() => { appState.game = null; app.nav('home'); }}>Quit</button>
-          <button className="btn primary" id="ge-retry" onClick={errInfo.retry}>Try again</button>
+          <button className="btn primary" id="ge-retry" onClick={manualRetry}>Try again</button>
         </div>
       </div>
     );

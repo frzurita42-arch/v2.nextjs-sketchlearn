@@ -4,6 +4,7 @@ export function Loading({ text }: { text?: string }) {
     <div className="loading">
       <span className="pencil">✏️</span>
       <p>{text || 'Sketching your slide…'}</p>
+      <div className="loading-bar"><span /></div>
     </div>
   );
 }
