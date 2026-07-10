@@ -41,7 +41,7 @@ export function StatsView() {
   const totalQ = mine.reduce((s: number, g: any) => s + (g.total || 0), 0);
   const totalTime = mine.reduce((s: number, g: any) => s + (g.durationSec || 0), 0);
   const isAdmin = API.user?.role === 'admin';
-  const emptyColspan = isAdmin ? 12 : 11;
+  const emptyColspan = isAdmin ? 13 : 12;
 
   // History newest-first, paginated 5 per page (page 0 = the latest 5).
   const PAGE_SIZE = 5;
@@ -77,7 +77,7 @@ export function StatsView() {
             <tbody>
               <tr>
                 <th>Date</th><th>Time</th><th>Topic</th><th>Concept</th><th>Level</th><th>Score</th>
-                <th>Question summary</th><th>Answer summary</th><th>AI notes</th><th>Competency</th><th>Share</th>{isAdmin && <th>Admin</th>}
+                <th>Question summary</th><th>Answer summary</th><th>AI notes</th><th>Competency</th><th>Language level</th><th>Share</th>{isAdmin && <th>Admin</th>}
               </tr>
               {mine.length ? pageGames.map((g: any, idx: number) => {
                 const shareHref = g.shareUrl || (g.shareId || g.id ? `/report/${encodeURIComponent(g.shareId || g.id)}` : '');
@@ -93,6 +93,11 @@ export function StatsView() {
                     <td className="summary-cell">
                       {Array.isArray(g.recommendations?.areaCompetency) && g.recommendations.areaCompetency.length
                         ? <ul className="sheet-list">{g.recommendations.areaCompetency.map((c: any, i: number) => <li key={i}>{c.area}: <b>{c.score}</b>/100</li>)}</ul>
+                        : ''}
+                    </td>
+                    <td className="summary-cell">
+                      {g.recommendations?.languageProficiency
+                        ? <span><b>{g.recommendations.languageProficiency.level}</b> · ~{g.recommendations.languageProficiency.estimatedWords} words{g.recommendations.languageProficiency.suggestedLevel !== g.recommendations.languageProficiency.level ? <> → {g.recommendations.languageProficiency.suggestedLevel}</> : ''}</span>
                         : ''}
                     </td>
                     <td>{shareHref ? <a href={shareHref} target="_blank" rel="noreferrer">open</a> : ''}</td>

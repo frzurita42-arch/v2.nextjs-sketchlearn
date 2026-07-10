@@ -5,7 +5,7 @@
  * prefetch so advancing is instant. Results are saved like a normal game. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
-import { appState } from '@/lib/app-state';
+import { appState, LANG_LEVELS } from '@/lib/app-state';
 import { shuffled } from '@/lib/util';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
@@ -13,6 +13,22 @@ import { Loading } from '@/components/ui/Loading';
 const MAX_SLIDES = 12;
 
 type SlideResult = { correct: number; total: number; answers: any[] };
+
+// Rough CEFR vocabulary sizes, used to estimate how many words the learner likely
+// knows from their performance at the attempted level.
+const VOCAB_AT_LEVEL: Record<string, number> = { Zero: 50, Beginner: 150, A1: 500, A2: 1000, B1: 2000, B2: 4000, C1: 8000, C2: 16000 };
+
+function estimateProficiency(level: string, correct: number, total: number) {
+  const base = VOCAB_AT_LEVEL[level] ?? 500;
+  const pct = total ? correct / total : 0.5;
+  // 50% score ≈ solidly at level; 100% ≈ 1.5× (ready to move up); 0% ≈ half.
+  const estimatedWords = Math.max(0, Math.round(base * (0.5 + pct)));
+  const idx = Math.max(0, LANG_LEVELS.indexOf(level));
+  let suggested = level;
+  if (pct >= 0.85 && idx < LANG_LEVELS.length - 1) suggested = LANG_LEVELS[idx + 1];
+  else if (pct < 0.4 && idx > 0) suggested = LANG_LEVELS[idx - 1];
+  return { level, estimatedWords, suggestedLevel: suggested, scorePct: Math.round(pct * 100) };
+}
 
 function buildPlan(counts: any): string[] {
   const n = (k: string) => Math.max(0, Number(counts?.[k] || 0));
@@ -74,6 +90,8 @@ export function LanguageGameView() {
     if (!Array.isArray(rec.areaCompetency) || !rec.areaCompetency.length) {
       rec.areaCompetency = [{ area: `${gg.language} (${gg.level})`, score: gg.total ? Math.round((gg.correct / gg.total) * 100) : 50 }];
     }
+    // Language proficiency ranking: estimated known vocabulary + suggested level.
+    rec.languageProficiency = { language: gg.language, ...estimateProficiency(gg.level, gg.correct, gg.total) };
     let saveNote = '';
     try {
       await API.post('/api/games', {
@@ -448,8 +466,11 @@ function LangResults({ r, onHome, onStats }: any) {
         <div className="stat-tile"><div className="big">{pct}%</div>score</div>
         <div className="stat-tile"><div className="big">{r.level}</div>level</div>
       </div>
+      {r.rec?.languageProficiency && (
+        <p style={{ marginTop: 10 }}><b>Estimated vocabulary:</b> ~{r.rec.languageProficiency.estimatedWords} {r.language} words · at level <b>{r.rec.languageProficiency.level}</b>{r.rec.languageProficiency.suggestedLevel !== r.rec.languageProficiency.level ? <> → try <b>{r.rec.languageProficiency.suggestedLevel}</b> next</> : ''}</p>
+      )}
       {Array.isArray(r.rec?.areaCompetency) && r.rec.areaCompetency.length > 0 && (
-        <p style={{ marginTop: 10 }}><b>Competency:</b> {r.rec.areaCompetency.map((c: any) => `${c.area}: ${c.score}/100`).join(' · ')}</p>
+        <p style={{ marginTop: 6 }}><b>Competency:</b> {r.rec.areaCompetency.map((c: any) => `${c.area}: ${c.score}/100`).join(' · ')}</p>
       )}
       {Array.isArray(r.rec?.aiNotes) && r.rec.aiNotes.length > 0 && (
         <div style={{ marginTop: 8 }}><b>Coach notes:</b><ul style={{ paddingLeft: 22 }}>{r.rec.aiNotes.map((n: string, i: number) => <li key={i}>{n}</li>)}</ul></div>
