@@ -4,8 +4,8 @@
 function buildRecommendPrompt({ topic, concept, level, correct, total, durationSec, history, slides }) {
   return {
     system: `You are a learning coach. Given a learner's quiz performance, respond ONLY with JSON:
-{"summary": string (2 sentences, warm, specific), "questionSummary": [string, string, string], "answerSummary": [string, string, string], "aiNotes": [string, string, string], "recommendations": [string, string, string], "nextConcepts": [{"name": string, "level": string}]}
-Recommendations must reference the actual mistakes made. questionSummary should list the main question themes in this lesson. answerSummary should list the learner's answer patterns or choices. aiNotes should compare this lesson against the recent history below and explain the learner's progress in the same field, with specific next steps. nextConcepts: 2-3 concepts to study next.`,
+{"summary": string (2 sentences, warm, specific), "questionSummary": [string, string, string], "answerSummary": [string, string, string], "aiNotes": [string, string, string], "recommendations": [string, string, string], "nextConcepts": [{"name": string, "level": string}], "areaCompetency": [{"area": string, "score": number}]}
+Recommendations must reference the actual mistakes made. questionSummary should list the main question themes in this lesson. answerSummary should list the learner's answer patterns or choices. aiNotes should compare this lesson against the recent history below and explain the learner's progress in the same field, with specific next steps. nextConcepts: 2-3 concepts to study next. areaCompetency: 1-3 tuples naming the broad area(s) of learning this lesson exercises (e.g. Mathematics, Statistics, Computer Science, Engineering, Economics, Psychology, History, Botany, Chemistry) each with an integer "score" from 1 to 100 estimating how competent this learner is in that area, judged from which questions they got right/wrong and the concept's difficulty — not just the raw percentage.`,
     user: `Topic: ${topic}, concept: ${concept}, level: ${level}. Score ${correct}/${total} in ${durationSec}s.\n\nRecent lessons in the same field:\n${history.filter(g => g.topic === topic).map(g => `- ${g.finishedDate || g.finishedAt}: ${g.concept} (${g.level}) ${g.correct}/${g.total}`).join('\n') || 'none yet'}\n\nAnswers:\n` +
       slides.map((s, i) => `${i + 1}. "${s.question}" → chose "${s.chosen}" (${s.correct ? 'correct' : `wrong — misconception: ${s.misconception || 'unknown'}`})`).join('\n')
   };
@@ -14,10 +14,13 @@ Recommendations must reference the actual mistakes made. questionSummary should 
 // A single follow-up note generated right after one question is answered, so the
 // coach builds up its read of the learner's gaps incrementally (instead of one slow
 // grading call at the end). Returns a short plain-text sentence.
-function buildAnswerNotePrompt({ topic, concept, level, question, chosen, correct, misconception, index, total }) {
+function buildAnswerNotePrompt({ topic, concept, level, question, chosen, correct, misconception, index, total, priorAnswers = [] }) {
+  const priorText = Array.isArray(priorAnswers) && priorAnswers.length
+    ? priorAnswers.map((a, i) => `${i + 1}. "${a.question}" -> chose "${a.chosen}" (${a.correct ? 'correct' : 'wrong'})`).join('\n')
+    : 'none yet (this is the first answer)';
   return {
-    system: `You are a learning coach observing one quiz answer at a time. In ONE concise sentence (max 25 words, plain text, no preamble), note what this answer reveals about the learner's understanding: if correct, what concept they've demonstrated; if wrong, the specific knowledge gap or misconception to address. Be specific to the content.`,
-    user: `Topic: ${topic}. Concept: ${concept}. Level: ${level}. Question ${index || '?'}/${total || '?'}.\nQuestion: "${question}"\nLearner chose: "${chosen}" — ${correct ? 'CORRECT' : `WRONG (misconception: ${misconception || 'unknown'})`}.\nWrite the one-sentence note.`
+    system: `You are a learning coach tracking one learner's understanding ACROSS a lesson, one answer at a time. Given their EARLIER answers plus this new one, write ONE concise sentence (max 28 words, plain text, no preamble) about their CUMULATIVE understanding — name a persistent gap, an improvement over an earlier mistake, or a newly demonstrated grasp, and how it builds on what came before. Be specific to the content, not generic.`,
+    user: `Topic: ${topic}. Concept: ${concept}. Level: ${level}. Question ${index || '?'}/${total || '?'}.\nEarlier answers this lesson:\n${priorText}\n\nThis answer — Question: "${question}"\nLearner chose: "${chosen}" — ${correct ? 'CORRECT' : `WRONG (misconception: ${misconception || 'unknown'})`}.\nWrite the one-sentence cumulative note.`
   };
 }
 

@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const { topic = '', concept = '', level = '', question = '', chosen = '', correct = false, misconception = '', index, total } = b;
+  const { topic = '', concept = '', level = '', question = '', chosen = '', correct = false, misconception = '', index, total, priorAnswers = [] } = b;
 
   const fallback = correct
     ? `Answered "${String(question).slice(0, 60)}" correctly — shows a solid grasp of ${concept || topic}.`
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ note: fallback });
   }
   try {
-    const p = buildAnswerNotePrompt({ topic, concept, level, question, chosen, correct, misconception, index, total });
+    const p = buildAnswerNotePrompt({ topic, concept, level, question, chosen, correct, misconception, index, total, priorAnswers });
     const note = await generateText(
       [{ role: 'system', content: p.system }, { role: 'user', content: p.user }],
       { json: false, temperature: 0.5, maxTokens: 120 }

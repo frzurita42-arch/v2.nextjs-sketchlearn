@@ -196,10 +196,13 @@ export function GameView() {
     // accumulate during the lesson and the final report always has them, without a
     // single slow grading call at the end.
     const noteIdx = gg.answers.length - 1;
+    // Prior answers give the note cumulative context (progress/persistent gaps).
+    const priorAnswers = gg.answers.slice(0, noteIdx).map((a: any) => ({ question: a.question, chosen: a.chosen, correct: a.correct }));
     const notePromise = API.post('/api/ai/answer-note', {
       topic: gg.topic, concept: gg.concept, level: gg.level,
       question: slide.quiz.question, chosen: opt.text, correct: !!opt.correct,
       misconception: opt.misconception || '', index: gg.answers.length, total: gg.settings.totalSlides,
+      priorAnswers,
     }).then((r: any) => { gg.answerNotes[noteIdx] = String(r?.note || '').trim(); })
       .catch(() => { gg.answerNotes[noteIdx] = ''; });
     gg.notePromises.push(notePromise);
@@ -268,6 +271,10 @@ export function GameView() {
     rec = rec || {};
     if (incrementalNotes.length) rec.aiNotes = incrementalNotes;
     else if (!Array.isArray(rec.aiNotes)) rec.aiNotes = [];
+    // Ensure a competency score exists even if the recommend call timed out.
+    if (!Array.isArray(rec.areaCompetency) || !rec.areaCompetency.length) {
+      rec.areaCompetency = [{ area: gg.topic || gg.concept || 'General', score: total ? Math.round((correct / total) * 100) : 50 }];
+    }
 
     let saveNote = '';
     let saved: any = null;
