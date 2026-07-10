@@ -9,6 +9,23 @@ const {
 const { sanitizeSvg } = require('../slides/sanitize');
 const { fallbackImageDataUrl } = require('../slides/visual-policy');
 
+// fetch() has no built-in timeout: on a slow/hung provider the serverless
+// function would hang until it is killed and the user only sees a generic
+// "Request timed out". Bound each provider call so it fails fast with a real,
+// surfaced error instead.
+async function fetchWithTimeout(url, options, ms = 45000, label = 'AI request') {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error(`${label} timed out after ${ms}ms`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function parseModelJson(raw) {
   const text = String(raw || '').trim();
   if (!text) throw new Error('Empty JSON response from model');
@@ -73,11 +90,11 @@ async function deepseek(messages, { json = true, temperature = 0.8, maxTokens = 
       max_tokens: attemptMaxTokens
     };
     if (json) body.response_format = { type: 'json_object' };
-    const res = await fetch(DEEPSEEK_URL, {
+    const res = await fetchWithTimeout(DEEPSEEK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${DEEPSEEK_API_KEY}` },
       body: JSON.stringify(body)
-    });
+    }, 45000, 'DeepSeek request');
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`DeepSeek API error ${res.status}: ${text.slice(0, 300)}`);
@@ -112,15 +129,21 @@ async function gemini(messages, { json = true, temperature = 0.8, maxTokens = 40
       generationConfig: {
         temperature: attempt === 0 ? temperature : 0.2,
         maxOutputTokens: attemptMaxTokens,
+        // Gemini 2.5/3 Flash think by default, and thinking tokens are billed
+        // against maxOutputTokens — that stalls replies and truncates our JSON.
+        // We don't need chain-of-thought here, so turn it off for speed + full
+        // output budget. (Override GEMINI_TEXT_MODEL to a non-thinking model if
+        // this ever errors.)
+        thinkingConfig: { thinkingBudget: 0 },
         ...(json ? { responseMimeType: 'application/json' } : {})
       }
     };
     if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
-    const res = await fetch(`${GEMINI_API_BASE}/models/${GEMINI_TEXT_MODEL}:generateContent`, {
+    const res = await fetchWithTimeout(`${GEMINI_API_BASE}/models/${GEMINI_TEXT_MODEL}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
       body: JSON.stringify(body)
-    });
+    }, 45000, 'Gemini request');
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       if (res.status === 429) {
