@@ -29,7 +29,13 @@ body {
     linear-gradient(rgba(92, 128, 188, .09) 1px, transparent 1px),
     linear-gradient(90deg, rgba(92, 128, 188, .09) 1px, transparent 1px);
   background-size: 26px 26px;
+  /* Sticky footer: fill at least the viewport and lay children out in a column so
+     #app can grow and push the footer to the bottom even when content is short.
+     100dvh tracks the *visible* height on mobile (9:16) as the URL bar shows/hides. */
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 .hidden { display: none !important; }
@@ -66,7 +72,10 @@ h3 { font-size: 1.5rem; }
 .topbar-user { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
 /* ---------- layout ---------- */
-#app { max-width: 1000px; margin: 0 auto; padding: 26px 16px 70px; }
+/* flex: 1 lets the main content expand to fill leftover vertical space so the
+   footer settles at the bottom of the page (sticky-footer), while width: 100%
+   keeps it centered at max-width 1000px inside the flex column. */
+#app { width: 100%; max-width: 1000px; margin: 0 auto; padding: 26px 16px 70px; flex: 1 0 auto; }
 /* Dashed rule above every activity title — same separator as the footer/slides,
    so it's obvious where one functionality ends and the next begins. */
 .view-title {
