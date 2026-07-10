@@ -105,16 +105,16 @@ export function StructuredExplanations() {
       'related-topics': 'Continue toward adjacent related topics once the core concept is stabilized.',
     };
     const alternationLine = alternate
-      ? 'Alternate slide modes: one slide with visual/story explanation, then one slide with mathematical steps/proof/code/latex. Repeat this alternation.'
-      : 'Blend visual and mathematical content on each slide without strict alternation.';
+      ? 'Alternate slide modes: one slide with visual/story explanation, then one slide that works the steps as a well-commented code snippet. Repeat this alternation.'
+      : 'Blend visual explanation and commented-code steps on each slide without strict alternation.';
 
     appState.suggestedSettings = {
       totalSlides, tone, exampleType, activityType: 'structured-explanation',
       complexity, paragraphLength, paragraphCount, imageDensity,
       language: '', audience: '',
-      customInstructions: `Teach "${prompt}" as ${modeMap[exampleType] || modeMap.proof}. ${alternationLine} If this is a proof, every slide must show the actual derivation in LaTeX and continue from the previous slide rather than restarting. Accompany every equation/code/table/graph/diagram with written explanation aligned to ${level} difficulty and ${tone} tone. ${continuationMap[continuation] || continuationMap['related-topics']}`,
+      customInstructions: `Teach "${prompt}" as ${modeMap[exampleType] || modeMap.proof}. ${alternationLine} Prefer a well-commented CODE snippet to work each derivation/solution step (comments explaining the reasoning of each line, plus hints), continuing from the previous slide rather than restarting; use a LaTeX block only for a symbolic step that genuinely cannot be shown as code. Accompany every code/equation/table/graph/diagram with written explanation aligned to ${level} difficulty and ${tone} tone. ${continuationMap[continuation] || continuationMap['related-topics']}`,
     };
-    appState.suggestedGuidance = `Build a rigorous but clear learning path for "${prompt}" focused on ${modeMap[exampleType] || modeMap.proof}. If the example type is proof, every slide must include a displayed LaTeX proof block that continues the derivation from the previous answer. Use visual representations (trees, diagrams, tables, graphs, or sketches) when helpful, and always include explanatory text.`;
+    appState.suggestedGuidance = `Build a rigorous but clear learning path for "${prompt}" focused on ${modeMap[exampleType] || modeMap.proof}. Prefer commented code snippets that compute or derive each step (continuing from the previous answer) over LaTeX; reserve LaTeX for symbolic results that cannot be code. Use visual representations (trees, diagrams, tables, graphs, or sketches) when helpful, and always include explanatory text.`;
     triggerHomePreloads(prompt);
     loadPath(app, prompt, appState.suggestedGuidance, [level], { fromHistory: true, fresh: true });
   };

@@ -50,12 +50,15 @@ export async function POST(req: Request) {
   const languageOrHumanities = /french|spanish|english|german|italian|portuguese|mandarin|chinese|japanese|korean|arabic|latin|\blanguage\b|grammar|vocabular|conjugat|\bverb\b|\bnoun\b|\btense\b|pronunciat|spelling|history|geograph|\bart\b|music|literature|poetry|philosoph|\blaw\b|politic|culture|religion|anatomy|cooking|writing|essay|social studies/i.test(subjectText);
   const allowLatex = (stemFocus || mathTopic) && !languageOrHumanities;
   const effectiveProof = proofMode && allowLatex;
+  // Prefer commented code snippets over LaTeX wherever a computation, formula,
+  // algorithm, statistical method or step-by-step solution can be expressed as code.
+  const preferCode = allowLatex || dataFocus;
   const componentStrategy = allowLatex
-    ? 'This is a technical/quantitative subject: reach first for LaTeX (formulas, derivations), then a chart (bar/line/scatter for relationships and trends) or a labelled svg diagram, and code when it is a computing topic. Use a sticky note only for a single crucial formula caveat or mnemonic.'
+    ? 'This is a technical/quantitative subject: reach FIRST for a well-commented CODE snippet that works the formula, computation, algorithm or derivation step by step — put the reasoning of each important line in a comment and add hints — then a chart (bar/line/scatter) or a labelled svg diagram. Prefer code over LaTeX; use LaTeX ONLY for a symbolic result that genuinely cannot be shown as code.'
     : (illustrativeFocus || languageOrHumanities)
       ? 'This is a language/humanities/conceptual subject: do NOT use LaTeX or formulas at all. Reach for a generated IMAGE to illustrate, a TABLE (e.g. conjugation/comparison/before-after/timeline), an SVG diagram for structure or relationships, and sticky notes for a rule, example, mnemonic, or anecdote. Every slide must carry at least one such support component — never a bare list of generic steps with no visual.'
       : dataFocus
-        ? 'This is a data-driven subject: reach first for a chart that fits the data\'s job — bar for comparing categories, line for change over time, pie for parts of a whole, scatter/bubble for relationships — with a sticky note or table calling out the single most important reading. Do NOT use LaTeX for non-mathematical points. Only invent numbers that are realistic and clearly illustrative.'
+        ? 'This is a data-driven subject: reach first for a chart that fits the data\'s job — bar for comparing categories, line for change over time, pie for parts of a whole, scatter/bubble for relationships — with a sticky note or table calling out the single most important reading. A short, well-commented CODE snippet that computes or simulates the result (comments explaining each step) is encouraged and is preferred over any formula. Do NOT use LaTeX for non-mathematical points. Only invent numbers that are realistic and clearly illustrative.'
         : 'Pick the one or two components that most clarify THIS concept: an image or svg diagram to illustrate, a table for structured comparisons, a chart for quantities/relationships, a sticky note for a highlight. Use LaTeX ONLY if the concept is genuinely mathematical. Never leave a slide as a bare list of generic steps with no support component.';
   const visualPlan = decideAdaptiveVisualMode({
     topic,
@@ -82,7 +85,7 @@ export async function POST(req: Request) {
 
   const system = buildSlideSystemPrompt({
     paraCount, paragraphWords, densityRule, componentStrategy, codeDepth,
-    equationDepth, allowLatex, stemAlternation, effectiveProof,
+    equationDepth, allowLatex, preferCode, stemAlternation, effectiveProof,
     isTimeTravelActivity, allowModelSvg, settings, level,
     visualPromptRule: visualPlan.promptRule,
   });
@@ -152,7 +155,9 @@ export async function POST(req: Request) {
     if (!allowLatex) {
       slide.components = (slide.components || []).filter((c: any) => c?.type !== 'latex');
     }
-    if (effectiveProof && slideNumber % 4 !== 0 && !slide.components.some((c: any) => c?.type === 'latex')) {
+    // Proof continuity: a well-commented code snippet now satisfies the step too, so
+    // only fall back to injecting a LaTeX block when the slide has neither code nor latex.
+    if (effectiveProof && slideNumber % 4 !== 0 && !slide.components.some((c: any) => c?.type === 'latex' || c?.type === 'code')) {
       slide.components.unshift({
         type: 'latex',
         content: makeFallbackProofLatex({ topic, concept, slideNumber, branch }),

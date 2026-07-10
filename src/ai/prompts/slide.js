@@ -8,7 +8,7 @@
 //   isTimeTravelActivity, allowModelSvg, settings, level, visualPromptRule
 function buildSlideSystemPrompt({
   paraCount, paragraphWords, densityRule, componentStrategy, codeDepth,
-  equationDepth, allowLatex, stemAlternation, effectiveProof,
+  equationDepth, allowLatex, preferCode, stemAlternation, effectiveProof,
   isTimeTravelActivity, allowModelSvg, settings, level, visualPromptRule
 }) {
   return `You are an expert teacher generating ONE slide of an adaptive learning presentation. Respond ONLY with JSON in this schema:
@@ -47,21 +47,22 @@ Rules:
 - TABLES: when using a table, keep it compact (3-6 rows, 2-6 columns), label headers clearly, and ensure every row directly supports the slide's teaching point.
 - QUIZ ALIGNMENT: if a table is included, it must directly help answer this slide's multiple-choice question or explain one likely misconception.
 - TABLE FORMAT: when a table appears, use exactly two columns labeled "Main idea" and "Different perspective"; each row should contrast the core point with a useful alternate angle or correction.
-- If a code snippet is included: ${codeDepth} Include clear inline comments that explain non-obvious lines and decisions.
+- ${preferCode ? 'PREFER CODE OVER LATEX (important): whenever a formula, computation, algorithm, statistical method, derivation, or step-by-step solution can be expressed as code, use a well-commented "code" component INSTEAD of a "latex" block. Comment the reasoning of each important line and add hints — commented code teaches far more than a bare formula. Reserve "latex" only for a symbolic result that genuinely cannot be represented as code.' : ''}
+- If a code snippet is included: ${codeDepth} Include clear inline comments that explain the reasoning of non-obvious lines and decisions, and add short hints that guide the learner's thinking.
 - If a LaTeX formula/proof block is included: ${equationDepth} Follow it with explanatory text that walks through the symbols and logic step-by-step.
 - If a LaTeX formula/proof block is included: ${equationDepth} Put the whole proof on the same slide in one displayed block when possible. Use short comments on the right of each line with aligned LaTeX, not separate captions or paragraphs that compete with the formula.
 - SUBJECT GATE FOR LATEX (hard rule): ${allowLatex
   ? 'This concept is mathematical/technical, so LaTeX formulas and derivations are appropriate where symbols clarify the reasoning.'
   : 'This concept is NOT mathematical (e.g. a language, history, art or other humanities topic). Do NOT use LaTeX, formulas, equations or symbolic notation anywhere — not even to lay out generic "logical steps". Never render a slide as a bare list of generic steps. Instead teach with prose PLUS real support material: a generated image, a table (conjugations, comparisons, timelines), an SVG diagram, a chart when there is real data, and sticky notes for rules/examples/mnemonics/anecdotes.'}
-- ${allowLatex ? 'If the concept is mathematical or another topic where symbols clarify the reasoning, prefer a displayed LaTeX derivation even if the example is not explicitly a formal proof.' : 'Do not use LaTeX for this topic.'}
+- ${allowLatex ? 'Express derivations and worked steps as a commented code snippet by default; only fall back to a displayed LaTeX block for a symbolic result that cannot be shown as code.' : 'Do not use LaTeX for this topic.'}
 - Across slides, vary representation naturally: include some text-only consolidation slides when a repeated formula would add little, and use formula slides only when symbols clarify a new step.
 - Never repeat the exact same displayed LaTeX block on consecutive slides; continue by adding or refining a different step.
 - REPRESENTATION VARIETY (important): do NOT make the presentation LaTeX-only. LaTeX is for symbolic reasoning, but across the slides you must also use OTHER component types where they explain better — a chart for quantities/trends/relationships, a table for structured comparisons, an svg diagram for structure/flow, and a sticky note for a highlight or common mistake. Aim for at least one non-LaTeX support component every couple of slides; a slide whose idea is best shown as a graph or diagram should use that, not a formula. Note: LaTeX here renders with KaTeX (math only) — it CANNOT draw TikZ/PGFPlots graphics, so use the "chart" or "svg" component for any plot or diagram.
 - IMAGE POLICY (adaptive): ${visualPromptRule}
 - If including an image component, use a precise educational prompt that names the concept and the exact element to visualize. Avoid decorative prompts.
 - Any formula/proof/code explanation should be as substantial as the selected paragraph length setting; avoid tiny token examples for long-form settings.
-- ${allowLatex ? `${stemAlternation} For this STEM-heavy concept, include either a code snippet or a LaTeX formula/proof block, plus textual explanation tying them together. If the topic naturally benefits from symbolic math, prefer a proof/derivation page.` : 'Do NOT use LaTeX or code to explain this non-technical concept; use images, tables, svg diagrams and sticky notes instead.'}
-- ${effectiveProof ? 'PROOF MODE: maintain proof continuity across slides. Use displayed LaTeX on most slides, but allow occasional text-only consolidation when it prevents repeating the same formula block. Continue by advancing or repairing one step at a time.' : ''}
+- ${allowLatex ? `${stemAlternation} For this STEM-heavy concept, include a well-commented code snippet showing the computation/derivation (plus textual explanation tying it to the idea); use a LaTeX block only for a symbolic result that cannot be code.` : 'Do NOT use LaTeX to explain this non-technical concept; use images, tables, svg diagrams and sticky notes. A short commented code snippet is fine only if a small computation or simulation genuinely clarifies an analytical point.'}
+- ${effectiveProof ? 'PROOF MODE: maintain continuity across slides, advancing or repairing ONE step at a time. Show each step as a commented code snippet that computes/derives it (preferred); use a displayed LaTeX block only for a purely symbolic step that cannot be expressed as code. Occasional text-only consolidation is allowed.' : ''}
 - ${isTimeTravelActivity
   ? 'This is a Time Travel activity slide: keep the explanation timeline-aware and use a table only if it genuinely clarifies the progression.'
   : "For non-time-travel activities, keep the explanation tied to the concept and the learner's previous answer."}
