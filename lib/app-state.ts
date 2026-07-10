@@ -48,7 +48,7 @@ export const appState: AppState = {
     paragraphLength: 'medium',
     paragraphCount: 1,
     imageDensity: 'balanced',
-    totalSlides: 7,
+    totalSlides: 3,
     tone: 'Storytelling',
   },
   latexLab: {
@@ -60,7 +60,7 @@ export const appState: AppState = {
     paragraphLength: 'medium',
     paragraphCount: 1,
     imageDensity: 'balanced',
-    totalSlides: 8,
+    totalSlides: 3,
     continuation: 'related-topics',
     alternateVisualMath: true,
   },

@@ -25,7 +25,7 @@ function normalizeStructuredSuggestion(raw: any = {}) {
     complexity: allowedComplexity.includes(raw.complexity) ? raw.complexity : 'standard',
     paragraphLength: allowedParagraph.includes(raw.paragraphLength) ? raw.paragraphLength : 'medium',
     imageDensity: allowedDensity.includes(raw.imageDensity) ? raw.imageDensity : 'balanced',
-    totalSlides: Math.min(20, Math.max(2, parseInt(raw.totalSlides, 10) || 8)),
+    totalSlides: Math.min(20, Math.max(2, parseInt(raw.totalSlides, 10) || 3)),
     continuation: allowedContinuation.includes(raw.continuation) ? raw.continuation : 'related-topics',
     alternateVisualMath: raw.alternateVisualMath !== false,
   };
@@ -82,7 +82,7 @@ export function StructuredExplanations() {
     const level = ml.level || 'Lower Intermediate';
     const tone = ml.tone || 'Friendly lecture';
     const complexity = ml.complexity || 'standard';
-    const totalSlides = Math.min(20, Math.max(2, parseInt(ml.totalSlides, 10) || 8));
+    const totalSlides = Math.min(20, Math.max(2, parseInt(ml.totalSlides, 10) || 3));
     const paragraphLength = ml.paragraphLength || 'medium';
     const imageDensity = ml.imageDensity || 'balanced';
     const continuation = ml.continuation || 'related-topics';

@@ -7,8 +7,8 @@ import { useApp } from '@/components/AppContext';
 function initialForm() {
   const preset = appState.suggestedSettings || null;
   const base = {
-    // Defaults: 1 paragraph, medium (standard) size, standard complexity.
-    lengthSel: '7', lengthCustom: 5, paragraph: 'medium', paraCount: 1,
+    // Defaults: shortest preset (4 slides), 1 paragraph, medium size, standard complexity.
+    lengthSel: '4', lengthCustom: 3, paragraph: 'medium', paraCount: 1,
     toneSel: TONES[0], toneCustom: '', complexity: 'standard', density: 'balanced',
     language: '', audience: '', instructions: '',
   };

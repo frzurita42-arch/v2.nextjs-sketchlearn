@@ -101,7 +101,7 @@ export function TimeTravel() {
     const paragraphLength = tt.paragraphLength || 'medium';
     const paragraphCount = Math.min(7, Math.max(1, parseInt(tt.paragraphCount, 10) || 3));
     const imageDensity = tt.imageDensity || 'balanced';
-    const totalSlides = Math.min(20, Math.max(2, parseInt(tt.totalSlides, 10) || 7));
+    const totalSlides = Math.min(20, Math.max(2, parseInt(tt.totalSlides, 10) || 3));
     const headline = (tt.headline || '').trim() || `Breaking news from the ${period}`;
 
     appState.timeTravel = { headline, period, level, complexity, paragraphLength, paragraphCount, imageDensity, totalSlides, tone: 'Storytelling' };
