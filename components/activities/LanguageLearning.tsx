@@ -163,7 +163,7 @@ export function LanguageLearning() {
             <h3 style={{ marginTop: 0 }}>Activities <small style={{ fontWeight: 'normal', opacity: .7 }}>({totalCount}/{MAX_SLIDES} slides)</small></h3>
             {ACTIVITIES.map(([key, label]) => (
               <label className="field" key={key} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span>{label}{key !== 'reading' && key !== 'grammar' ? <small style={{ opacity: .6 }}> · soon</small> : ''}</span>
+                <span>{label}{key === 'listening' || key === 'spelling' ? <small style={{ opacity: .55 }}> · 🔊</small> : ''}</span>
                 <input type="number" id={`ll-count-${key}`} min={0} max={MAX_SLIDES} value={Number(counts[key] || 0)}
                   style={{ width: 72 }} onChange={e => setCount(key, e.target.value)} />
               </label>

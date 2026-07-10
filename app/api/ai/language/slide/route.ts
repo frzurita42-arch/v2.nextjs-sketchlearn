@@ -53,6 +53,22 @@ function fbVocab(topic: string) {
     ],
   };
 }
+function fbListening(topic: string) {
+  const q = () => ({ prompt: 'What did you hear?', options: cleanOptions([{ text: 'the correct phrase', correct: true }, { text: 'wrong 1' }, { text: 'wrong 2' }, { text: 'wrong 3' }], 4) });
+  return {
+    type: 'listening', title: `Listening: ${topic}`.slice(0, 60), audioText: 'Hola', transcript: 'Hola',
+    sticky: cleanSticky({ color: 'pink', title: 'Listen', note: 'Play it twice before answering.' }),
+    questions: [q(), q()],
+  };
+}
+function fbSpelling(topic: string) {
+  const it = (w: string) => ({ audioText: w, answer: w, accept: [w.toLowerCase()], usage: `Example with ${w}.` });
+  return {
+    type: 'spelling', title: `Spelling: ${topic}`.slice(0, 60),
+    sticky: cleanSticky({ color: 'orange', title: 'Spell it', note: 'Sound it out syllable by syllable.' }),
+    items: [it('hola'), it('gracias'), it('agua'), it('casa')],
+  };
+}
 function fbReading(topic: string) {
   return {
     type: 'reading', title: `Reading: ${topic}`.slice(0, 60),
@@ -74,14 +90,15 @@ export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const type = ['grammar', 'vocabulary', 'reading'].includes(b.type) ? b.type : 'reading';
+  const type = ['grammar', 'vocabulary', 'reading', 'listening', 'spelling'].includes(b.type) ? b.type : 'reading';
   const { language = 'Spanish', level = 'A1', topic = 'everyday life', grammarTopic = '', slideNumber = 1, totalSlides = 1, priorSummary = '' } = b;
 
+  const fb = (ty: string) => ty === 'grammar' ? fbGrammar(topic) : ty === 'vocabulary' ? fbVocab(topic) : ty === 'listening' ? fbListening(topic) : ty === 'spelling' ? fbSpelling(topic) : fbReading(topic);
   const useFallback = !geminiEnabled && !deepseekEnabled;
   let slide: any;
 
   if (useFallback) {
-    slide = type === 'grammar' ? fbGrammar(topic) : type === 'vocabulary' ? fbVocab(topic) : fbReading(topic);
+    slide = fb(type);
   } else {
     try {
       const p = buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slideNumber, totalSlides, priorSummary });
@@ -91,6 +108,19 @@ export async function POST(req: Request) {
       if (type === 'grammar') {
         slide.questions = (Array.isArray(slide.questions) ? slide.questions : []).slice(0, 4).map((q: any) => ({ prompt: String(q?.prompt || '').trim(), options: cleanOptions(q?.options, 2) })).filter((q: any) => q.prompt && q.options.length === 2);
         if (slide.questions.length < 1) slide = fbGrammar(topic);
+      } else if (type === 'listening') {
+        slide.audioText = String(slide.audioText || slide.transcript || '').trim();
+        slide.transcript = String(slide.transcript || slide.audioText || '').trim();
+        slide.questions = (Array.isArray(slide.questions) ? slide.questions : []).slice(0, 2).map((q: any) => ({ prompt: String(q?.prompt || '').trim(), options: cleanOptions(q?.options, 4) })).filter((q: any) => q.prompt && q.options.length);
+        if (!slide.audioText || slide.questions.length < 1) slide = fbListening(topic);
+      } else if (type === 'spelling') {
+        slide.items = (Array.isArray(slide.items) ? slide.items : []).slice(0, 4).map((it: any) => ({
+          audioText: String(it?.audioText || it?.answer || '').trim(),
+          answer: String(it?.answer || '').trim(),
+          accept: (Array.isArray(it?.accept) && it.accept.length ? it.accept : [it?.answer]).map((v: any) => String(v || '').trim().toLowerCase()).filter(Boolean),
+          usage: String(it?.usage || '').trim(),
+        })).filter((it: any) => it.audioText && it.answer);
+        if (!slide.items.length) slide = fbSpelling(topic);
       } else if (type === 'vocabulary') {
         const items = (Array.isArray(slide.items) ? slide.items : []).slice(0, 4);
         slide.items = await Promise.all(items.map(async (it: any) => {
@@ -109,7 +139,7 @@ export async function POST(req: Request) {
         if (!slide.passage || !slide.quiz.question) slide = fbReading(topic);
       }
     } catch {
-      slide = type === 'grammar' ? fbGrammar(topic) : type === 'vocabulary' ? fbVocab(topic) : fbReading(topic);
+      slide = fb(type);
     }
   }
 

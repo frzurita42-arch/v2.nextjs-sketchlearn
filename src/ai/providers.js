@@ -4,7 +4,8 @@ const {
   DEEPSEEK_API_KEY, DEEPSEEK_URL, deepseekEnabled,
   GEMINI_API_KEY, GEMINI_API_BASE, GEMINI_TEXT_MODEL, GEMINI_IMAGE_MODEL, geminiEnabled,
   IMAGE_API_KEY, IMAGE_API_URL, IMAGE_API_MODEL,
-  ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled
+  ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
+  ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled
 } = require('../config');
 const { sanitizeSvg } = require('../slides/sanitize');
 const { fallbackImageDataUrl } = require('../slides/visual-policy');
@@ -328,6 +329,25 @@ async function illustrateWithClaude(slide, context) {
   slide.components.push({ type: 'svg', svg, caption, drawnBy: 'claude' });
 }
 
+// ElevenLabs text-to-speech for the language listening/spelling activities.
+// Returns a base64 audio data URL the client can drop straight into <audio>, or
+// null when TTS is not configured / fails (caller then falls back to text).
+async function generateSpeech(text) {
+  if (!ttsEnabled) return null;
+  const clean = String(text || '').trim().slice(0, 600);
+  if (!clean) return null;
+  try {
+    const res = await fetchWithTimeout(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': ELEVENLABS_API_KEY, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      body: JSON.stringify({ text: clean, model_id: ELEVENLABS_MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
+    }, 30000, 'ElevenLabs TTS');
+    if (!res.ok) { console.error('ElevenLabs error', res.status, (await res.text().catch(() => '')).slice(0, 200)); return null; }
+    const buf = Buffer.from(await res.arrayBuffer());
+    return `data:audio/mpeg;base64,${buf.toString('base64')}`;
+  } catch (e) { console.error('TTS failed:', e.message); return null; }
+}
+
 const SKETCH_SVG_RULES = `SVG rules: self-contained <svg> with a viewBox (around 0 0 400 260), no external references, no scripts, no <text> smaller than 14px. Draw in a hand-sketched style: stroke-based shapes with stroke="#2d2a26" stroke-width="2.5" stroke-linecap="round", slightly irregular lines, fills only from this palette: #f9a03f (orange), #7fb069 (green), #5c80bc (blue), #e4572e (red), #f7f3e9 (paper), #fadf63 (yellow). CRITICAL: the drawing must accurately depict THIS slide's specific concept — a real diagram, labeled figure, graph, or visual metaphor of what the paragraphs explain. Label its parts with <text> so a viewer can map the picture onto the idea. A generic, decorative, or unrelated shape (a plain circle, a random zig-zag) is unacceptable; if the concept is a process show the steps, if it is a relationship show the axes/quantities, if it is a structure show and name the parts.`;
 
 module.exports = {
@@ -341,5 +361,6 @@ module.exports = {
   fillImages,
   generateSvgWithClaude,
   illustrateWithClaude,
+  generateSpeech,
   SKETCH_SVG_RULES
 };

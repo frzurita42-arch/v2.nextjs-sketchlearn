@@ -72,6 +72,18 @@ function buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slid
       user: base,
     };
   }
+  if (type === 'listening') {
+    return {
+      system: `You are a ${language} listening teacher. Respond ONLY with JSON: {"title": string, "audioText": string (the exact ${language} words/phrase/short sentence to be spoken aloud, appropriate to the level — Zero: one or two words or a 2-4 word sentence), "transcript": string (the same text), "sticky": {...}, "questions": [q, q]}. EXACTLY 2 questions, each {"prompt": string, "options": [{"text": string, "correct": boolean, "explanation": string}]} with EXACTLY 4 options and one correct. Questions test listening comprehension of the audio (what was said, a synonym of a word used, the meaning, etc.). Keep the spoken content oriented to a ${level} learner's objective. ${sticky}`,
+      user: base,
+    };
+  }
+  if (type === 'spelling') {
+    return {
+      system: `You are a ${language} spelling/dictation teacher. Respond ONLY with JSON: {"title": string, "sticky": {...}, "items": [item, item, item, item]}. EXACTLY 4 items, each {"audioText": string (the ${language} target WORD, then a short example sentence using it, to be spoken aloud), "answer": string (just the target word the learner must type), "accept": [string, ...] (lowercased acceptable spellings), "usage": string (a brief English gloss of the example)}. Choose words at the ${level} level and relevant to the theme. ${sticky}`,
+      user: base,
+    };
+  }
   // reading
   return {
     system: `You are a ${language} reading teacher. Respond ONLY with JSON: {"title": string, "passage": string (a short reading sized to the level — Zero: a few words/short sentences; higher: more sentences/paragraphs), "support": ONE of {"type":"image","prompt":string} | {"type":"table","headers":[string,...],"rows":[[string,...],...],"caption":string} | {"type":"code","language":string,"content":string}, "sticky": {...}, "quiz": {"question": string, "options": [{"text": string, "correct": boolean, "explanation": string}] (4 options, one correct)}}. ${sticky}`,

@@ -17,10 +17,11 @@ type SlideResult = { correct: number; total: number; answers: any[] };
 function buildPlan(counts: any): string[] {
   const n = (k: string) => Math.max(0, Number(counts?.[k] || 0));
   const grammar = Array(n('grammar')).fill('grammar');
-  // Phase 2 implements grammar, reading and vocabulary; listening/spelling arrive later.
   const rest = [
     ...Array(n('reading')).fill('reading'),
     ...Array(n('vocabulary')).fill('vocabulary'),
+    ...Array(n('listening')).fill('listening'),
+    ...Array(n('spelling')).fill('spelling'),
   ];
   const plan = [...grammar, ...shuffled(rest)].slice(0, MAX_SLIDES);
   return plan.length ? plan : ['reading'];
@@ -133,6 +134,8 @@ export function LanguageGameView() {
     const header = <SlideHeader idx={gg.idx} total={gg.plan.length} type={cur.type} />;
     if (cur.type === 'grammar') return <>{header}<GrammarSlide slide={cur} onDone={advance} /></>;
     if (cur.type === 'vocabulary') return <>{header}<VocabSlide slide={cur} onDone={advance} /></>;
+    if (cur.type === 'listening') return <>{header}<ListeningSlide slide={cur} onDone={advance} /></>;
+    if (cur.type === 'spelling') return <>{header}<SpellingSlide slide={cur} onDone={advance} /></>;
     return <>{header}<ReadingSlide slide={cur} onDone={advance} /></>;
   }
   return <Loading text={loadingMsg} />;
@@ -303,6 +306,128 @@ function VocabInput({ item, onDone }: any) {
           <button className="btn primary" onClick={submit}>Check</button>
         </div>
       ) : null}
+      {feedback && <p style={{ marginTop: 8, color: solved === false ? 'var(--red)' : undefined }}>{feedback}</p>}
+      {solved !== null && (
+        <div className="slide-actions" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn primary" onClick={() => onDone({ correct: solved === true, chosen: val.trim() })}>Next →</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Play a bit of text via the TTS proxy; falls back to showing the text when audio
+// is unavailable (no ElevenLabs key). Caches the fetched audio per instance.
+function AudioButton({ text, label = '🔊 Play', autoRevealText = true }: { text: string; label?: string; autoRevealText?: boolean }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const srcRef = useRef<string | null>(null);
+  const play = async () => {
+    if (srcRef.current) { audioRef.current?.play().catch(() => {}); return; }
+    setState('loading');
+    try {
+      const r = await API.post('/api/ai/language/tts', { text });
+      if (r?.audio) { srcRef.current = r.audio; setState('ready'); setTimeout(() => audioRef.current?.play().catch(() => {}), 50); }
+      else setState('unavailable');
+    } catch { setState('unavailable'); }
+  };
+  return (
+    <div style={{ margin: '8px 0' }}>
+      <button className="btn blue" type="button" onClick={play} disabled={state === 'loading'}>
+        {state === 'loading' ? '…' : state === 'unavailable' ? '🔇 Audio off' : label}
+      </button>
+      {srcRef.current && <audio ref={audioRef} src={srcRef.current} />}
+      {state === 'unavailable' && autoRevealText && (
+        <p style={{ marginTop: 6, fontStyle: 'italic', opacity: 0.85 }}>“{text}” <small>(audio needs ELEVENLABS_API_KEY — showing text)</small></p>
+      )}
+    </div>
+  );
+}
+
+// ---- Listening: audio + 2 questions (4 options) ----
+function ListeningSlide({ slide, onDone }: any) {
+  const [qi, setQi] = useState(0);
+  const [chosen, setChosen] = useState<number | null>(null);
+  const acc = useRef<{ correct: number; answers: any[] }>({ correct: 0, answers: [] });
+  const q = slide.questions[qi];
+  const [opts, setOpts] = useState<any[]>(() => shuffled(q.options.map((o: any, i: number) => ({ ...o, _i: i }))));
+  const pick = (i: number) => {
+    if (chosen !== null) return;
+    setChosen(i);
+    if (opts[i].correct) acc.current.correct += 1;
+    acc.current.answers.push({ question: q.prompt, chosen: opts[i].text, correct: !!opts[i].correct, misconception: '' });
+  };
+  const next = () => {
+    if (qi + 1 < slide.questions.length) {
+      const nq = slide.questions[qi + 1];
+      setQi(qi + 1); setChosen(null); setOpts(shuffled(nq.options.map((o: any, i: number) => ({ ...o, _i: i }))));
+    } else onDone({ correct: acc.current.correct, total: slide.questions.length, answers: acc.current.answers });
+  };
+  return (
+    <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
+      <Sticky sticky={slide.sticky} />
+      <p style={{ fontWeight: 600 }}>Listen and answer</p>
+      <AudioButton text={slide.audioText || slide.transcript} label="🔊 Play audio" />
+      <p style={{ opacity: 0.7, fontSize: '.9rem' }}>Question {qi + 1} of {slide.questions.length}</p>
+      <p style={{ fontWeight: 600 }}>{q.prompt}</p>
+      {opts.map((o: any, i: number) => <OptionButton key={i} opt={o} chosen={chosen === i} revealed={chosen !== null} onClick={() => pick(i)} />)}
+      {chosen !== null && (
+        <>
+          {opts[chosen].explanation && <p style={{ marginTop: 6, fontSize: '.95rem' }}>{opts[chosen].explanation}</p>}
+          <div className="slide-actions" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn primary" onClick={next}>{qi + 1 < slide.questions.length ? 'Next question →' : 'Continue →'}</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---- Spelling: 4 audios, type the word (3 tries) ----
+function SpellingSlide({ slide, onDone }: any) {
+  const [ii, setII] = useState(0);
+  const acc = useRef<{ correct: number; answers: any[] }>({ correct: 0, answers: [] });
+  const item = slide.items[ii];
+  const advance = (rec: { correct: boolean; chosen: string }) => {
+    if (rec.correct) acc.current.correct += 1;
+    acc.current.answers.push({ question: `Spell: ${item.usage || item.answer}`, chosen: rec.chosen, correct: rec.correct, misconception: '' });
+    if (ii + 1 < slide.items.length) setII(ii + 1);
+    else onDone({ correct: acc.current.correct, total: slide.items.length, answers: acc.current.answers });
+  };
+  return (
+    <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
+      {ii === 0 && <Sticky sticky={slide.sticky} />}
+      <p style={{ opacity: 0.7, fontSize: '.9rem' }}>Word {ii + 1} of {slide.items.length}</p>
+      <p style={{ fontWeight: 600 }}>Listen, then type the word you hear.</p>
+      <AudioButton key={ii} text={item.audioText} label="🔊 Play word" />
+      {item.usage && <p style={{ opacity: 0.75, fontSize: '.9rem' }}>Hint (meaning): {item.usage}</p>}
+      <SpellInput key={`in-${ii}`} item={item} onDone={advance} />
+    </div>
+  );
+}
+
+function SpellInput({ item, onDone }: any) {
+  const [val, setVal] = useState('');
+  const [tries, setTries] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const [solved, setSolved] = useState<null | boolean>(null);
+  const accept: string[] = Array.isArray(item.accept) && item.accept.length ? item.accept : [String(item.answer || '').toLowerCase()];
+  const submit = () => {
+    const guess = val.trim().toLowerCase();
+    if (!guess) return;
+    if (accept.includes(guess)) { setSolved(true); setFeedback('✓ Correct!'); return; }
+    const t = tries + 1; setTries(t);
+    if (t >= 3) { setSolved(false); setFeedback(`Not quite. The word is “${item.answer}”.`); }
+    else setFeedback(`Not quite — try again (${3 - t} left).`);
+  };
+  return (
+    <>
+      {solved === null && (
+        <div className="slide-actions" style={{ gap: 8 }}>
+          <input type="text" value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} placeholder="Type the word…" style={{ flex: 1 }} />
+          <button className="btn primary" onClick={submit}>Check</button>
+        </div>
+      )}
       {feedback && <p style={{ marginTop: 8, color: solved === false ? 'var(--red)' : undefined }}>{feedback}</p>}
       {solved !== null && (
         <div className="slide-actions" style={{ justifyContent: 'flex-end' }}>
