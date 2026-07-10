@@ -19,6 +19,15 @@ import { normalizeStoreShape, writeSuggestedStore, writeHomeTopicsStore } from '
 
 let readyPromise: Promise<void> | null = null;
 
+// Reject after `ms` so a Postgres that connects but never responds can't hang the
+// whole bootstrap (and therefore every route awaiting ensureReady()). On timeout the
+// catch below downgrades to file storage.
+function bootTimeout(ms: number): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`DB bootstrap timed out after ${ms}ms`)), ms)
+  );
+}
+
 async function bootstrapPersistence(): Promise<void> {
   // Resolve where file-storage lives (project dir, else /tmp) before any read/write.
   ensureDataDirs();
@@ -35,6 +44,10 @@ async function bootstrapPersistence(): Promise<void> {
   }
 
   try {
+    // Bound the whole DB init/migration so a slow or unreachable Postgres (common on
+    // serverless with a non-pooled connection) downgrades to file storage instead of
+    // hanging until the function times out.
+    await Promise.race([bootTimeout(12000), (async () => {
     await initDatabase();
 
     let dbUsers = await loadUsers();
@@ -106,11 +119,12 @@ async function bootstrapPersistence(): Promise<void> {
       );
       if (Object.keys(homeFile.users || {}).length) await writeHomeTopicsStore(homeFile);
     }
+    })()]);
   } catch (e: any) {
     // DB configured but unreachable/slow at boot: don't crash — run on file storage so
     // the site stays up and saves still work (see insertGame's file fallback).
     console.error('Database bootstrap failed; falling back to file storage for this run:', e.message);
-    try { await db.pool.end(); } catch { /* ignore */ }
+    try { await db.pool?.end(); } catch { /* ignore */ }
     db.pool = null;
     if (!Array.isArray(userState.users) || !userState.users.length) {
       userState.users = [makeUser('admin', '123456', 'admin')];

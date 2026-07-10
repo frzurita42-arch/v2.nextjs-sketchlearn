@@ -19,7 +19,7 @@ const db = {
         // slow queries (e.g. a cold-starting free-tier DB) are bounded per-call by
         // withDbTimeout so the boot DDL is never killed mid-flight.
         max: 5,
-        connectionTimeoutMillis: 10000,
+        connectionTimeoutMillis: 6000,
         idleTimeoutMillis: 30000
       })
     : null
@@ -32,7 +32,10 @@ if (db.pool) {
 
 async function dbQuery(text, params = []) {
   if (!db.pool) throw new Error('Database is not configured');
-  return db.pool.query(text, params);
+  // Bound EVERY query so a slow/overloaded Postgres (or an exhausted connection
+  // pool under a burst of concurrent requests) rejects fast and callers can fall
+  // back to file storage, instead of hanging until the serverless function dies.
+  return withDbTimeout(db.pool.query(text, params), 10000, 'DB query');
 }
 
 // Bound a DB operation so a slow/hung query rejects quickly and callers can fall back.

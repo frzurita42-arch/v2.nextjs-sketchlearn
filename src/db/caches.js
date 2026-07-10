@@ -1,6 +1,6 @@
 /* Per-user caches for the home-page topic chips and the suggested-topic pair,
  * plus the rotate/pick/normalize helpers that keep those suggestions varied. */
-const { db, dbQuery } = require('./pool');
+const { db, dbQuery, withDbTimeout } = require('./pool');
 const { readJSON, writeJSON } = require('./persistence');
 const {
   SUGGESTED_STORE_FILE, HOME_TOPICS_STORE_FILE,
@@ -26,18 +26,23 @@ function isValidSuggestion(item) {
 async function readSuggestedStore() {
   const fallback = { defaults: DEFAULT_SUGGESTION_PAIR, users: {} };
   if (db.pool) {
-    const { rows } = await dbQuery('SELECT username, pair, cursor, last_shown_topic, updated_at, trigger_topic FROM suggested_topics_cache');
-    const usersMap = {};
-    for (const r of rows) {
-      usersMap[r.username] = {
-        pair: Array.isArray(r.pair) ? r.pair : DEFAULT_SUGGESTION_PAIR,
-        cursor: Number.isInteger(r.cursor) ? r.cursor : 0,
-        lastShownTopic: r.last_shown_topic || null,
-        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
-        triggerTopic: r.trigger_topic || null
-      };
+    try {
+      const { rows } = await dbQuery('SELECT username, pair, cursor, last_shown_topic, updated_at, trigger_topic FROM suggested_topics_cache');
+      const usersMap = {};
+      for (const r of rows) {
+        usersMap[r.username] = {
+          pair: Array.isArray(r.pair) ? r.pair : DEFAULT_SUGGESTION_PAIR,
+          cursor: Number.isInteger(r.cursor) ? r.cursor : 0,
+          lastShownTopic: r.last_shown_topic || null,
+          updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+          triggerTopic: r.trigger_topic || null
+        };
+      }
+      return { defaults: DEFAULT_SUGGESTION_PAIR, users: usersMap };
+    } catch (e) {
+      // DB slow/unreachable: don't hang the request — serve from file/defaults.
+      console.error('readSuggestedStore DB error; using file storage:', e.message);
     }
-    return { defaults: DEFAULT_SUGGESTION_PAIR, users: usersMap };
   }
   const store = readJSON(SUGGESTED_STORE_FILE, fallback);
   return normalizeStoreShape(store, DEFAULT_SUGGESTION_PAIR);
@@ -49,47 +54,59 @@ async function writeSuggestedStore(store) {
     writeJSON(SUGGESTED_STORE_FILE, normalized);
     return;
   }
-  const client = await db.pool.connect();
+  let client;
   try {
-    await client.query('BEGIN');
-    await client.query('DELETE FROM suggested_topics_cache');
-    for (const [username, entry] of Object.entries(normalized.users || {})) {
-      await client.query(
-        `INSERT INTO suggested_topics_cache (username, pair, cursor, last_shown_topic, updated_at, trigger_topic)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [
-          username,
-          JSON.stringify(Array.isArray(entry.pair) ? entry.pair : DEFAULT_SUGGESTION_PAIR),
-          Number.isInteger(entry.cursor) ? entry.cursor : 0,
-          entry.lastShownTopic || null,
-          entry.updatedAt || new Date().toISOString(),
-          entry.triggerTopic || null
-        ]
-      );
+    // Bound the connection checkout so an exhausted pool / slow DB doesn't hang.
+    client = await withDbTimeout(db.pool.connect(), 8000, 'DB connect');
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM suggested_topics_cache');
+      for (const [username, entry] of Object.entries(normalized.users || {})) {
+        await client.query(
+          `INSERT INTO suggested_topics_cache (username, pair, cursor, last_shown_topic, updated_at, trigger_topic)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            username,
+            JSON.stringify(Array.isArray(entry.pair) ? entry.pair : DEFAULT_SUGGESTION_PAIR),
+            Number.isInteger(entry.cursor) ? entry.cursor : 0,
+            entry.lastShownTopic || null,
+            entry.updatedAt || new Date().toISOString(),
+            entry.triggerTopic || null
+          ]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+      throw e;
+    } finally {
+      client.release();
     }
-    await client.query('COMMIT');
   } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+    // Never let a cache write hang or break the request — persist to file instead.
+    console.error('writeSuggestedStore DB error; using file storage:', e.message);
+    writeJSON(SUGGESTED_STORE_FILE, normalized);
   }
 }
 
 async function readHomeTopicsStore() {
   const fallback = { defaults: DEFAULT_HOME_TOPIC_POOL, users: {} };
   if (db.pool) {
-    const { rows } = await dbQuery('SELECT username, topics, cursor, updated_at, trigger_topic FROM home_topics_cache');
-    const usersMap = {};
-    for (const r of rows) {
-      usersMap[r.username] = {
-        topics: Array.isArray(r.topics) ? r.topics : DEFAULT_HOME_TOPIC_POOL,
-        cursor: Number.isInteger(r.cursor) ? r.cursor : 0,
-        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
-        triggerTopic: r.trigger_topic || null
-      };
+    try {
+      const { rows } = await dbQuery('SELECT username, topics, cursor, updated_at, trigger_topic FROM home_topics_cache');
+      const usersMap = {};
+      for (const r of rows) {
+        usersMap[r.username] = {
+          topics: Array.isArray(r.topics) ? r.topics : DEFAULT_HOME_TOPIC_POOL,
+          cursor: Number.isInteger(r.cursor) ? r.cursor : 0,
+          updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+          triggerTopic: r.trigger_topic || null
+        };
+      }
+      return { defaults: DEFAULT_HOME_TOPIC_POOL, users: usersMap };
+    } catch (e) {
+      console.error('readHomeTopicsStore DB error; using file storage:', e.message);
     }
-    return { defaults: DEFAULT_HOME_TOPIC_POOL, users: usersMap };
   }
   const store = readJSON(HOME_TOPICS_STORE_FILE, fallback);
   return normalizeStoreShape(store, DEFAULT_HOME_TOPIC_POOL);
@@ -101,29 +118,35 @@ async function writeHomeTopicsStore(store) {
     writeJSON(HOME_TOPICS_STORE_FILE, normalized);
     return;
   }
-  const client = await db.pool.connect();
+  let client;
   try {
-    await client.query('BEGIN');
-    await client.query('DELETE FROM home_topics_cache');
-    for (const [username, entry] of Object.entries(normalized.users || {})) {
-      await client.query(
-        `INSERT INTO home_topics_cache (username, topics, cursor, updated_at, trigger_topic)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [
-          username,
-          JSON.stringify(Array.isArray(entry.topics) ? entry.topics : DEFAULT_HOME_TOPIC_POOL),
-          Number.isInteger(entry.cursor) ? entry.cursor : 0,
-          entry.updatedAt || new Date().toISOString(),
-          entry.triggerTopic || null
-        ]
-      );
+    client = await withDbTimeout(db.pool.connect(), 8000, 'DB connect');
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM home_topics_cache');
+      for (const [username, entry] of Object.entries(normalized.users || {})) {
+        await client.query(
+          `INSERT INTO home_topics_cache (username, topics, cursor, updated_at, trigger_topic)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [
+            username,
+            JSON.stringify(Array.isArray(entry.topics) ? entry.topics : DEFAULT_HOME_TOPIC_POOL),
+            Number.isInteger(entry.cursor) ? entry.cursor : 0,
+            entry.updatedAt || new Date().toISOString(),
+            entry.triggerTopic || null
+          ]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+      throw e;
+    } finally {
+      client.release();
     }
-    await client.query('COMMIT');
   } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+    console.error('writeHomeTopicsStore DB error; using file storage:', e.message);
+    writeJSON(HOME_TOPICS_STORE_FILE, normalized);
   }
 }
 
