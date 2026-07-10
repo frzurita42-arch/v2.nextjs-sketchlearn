@@ -56,15 +56,15 @@ export function LearningPath() {
             onKeyDown={e => { if (e.key === 'Enter') start(custom.trim()); }} /></label>
         <button className="btn primary" id="custom-topic-btn" onClick={() => start(custom.trim())}>Draw my path →</button>
       </div>
+      <div className="slide-actions" style={{ justifyContent: 'center', marginTop: 12 }}>
+        <button className="btn small blue" id="refresh-home-topics" disabled={refreshing} onClick={refreshTopics}>
+          {refreshing ? 'Refreshing ideas…' : '↻ Refresh 12 topic ideas'}
+        </button>
+      </div>
       <div className="chip-row" style={{ marginTop: 16 }}>
         {(appState.homeTopics || []).map((t: string) => (
           <button key={t} className="chip" data-topic={t} onClick={() => start(t)}>{t}</button>
         ))}
-      </div>
-      <div className="slide-actions" style={{ justifyContent: 'center', marginTop: 10 }}>
-        <button className="btn small blue" id="refresh-home-topics" disabled={refreshing} onClick={refreshTopics}>
-          {refreshing ? 'Refreshing ideas…' : '↻ Refresh 12 topic ideas'}
-        </button>
       </div>
     </section>
   );
