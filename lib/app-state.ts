@@ -7,6 +7,13 @@ export const PRESET_TOPICS = ['Math', 'Physics', 'Chemistry', 'Biology', 'Histor
 export const LEVELS = ['Beginner', 'Lower Intermediate', 'Upper Intermediate', 'Advanced', 'PhD'];
 export const TONES = ['Friendly lecture', 'Casual conversation', 'Hopeful & encouraging', 'Pessimistic & cautionary', 'Humorous', 'Storytelling', 'Socratic questioning'];
 
+// Language Learning activity: a broad set including the most widely spoken languages.
+export const LANGUAGES = ['English', 'Spanish', 'Mandarin Chinese', 'Hindi', 'Arabic', 'French', 'Portuguese', 'Japanese', 'German', 'Italian'];
+// CEFR-style levels plus "Zero" (absolute beginner, alphabet/characters up).
+export const LANG_LEVELS = ['Zero', 'Beginner', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+// The five sub-activity types the language lesson can mix (grammar always first).
+export const LANG_ACTIVITY_TYPES = ['grammar', 'reading', 'listening', 'spelling', 'vocabulary'] as const;
+
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export const initialCoachGreeting: ChatMessage = {
@@ -21,6 +28,7 @@ export interface AppState {
   homeSuggestion: any;
   timeTravel: any;
   latexLab: any;
+  languageLearning: any;
   suggestedSettings: any;
   suggestedGuidance: string;
   concept: string | null;
@@ -63,6 +71,17 @@ export const appState: AppState = {
     totalSlides: 3,
     continuation: 'related-topics',
     alternateVisualMath: true,
+  },
+  languageLearning: {
+    language: 'Spanish',
+    customLanguage: false,
+    level: 'Zero',
+    grammarTopic: '',
+    customGrammar: false,
+    topic: '',
+    // Per-sub-activity slide counts; grammar renders first, the rest shuffle.
+    counts: { grammar: 1, reading: 1, listening: 0, spelling: 0, vocabulary: 0 },
+    grammarTopicOptions: [] as string[],
   },
   suggestedSettings: null,
   suggestedGuidance: '',

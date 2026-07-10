@@ -1,0 +1,54 @@
+/* Prompts for the Language Learning activity: level-appropriate grammar topics,
+ * a lesson-theme suggestion, and the per-level instructions that steer the shared
+ * slide engine when it renders a language "reading" lesson. */
+
+// Guidance per CEFR-style level, reused across prompts so lessons target the right
+// objective and difficulty (Zero = absolute basics; C1/C2 = nuanced/real-world).
+const LEVEL_GUIDANCE = {
+  Zero: 'Absolute beginner starting from nothing. Teach the alphabet/characters, letter or character sounds, a handful of the most essential words, and 2-4 word sentences. For symbol-based languages (Japanese, Mandarin), introduce individual characters: what the character depicts, what it means, and how it sounds, and translate everything using the learner\'s own language so they can follow with zero prior knowledge.',
+  Beginner: 'Near-zero. Very simple greetings, numbers, days, essential everyday words, and short present-tense sentences.',
+  A1: 'Basic phrases and everyday expressions, simple questions and answers about concrete needs (introductions, shopping, directions).',
+  A2: 'Simple, routine matters: describing background, immediate environment, simple past/future, common connectors.',
+  B1: 'Handle most travel situations, describe experiences/plans, give brief reasons and opinions; broader tenses.',
+  B2: 'Fluent-ish on a range of topics, clear detailed text, argue a viewpoint; subtler grammar and register.',
+  C1: 'Complex texts, implicit meaning, flexible/effective language for social, academic and professional use; negotiation, study, business.',
+  C2: 'Near-native precision and nuance across specialized/professional/academic contexts; idioms, subtext, fine distinctions.',
+};
+
+function levelGuidance(level) {
+  return LEVEL_GUIDANCE[level] || LEVEL_GUIDANCE.A1;
+}
+
+// 10 grammar topics accurate for a given language + level.
+function buildGrammarTopicsPrompt({ language, level }) {
+  return {
+    system: `You produce grammar syllabi for language learners. Respond ONLY with JSON: {"topics": [string, ...]} — exactly 10 concise grammar-topic titles (3-6 words each), in learning order, that are ACCURATE and appropriate for the given target language and level. No numbering, no explanations.`,
+    user: `Target language: ${language}. Level: ${level} (${levelGuidance(level)}).\nList 10 grammar topics a ${level} learner of ${language} should study, correct for this exact level.`,
+  };
+}
+
+// A fun lesson theme (not language-specific): "Food", "Summer vibes", "Travel".
+function buildLanguageTopicPrompt({ language, level, avoid = [] }) {
+  return {
+    system: `You suggest a single, fun, concrete THEME for a language lesson (e.g. Food, Summer vibes, Travel, Sports, Family, City life, Festivals). Respond ONLY with JSON: {"topic": string} — 1-3 words, everyday and engaging, suitable to build ${level} ${language} examples around. Avoid anything in the avoid list.`,
+    user: `Language: ${language}. Level: ${level}. Avoid: ${avoid.join(', ') || 'none'}. Suggest one lesson theme.`,
+  };
+}
+
+// Instructions injected as the slide engine's customInstructions for a language
+// READING lesson at a given level/topic/grammar focus.
+function buildReadingInstructions({ language, level, topic, grammarTopic }) {
+  const symbolNote = /japanese|mandarin|chinese|korean|arabic/i.test(language)
+    ? ` ${language} is script/character-based: at Zero/Beginner introduce the characters themselves (what each depicts, means and sounds like) and always give the meaning in the learner's own language.`
+    : '';
+  const explainInEnglish = ['Zero', 'Beginner', 'A1'].includes(level)
+    ? ' Explain in clear English (the learner\'s language) so a near-beginner understands, then show the target-language example.'
+    : ' Write mostly in the target language, with brief English glosses only where a beginner-of-this-level would need them.';
+  return `LANGUAGE READING LESSON. Target language: ${language}. Learner level: ${level} — ${levelGuidance(level)}${symbolNote}${explainInEnglish}` +
+    ` Theme for examples: "${topic || 'everyday life'}". Grammar focus: "${grammarTopic || 'general'}".` +
+    ` Each slide is a short reading passage sized to the level (Zero: a few short words/sentences; higher levels: more sentences and paragraphs, richer vocabulary and harder interpretation), followed by a comprehension multiple-choice question.` +
+    ` On EVERY slide include exactly one support component that fits the passage — an image, a table (e.g. vocabulary/conjugations), or a code snippet when illustrating a rule/pattern/steps — AND exactly one sticky note whose text is either an encouraging comment on the learner's progress so far, a short level-appropriate quote about the theme, or a quick motivational cheer.` +
+    ` Keep the lesson oriented to what a ${level} learner actually needs (Zero: survival basics; A1/A2: greetings and daily life; B1/B2: experiences and opinions; C1/C2: negotiation, study, travel, business).`;
+}
+
+module.exports = { LEVEL_GUIDANCE, levelGuidance, buildGrammarTopicsPrompt, buildLanguageTopicPrompt, buildReadingInstructions };
