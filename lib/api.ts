@@ -73,6 +73,7 @@ class ApiClient {
 
   get(url: string) { return this.call('GET', url); }
   post(url: string, body?: any) { return this.call('POST', url, body); }
+  put(url: string, body?: any) { return this.call('PUT', url, body); }
   del(url: string) { return this.call('DELETE', url); }
 }
 

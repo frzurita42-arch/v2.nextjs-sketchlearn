@@ -19,6 +19,9 @@ import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
 import { CsPathView } from '@/components/views/CsPathView';
 import { FeedView } from '@/components/views/FeedView';
+import { ToolsView } from '@/components/views/ToolsView';
+import { ToolRunnerView } from '@/components/views/ToolRunnerView';
+import { ToolBuilderView } from '@/components/views/ToolBuilderView';
 
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
@@ -92,6 +95,9 @@ export default function AppRoot() {
     dashboard: <DashboardView />,
     cspath: <CsPathView />,
     feed: <FeedView />,
+    tools: <ToolsView />,
+    tool: <ToolRunnerView />,
+    toolbuilder: <ToolBuilderView />,
   };
 
   return (

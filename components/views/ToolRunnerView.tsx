@@ -1,0 +1,169 @@
+'use client';
+/* The interpreter/runtime. Reads appState.activeTool (a Tool Definition record)
+ * and renders it — no per-tool code. Two archetypes:
+ *   - generator: settings form -> run -> render output (text/cards/table)
+ *   - app:       entry form -> save -> browse entries (cards/list/table),
+ *                with an owner-only review queue when the tool uses review. */
+import { useEffect, useMemo, useState } from 'react';
+import { API } from '@/lib/api';
+import { appState } from '@/lib/app-state';
+import { useApp } from '@/components/AppContext';
+import { defaultsFor } from '@/lib/tool-schema';
+import { ToolFields } from '@/components/tools/ToolFields';
+
+function OutputView({ out }: { out: any }) {
+  if (!out) return null;
+  if (out.output === 'text') return <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{out.text}</p>;
+  if (out.output === 'cards') return (
+    <div>{(out.cards || []).map((c: any, i: number) => (
+      <div key={i} className="card" style={{ padding: '12px 14px', marginBottom: 10 }}>
+        <strong>{c.title}</strong><p style={{ margin: '6px 0 0', fontSize: 14 }}>{c.body}</p>
+      </div>
+    ))}</div>
+  );
+  if (out.output === 'table') return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="sketch-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead><tr>{(out.headers || []).map((h: string, i: number) => <th key={i} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{h}</th>)}</tr></thead>
+        <tbody>{(out.rows || []).map((r: any[], i: number) => <tr key={i}>{r.map((c, j) => <td key={j} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6 }}>{c}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  );
+  return null;
+}
+
+function EntryDisplay({ entries, display, fields }: { entries: any[]; display: string; fields: any[] }) {
+  if (!entries.length) return <p style={{ opacity: 0.6 }}>No entries yet — add the first one above.</p>;
+  if (display === 'table') return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="sketch-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead><tr>{fields.map(f => <th key={f.id} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{f.label}</th>)}<th /></tr></thead>
+        <tbody>{entries.map(e => (
+          <tr key={e.id}>{fields.map(f => <td key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6 }}>{String(e.data?.[f.id] ?? '')}</td>)}
+            <td style={{ padding: 6, opacity: 0.6, fontSize: 12 }}>{e.status !== 'active' && e.status !== 'approved' ? e.status : ''}</td></tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
+  if (display === 'list') return (
+    <ul style={{ paddingLeft: 18 }}>{entries.map(e => (
+      <li key={e.id} style={{ marginBottom: 6 }}>
+        {fields.map(f => <span key={f.id}><b>{f.label}:</b> {String(e.data?.[f.id] ?? '')} </span>)}
+        {e.status && e.status !== 'active' && e.status !== 'approved' && <em style={{ opacity: 0.6 }}> ({e.status})</em>}
+      </li>
+    ))}</ul>
+  );
+  // cards
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+      {entries.map(e => (
+        <div key={e.id} className="card" style={{ padding: '12px 14px' }}>
+          {fields.map(f => <div key={f.id} style={{ fontSize: 14, marginBottom: 4 }}><b>{f.label}:</b> {String(e.data?.[f.id] ?? '')}</div>)}
+          {e.status && e.status !== 'active' && e.status !== 'approved' && <div style={{ fontSize: 12, opacity: 0.6 }}>status: {e.status}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ToolRunnerView() {
+  const app = useApp();
+  const tool = appState.activeTool;
+  const def = tool?.definition;
+
+  // generator state
+  const [values, setValues] = useState<Record<string, any>>(() => defaultsFor(def?.settings || []));
+  const [out, setOut] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  // app state
+  const [entryVals, setEntryVals] = useState<Record<string, any>>(() => defaultsFor(def?.app?.entryFields || []));
+  const [entries, setEntries] = useState<any[]>([]);
+  const [isOwner, setIsOwner] = useState(false);
+
+  const isApp = def?.archetype === 'app';
+  const loadEntries = useMemo(() => async () => {
+    if (!isApp || !tool?.slug) return;
+    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(tool.slug)}`); setEntries(r?.entries || []); setIsOwner(!!r?.isOwner); } catch { /* ignore */ }
+  }, [isApp, tool?.slug]);
+  useEffect(() => { loadEntries(); }, [loadEntries]);
+
+  if (!tool || !def) return (
+    <><h1 className="view-title">Tool</h1><p className="view-sub">No tool selected. <button className="btn small" onClick={() => app.nav('tools')}>← Browse tools</button></p></>
+  );
+
+  const run = async () => {
+    setBusy(true); setErr(''); setOut(null);
+    try { const r = await API.post('/api/tools/run', { definition: def, values }); setOut(r); }
+    catch (e: any) { setErr(e?.message || 'Run failed'); }
+    setBusy(false);
+  };
+
+  const addEntry = async () => {
+    setBusy(true); setErr('');
+    try { await API.post('/api/tools/entries', { slug: tool.slug, data: entryVals }); setEntryVals(defaultsFor(def.app.entryFields)); await loadEntries(); }
+    catch (e: any) { setErr(e?.message || 'Could not add entry'); }
+    setBusy(false);
+  };
+
+  const setStatus = async (entryId: string, status: string) => {
+    try { await API.put('/api/tools/entries', { slug: tool.slug, entryId, status }); await loadEntries(); } catch { /* ignore */ }
+  };
+
+  return (
+    <>
+      <h1 className="view-title">{tool.title}</h1>
+      <p className="view-sub">{def.description || (isApp ? 'Add and browse entries.' : 'Fill the settings and generate.')}{' '}
+        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button></p>
+
+      <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
+        {!isApp ? (
+          <>
+            <div className="card alt" style={{ padding: '14px 16px' }}>
+              <ToolFields fields={def.settings} values={values} onChange={(id, v) => setValues(s => ({ ...s, [id]: v }))} />
+              <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
+                <button className="btn green" disabled={busy} onClick={run}>{busy ? 'Generating…' : 'Generate →'}</button>
+              </div>
+              {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
+            </div>
+            {out && (
+              <div style={{ marginTop: 16 }}>
+                {out.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7 }}>Demo output (no AI connected).</p>}
+                <OutputView out={out} />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="card alt" style={{ padding: '14px 16px' }}>
+              <h4 style={{ margin: '0 0 8px' }}>Add an entry</h4>
+              <ToolFields fields={def.app.entryFields} values={entryVals} onChange={(id, v) => setEntryVals(s => ({ ...s, [id]: v }))} />
+              <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
+                <button className="btn green" disabled={busy} onClick={addEntry}>{busy ? 'Saving…' : (def.app.review ? 'Submit for review' : 'Add')}</button>
+              </div>
+              {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <EntryDisplay entries={entries} display={def.app.display} fields={def.app.entryFields} />
+              {isOwner && def.app.review && entries.some((e: any) => e.status === 'pending') && (
+                <div className="card" style={{ padding: '12px 14px', marginTop: 12 }}>
+                  <h4 style={{ margin: '0 0 8px' }}>Review queue (owner)</h4>
+                  {entries.filter((e: any) => e.status === 'pending').map((e: any) => (
+                    <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13 }}>{def.app.entryFields.map((f: any) => `${e.data?.[f.id] ?? ''}`).filter(Boolean).join(' · ')}</span>
+                      <span style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn small green" onClick={() => setStatus(e.id, 'approved')}>Approve</button>
+                        <button className="btn small ghost" onClick={() => setStatus(e.id, 'rejected')}>Reject</button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+    </>
+  );
+}

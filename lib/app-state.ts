@@ -31,6 +31,8 @@ export interface AppState {
   languageLearning: any;
   languageLesson?: any;
   csAcademy?: any;
+  activeTool?: any;
+  builderDraft?: any;
   suggestedSettings: any;
   suggestedGuidance: string;
   concept: string | null;
