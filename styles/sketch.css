@@ -611,6 +611,12 @@ table.sketch tr:nth-child(even) td { background: #fffbe8; }
 }
 .site-footer.hidden { display: none; }
 
+/* Language-learning activity count inputs: compact, centered, no spin buttons so the
+   value stays readable in the narrow Activities column on 9:16 screens. */
+input.ll-count { width: 46px; flex: 0 0 auto; text-align: center; padding-left: 4px; padding-right: 4px; -moz-appearance: textfield; }
+input.ll-count::-webkit-outer-spin-button,
+input.ll-count::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 640px) {
   body { font-size: 17px; }

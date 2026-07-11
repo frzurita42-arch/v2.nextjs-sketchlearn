@@ -119,34 +119,26 @@ export function LanguageLearning() {
       <h4 className="activity-heading" style={{ margin: '0 0 6px', opacity: 0.9 }}>Language learning</h4>
       <InstructionPlank>Pick a language, level and grammar focus — get a playable lesson with reading, quizzes and coaching notes.</InstructionPlank>
       <div className="card alt" style={{ maxWidth: 860, margin: '0 auto', padding: '14px 16px' }}>
-        <div className="settings-grid">
-          {/* ---- left: language / level / grammar ---- */}
+        {/* ---- row 1: settings (wider) + activities (narrower), side by side even on 9:16 ---- */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12, alignItems: 'start' }}>
           <div className="card">
-            <label className="field">
-              <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                Language
-                <button className="btn small ghost" type="button" onClick={() => patch({ customLanguage: !st.customLanguage })}>
-                  {st.customLanguage ? 'Pick from list' : '✎ Custom'}
-                </button>
-              </span>
+            <div className="field">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Language
+                <PencilToggle active={st.customLanguage} onClick={() => patch({ customLanguage: !st.customLanguage })} title="Type your own language" /></span>
               {st.customLanguage
                 ? <input type="text" id="ll-language-custom" value={st.language} placeholder="e.g. Swahili, Greek…" onChange={e => patch({ language: e.target.value })} />
                 : <select id="ll-language" value={st.language} onChange={e => onLanguage(e.target.value)}>
                     {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>}
-            </label>
+            </div>
             <label className="field"><span>Level</span>
               <select id="ll-level" value={st.level} onChange={e => onLevel(e.target.value)}>
                 {LANG_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
             </label>
-            <label className="field">
-              <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                Grammar topic
-                <button className="btn small ghost" type="button" onClick={() => patch({ customGrammar: !st.customGrammar })}>
-                  {st.customGrammar ? 'Pick from list' : '✎ Custom'}
-                </button>
-              </span>
+            <div className="field">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Grammar topic
+                <PencilToggle active={st.customGrammar} onClick={() => patch({ customGrammar: !st.customGrammar })} title="Type your own grammar topic" /></span>
               {st.customGrammar
                 ? <input type="text" id="ll-grammar-custom" value={st.grammarTopic} placeholder="e.g. Past tense of regular verbs" onChange={e => patch({ grammarTopic: e.target.value })} />
                 : <select id="ll-grammar" value={st.grammarTopic} disabled={grammarUnavailable} onChange={e => patch({ grammarTopic: e.target.value })}>
@@ -154,48 +146,55 @@ export function LanguageLearning() {
                     {!grammarUnavailable && !(st.grammarTopicOptions || []).length && <option value="">(no topics — try Custom)</option>}
                     {(st.grammarTopicOptions || []).map((t: string) => <option key={t} value={t}>{t}</option>)}
                   </select>}
-              {grammarUnavailable && <span className="muted-line">Generating {st.level} topics for {st.language}…</span>}
-            </label>
+              {grammarUnavailable && <span className="muted-line">Generating {st.level} topics…</span>}
+            </div>
           </div>
 
-          {/* ---- right: activities ---- */}
-          <div className="card alt">
-            <h3 style={{ marginTop: 0 }}>Activities <small style={{ fontWeight: 'normal', opacity: .7 }}>({totalCount}/{MAX_SLIDES} slides)</small></h3>
+          <div className="card alt" style={{ minWidth: 0 }}>
+            <h3 style={{ marginTop: 0, fontSize: '1.2rem' }}>Activities <small style={{ fontWeight: 'normal', opacity: .7 }}>{totalCount}/{MAX_SLIDES}</small></h3>
             {ACTIVITIES.map(([key, label]) => (
-              <label className="field" key={key} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span>{label}{key === 'listening' || key === 'spelling' ? <small style={{ opacity: .55 }}> · 🔊</small> : ''}</span>
-                <input type="number" id={`ll-count-${key}`} min={0} max={MAX_SLIDES} value={Number(counts[key] || 0)}
-                  style={{ width: 72 }} onChange={e => setCount(key, e.target.value)} />
+              <label className="field" key={key} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, minWidth: 0 }}>
+                <span style={{ fontSize: '.86rem', minWidth: 0, lineHeight: 1.1 }}>{label}{key === 'listening' || key === 'spelling' ? ' 🔊' : ''}</span>
+                <input type="number" className="ll-count" id={`ll-count-${key}`} min={0} max={MAX_SLIDES} value={Number(counts[key] || 0)}
+                  onChange={e => setCount(key, e.target.value)} />
               </label>
             ))}
-            <div className="slide-actions" style={{ marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
-              <button className="btn primary" id="ll-generate" onClick={generate}>Generate ✏️</button>
-              <button className="btn blue" id="ll-randomize" title="Randomize level, grammar topic and activities" onClick={randomize}>🎲 Surprise me</button>
-            </div>
           </div>
         </div>
 
-        {/* ---- bottom: topic paper + donations mug ---- */}
-        <div className="settings-grid" style={{ marginTop: 12 }}>
+        {/* ---- row 2: topic paper + donations mug ---- */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 12, marginTop: 12, alignItems: 'stretch' }}>
           <div className="card">
-            <label className="field">
-              <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                Topic
-                <button className="btn small blue" type="button" disabled={busyTopic} onClick={suggestTopic}>{busyTopic ? '…' : '🎲 Suggest'}</button>
-              </span>
+            <div className="field">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Topic
+                <button className="btn small blue" type="button" disabled={busyTopic} onClick={suggestTopic} style={{ padding: '2px 8px' }}>{busyTopic ? '…' : '🎲'}</button></span>
               <input type="text" id="ll-topic" value={st.topic} placeholder="e.g. Food, Summer vibes, Travel…" onChange={e => patch({ topic: e.target.value })} />
-            </label>
+            </div>
           </div>
-          <div className="card alt" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card alt" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
             <a href="https://ko-fi.com" target="_blank" rel="noreferrer" title="Support this project" aria-label="Donations"
-              style={{ textDecoration: 'none', color: 'inherit', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              style={{ textDecoration: 'none', color: 'inherit', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <DonationMug />
-              <span style={{ fontFamily: 'var(--font-title)', fontSize: '1.3rem' }}>Donations</span>
+              <span style={{ fontFamily: 'var(--font-title)', fontSize: '1.15rem' }}>Donations</span>
             </a>
           </div>
         </div>
+
+        {/* ---- generate, beneath the topic card ---- */}
+        <div className="slide-actions" style={{ justifyContent: 'center', marginTop: 14, gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn primary" id="ll-generate" style={{ fontSize: '1.15rem' }} onClick={generate}>Generate ✏️</button>
+          <button className="btn blue" id="ll-randomize" title="Randomize level, grammar topic and activities" onClick={randomize}>🎲 Surprise me</button>
+        </div>
       </div>
     </section>
+  );
+}
+
+// Small pencil icon that toggles a field between "pick from list" and "type your own".
+function PencilToggle({ active, onClick, title }: { active: boolean; onClick: () => void; title: string }) {
+  return (
+    <button type="button" title={title} aria-label={title} aria-pressed={active} onClick={onClick}
+      style={{ background: active ? 'var(--yellow)' : 'none', border: active ? '2px solid var(--ink)' : '2px solid transparent', borderRadius: 8, cursor: 'pointer', fontSize: '.9rem', lineHeight: 1, padding: '2px 5px' }}>✏️</button>
   );
 }
 
