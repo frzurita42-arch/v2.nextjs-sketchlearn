@@ -27,6 +27,26 @@ function heuristicProposal(text: string) {
     const cap = (s: string) => `${s[0].toUpperCase()}${s.slice(1)}`;
     const subject = (text.trim().split(/[.,\n]/)[0] || 'Lesson').replace(/^(a|an|make|build|create|i want|i'd like)\s+/i, '').slice(0, 60) || 'Lesson';
     const levels = langMatch ? ['A1', 'A2', 'B1', 'B2', 'C1'] : ['Beginner', 'Intermediate', 'Advanced'];
+    // Handwriting/character practice -> a pure WRITING lesson (draw + AI check). No
+    // pronunciation/image/phrase — just a character set + difficulty.
+    const writey = /\b(write|writing|handwriting|hand-write|trace|tracing|character|characters|kanji|hiragana|katakana|hanzi|alphabet|stroke|calligraphy)\b/.test(t);
+    if (writey) {
+      return {
+        archetype: 'lesson', title: subject, description: text.slice(0, 300),
+        tags: ['language', 'writing', 'handwriting'].filter((v, i, arr) => arr.indexOf(v) === i),
+        settings: [
+          { id: 'topic', label: 'Character set / topic', type: 'select-or-custom', options: langMatch && /japanese/.test(t) ? ['Hiragana', 'Katakana', 'Basic Kanji'] : ['Basics', 'Common words'] },
+          { id: 'difficulty', label: 'Difficulty', type: 'select-or-custom', options: levels },
+          { id: 'slides', label: 'How many characters', type: 'number', default: 5 },
+        ],
+        lesson: {
+          subject: langMatch ? cap(langMatch[1]) : subject, subjectKind: 'language',
+          totalSlides: 5, language: langMatch ? cap(langMatch[1]) : subject, translateTo: 'English',
+          support: { images: false, code: false, tables: false, formulas: false, audio: false },
+          activityTypes: ['writing'],
+        },
+      };
+    }
     return {
       archetype: 'lesson', title: subject, description: text.slice(0, 300),
       tags: [subjectKind === 'general' ? 'lesson' : subjectKind, 'lesson'].filter((v, i, arr) => arr.indexOf(v) === i),
@@ -152,6 +172,9 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const messages: any[] = Array.isArray(b.messages) ? b.messages.slice(-16) : [];
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
+  // All the user's turns joined (first = the idea) so the heuristic proposal
+  // captures the whole request, not just the last "generate as is" answer.
+  const ideaText = messages.filter((m) => m.role === 'user').map((m) => String(m.content)).join('. ') || String(lastUser || 'a simple tool');
 
   // Gate: turn 1 = the idea; force 2 follow-up questions (turns 1,2) + a
   // recommendation (turn 3) BEFORE any proposal is allowed. Only from turn 4 on
@@ -161,7 +184,7 @@ export async function POST(req: Request) {
 
   if (!geminiEnabled && !deepseekEnabled) {
     if (inGate) return NextResponse.json({ kind: 'question', ...gateQuestion(userTurns) });
-    const raw = heuristicProposal(String(lastUser || 'a simple tool'));
+    const raw = heuristicProposal(ideaText);
     const { def } = validateToolDefinition(raw);
     return NextResponse.json({ kind: 'proposal', definition: def, summary: 'Assembled a starter tool from your answers (no AI connected — edit or publish as-is).' });
   }
@@ -205,7 +228,7 @@ export async function POST(req: Request) {
     if (r?.kind === 'proposal' || r?.definition) {
       const { ok, def } = validateToolDefinition(r.definition);
       if (ok) return NextResponse.json({ kind: 'proposal', definition: def, summary: String(r.summary || 'Here is a tool based on your answers.') });
-      const { def: hdef } = validateToolDefinition(heuristicProposal(String(lastUser)));
+      const { def: hdef } = validateToolDefinition(heuristicProposal(ideaText));
       return NextResponse.json({ kind: 'proposal', definition: hdef, summary: 'Here is a starter version — tweak it or publish.' });
     }
     // Model still asked something -> pass it through.
@@ -216,7 +239,7 @@ export async function POST(req: Request) {
       field: String(r?.field || ''),
     });
   } catch {
-    const { def } = validateToolDefinition(heuristicProposal(String(lastUser || 'a simple tool')));
+    const { def } = validateToolDefinition(heuristicProposal(ideaText));
     return NextResponse.json({ kind: 'proposal', definition: def, summary: 'Assembled a starter tool from your description.' });
   }
 }

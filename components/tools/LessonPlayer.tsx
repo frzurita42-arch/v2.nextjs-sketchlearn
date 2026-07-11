@@ -10,8 +10,10 @@ import { API } from '@/lib/api';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
+import { DrawField } from '@/components/tools/MediaFields';
+import { AudioButton } from '@/components/ui/AudioButton';
 
-type Q = { kind: string; prompt: string; options?: any[]; answer?: string; accept?: string[]; explanation?: string };
+type Q = { kind: string; prompt: string; options?: any[]; answer?: string; accept?: string[]; explanation?: string; target?: string };
 type Slide = { title: string; content: string; translation?: string; support?: any; questions: Q[]; fallback?: boolean };
 type Cfg = Record<string, any>;
 
@@ -57,6 +59,8 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
 
   const finish = (correct: boolean) => { if (state === 'open') { setState(correct ? 'right' : 'wrong'); onDone(correct); } };
 
+  if (q.kind === 'writing') return <WritingQuestion q={q} translateTo={translateTo} onDone={onDone} />;
+
   if (q.kind === 'mcq') {
     const answered = picked !== null;
     return (
@@ -94,6 +98,44 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
       {state === 'open' && tries > 0 && <p style={{ fontSize: 13, color: 'var(--danger,#e4572e)' }}>Not quite — {3 - tries} {3 - tries === 1 ? 'try' : 'tries'} left.</p>}
       {state === 'right' && <p style={{ fontSize: 14, color: 'var(--accent,#5c80bc)' }}>✓ Correct!</p>}
       {state === 'wrong' && <p style={{ fontSize: 14 }}>Answer: <b>{q.answer}</b> <RichText text={String(q.answer || '')} translateTo={translateTo} /></p>}
+    </div>
+  );
+}
+
+// Handwriting drill: draw the target character/word, then have the AI check it.
+function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean) => void }) {
+  const [drawing, setDrawing] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const target = String(q.target || '');
+
+  const check = async () => {
+    if (!drawing) { alert('Draw the character first.'); return; }
+    setBusy(true);
+    try {
+      const r = await API.post('/api/tools/lesson/check-writing', { target, image: drawing });
+      setResult(r);
+    } catch { setResult({ correct: true, feedback: 'Saved.', checked: false }); }
+    setBusy(false);
+  };
+
+  return (
+    <div>
+      <p style={{ fontWeight: 600 }}>✍️ {q.prompt}</p>
+      <div style={{ textAlign: 'center', margin: '4px 0 8px' }}>
+        <div style={{ fontSize: '3.6rem', lineHeight: 1.1 }}>{target}</div>
+        <AudioButton text={target} label="🔊" small showTextOnFail={false} />{' '}
+        <RichText text={target} translateTo={translateTo} />
+      </div>
+      <DrawField label="Trace / write it here" value={drawing} onChange={setDrawing} />
+      {!result ? (
+        <button className="btn green" style={{ marginTop: 10 }} disabled={busy} onClick={check}>{busy ? 'Checking…' : '✅ Check with AI'}</button>
+      ) : (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ fontSize: 15 }}>{result.correct ? '✓ ' : '✗ '}{result.feedback}{typeof result.score === 'number' ? ` (${result.score}/100)` : ''}</p>
+          <button className="btn green" onClick={() => onDone(!!result.correct)}>Continue →</button>
+        </div>
+      )}
     </div>
   );
 }

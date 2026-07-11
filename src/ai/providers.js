@@ -169,6 +169,27 @@ async function gemini(messages, { json = true, temperature = 0.8, maxTokens = 40
   throw lastParseErr || new Error('Model returned invalid JSON');
 }
 
+// Gemini vision: send an image (data URL) + a prompt, get back parsed JSON.
+// Used to CHECK a learner's handwriting drawing against a target character.
+// Returns null when Gemini isn't configured (caller falls back to self-check).
+async function generateVisionJSON(prompt, imageDataUrl) {
+  if (!geminiEnabled) return null;
+  const m = String(imageDataUrl || '').match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  if (!m) return null;
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: String(prompt) }, { inlineData: { mimeType: m[1], data: m[2] } }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' },
+  };
+  const res = await fetchWithTimeout(`${GEMINI_API_BASE}/models/${GEMINI_TEXT_MODEL}:generateContent`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY }, body: JSON.stringify(body),
+  }, 20000, 'Gemini vision');
+  if (!res.ok) return null;
+  const data = await res.json();
+  const content = (data.candidates?.[0]?.content?.parts || []).map(p => p.text).filter(Boolean).join('');
+  if (!content) return null;
+  try { return parseModelJson(content); } catch { return null; }
+}
+
 // Text-provider dispatcher with failover: Gemini first, then DeepSeek on quota/outage.
 async function generateText(messages, opts) {
   if (geminiEnabled) {
@@ -367,6 +388,7 @@ module.exports = {
   gemini,
   generateText,
   generateStructured,
+  generateVisionJSON,
   generateImage,
   geminiImage,
   fillImages,
