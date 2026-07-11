@@ -140,7 +140,6 @@ const claudeSvgEnabled = !!ANTHROPIC_API_KEY;
 // Optional: ElevenLabs text-to-speech for the Language Learning listening/spelling
 // activities. Set ELEVENLABS_API_KEY to enable audio; without it those activities
 // gracefully fall back to showing the text instead of playing it.
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // "Rachel" (public preset)
 const ELEVENLABS_MODEL = process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2';
 const ttsEnabled = !forceFallback && hasConfiguredKey(ELEVENLABS_API_KEY);
@@ -194,7 +193,6 @@ module.exports = {
   ANTHROPIC_API_URL,
   ANTHROPIC_MODEL,
   claudeSvgEnabled,
-  ELEVENLABS_API_KEY,
   ELEVENLABS_VOICE_ID,
   ELEVENLABS_MODEL,
   ttsEnabled,
