@@ -62,7 +62,7 @@ function buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slid
 
   if (type === 'grammar') {
     return {
-      system: `You are a ${language} grammar teacher. Respond ONLY with JSON: {"title": string, "sticky": {...}, "questions": [{"prompt": string, "options": [{"text": string, "correct": boolean, "explanation": string}]}]}. EXACTLY 4 questions; each has EXACTLY 2 options with exactly one "correct": true. Vary the 4 question kinds: (1) fill in the blank with the best word, (2) best translation of a phrase, (3) is this grammar structure correct? (yes/no), (4) judge whether a stated grammar rule/explanation is correct. Keep it at the ${level} level. ${sticky}`,
+      system: `You are a ${language} grammar teacher. Respond ONLY with JSON: {"title": string, "sticky": {...}, "questions": [{"prompt": string, "options": [{"text": string, "correct": boolean, "explanation": string}]}]}. EXACTLY 4 questions; each has EXACTLY 2 options with exactly one "correct": true. Vary the 4 question kinds: (1) fill in the blank with the best word, (2) best translation of a phrase, (3) is this grammar structure correct? (yes/no), (4) judge whether a stated grammar rule/explanation is correct. CRITICAL — DIVERSITY: every question must use DIFFERENT example sentences/words and every option's text must be UNIQUE across the whole slide (never reuse the same option wording for two questions, and the two options of a question must be clearly distinct, not near-duplicates). Each question must teach something new; if the level is very basic, vary with different vocabulary, synonyms and fresh examples so no two questions feel the same. Keep it at the ${level} level. ${sticky}`,
       user: base,
     };
   }

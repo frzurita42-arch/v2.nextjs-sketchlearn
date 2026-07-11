@@ -13,9 +13,12 @@ function normalizeList(value: any, fallback: string[] = []): string[] {
   return text.split(/\s*[·,|]\s*/).map((v: string) => v.trim()).filter(Boolean);
 }
 
+// Muted "NA" for any data point a lesson didn't provide (keeps every row uniform).
+const NA = <span style={{ opacity: 0.45 }}>NA</span>;
+
 function ListCell({ items, emptyText = '' }: { items: any; emptyText?: string | string[] }) {
   const list = normalizeList(items, Array.isArray(emptyText) ? emptyText : (emptyText ? [emptyText] : []));
-  if (!list.length) return <>{Array.isArray(emptyText) ? '' : emptyText}</>;
+  if (!list.length) return NA;
   return <ul className="sheet-list">{list.map((item, i) => <li key={i}>{item}</li>)}</ul>;
 }
 
@@ -85,20 +88,20 @@ export function StatsView() {
                   <tr className="stats-row" data-game-id={g.id || ''} key={g.id || idx}>
                     <td>{g.finishedDate || new Date(g.finishedAt).toLocaleDateString()}</td>
                     <td>{g.finishedTime || new Date(g.finishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                    <td>{g.topic}</td><td>{g.concept}</td>
-                    <td>{g.level}</td><td>{g.correct}/{g.total}</td>
+                    <td>{g.topic || NA}</td><td>{g.concept || NA}</td>
+                    <td>{g.level || NA}</td><td>{Number.isFinite(g.total) && g.total ? `${g.correct}/${g.total}` : NA}</td>
                     <td className="summary-cell"><ListCell items={g.questionSummary} emptyText={(g.slides || []).map((s: any) => s.question).filter(Boolean).join(' · ')} /></td>
                     <td className="summary-cell"><ListCell items={g.answerSummary} emptyText={(g.slides || []).map((s: any) => s.chosen).filter(Boolean).join(' · ')} /></td>
                     <td className="summary-cell"><ListCell items={g.aiNotes} emptyText={g.recommendations?.summary ? [g.recommendations.summary] : ''} /></td>
                     <td className="summary-cell">
                       {Array.isArray(g.recommendations?.areaCompetency) && g.recommendations.areaCompetency.length
                         ? <ul className="sheet-list">{g.recommendations.areaCompetency.map((c: any, i: number) => <li key={i}>{c.area}: <b>{c.score}</b>/100</li>)}</ul>
-                        : ''}
+                        : NA}
                     </td>
                     <td className="summary-cell">
                       {g.recommendations?.languageProficiency
                         ? <span><b>{g.recommendations.languageProficiency.level}</b> · ~{g.recommendations.languageProficiency.estimatedWords} words{g.recommendations.languageProficiency.suggestedLevel !== g.recommendations.languageProficiency.level ? <> → {g.recommendations.languageProficiency.suggestedLevel}</> : ''}</span>
-                        : ''}
+                        : NA}
                     </td>
                     <td>{shareHref ? <a href={shareHref} target="_blank" rel="noreferrer">open</a> : ''}</td>
                     {isAdmin && <td>{g.id ? <button className="btn small ghost delete-game" data-game-id={g.id} onClick={() => deleteGame(g.id)}>Delete</button> : ''}</td>}

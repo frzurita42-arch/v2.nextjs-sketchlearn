@@ -31,13 +31,14 @@ function fbGrammar(topic: string) {
   const q = (prompt: string, a: string, b: string, correctA: boolean) => ({
     prompt, options: [{ text: a, correct: correctA, explanation: '' }, { text: b, correct: !correctA, explanation: '' }],
   });
+  // Distinct options per question so nothing repeats across the slide.
   return {
     type: 'grammar', title: `Grammar practice: ${topic}`.slice(0, 60), sticky: cleanSticky({ color: 'green', title: 'Warm-up', note: 'Trust what you have learned so far.' }),
     questions: [
-      q('Pick the correct word to fill the blank.', 'the correct form', 'a wrong form', true),
-      q('Which is the better translation?', 'the accurate translation', 'a mistranslation', true),
-      q('Is this grammar structure correct?', 'Yes', 'No', true),
-      q('Is this grammar explanation correct?', 'Correct', 'Incorrect', true),
+      q('Choose the word that correctly fills the blank.', 'the form that follows the rule', 'a form that breaks the rule', true),
+      q('Which is the more faithful translation?', 'the meaning-accurate translation', 'a word-for-word but wrong version', false),
+      q('Is this sentence grammatically correct?', 'Yes — it follows the pattern', 'No — it has an error', true),
+      q('Is this stated grammar rule accurate?', 'It contains a mistake', 'It is accurate', false),
     ],
   };
 }

@@ -338,6 +338,7 @@ function VocabInput({ item, onDone }: any) {
 // is unavailable (no ElevenLabs key). Caches the fetched audio per instance.
 function AudioButton({ text, label = '🔊 Play', autoRevealText = true }: { text: string; label?: string; autoRevealText?: boolean }) {
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
+  const [err, setErr] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const srcRef = useRef<string | null>(null);
   const play = async () => {
@@ -346,8 +347,8 @@ function AudioButton({ text, label = '🔊 Play', autoRevealText = true }: { tex
     try {
       const r = await API.post('/api/ai/language/tts', { text });
       if (r?.audio) { srcRef.current = r.audio; setState('ready'); setTimeout(() => audioRef.current?.play().catch(() => {}), 50); }
-      else setState('unavailable');
-    } catch { setState('unavailable'); }
+      else { setErr(r?.error || ''); setState('unavailable'); }
+    } catch (e: any) { setErr(e?.message || ''); setState('unavailable'); }
   };
   return (
     <div style={{ margin: '8px 0' }}>
@@ -356,7 +357,7 @@ function AudioButton({ text, label = '🔊 Play', autoRevealText = true }: { tex
       </button>
       {srcRef.current && <audio ref={audioRef} src={srcRef.current} />}
       {state === 'unavailable' && autoRevealText && (
-        <p style={{ marginTop: 6, fontStyle: 'italic', opacity: 0.85 }}>“{text}” <small>(audio needs ELEVENLABS_API_KEY — showing text)</small></p>
+        <p style={{ marginTop: 6, fontStyle: 'italic', opacity: 0.85 }}>“{text}” <small>(showing text{err ? ` — ${err}` : ' — audio unavailable'})</small></p>
       )}
     </div>
   );
