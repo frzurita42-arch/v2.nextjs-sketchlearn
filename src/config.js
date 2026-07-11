@@ -22,15 +22,26 @@ function hasConfiguredKey(value) {
   return !/(your[-_ ]?key|sk-your-key-here|replace-me|placeholder)/i.test(v);
 }
 
+function hasPooledConnectionString(value) {
+  const v = String(value || '').trim();
+  if (!hasConfiguredKey(v)) return false;
+  return /-pooler\b/i.test(v) || /[?&]channel_binding=require/i.test(v);
+}
+
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_URL = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions';
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  process.env.POSTGRES_URL ||
-  // Vercel Storage integrations can inject custom-prefixed URLs like SKETCHDB_URL.
-  process.env.SKETCHDB_URL ||
-  '';
+const DATABASE_URL = (() => {
+  const pooledCandidates = [
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_URL,
+    process.env.SKETCHDB_DATABASE_URL,
+    // Vercel Storage integrations can inject custom-prefixed URLs like SKETCHDB_URL.
+    process.env.SKETCHDB_URL
+  ];
+
+  return pooledCandidates.find(hasPooledConnectionString) || pooledCandidates.find(hasConfiguredKey) || '';
+})();
 
 const SUGGESTED_STORE_FILE = 'suggested_topics.json';
 const HOME_TOPICS_STORE_FILE = 'home_topics.json';
@@ -111,6 +122,11 @@ const IMAGE_API_URL = process.env.IMAGE_API_URL || 'https://api.openai.com/v1/im
 const IMAGE_API_MODEL = process.env.IMAGE_API_MODEL || 'gpt-image-1';
 const imageEnabled = !forceFallback && (hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled);
 
+// Optional: ElevenLabs text-to-speech / voice generation.
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const ELEVENLABS_API_URL = process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io/v1';
+const elevenlabsEnabled = hasConfiguredKey(ELEVENLABS_API_KEY);
+
 // Optional: use Anthropic's Claude to DRAW each slide's SVG (Claude writes far more
 // accurate, well-labelled sketch diagrams than a text model). DeepSeek still writes
 // the lesson text + quiz; when a key is set, Claude illustrates each slide fresh,
@@ -171,6 +187,9 @@ module.exports = {
   IMAGE_API_URL,
   IMAGE_API_MODEL,
   imageEnabled,
+  ELEVENLABS_API_KEY,
+  ELEVENLABS_API_URL,
+  elevenlabsEnabled,
   ANTHROPIC_API_KEY,
   ANTHROPIC_API_URL,
   ANTHROPIC_MODEL,
