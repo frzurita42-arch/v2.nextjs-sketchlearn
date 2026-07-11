@@ -131,6 +131,24 @@ async function updateTool(slug, patch) {
   }
 }
 
+// Delete a tool by slug. Entries cascade via the FK; comments are left (harmless).
+async function deleteTool(slug) {
+  if (!db.pool) {
+    const tools = readJSON('tools.json', []);
+    const next = tools.filter(t => t.slug !== slug);
+    if (next.length === tools.length) return false;
+    writeJSON('tools.json', next);
+    return true;
+  }
+  try {
+    const { rowCount } = await withDbTimeout(dbQuery('DELETE FROM tools WHERE slug = $1', [slug]), 8000, 'Delete tool');
+    return rowCount > 0;
+  } catch (e) {
+    console.error('DB delete tool failed:', e.message);
+    return false;
+  }
+}
+
 // Adjust a tool's like counter by delta (+1 / -1). Returns the new count or null.
 async function setToolLikeDelta(slug, delta) {
   const d = Math.sign(parseInt(delta, 10) || 0);
@@ -361,7 +379,7 @@ async function listPosts({ limit = 100 } = {}) {
 }
 
 module.exports = {
-  insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool,
+  insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, setEntryStatus,
   insertComment, listComments,
   insertPost, listPosts,

@@ -57,6 +57,12 @@ export function ToolSettingsView() {
     setBusy(false);
   };
 
+  const deleteTool = async () => {
+    if (!confirm(`Delete “${tool?.title}”? This permanently removes the tool and its activities.`)) return;
+    try { await API.del(`/api/tools?slug=${encodeURIComponent(slug)}`); appState.activeTool = null; app.nav('tools'); }
+    catch (e: any) { setErr(e?.message || 'Could not delete.'); }
+  };
+
   const applyEdit = async () => {
     if (!proposal) return;
     setBusy(true); setErr('');
@@ -131,6 +137,13 @@ export function ToolSettingsView() {
         <p style={{ fontSize: 12, opacity: 0.6, marginTop: 12 }}>
           Current fields: {fields.map((f: any) => `${f.label} (${f.type})`).join(', ') || '—'}
         </p>
+
+        {/* Danger zone */}
+        <div className="card" style={{ padding: '12px 14px', marginTop: 16, borderColor: 'var(--danger,#e4572e)' }}>
+          <h4 style={{ margin: '0 0 6px', color: 'var(--danger,#e4572e)' }}>Delete tool</h4>
+          <p style={{ fontSize: 13, opacity: 0.8, margin: '0 0 8px' }}>Permanently removes this tool and its activities.</p>
+          <button className="btn" style={{ borderColor: 'var(--danger,#e4572e)', color: 'var(--danger,#e4572e)' }} onClick={deleteTool}>🗑 Delete this tool</button>
+        </div>
       </section>
     </>
   );

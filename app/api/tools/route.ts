@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition, slugify } from '@/lib/tool-schema';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { insertTool, getToolBySlug, listTools } = require('@/src/db/platform');
+const { insertTool, getToolBySlug, listTools, deleteTool } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { EXAMPLE_TOOLS, exampleBySlug } = require('@/src/tools/examples');
 
@@ -64,4 +64,19 @@ export async function POST(req: Request) {
   };
   await insertTool(record);
   return NextResponse.json({ slug, id: record.id, visibility });
+}
+
+// DELETE /api/tools?slug=  -> owner or admin removes a tool. Examples aren't deletable.
+export async function DELETE(req: Request) {
+  const a = await requireAuth(req);
+  if (!a.ok) return a.response;
+  const slug = new URL(req.url).searchParams.get('slug') || '';
+  if (exampleBySlug(slug)) return NextResponse.json({ error: 'Built-in examples cannot be deleted.' }, { status: 400 });
+  const tool = await getToolBySlug(slug);
+  if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (a.user.role !== 'admin' && tool.owner !== a.user.username) {
+    return NextResponse.json({ error: 'Only the tool owner or an admin can delete this.' }, { status: 403 });
+  }
+  const ok = await deleteTool(slug);
+  return NextResponse.json({ ok });
 }

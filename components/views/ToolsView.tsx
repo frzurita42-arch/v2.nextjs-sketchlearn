@@ -19,6 +19,11 @@ export function ToolsView() {
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
+  const canDelete = (t: any) => !(t.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === t.owner);
+  const del = async (t: any) => {
+    if (!confirm(`Delete “${t.title}”? This can't be undone.`)) return;
+    try { await API.del(`/api/tools?slug=${encodeURIComponent(t.slug)}`); setTools(ts => ts.filter(x => x.slug !== t.slug)); } catch (e: any) { alert(e?.message || 'Could not delete.'); }
+  };
 
   return (
     <>
@@ -47,7 +52,10 @@ export function ToolsView() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
                   <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>
-                  <button className="btn small green" onClick={() => open(t)}>Open →</button>
+                  <span style={{ display: 'flex', gap: 6 }}>
+                    {canDelete(t) && <button className="btn small ghost" title="Delete" onClick={() => del(t)}>🗑</button>}
+                    <button className="btn small green" onClick={() => open(t)}>Open →</button>
+                  </span>
                 </div>
               </div>
             ))}
