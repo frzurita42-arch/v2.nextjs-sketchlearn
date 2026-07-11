@@ -21,6 +21,16 @@ export type Archetype = 'generator' | 'app' | 'lesson';
 export type GeneratorOutput = 'text' | 'cards' | 'table';
 export type AppDisplay = 'cards' | 'list' | 'table';
 
+export type SubjectKind = 'general' | 'language' | 'math' | 'programming';
+
+export interface LessonSupport {
+  images?: boolean;
+  code?: boolean;
+  tables?: boolean;
+  formulas?: boolean;   // math / Wolfram-style formulas (rendered as a formula block)
+  audio?: boolean;
+}
+
 export interface LessonSpec {
   subject: string;         // "French", "Algebra", "World History"...
   level?: string;          // default level label
@@ -28,6 +38,11 @@ export interface LessonSpec {
   language?: string;       // target language for a language lesson (enables speak/translate)
   translateTo?: string;    // default 'English'
   style?: string;          // extra generation guidance
+  subjectKind?: SubjectKind;        // steers support material + activity mix
+  paragraphsPerSlide?: number;      // 1-4
+  paragraphLength?: 'brief' | 'medium' | 'detailed';
+  support?: LessonSupport;          // which support materials may appear
+  activityTypes?: string[];         // subset of ['mcq','fill-blank','input'] to shuffle
 }
 
 export interface GeneratorSpec {
@@ -112,6 +127,9 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);
     if (!subject) errors.push('lesson.subject is required');
+    const sk = ['general', 'language', 'math', 'programming'].includes(l.subjectKind) ? l.subjectKind : undefined;
+    const sup = l.support && typeof l.support === 'object' ? l.support : {};
+    const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ['mcq', 'fill-blank', 'input'].includes(x));
     lesson = {
       subject,
       level: String(l.level || '').slice(0, 40) || undefined,
@@ -119,6 +137,13 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       language: String(l.language || '').slice(0, 40) || undefined,
       translateTo: String(l.translateTo || 'English').slice(0, 40),
       style: String(l.style || '').slice(0, 500) || undefined,
+      subjectKind: sk,
+      paragraphsPerSlide: Math.max(1, Math.min(4, parseInt(l.paragraphsPerSlide, 10) || 1)),
+      paragraphLength: ['brief', 'medium', 'detailed'].includes(l.paragraphLength) ? l.paragraphLength : 'medium',
+      support: {
+        images: sup.images !== false, code: !!sup.code, tables: !!sup.tables, formulas: !!sup.formulas, audio: !!sup.audio,
+      },
+      activityTypes: acts.length ? acts : ['mcq', 'fill-blank', 'input'],
     };
   } else if (archetype === 'generator') {
     const g = d.generator || {};
