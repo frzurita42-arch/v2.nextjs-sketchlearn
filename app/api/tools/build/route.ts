@@ -47,15 +47,26 @@ function heuristicProposal(text: string) {
         },
       };
     }
+    // Support-material toggles appropriate to the subject.
+    const supToggles = subjectKind === 'math'
+      ? [{ id: 'sup_formulas', label: 'Formulas', type: 'toggle', default: true }, { id: 'sup_tables', label: 'Tables', type: 'toggle', default: true }]
+      : subjectKind === 'programming'
+        ? [{ id: 'sup_code', label: 'Code snippets', type: 'toggle', default: true }, { id: 'sup_tables', label: 'Tables', type: 'toggle', default: true }]
+        : subjectKind === 'language'
+          ? [{ id: 'sup_images', label: 'Images', type: 'toggle', default: true }, { id: 'sup_audio', label: 'Audio', type: 'toggle', default: true }]
+          : [{ id: 'sup_images', label: 'Images', type: 'toggle', default: true }, { id: 'sup_tables', label: 'Tables', type: 'toggle', default: false }];
     return {
       archetype: 'lesson', title: subject, description: text.slice(0, 300),
       tags: [subjectKind === 'general' ? 'lesson' : subjectKind, 'lesson'].filter((v, i, arr) => arr.indexOf(v) === i),
-      // Customizable per run: topic, difficulty, slide count, paragraph density.
+      // The standard slide-presentation settings, kept compact for 9:16.
       settings: [
-        { id: 'topic', label: 'Topic (optional)', type: 'text', placeholder: 'Narrow the focus' },
-        { id: 'difficulty', label: 'Difficulty', type: 'select-or-custom', options: levels },
-        { id: 'slides', label: 'Number of slides', type: 'number', default: 5 },
+        { id: 'topic', label: 'Topic', type: 'text', placeholder: 'Narrow the focus' },
+        { id: 'difficulty', label: 'Level', type: 'select-or-custom', options: levels },
+        { id: 'tone', label: 'Tone', type: 'select-or-custom', options: ['Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling'] },
+        { id: 'slides', label: 'Slides', type: 'number', default: 5 },
         { id: 'length', label: 'Paragraph length', type: 'select', options: ['brief', 'medium', 'detailed'], default: 'medium' },
+        { id: 'paragraphs', label: 'Paragraphs / slide', type: 'number', default: 1 },
+        ...supToggles,
       ],
       lesson: {
         subject: langMatch ? cap(langMatch[1]) : subject,
@@ -117,7 +128,7 @@ const PALETTE = `Field types: text, textarea, number, select (needs options), se
 Archetypes:
 - "generator": settings[] (the inputs) + generator.promptTemplate (use {{fieldId}} placeholders) + generator.output ("text" | "cards" | "table").
 - "app": app.entryFields[] (fields per stored record) + app.display ("cards" | "list" | "table") + app.review (bool: new entries need owner approval).
-- "lesson": a PLAYABLE, scored slide deck. Use for quizzes, courses, study/practice, and interactive language lessons. settings[] are learner options that make it customizable — include a "topic" text field, a "difficulty" select-or-custom, a "slides" number, and a "length" select (brief/medium/detailed). lesson = { subject, subjectKind ("general"|"language"|"math"|"programming"), totalSlides (3-15, default 5), paragraphsPerSlide (1-4), paragraphLength, language (for language lessons -> content generated in that language with speaker+translate), translateTo, support { images, code, tables, formulas, audio }, activityTypes (subset of ["mcq","fill-blank","input"]) }. The runtime fluctuates question types (MCQ with 2 or 4 options, fill-in-the-blank, typed answers with 3 tries), allows multiple questions per slide, and shows support material. For MATH set support.formulas+tables; for PROGRAMMING set support.code+tables; for LANGUAGE set support.audio+images.
+- "lesson": a PLAYABLE, scored slide deck. Use for quizzes, courses, study/practice, and interactive language lessons. settings[] are the standard slide-presentation controls (keep them compact): "topic" (text), "difficulty"/level (select-or-custom), "tone" (select-or-custom: Friendly/Formal/Playful/Socratic/Storytelling), "slides" (number), "length" (select brief/medium/detailed), "paragraphs" per slide (number), and toggle fields to include/exclude support material APPROPRIATE to the subject — id them "sup_images", "sup_audio", "sup_code", "sup_tables", "sup_formulas" (e.g. math -> sup_formulas+sup_tables; programming -> sup_code+sup_tables; language -> sup_images+sup_audio). Only include the toggles that fit the activity. lesson = { subject, subjectKind ("general"|"language"|"math"|"programming"), totalSlides (3-15, default 5), paragraphsPerSlide (1-4), paragraphLength, language (for language lessons -> content generated in that language with speaker+translate), translateTo, support { images, code, tables, formulas, audio }, activityTypes (subset of ["mcq","fill-blank","input"]) }. The runtime fluctuates question types (MCQ with 2 or 4 options, fill-in-the-blank, typed answers with 3 tries), allows multiple questions per slide, and shows support material. For MATH set support.formulas+tables; for PROGRAMMING set support.code+tables; for LANGUAGE set support.audio+images.
 
 The PLATFORM already wraps EVERY published tool in social chrome: the author's
 profile, a like button + like count, a share link, and a full comment section.

@@ -128,7 +128,17 @@ export async function POST(req: Request) {
   const priorSummary = String(b.priorSummary || '').slice(0, 600);
   const paras = Math.max(1, Math.min(4, parseInt(b.values?.paragraphs, 10) || parseInt(lesson.paragraphsPerSlide, 10) || 1));
   const pLen = ['brief', 'medium', 'detailed'].includes(b.values?.length) ? b.values.length : (lesson.paragraphLength || 'medium');
-  const support = lesson.support || { images: true };
+  const tone = String(b.values?.tone || lesson.tone || '').slice(0, 40);
+  // Learner-chosen support toggles (sup_*) override the tool's defaults.
+  const baseSup = lesson.support || { images: true };
+  const pickBool = (v: any, d: any) => (typeof v === 'boolean' ? v : d);
+  const support = {
+    images: pickBool(b.values?.sup_images, baseSup.images),
+    audio: pickBool(b.values?.sup_audio, baseSup.audio),
+    code: pickBool(b.values?.sup_code, baseSup.code),
+    tables: pickBool(b.values?.sup_tables, baseSup.tables),
+    formulas: pickBool(b.values?.sup_formulas, baseSup.formulas),
+  };
   const activityTypes: string[] = (Array.isArray(lesson.activityTypes) && lesson.activityTypes.length) ? lesson.activityTypes : ['mcq', 'fill-blank', 'input'];
 
   // A pure handwriting drill needs no support material (no image/pronunciation/phrase).
@@ -178,7 +188,7 @@ export async function POST(req: Request) {
   const system = [
     `Generate slide ${n} of ${total} for a ${subject} lesson at ${level} level.`,
     language ? `Level objective: ${levelGuidance(level)}` : '',
-    topic ? `Focus: ${topic}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
+    topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
     priorSummary ? `Avoid repeating: ${priorSummary}.` : '',
     ACTIVITY_MENU,
     langLine, subjectLine,
