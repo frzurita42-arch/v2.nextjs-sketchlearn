@@ -285,12 +285,48 @@ Guidance by kind:
   field when handwriting/characters matter. Learners view the cards inside the tool.
 - Dashboards / trackers / directories / journals: APP with the natural fields, display "cards" or "table".`;
 
-// Deterministic gate questions (used without AI, or as a fallback). The builder
-// ALWAYS asks 2 settings questions + 1 recommendation before it may propose.
-function gateQuestion(userTurns: number) {
-  if (userTurns <= 1) return { question: 'Who is this tool mainly for, and how will it be used?', options: ['Just me / personal', 'A public community tool'], field: 'audience' };
-  if (userTurns === 2) return { question: 'How should people mainly use it each time?', options: ['Play / generate an activity', 'Add & browse saved entries'], field: 'interaction' };
-  return { question: 'I can also add a difficulty / level setting so it adapts to the user. Add that?', options: ['Add it', 'Generate as is'], field: 'recommendation' };
+// Deterministic gate questions (used without AI, or as a fallback). They probe
+// the tool's DOMAIN, SUBJECT and CONTENT/COMPONENTS so the generator can pick the
+// right settings and activities — tailored to what's described, and varied to
+// avoid asking the same thing every time. It NEVER asks about difficulty/level:
+// that is already a preloaded, customizable setting on every lesson.
+function gateQuestion(userTurns: number, ideaText = '') {
+  const t = String(ideaText).toLowerCase();
+  const eduish = /\b(lesson|quiz|learn|study|practi[cs]e|course|teach|educat|language|math|science|physics|chemistry|biolog|grammar|vocabul|history|geograph)\b/.test(t);
+  const collectiony = /\b(gallery|collection|store|storage|catalog|catalogue|feed|board|portfolio|directory|album|posts?|repository|inventory|tracker|journal|diary)\b/.test(t);
+  const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+  if (userTurns <= 1) {
+    // DOMAIN — is it educational, language, a collection, a journal…?
+    return {
+      question: pick([
+        'What kind of tool is this — what should it mainly do?',
+        'How would you describe this tool at a high level?',
+      ]),
+      options: ['An educational lesson or quiz', 'A language-learning activity', 'A gallery / collection of items', 'A journal or notes tool'],
+      field: 'domain',
+    };
+  }
+  if (userTurns === 2) {
+    // SUBJECT / CONTENT of each item.
+    if (collectiony && !eduish) {
+      return { question: 'What does each item contain?', options: ['A photo + a caption', 'Text / notes', 'A link or file', 'Mixed media'], field: 'itemContent' };
+    }
+    return {
+      question: pick(['What subject or topic should it focus on?', 'What area or subjects should it cover?']),
+      options: ['Math or science', 'A language', 'Programming / tech', 'History or general knowledge'],
+      field: 'subject',
+    };
+  }
+  // turn 3 — CONTENT/COMPONENTS to display or ask (never difficulty).
+  if (collectiony && !eduish) {
+    return { question: 'How should the items be shown?', options: ['A grid of cards', 'A simple list', 'A table'], field: 'display' };
+  }
+  return {
+    question: 'What should each activity include or ask the learner to do?',
+    options: ['Reading / info + multiple-choice', 'Typed answers checked by AI', 'Handwriting / worked answers on a pad', 'A mix of formats'],
+    field: 'activityContent',
+  };
 }
 
 export async function POST(req: Request) {
@@ -310,7 +346,7 @@ export async function POST(req: Request) {
   const inGate = userTurns <= 3;
 
   if (!geminiEnabled && !deepseekEnabled) {
-    if (inGate) return NextResponse.json({ kind: 'question', ...gateQuestion(userTurns) });
+    if (inGate) return NextResponse.json({ kind: 'question', ...gateQuestion(userTurns, ideaText) });
     const raw = heuristicProposal(ideaText);
     const { def } = validateToolDefinition(raw);
     return NextResponse.json({ kind: 'proposal', definition: def, summary: 'Assembled a starter tool from your answers (no AI connected — edit or publish as-is).' });
@@ -323,21 +359,24 @@ export async function POST(req: Request) {
     'Return STRICT JSON that is EITHER a clarifying question OR a finished proposal:',
     '{ "kind": "question", "question": "one short question", "options": ["opt1","opt2"], "field": "what this decides" }',
     'OR { "kind": "proposal", "summary": "one sentence", "definition": { ...a full Tool Definition... } }',
-    'Questions must be short, oriented to the tool\'s SETTINGS/design, and give exactly 2 concrete options (the user can also type a custom answer).',
+    'Questions must be short and give 2-4 concrete options (the user can also type a custom answer). They must uncover what you need to DESIGN the tool: its DOMAIN (educational lesson? language learning? a gallery/collection? a journal?), its SUBJECT/topic area, and the CONTENT/COMPONENTS to use (what each activity asks or each item contains, how it is shown).',
+    'NEVER ask about difficulty or level — every lesson already gets a preloaded, customizable difficulty setting. Never re-ask something already answered; each question must reveal something NEW.',
   ].join('\n');
   const convo = messages.map((m) => `${m.role === 'assistant' ? 'Builder' : 'User'}: ${String(m.content).slice(0, 800)}`).join('\n');
 
   try {
     // While in the gate, force a settings-oriented question (never a proposal yet).
     if (inGate) {
-      const directive = userTurns <= 2
-        ? `Ask clarifying question ${userTurns} of 2 about this tool's SETTINGS/design (2 options + allow custom). Return ONLY a "question" object, do NOT propose.`
-        : `Recommend ONE extra useful setting for this tool and ask whether to add it. The options MUST be exactly ["Add it","Generate as is"]. Return ONLY a "question" object, do NOT propose.`;
+      const directive = userTurns === 1
+        ? `Ask ONE short question about the tool's DOMAIN and SUBJECT — e.g. whether it is an educational lesson/quiz, a language-learning activity, a gallery/collection, or a journal, and what subject/topic area it should cover. Base it on their description; don't re-ask what they already told you. 2-4 options + allow custom. Return ONLY a "question" object, do NOT propose.`
+        : userTurns === 2
+          ? `Ask ONE short question about the CONTENT and COMPONENTS — what each activity should ASK the learner (reading + multiple-choice, typed AI-checked answers, handwriting/worked answers on a pad, a code box, a chat…) OR what each item should CONTAIN and how it's shown (photos, text, links, cards/list/table). 2-4 options + allow custom. Return ONLY a "question" object, do NOT propose.`
+          : `Recommend ONE specific CONTENT or COMPONENT choice that would improve this tool (e.g. add an image field, include a listening/audio step, mix in a handwriting activity) — NOT difficulty/level. Ask whether to include it. Options MUST be exactly ["Add it","Generate as is"]. Return ONLY a "question" object, do NOT propose.`;
       const r: any = await generateStructured(
         [{ role: 'system', content: `${system}\n${directive}` }, { role: 'user', content: `Conversation so far:\n${convo}` }],
-        { temperature: 0.6, maxTokens: 700 }
+        { temperature: 0.7, maxTokens: 700 }
       ).catch(() => null);
-      const fb = gateQuestion(userTurns);
+      const fb = gateQuestion(userTurns, ideaText);
       const options = (Array.isArray(r?.options) ? r.options : []).map((o: any) => String(o).slice(0, 60)).filter(Boolean).slice(0, 4);
       return NextResponse.json({
         kind: 'question',
