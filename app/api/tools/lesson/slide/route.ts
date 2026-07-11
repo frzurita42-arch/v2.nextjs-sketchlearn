@@ -64,7 +64,7 @@ function cleanOptions(opts: any, want: number) {
   return arr;
 }
 function cleanQuestion(q: any) {
-  const kind = ['mcq', 'fill-blank', 'input', 'writing', 'annotation'].includes(q?.kind) ? q.kind : 'mcq';
+  const kind = ['mcq', 'fill-blank', 'input', 'writing', 'annotation', 'code'].includes(q?.kind) ? q.kind : 'mcq';
   if (kind === 'writing') {
     // Handwriting drill: draw the target; the AI checks the drawing. No options/answer.
     const target = String(q?.target || q?.answer || '').trim();
@@ -117,7 +117,7 @@ async function makeImage(prompt: string): Promise<string> {
 }
 
 // ---- deterministic fallback (demo / no AI) ----
-function fbSlide(subject: string, n: number, kinds: string[]) {
+function fbSlide(subject: string, n: number, kinds: string[], mathish = false) {
   const kind = rand(kinds);
   let question: any;
   if (kind === 'mcq') {
@@ -133,10 +133,16 @@ function fbSlide(subject: string, n: number, kinds: string[]) {
   } else {
     question = { kind, prompt: kind === 'fill-blank' ? `${subject} has ____ key idea per slide.` : `Type a key term from this ${subject} slide.`, answer: 'one', accept: ['one', '1'] };
   }
+  // Math/science demo slides show a real typeset formula so the KaTeX rendering
+  // is visible even without an AI key.
+  const support = mathish ? { type: 'formula', latex: 'c = \\sqrt{a^2 + b^2}', caption: 'Example formula (Pythagoras)' } : null;
+  const content = mathish
+    ? `This is practice slide ${n} about ${subject}. Formulas render cleanly, e.g. $a^2 + b^2 = c^2$ and $E = mc^2$. Connect an AI key for full generated content.`
+    : `This is practice slide ${n} about ${subject}. Connect an AI key for full generated content.`;
   return {
     title: `${subject} — slide ${n}`,
-    content: `This is practice slide ${n} about ${subject}. Connect an AI key for full generated content.`,
-    translation: '', support: null, questions: [question], fallback: true,
+    content,
+    translation: '', support, questions: [question], fallback: true,
   };
 }
 
@@ -168,6 +174,9 @@ export async function POST(req: Request) {
     formulas: pickBool(b.values?.sup_formulas, baseSup.formulas),
   };
   const activityTypes: string[] = (Array.isArray(lesson.activityTypes) && lesson.activityTypes.length) ? lesson.activityTypes : ['mcq', 'fill-blank', 'input'];
+  // Quantitative subjects (math + physics/chemistry/etc.) get LaTeX formulas,
+  // diagrams and step-by-step working — not plain-ASCII math.
+  const mathish = kind === 'math' || /\b(physics|chemistry|chemical|biolog|trigonometry|geometry|calculus|algebra|equation|mechanics|thermodynamic|kinematic|electromag|stoichiom|\bmole\b|reaction|force|velocity|acceleration|vector|momentum|circuit|optics|astronom|statistic|probability)\b/.test(`${subject} ${topic}`.toLowerCase());
 
   // A pure handwriting/worked-answer/code drill needs no support clutter.
   const onlyDrills = activityTypes.every((t) => t === 'writing' || t === 'annotation' || t === 'code');
@@ -181,26 +190,29 @@ export async function POST(req: Request) {
   // Code snippets: for programming, AND for language grammar (show syntax logic as code).
   if (support.code || kind === 'programming' || kind === 'language') allowedSupport.push('code');
   if (support.tables) allowedSupport.push('table');
-  if (support.formulas || kind === 'math') {
+  if (support.formulas || mathish) {
     // Prefer a real Wolfram computation when the API key is present. When it is
     // NOT available, lean on a worked code snippet (the computation / a proof
     // with comments) — that reads better than a bare formula — while still
     // keeping the formula in the mix.
     if (wolfram) allowedSupport.push('wolfram');
     allowedSupport.push('formula');
-    if (kind === 'math') {
+    if (mathish) {
       allowedSupport.push('code');
-      if (!wolfram) allowedSupport.push('code');   // extra weight: bias to code when no Wolfram
+      allowedSupport.push('table');                 // 3-column "steps" table
+      allowedSupport.push('image');                 // a labelled diagram (triangle, free-body…)
+      if (!wolfram) allowedSupport.push('code');     // extra weight: bias to code when no Wolfram
     }
   }
   const supportType = (!pureWriting && allowedSupport.length && Math.random() < 0.7) ? rand(allowedSupport) : null;
 
-  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, activityTypes));
+  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, activityTypes, mathish));
 
   const langLine = language
     ? `This is a ${language} lesson: write "content" in ${language} and put the ${translateTo} meaning in "translation".`
     : `Write "content" as ${paras} ${pLen} paragraph(s).`;
-  const subjectLine = kind === 'math' ? 'Prefer precise definitions; use a formula where it clarifies.'
+  const subjectLine = mathish
+    ? 'MATH/SCIENCE FORMATTING (important): write EVERY formula, equation, variable or symbol as LaTeX inside $...$ in the "content" — e.g. $a^2+b^2=c^2$, $\\frac{1}{2}mv^2$, $\\theta=30^\\circ$, $\\ce{2H2 + O2 -> 2H2O}$ — NEVER as plain ASCII like "a^2 + b^2". Explain any method as SEVERAL short paragraphs, one step per paragraph (separate steps with a blank line), with the actual formula/fraction typeset in each step (not described in words). Put the key equation in a "formula" support block, use a diagram "image" for shapes/physics situations, and use a "code" snippet or a 3-column steps "table" for the worked solution.'
     : kind === 'programming' ? 'Prefer concrete code and tables over prose.'
     : '';
   const qSpec = qKinds.map((k, i) => {
@@ -216,11 +228,15 @@ export async function POST(req: Request) {
     : kind === 'math'
       ? 'a short worked computation or proof shown as code/pseudocode, using COMMENTS to explain each step (e.g. "# derivative of x^2\\nf = x**2\\n# power rule: 2*x**(2-1)\\nf_prime = 2*x") — no Wolfram needed'
       : 'a short, correct code snippet';
-  const supSpec = supportType === 'image' ? 'Also include support = { "type": "image", "prompt": "a vivid image description" }.'
+  const supSpec = supportType === 'image' ? (mathish
+      ? 'Also include support = { "type": "image", "prompt": "a CLEAN, LABELLED reference diagram to help solve the problem — e.g. a right triangle with the base, height, hypotenuse and angle labelled; a physics free-body/situation sketch with forces and values; a geometry figure with measurements. Describe it precisely so it reads like a textbook diagram.", "caption": "what the diagram shows" }.'
+      : 'Also include support = { "type": "image", "prompt": "a vivid image description", "caption": "..." }.')
     : supportType === 'code' ? `Also include support = { "type": "code", "language": "...", "code": ${JSON.stringify(codeHint)} }.`
-    : supportType === 'table' ? 'Also include support = { "type": "table", "headers": [...], "rows": [[...]] }.'
+    : supportType === 'table' ? (mathish
+      ? 'Also include support = { "type": "table", "headers": ["Step", "Equation", "What we did"], "rows": [["1", "the equation for this step (plain math text)", "short reason"], ...] } — a 3-column step-by-step working table.'
+      : 'Also include support = { "type": "table", "headers": [...], "rows": [[...]] }.')
     : supportType === 'wolfram' ? 'Also include support = { "type": "wolfram", "query": "a precise Wolfram Alpha query that computes/derives the concept (e.g. \\"derivative of x^2\\", \\"solve 2x+3=7\\")", "latex": "the formula in LaTeX", "caption": "what it shows" }. Wolfram will compute the answer.'
-    : supportType === 'formula' ? 'Also include support = { "type": "formula", "latex": "a LaTeX formula", "caption": "what it means" }.'
+    : supportType === 'formula' ? 'Also include support = { "type": "formula", "latex": "a valid LaTeX formula (e.g. \\"c = \\\\sqrt{a^2+b^2}\\", \\"\\\\frac{d}{dx}x^n = n x^{n-1}\\") — NOT plain ASCII", "caption": "what it means" }.'
     : 'Set support to null.';
 
   const system = [
@@ -245,7 +261,7 @@ export async function POST(req: Request) {
     const questions = (Array.isArray(r?.questions) ? r.questions : []).map(cleanQuestion).filter(Boolean);
     // If content came back empty or as a JSON blob we couldn't salvage, or there
     // are no valid questions, use the deterministic fallback instead of showing junk.
-    if (!content || !questions.length) return NextResponse.json(fbSlide(subject, n, activityTypes));
+    if (!content || !questions.length) return NextResponse.json(fbSlide(subject, n, activityTypes, mathish));
     let sup: any = null;
     const s = r.support;
     if (s?.type === 'image') sup = { type: 'image', url: await makeImage(String(s.prompt || subject)), caption: String(s.caption || '') };
@@ -266,6 +282,6 @@ export async function POST(req: Request) {
       support: sup, questions, fallback: false,
     });
   } catch {
-    return NextResponse.json(fbSlide(subject, n, activityTypes));
+    return NextResponse.json(fbSlide(subject, n, activityTypes, mathish));
   }
 }

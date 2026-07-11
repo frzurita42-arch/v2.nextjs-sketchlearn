@@ -16,6 +16,12 @@ import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad';
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
+import { renderMath, renderInlineMath } from '@/components/ui/shared';
+
+// Inline text that typesets any $...$ LaTeX segments (math/science prompts).
+function MathText({ text }: { text: string }) {
+  return <span dangerouslySetInnerHTML={{ __html: renderInlineMath(String(text || '')) }} />;
+}
 
 type Q = { kind: string; prompt: string; options?: any[]; answer?: string; accept?: string[]; explanation?: string; target?: string; language?: string; starter?: string };
 type Slide = { title: string; content: string; translation?: string; support?: any; questions: Q[]; fallback?: boolean };
@@ -43,15 +49,15 @@ function Support({ s }: { s: any }) {
     </div>
   );
   if (s.type === 'formula') return (
-    <div style={{ margin: '8px 0', padding: '10px 12px', background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 8, textAlign: 'center' }}>
-      <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 16 }}>{s.latex}</div>
+    <div style={{ margin: '8px 0', padding: '10px 12px', background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 8, textAlign: 'center', overflowX: 'auto' }}>
+      <div style={{ fontSize: 18 }} dangerouslySetInnerHTML={{ __html: renderMath(s.latex, true) }} />
       {s.caption && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{s.caption}</div>}
     </div>
   );
   if (s.type === 'wolfram') return (
-    <div style={{ margin: '8px 0', padding: '10px 12px', background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 8 }}>
+    <div style={{ margin: '8px 0', padding: '10px 12px', background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 8, overflowX: 'auto' }}>
       <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>⚡ WOLFRAM ALPHA</div>
-      {s.latex && <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 16, textAlign: 'center', margin: '4px 0' }}>{s.latex}</div>}
+      {s.latex && <div style={{ fontSize: 18, textAlign: 'center', margin: '4px 0' }} dangerouslySetInnerHTML={{ __html: renderMath(s.latex, true) }} />}
       {s.query && <div style={{ fontSize: 12, opacity: 0.7 }}>Query: <code>{s.query}</code></div>}
       {s.result && <div style={{ fontSize: 15, marginTop: 4 }}>= <b>{s.result}</b></div>}
       {s.caption && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{s.caption}</div>}
@@ -75,13 +81,13 @@ function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string;
     const correctText = (opts.find((o: any) => o.correct) || {}).text || '';
     return (
       <div>
-        <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 10px' }}>{q.prompt}</p>
+        <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 10px' }}><MathText text={q.prompt} /></p>
         <div style={{ display: 'grid', gap: 8, maxWidth: 460, margin: '0 auto' }}>
           {opts.map((o: any, i: number) => {
             const isP = picked === i;
             const bg = !answered ? undefined : o.correct ? 'rgba(127,176,105,0.25)' : (isP ? 'rgba(228,87,46,0.2)' : undefined);
             return <button key={i} className="btn" style={{ textAlign: 'left', width: '100%', background: bg, borderColor: answered && o.correct ? 'var(--ink)' : undefined }} disabled={answered}
-              onClick={() => { setPicked(i); finish(!!o.correct, { prompt: q.prompt, your: o.text, answer: correctText, correct: !!o.correct }); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}{o.text}</button>;
+              onClick={() => { setPicked(i); finish(!!o.correct, { prompt: q.prompt, your: o.text, answer: correctText, correct: !!o.correct }); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}<MathText text={o.text} /></button>;
           })}
         </div>
         {answered && opts[picked!]?.explanation && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 10, textAlign: 'center' }}>{opts[picked!].explanation}</p>}
@@ -98,7 +104,7 @@ function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string;
   };
   return (
     <div style={{ textAlign: 'center' }}>
-      <p style={{ fontWeight: 600, margin: '0 0 8px' }}>{q.kind === 'fill-blank' ? '✍️ Fill in the blank' : '⌨️ Your answer'}: {q.prompt}</p>
+      <p style={{ fontWeight: 600, margin: '0 0 8px' }}>{q.kind === 'fill-blank' ? '✍️ Fill in the blank' : '⌨️ Your answer'}: <MathText text={q.prompt} /></p>
       <div className="chat-input-row" style={{ maxWidth: 420, margin: '0 auto' }}>
         <input type="text" value={val} disabled={state !== 'open'} placeholder="Type your answer…"
           onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); check(); } }} />
@@ -157,7 +163,7 @@ function AnnotationCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void
   };
   return (
     <div style={{ textAlign: 'center' }}>
-      <p style={{ fontWeight: 600, margin: '0 0 10px' }}>📝 {q.prompt || 'Work out the full answer on the pad:'}</p>
+      <p style={{ fontWeight: 600, margin: '0 0 10px' }}>📝 <MathText text={q.prompt || 'Work out the full answer on the pad:'} /></p>
       <AnnotationPad onReady={(fn) => { getPagesRef.current = fn; emit(ready, text); }} onChange={() => setReady(true)} />
       {/* Optional: type the answer instead of / alongside drawing. The keyboard's
           mic 🎤 dictates into this box, so answers can be spoken too. */}
@@ -177,7 +183,7 @@ function CodeCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void }) {
   useEffect(() => { onAnswer({ kind: 'code', prompt: q.prompt || '', answer: q.answer || '', code, language: q.language || '', ready: code.trim().length > 0 }); /* eslint-disable-next-line */ }, [code]);
   return (
     <div>
-      <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 8px' }}>⌨️ {q.prompt || 'Write your answer'}</p>
+      <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 8px' }}>⌨️ <MathText text={q.prompt || 'Write your answer'} /></p>
       <textarea value={code} onChange={e => setCode(e.target.value)} spellCheck={false}
         placeholder={q.language ? `Write your ${q.language} here…` : 'Write your working / answer here… (you can include proofs with comments)'}
         style={{ width: '100%', minHeight: 200, resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 14, lineHeight: 1.5, padding: 12, borderRadius: 8, border: '2px solid var(--ink)', background: '#2d2a26', color: '#f7f3e9', boxSizing: 'border-box' }} />

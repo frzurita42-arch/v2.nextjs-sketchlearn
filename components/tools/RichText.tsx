@@ -5,20 +5,23 @@
 import { useState } from 'react';
 import { API } from '@/lib/api';
 import { AudioButton } from '@/components/ui/AudioButton';
+import { renderInlineMath } from '@/components/ui/shared';
 
 export function RichText({ text, translateTo = 'English', block = false }: { text: string; translateTo?: string; block?: boolean }) {
   const [tr, setTr] = useState('');
   const [busy, setBusy] = useState(false);
   if (!text) return <></>;
+  const speak = text.replace(/\$/g, '');            // don't read the math delimiters aloud
   const translate = async () => {
     setBusy(true);
-    try { const r = await API.post('/api/tools/translate', { text, to: translateTo }); setTr(r?.translation || ''); } catch { /* ignore */ }
+    try { const r = await API.post('/api/tools/translate', { text: speak, to: translateTo }); setTr(r?.translation || ''); } catch { /* ignore */ }
     setBusy(false);
   };
   return (
     <span style={block ? { display: 'block' } : undefined}>
-      {text}{' '}
-      <AudioButton text={text} label="🔊" small showTextOnFail={false} />{' '}
+      {/* Inline $...$ segments typeset with KaTeX; the rest is escaped prose. */}
+      <span dangerouslySetInnerHTML={{ __html: renderInlineMath(text) }} />{' '}
+      <AudioButton text={speak} label="🔊" small showTextOnFail={false} />{' '}
       <button className="btn small ghost" onClick={translate} disabled={busy} title={`Translate to ${translateTo}`}>{busy ? '…' : '🌐'}</button>
       {tr && <em style={{ display: 'block', fontSize: 13, opacity: 0.8, marginTop: 2 }}>→ {tr}</em>}
     </span>

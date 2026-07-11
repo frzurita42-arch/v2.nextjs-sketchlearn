@@ -9,6 +9,7 @@
 import { useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad';
+import { renderInlineMath } from '@/components/ui/shared';
 
 type Turn = { role: 'user' | 'assistant'; text?: string; image?: string };
 
@@ -139,7 +140,7 @@ export function CanvasConversation({ def, slug }: { def: any; slug: string }) {
           {turns.map((t, i) => t.role === 'assistant' ? (
             <div key={i} style={{ alignSelf: 'flex-start', maxWidth: '90%', background: 'var(--card,#fff)', border: '1.5px solid var(--ink)', borderRadius: 10, padding: '8px 12px' }}>
               <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>✦ TUTOR</div>
-              <div style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{t.text}</div>
+              <div style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: renderInlineMath(t.text || '') }} />
             </div>
           ) : (
             <div key={i} style={{ alignSelf: 'flex-end', maxWidth: '70%' }}>
