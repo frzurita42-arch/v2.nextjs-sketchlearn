@@ -5,6 +5,8 @@ import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition, slugify } from '@/lib/tool-schema';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { insertTool, getToolBySlug, listTools } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { EXAMPLE_TOOLS, exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,6 +19,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get('slug');
   if (slug) {
+    const example = exampleBySlug(slug);
+    if (example) return NextResponse.json({ tool: example }, { headers: { 'Cache-Control': 'no-cache' } });
     const tool = await getToolBySlug(slug);
     if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // Private tools are visible only to their owner.
@@ -26,7 +30,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ tool }, { headers: { 'Cache-Control': 'no-cache' } });
   }
   const tools = await listTools({ includePrivateFor: a.user.username, limit: 60 });
-  return NextResponse.json({ tools }, { headers: { 'Cache-Control': 'no-cache' } });
+  // Prepend the built-in examples so the gallery always has a working lesson to try.
+  return NextResponse.json({ tools: [...EXAMPLE_TOOLS, ...tools] }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 // POST /api/tools  { definition, visibility, aiGenerated? } -> publish a tool

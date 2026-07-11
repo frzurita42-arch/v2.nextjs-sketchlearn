@@ -29,6 +29,23 @@ export const maxDuration = 60;
 
 const rand = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
+// The model sometimes dumps JSON/an object into "content". Detect that and
+// salvage a plain-text field from it, so a raw JSON string never hits the UI.
+function cleanContent(raw: any): string {
+  if (raw && typeof raw === 'object') {
+    return String(raw.content || raw.text || raw.passage || raw.paragraph || raw.body || '').trim();
+  }
+  const s = String(raw || '').trim();
+  if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
+    try {
+      const o = JSON.parse(s);
+      const salvaged = String(o?.content || o?.text || o?.passage || o?.paragraph || o?.body || '').trim();
+      return salvaged || ''; // empty -> caller treats slide as invalid and uses the fallback
+    } catch { return ''; }
+  }
+  return s;
+}
+
 // Infer the subject family when the builder didn't set one.
 function inferKind(subject: string, language?: string): string {
   const s = subject.toLowerCase();
@@ -155,14 +172,19 @@ export async function POST(req: Request) {
     ACTIVITY_MENU,
     langLine, subjectLine,
     'For THIS slide, teach one idea, then produce these specific questions (still applying the freedom above to vary content):', qSpec, supSpec,
-    'Return STRICT JSON only.',
+    'OUTPUT RULES (critical): return ONE JSON object with EXACTLY these top-level keys: title, content, translation, support, questions.',
+    '"content" MUST be plain, human-readable teaching text (a sentence or short paragraph) — NEVER JSON, never a nested object, never quoted JSON, never code. Put questions ONLY in the "questions" array, and support material ONLY in "support". Do not wrap the whole object in a string or another object.',
+    'Return STRICT JSON only — no markdown fences, no commentary.',
   ].filter(Boolean).join('\n');
-  const user = `Return JSON: { "title": "short", "content": "the teaching text", "translation": "or empty", "support": {...} or null, "questions": [ { "kind": "mcq|fill-blank|input", "prompt": "...", "options": [{"text","correct","explanation"}], "answer": "...", "accept": ["..."] } ] }`;
+  const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "support": {...} or null, "questions": [ { "kind": "mcq|fill-blank|input", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "...", "accept": ["..."] } ] }`;
 
   try {
     const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 1800 });
+    const content = cleanContent(r?.content);
     const questions = (Array.isArray(r?.questions) ? r.questions : []).map(cleanQuestion).filter(Boolean);
-    if (!r?.content || !questions.length) return NextResponse.json(fbSlide(subject, n, activityTypes));
+    // If content came back empty or as a JSON blob we couldn't salvage, or there
+    // are no valid questions, use the deterministic fallback instead of showing junk.
+    if (!content || !questions.length) return NextResponse.json(fbSlide(subject, n, activityTypes));
     let sup: any = null;
     const s = r.support;
     if (s?.type === 'image') sup = { type: 'image', url: await makeImage(String(s.prompt || subject)), caption: String(s.caption || '') };
@@ -178,8 +200,8 @@ export async function POST(req: Request) {
     else if (s?.type === 'formula') sup = { type: 'formula', latex: String(s.latex || s.formula || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
     return NextResponse.json({
       title: String(r.title || `${subject} — slide ${n}`).slice(0, 100),
-      content: String(r.content || '').slice(0, 2000),
-      translation: String(r.translation || '').slice(0, 800),
+      content: content.slice(0, 2000),
+      translation: cleanContent(r.translation).slice(0, 800),
       support: sup, questions, fallback: false,
     });
   } catch {
