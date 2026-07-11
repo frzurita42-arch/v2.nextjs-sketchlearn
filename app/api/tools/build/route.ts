@@ -16,9 +16,24 @@ function heuristicProposal(text: string) {
   // Strong storage nouns => app; explicit generation verbs => generator; then weak signals.
   const strongApp = /\b(store|storage|track|tracker|journal|library|catalog|catalogue|repository|directory|inventory|log|collection|database|bookmark|planner|gallery)\b/.test(t);
   const socialish = /\b(instagram|social|feed|page|posts?|photo|photos|album|portfolio|board|profile|upload|pictures?|images?|meme|scrapbook)\b/.test(t);
+  const languagey = /\b(french|spanish|german|italian|portuguese|japanese|chinese|mandarin|arabic|hindi|english|language|lesson|vocab|vocabulary|phrase|flashcard|flashcards|learn|pronunciation)\b/.test(t);
   const genVerb = /\b(generate|produce|write|draft|compose|summar|essay|outline|ideas|suggestions?|plan out)\b/.test(t);
-  const archetype = (strongApp || socialish) ? 'app' : genVerb ? 'generator' : /\b(list|collect|save)\b/.test(t) ? 'app' : 'generator';
+  const archetype = (strongApp || socialish || languagey) ? 'app' : genVerb ? 'generator' : /\b(list|collect|save)\b/.test(t) ? 'app' : 'generator';
   const title = (text.trim().split(/[.,\n]/)[0] || 'My Tool').replace(/^(a|an|make|build|create|i want|i'd like)\s+/i, '').slice(0, 60) || 'My Tool';
+
+  // Language/lesson tool: leveled lesson cards with speaker + translate (free on text),
+  // plus a recorded-pronunciation audio field and an optional handwriting canvas.
+  if (archetype === 'app' && languagey) {
+    const drawy = /\bdraw|sketch|handwrit|character|kanji|hanzi|alphabet\b/.test(t);
+    const fields: any[] = [
+      { id: 'level', label: 'Level', type: 'select-or-custom', options: ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1'] },
+      { id: 'phrase', label: 'Phrase / prompt', type: 'textarea', required: true },
+      { id: 'image', label: 'Image (optional)', type: 'image' },
+      { id: 'audio', label: 'Pronunciation (record)', type: 'audio' },
+    ];
+    if (drawy) fields.push({ id: 'writing', label: 'Handwriting', type: 'drawing' });
+    return { archetype, title, description: text.slice(0, 300), tags: ['language', 'lesson'], settings: [], app: { entryFields: fields, display: 'cards', review: false } };
+  }
 
   if (archetype === 'app') {
     const imagey = socialish || /\bphoto|image|picture|upload\b/.test(t);
@@ -39,7 +54,7 @@ function heuristicProposal(text: string) {
   };
 }
 
-const PALETTE = `Field types: text, textarea, number, select (needs options), select-or-custom (dropdown the user can override), toggle, date, image (user uploads a picture).
+const PALETTE = `Field types: text, textarea, number, select (needs options), select-or-custom (dropdown the user can override), toggle, date, image (upload a picture), audio (record voice), drawing (sketch on a canvas). Text/textarea values automatically get speaker (text-to-speech) and translate buttons in the display, so language tools don't need separate "audio" fields for reading text aloud.
 Archetypes:
 - "generator": settings[] (the inputs) + generator.promptTemplate (use {{fieldId}} placeholders) + generator.output ("text" | "cards" | "table").
 - "app": app.entryFields[] (fields per stored record) + app.display ("cards" | "list" | "table") + app.review (bool: new entries need owner approval).
@@ -57,10 +72,11 @@ make something good, propose it.
 Guidance by kind:
 - Social page / Instagram-style feed / photo gallery / portfolio / "page with uploadable posts":
   APP, display "cards", entryFields = an "image" field + a "textarea" caption (+ optional link/tags).
-- Language / lesson tools (e.g. "a French lesson"): include a "select-or-custom" level field
-  (options like Beginner, A1, A2, B1, B2, C1) and content fields suited to the activity —
-  text prompts, an image, and (audio/translation coming soon). Prefer an APP whose entries are
-  the lesson cards the creator adds, displayed as "cards"; learners view them inside the tool.
+- Language / lesson tools (e.g. "a French lesson"): APP, display "cards". Include a
+  "select-or-custom" level field (Beginner, A1, A2, B1, B2, C1) and content fields for each
+  lesson card — a "textarea" for the phrase/prompt (it gets speaker + translate buttons for
+  free), an optional "image", an "audio" field for a recorded pronunciation, and a "drawing"
+  field when handwriting/characters matter. Learners view the cards inside the tool.
 - Dashboards / trackers / directories / journals: APP with the natural fields, display "cards" or "table".`;
 
 export async function POST(req: Request) {

@@ -4,6 +4,7 @@
  * free-text input — the same pattern used on the language activity's title. */
 import { useState } from 'react';
 import type { ToolField } from '@/lib/tool-schema';
+import { AudioField, DrawField } from '@/components/tools/MediaFields';
 
 function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v: any) => void }) {
   const inList = f.options?.includes(value);
@@ -75,6 +76,8 @@ function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v:
       </label>
     );
   }
+  if (f.type === 'audio') return <AudioField label={f.label} value={value} onChange={onChange} />;
+  if (f.type === 'drawing') return <DrawField label={f.label} value={value} onChange={onChange} />;
   // text (default)
   return (
     <label className="field"><span>{f.label}</span>

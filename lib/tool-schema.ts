@@ -5,7 +5,7 @@
  * The runtime (ToolRunnerView) interprets this; the Builder chat authors it.
  * Shared by client and server so validation lives in exactly one place. */
 
-export type FieldType = 'text' | 'textarea' | 'number' | 'select' | 'select-or-custom' | 'toggle' | 'date' | 'image';
+export type FieldType = 'text' | 'textarea' | 'number' | 'select' | 'select-or-custom' | 'toggle' | 'date' | 'image' | 'audio' | 'drawing';
 
 export interface ToolField {
   id: string;
@@ -44,7 +44,7 @@ export interface ToolDefinition {
   app?: AppSpec;
 }
 
-const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'select', 'select-or-custom', 'toggle', 'date', 'image'];
+const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'select', 'select-or-custom', 'toggle', 'date', 'image', 'audio', 'drawing'];
 
 export function slugify(s: string): string {
   return String(s || '').toLowerCase().trim()

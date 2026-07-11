@@ -11,6 +11,28 @@ import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { CommentSection } from '@/components/social/CommentSection';
+import { AudioButton } from '@/components/ui/AudioButton';
+
+// Text value with speaker (TTS) + translate actions — the "speaker/translation
+// options when appropriate" for language and content tools.
+function RichText({ text }: { text: string }) {
+  const [tr, setTr] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!text) return <></>;
+  const translate = async () => {
+    setBusy(true);
+    try { const r = await API.post('/api/tools/translate', { text, to: 'English' }); setTr(r?.translation || ''); } catch { /* ignore */ }
+    setBusy(false);
+  };
+  return (
+    <span>
+      {text}{' '}
+      <AudioButton text={text} label="🔊" small showTextOnFail={false} />{' '}
+      <button className="btn small ghost" onClick={translate} disabled={busy} title="Translate to English">{busy ? '…' : '🌐'}</button>
+      {tr && <em style={{ display: 'block', fontSize: 13, opacity: 0.8, marginTop: 2 }}>→ {tr}</em>}
+    </span>
+  );
+}
 
 // Deterministic emoji+color avatar from a username (matches the feed's style).
 const AV_EMOJI = ['🦊', '📊', '🐛', '🦉', '🤖', '⚙️', '🗣️', '🛡️', '🔧', '📈', '✏️', '☁️', '🎨', '🔐', '📝', '🌊'];
@@ -61,10 +83,14 @@ function Byline({ e }: { e: any }) {
 }
 function fieldValue(f: any, e: any) {
   const v = e.data?.[f.id];
-  if (f.type === 'image' && typeof v === 'string' && v.startsWith('data:')) {
+  if ((f.type === 'image' || f.type === 'drawing') && typeof v === 'string' && v.startsWith('data:')) {
     return <img src={v} alt={f.label} style={{ width: '100%', borderRadius: 8, border: '2px solid var(--ink)', display: 'block' }} />;
   }
+  if (f.type === 'audio' && typeof v === 'string' && v.startsWith('data:')) {
+    return <audio controls src={v} style={{ width: '100%', height: 36 }} />;
+  }
   if (f.type === 'toggle') return v ? 'yes' : 'no';
+  if (f.type === 'textarea' || f.type === 'text') return <RichText text={String(v ?? '')} />;
   return String(v ?? '');
 }
 
