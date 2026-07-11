@@ -35,6 +35,15 @@ function Support({ s }: { s: any }) {
       {s.caption && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{s.caption}</div>}
     </div>
   );
+  if (s.type === 'wolfram') return (
+    <div style={{ margin: '8px 0', padding: '10px 12px', background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>⚡ WOLFRAM ALPHA</div>
+      {s.latex && <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 16, textAlign: 'center', margin: '4px 0' }}>{s.latex}</div>}
+      {s.query && <div style={{ fontSize: 12, opacity: 0.7 }}>Query: <code>{s.query}</code></div>}
+      {s.result && <div style={{ fontSize: 15, marginTop: 4 }}>= <b>{s.result}</b></div>}
+      {s.caption && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{s.caption}</div>}
+    </div>
+  );
   return null;
 }
 

@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth-guard';
 const { fallbackImageDataUrl } = require('@/src/slides/visual-policy');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { wolframAvailable, wolframShortAnswer } = require('@/src/connectors/wolfram');
 
 // The menu of activities/displays proven out by the Language Learning tool. Fed
 // to the generator so it knows the full space and is FREE to mix formats.
@@ -15,7 +17,10 @@ const ACTIVITY_MENU = `Menu of activities you can draw on (mix formats FREELY be
 - Fill in the blank: a sentence containing "____" where the learner types the missing word.
 - Typed short answer / spelling: the learner types a term, definition, or word.
 Information display you may attach to a slide (pick what fits the idea; vary it slide to slide):
-- a reading passage, an image, a table (vocabulary/conjugations/data/comparisons), a code snippet (rules/patterns/steps), or a formula.
+- a reading passage, an image, a table (vocabulary/conjugations/data/comparisons), a code snippet, a formula, or a Wolfram Alpha computation.
+- MATH/quantitative ideas: explain with a formula, a Wolfram computation, and/or a code snippet — mix them when useful.
+- GRAMMAR/syntax ideas: a code snippet is great for showing the syntax pattern/conjugation logic.
+- PROGRAMMING ideas: prefer real code snippets and tables.
 You are free to combine ANY evaluation type with ANY display type; keep everything level-appropriate.`;
 
 export const dynamic = 'force-dynamic';
@@ -104,11 +109,19 @@ export async function POST(req: Request) {
   // Randomly fluctuate this slide's shape.
   const numQ = 1 + Math.floor(Math.random() * 3);                 // 1-3 questions per slide
   const qKinds = Array.from({ length: numQ }, () => rand(activityTypes));
+  const wolfram = wolframAvailable();
   const allowedSupport: string[] = [];
   if (support.images) allowedSupport.push('image');
-  if (support.code || kind === 'programming') allowedSupport.push('code');
+  // Code snippets: for programming, AND for language grammar (show syntax logic as code).
+  if (support.code || kind === 'programming' || kind === 'language') allowedSupport.push('code');
   if (support.tables) allowedSupport.push('table');
-  if (support.formulas || kind === 'math') allowedSupport.push('formula');
+  if (support.formulas || kind === 'math') {
+    // Prefer a real Wolfram computation when the API key is present; always keep
+    // formula (and code) as fallbacks, and mix between them.
+    if (wolfram) allowedSupport.push('wolfram');
+    allowedSupport.push('formula');
+    if (kind === 'math' && !allowedSupport.includes('code')) allowedSupport.push('code');
+  }
   const supportType = allowedSupport.length && Math.random() < 0.7 ? rand(allowedSupport) : null;
 
   if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, activityTypes));
@@ -124,9 +137,13 @@ export async function POST(req: Request) {
     if (k === 'fill-blank') return `Q${i + 1}: kind "fill-blank" — a sentence with "____" and the missing "answer" (+ "accept" variants).`;
     return `Q${i + 1}: kind "input" — a short-answer question with an "answer" (+ "accept" variants).`;
   }).join('\n');
+  const codeHint = kind === 'language'
+    ? 'a short snippet showing the SYNTAX/grammar logic (e.g. "subject + verb(conjugated) + object", or a conjugation pattern)'
+    : 'a short, correct code snippet';
   const supSpec = supportType === 'image' ? 'Also include support = { "type": "image", "prompt": "a vivid image description" }.'
-    : supportType === 'code' ? 'Also include support = { "type": "code", "language": "...", "code": "a short snippet" }.'
+    : supportType === 'code' ? `Also include support = { "type": "code", "language": "...", "code": ${JSON.stringify(codeHint)} }.`
     : supportType === 'table' ? 'Also include support = { "type": "table", "headers": [...], "rows": [[...]] }.'
+    : supportType === 'wolfram' ? 'Also include support = { "type": "wolfram", "query": "a precise Wolfram Alpha query that computes/derives the concept (e.g. \\"derivative of x^2\\", \\"solve 2x+3=7\\")", "latex": "the formula in LaTeX", "caption": "what it shows" }. Wolfram will compute the answer.'
     : supportType === 'formula' ? 'Also include support = { "type": "formula", "latex": "a LaTeX formula", "caption": "what it means" }.'
     : 'Set support to null.';
 
@@ -151,6 +168,13 @@ export async function POST(req: Request) {
     if (s?.type === 'image') sup = { type: 'image', url: await makeImage(String(s.prompt || subject)), caption: String(s.caption || '') };
     else if (s?.type === 'code') sup = { type: 'code', language: String(s.language || '').slice(0, 20), code: String(s.code || '').slice(0, 1200) };
     else if (s?.type === 'table' && Array.isArray(s.headers)) sup = { type: 'table', headers: s.headers.map((h: any) => String(h).slice(0, 40)).slice(0, 6), rows: (Array.isArray(s.rows) ? s.rows : []).slice(0, 12).map((row: any) => (Array.isArray(row) ? row.map((c: any) => String(c).slice(0, 80)).slice(0, 6) : [])) };
+    else if (s?.type === 'wolfram') {
+      // Compute the answer via Wolfram when available; otherwise degrade to a formula.
+      const result = await wolframShortAnswer(s.query);
+      const base = { query: String(s.query || '').slice(0, 300), latex: String(s.latex || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
+      sup = result ? { type: 'wolfram', ...base, result: String(result).slice(0, 400) }
+        : (base.latex ? { type: 'formula', latex: base.latex, caption: base.caption } : null);
+    }
     else if (s?.type === 'formula') sup = { type: 'formula', latex: String(s.latex || s.formula || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
     return NextResponse.json({
       title: String(r.title || `${subject} — slide ${n}`).slice(0, 100),
