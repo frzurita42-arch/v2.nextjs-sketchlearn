@@ -5,6 +5,16 @@
 const { db, dbQuery, withDbTimeout } = require('./pool');
 const { readJSON, writeJSON } = require('./persistence');
 
+// JSONB columns should come back parsed, but some drivers/paths hand back a raw
+// string. Coerce defensively so the client always receives real objects/arrays
+// (a stray JSON string is what makes `tags.map`/`def.settings` blow up).
+function parseJsonb(v, fallback) {
+  if (v == null) return fallback;
+  if (typeof v === 'string') { try { return JSON.parse(v); } catch { return fallback; } }
+  return v;
+}
+function asArr(v) { const p = parseJsonb(v, []); return Array.isArray(p) ? p : []; }
+
 // ---------------------------------------------------------------------------
 // tools — published Tool Definitions (the spec the runtime interprets)
 // ---------------------------------------------------------------------------
@@ -16,9 +26,9 @@ function mapToolRow(r) {
     title: r.title,
     description: r.description,
     archetype: r.archetype,
-    definition: r.definition,
+    definition: parseJsonb(r.definition, {}),
     visibility: r.visibility,
-    tags: r.tags || [],
+    tags: asArr(r.tags),
     thumbnail: r.thumbnail,
     likeCount: r.like_count,
     aiGenerated: r.ai_generated,
@@ -39,11 +49,11 @@ async function insertTool(record) {
     await withDbTimeout(dbQuery(
       `INSERT INTO tools (id, slug, owner, title, description, archetype, definition,
          visibility, tags, thumbnail, like_count, ai_generated)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11,$12)`,
       [
         record.id, record.slug, record.owner, record.title, record.description || null,
-        record.archetype, record.definition, record.visibility || 'private',
-        record.tags || null, record.thumbnail || null, record.likeCount || 0,
+        record.archetype, JSON.stringify(record.definition || {}), record.visibility || 'private',
+        JSON.stringify(record.tags || []), record.thumbnail || null, record.likeCount || 0,
         !!record.aiGenerated,
       ]
     ), 8000, 'Save tool');
@@ -98,7 +108,7 @@ function mapEntryRow(r) {
     toolId: r.tool_id,
     username: r.username,
     status: r.status,
-    data: r.data,
+    data: parseJsonb(r.data, {}),
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
   };
@@ -115,8 +125,8 @@ async function insertEntry(record) {
   try {
     await withDbTimeout(dbQuery(
       `INSERT INTO entries (id, tool_id, username, status, data)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [record.id, record.toolId, record.username || null, record.status || 'active', record.data]
+       VALUES ($1,$2,$3,$4,$5::jsonb)`,
+      [record.id, record.toolId, record.username || null, record.status || 'active', JSON.stringify(record.data || {})]
     ), 8000, 'Save entry');
   } catch (e) {
     console.error('DB insert for entry failed; saving to file instead:', e.message);

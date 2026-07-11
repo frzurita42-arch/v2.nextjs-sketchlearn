@@ -11,11 +11,15 @@ import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 
+// Coerce anything the API/DB hands us into an array, so a stray non-array shape
+// (e.g. tags/entries returned oddly) can never throw `.map is not a function`.
+const asArray = (x: any): any[] => (Array.isArray(x) ? x : []);
+
 function OutputView({ out }: { out: any }) {
   if (!out) return null;
   if (out.output === 'text') return <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{out.text}</p>;
   if (out.output === 'cards') return (
-    <div>{(out.cards || []).map((c: any, i: number) => (
+    <div>{asArray(out.cards).map((c: any, i: number) => (
       <div key={i} className="card" style={{ padding: '12px 14px', marginBottom: 10 }}>
         <strong>{c.title}</strong><p style={{ margin: '6px 0 0', fontSize: 14 }}>{c.body}</p>
       </div>
@@ -24,8 +28,8 @@ function OutputView({ out }: { out: any }) {
   if (out.output === 'table') return (
     <div style={{ overflowX: 'auto' }}>
       <table className="sketch-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead><tr>{(out.headers || []).map((h: string, i: number) => <th key={i} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{h}</th>)}</tr></thead>
-        <tbody>{(out.rows || []).map((r: any[], i: number) => <tr key={i}>{r.map((c, j) => <td key={j} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6 }}>{c}</td>)}</tr>)}</tbody>
+        <thead><tr>{asArray(out.headers).map((h: string, i: number) => <th key={i} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{h}</th>)}</tr></thead>
+        <tbody>{asArray(out.rows).map((r: any[], i: number) => <tr key={i}>{asArray(r).map((c, j) => <td key={j} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6 }}>{c}</td>)}</tr>)}</tbody>
       </table>
     </div>
   );
@@ -55,7 +59,9 @@ function fieldValue(f: any, e: any) {
   return String(v ?? '');
 }
 
-function EntryDisplay({ entries, display, fields }: { entries: any[]; display: string; fields: any[] }) {
+function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn }: { entries: any[]; display: string; fields: any[] }) {
+  const entries = asArray(entriesIn);
+  const fields = asArray(fieldsIn);
   if (!entries.length) return <p style={{ opacity: 0.6 }}>No entries yet — add the first one above.</p>;
   const imageFields = fields.filter((f: any) => f.type === 'image');
   const textFields = fields.filter((f: any) => f.type !== 'image');
@@ -103,21 +109,25 @@ export function ToolRunnerView() {
   const tool = appState.activeTool;
   const def = tool?.definition;
 
+  // Coerced field arrays used everywhere below (never throw on a bad shape).
+  const settingsFields = asArray(def?.settings);
+  const entryFields = asArray(def?.app?.entryFields);
+
   // generator state
-  const [values, setValues] = useState<Record<string, any>>(() => defaultsFor(def?.settings || []));
+  const [values, setValues] = useState<Record<string, any>>(() => defaultsFor(settingsFields));
   const [out, setOut] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
   // app state
-  const [entryVals, setEntryVals] = useState<Record<string, any>>(() => defaultsFor(def?.app?.entryFields || []));
+  const [entryVals, setEntryVals] = useState<Record<string, any>>(() => defaultsFor(entryFields));
   const [entries, setEntries] = useState<any[]>([]);
   const [isOwner, setIsOwner] = useState(false);
 
   const isApp = def?.archetype === 'app';
   const loadEntries = useMemo(() => async () => {
     if (!isApp || !tool?.slug) return;
-    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(tool.slug)}`); setEntries(r?.entries || []); setIsOwner(!!r?.isOwner); } catch { /* ignore */ }
+    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(tool.slug)}`); setEntries(asArray(r?.entries)); setIsOwner(!!r?.isOwner); } catch { /* ignore */ }
   }, [isApp, tool?.slug]);
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
@@ -134,7 +144,7 @@ export function ToolRunnerView() {
 
   const addEntry = async () => {
     setBusy(true); setErr('');
-    try { await API.post('/api/tools/entries', { slug: tool.slug, data: entryVals }); setEntryVals(defaultsFor(def.app.entryFields)); await loadEntries(); }
+    try { await API.post('/api/tools/entries', { slug: tool.slug, data: entryVals }); setEntryVals(defaultsFor(entryFields)); await loadEntries(); }
     catch (e: any) { setErr(e?.message || 'Could not add entry'); }
     setBusy(false);
   };
@@ -161,9 +171,12 @@ export function ToolRunnerView() {
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
         {!isApp ? (
+          !def.generator ? (
+            <div className="card alt" style={{ padding: '14px 16px' }}><p style={{ margin: 0 }}>This tool&apos;s definition is incomplete and can&apos;t run. Try rebuilding it from the Builder.</p></div>
+          ) : (
           <>
             <div className="card alt" style={{ padding: '14px 16px' }}>
-              <ToolFields fields={def.settings} values={values} onChange={(id, v) => setValues(s => ({ ...s, [id]: v }))} />
+              <ToolFields fields={settingsFields} values={values} onChange={(id, v) => setValues(s => ({ ...s, [id]: v }))} />
               <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
                 <button className="btn green" disabled={busy} onClick={run}>{busy ? 'Generating…' : 'Generate →'}</button>
               </div>
@@ -176,24 +189,25 @@ export function ToolRunnerView() {
               </div>
             )}
           </>
+          )
         ) : (
           <>
             <div className="card alt" style={{ padding: '14px 16px' }}>
               <h4 style={{ margin: '0 0 8px' }}>Add an entry</h4>
-              <ToolFields fields={def.app.entryFields} values={entryVals} onChange={(id, v) => setEntryVals(s => ({ ...s, [id]: v }))} />
+              <ToolFields fields={entryFields} values={entryVals} onChange={(id, v) => setEntryVals(s => ({ ...s, [id]: v }))} />
               <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
-                <button className="btn green" disabled={busy} onClick={addEntry}>{busy ? 'Saving…' : (def.app.review ? 'Submit for review' : 'Add')}</button>
+                <button className="btn green" disabled={busy} onClick={addEntry}>{busy ? 'Saving…' : (def.app?.review ? 'Submit for review' : 'Add')}</button>
               </div>
               {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
             </div>
             <div style={{ marginTop: 16 }}>
-              <EntryDisplay entries={entries} display={def.app.display} fields={def.app.entryFields} />
-              {isOwner && def.app.review && entries.some((e: any) => e.status === 'pending') && (
+              <EntryDisplay entries={entries} display={def.app?.display || 'cards'} fields={entryFields} />
+              {isOwner && def.app?.review && asArray(entries).some((e: any) => e.status === 'pending') && (
                 <div className="card" style={{ padding: '12px 14px', marginTop: 12 }}>
                   <h4 style={{ margin: '0 0 8px' }}>Review queue (owner)</h4>
-                  {entries.filter((e: any) => e.status === 'pending').map((e: any) => (
+                  {asArray(entries).filter((e: any) => e.status === 'pending').map((e: any) => (
                     <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 13 }}>{def.app.entryFields.map((f: any) => `${e.data?.[f.id] ?? ''}`).filter(Boolean).join(' · ')}</span>
+                      <span style={{ fontSize: 13 }}>{entryFields.map((f: any) => `${e.data?.[f.id] ?? ''}`).filter(Boolean).join(' · ')}</span>
                       <span style={{ display: 'flex', gap: 6 }}>
                         <button className="btn small green" onClick={() => setStatus(e.id, 'approved')}>Approve</button>
                         <button className="btn small ghost" onClick={() => setStatus(e.id, 'rejected')}>Reject</button>

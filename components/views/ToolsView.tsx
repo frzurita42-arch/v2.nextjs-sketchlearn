@@ -13,7 +13,7 @@ export function ToolsView() {
 
   const load = async () => {
     setLoading(true);
-    try { const r = await API.get('/api/tools'); setTools(r?.tools || []); } catch { /* ignore */ }
+    try { const r = await API.get('/api/tools'); setTools(Array.isArray(r?.tools) ? r.tools : []); } catch { /* ignore */ }
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
@@ -43,7 +43,7 @@ export function ToolsView() {
                 </div>
                 <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}</p>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {(t.tags || []).map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
+                  {(Array.isArray(t.tags) ? t.tags : []).map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
                   <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>
