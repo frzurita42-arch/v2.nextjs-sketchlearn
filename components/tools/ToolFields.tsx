@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import type { ToolField } from '@/lib/tool-schema';
 import { AudioField, DrawField } from '@/components/tools/MediaFields';
-import { normalizeImageUrl, isRenderableImage } from '@/lib/img';
+import { ImageField } from '@/components/tools/ImageField';
 
 function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v: any) => void }) {
   const inList = f.options?.includes(value);
@@ -39,30 +39,7 @@ function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v:
       </label>
     );
   }
-  if (f.type === 'image') {
-    // URL-first (lightweight, AI-readable). Upload is optional and heavier.
-    const onFile = (file?: File) => {
-      if (!file) return;
-      if (file.size > 1_500_000) { alert('Please pick an image under 1.5 MB (or paste a URL instead — lighter).'); return; }
-      const reader = new FileReader();
-      reader.onload = () => onChange(String(reader.result || ''));
-      reader.readAsDataURL(file);
-    };
-    const isData = String(value || '').startsWith('data:');
-    return (
-      <label className="field" style={{ gridColumn: '1 / -1' }}><span>{f.label}</span>
-        <input type="url" placeholder="Paste an image URL (e.g. from an image host)"
-          value={isData ? '' : (value ?? '')} onChange={e => onChange(normalizeImageUrl(e.target.value))} />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, opacity: 0.6 }}>or</span>
-          <input type="file" accept="image/*" onChange={e => onFile(e.target.files?.[0])} style={{ fontSize: 12 }} />
-          {value && <button type="button" className="btn small ghost" onClick={() => onChange('')}>Clear</button>}
-        </div>
-        <small style={{ fontSize: 11, opacity: 0.6 }}>Tip: a direct image link saves space. Plain Google Drive share links usually don&apos;t load — use an image host.</small>
-        {isRenderableImage(value) && <img src={value} alt="" style={{ maxWidth: 160, marginTop: 6, borderRadius: 8, border: '2px solid var(--ink)' }} />}
-      </label>
-    );
-  }
+  if (f.type === 'image') return <ImageField label={f.label} value={value} onChange={onChange} />;
   if (f.type === 'select') {
     return (
       <label className="field"><span>{f.label}</span>

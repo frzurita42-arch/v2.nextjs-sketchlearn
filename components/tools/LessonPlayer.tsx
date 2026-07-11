@@ -88,6 +88,8 @@ function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string;
   const [val, setVal] = useState('');
   const [tries, setTries] = useState(0);
   const [state, setState] = useState<'open' | 'right' | 'wrong'>('open');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState('');
   const finish = (correct: boolean, detail: any) => { if (state === 'open') { setState(correct ? 'right' : 'wrong'); onDone(correct, detail); } };
 
   if (q.kind === 'mcq') {
@@ -108,22 +110,37 @@ function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string;
       </div>
     );
   }
-  // fill-blank / input — typed answer, 3 tries then reveal
+  // fill-blank / input — typed answer. Exact match is instant; otherwise the AI
+  // judges whether the free-text answer is valid (accepts the learner's own
+  // wording / paraphrases), then we move on. 3 tries before revealing.
   const accept = (q.accept && q.accept.length ? q.accept : [q.answer || '']).map(s => String(s).toLowerCase());
-  const check = () => {
-    const ok = accept.includes(val.trim().toLowerCase());
-    if (ok) { finish(true, { prompt: q.prompt, your: val, answer: q.answer || '', correct: true }); return; }
+  const check = async () => {
+    if (aiBusy) return;
+    const v = val.trim();
+    if (accept.includes(v.toLowerCase())) { finish(true, { prompt: q.prompt, your: v, answer: q.answer || '', correct: true }); return; }
+    // Ask the AI whether this free-text answer is acceptable.
+    if (v && q.answer) {
+      setAiBusy(true); setAiNote('');
+      try {
+        const r = await API.post('/api/tools/lesson/check-code', { prompt: q.prompt, answer: q.answer, code: v }, { retries: 1 });
+        setAiBusy(false);
+        // Only trust a REAL AI grade (checked). Without AI, fall through to tries.
+        if (r?.checked && r?.correct) { finish(true, { prompt: q.prompt, your: v, answer: q.answer || '', correct: true, feedback: r.feedback }); return; }
+        if (r?.checked && r?.feedback) setAiNote(r.feedback);
+      } catch { setAiBusy(false); }
+    }
     const t = tries + 1; setTries(t);
-    if (t >= 3) finish(false, { prompt: q.prompt, your: val || '(no answer)', answer: q.answer || '', correct: false });
+    if (t >= 3) finish(false, { prompt: q.prompt, your: v || '(no answer)', answer: q.answer || '', correct: false });
   };
   return (
     <div style={{ textAlign: 'center' }}>
       <p style={{ fontWeight: 600, margin: '0 0 8px' }}>{q.kind === 'fill-blank' ? '✍️ Fill in the blank' : '⌨️ Your answer'}: <MathText text={q.prompt} /></p>
       <div className="chat-input-row" style={{ maxWidth: 420, margin: '0 auto' }}>
-        <input type="text" value={val} disabled={state !== 'open'} placeholder="Type your answer…"
+        <input type="text" value={val} disabled={state !== 'open' || aiBusy} placeholder="Type or speak (🎤) your answer…"
           onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); check(); } }} />
-        {state === 'open' && <button className="btn primary" onClick={check}>Check</button>}
+        {state === 'open' && <button className="btn primary" disabled={aiBusy} onClick={check}>{aiBusy ? <><Spinner />Checking…</> : 'Check'}</button>}
       </div>
+      {state === 'open' && aiNote && <p style={{ fontSize: 13, opacity: 0.85 }}>{aiNote}</p>}
       {state === 'open' && tries > 0 && <p style={{ fontSize: 13, color: 'var(--danger,#e4572e)' }}>Not quite — {3 - tries} {3 - tries === 1 ? 'try' : 'tries'} left.</p>}
       {state === 'right' && <p style={{ fontSize: 14, color: 'var(--accent,#5c80bc)' }}>✓ Correct!</p>}
       {state === 'wrong' && <p style={{ fontSize: 14 }}>Answer: <b>{q.answer}</b> <RichText text={String(q.answer || '')} translateTo={translateTo} /></p>}
@@ -256,6 +273,27 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const [checking, setChecking] = useState(false);              // AI grading in progress
   const [err, setErr] = useState('');
   const [showReview, setShowReview] = useState(false);
+  // Refs let the background prefetch read the latest state without stale closures.
+  const slidesRef = useRef<(Slide | null)[]>([]);
+  const cfgRef = useRef<Cfg>({});
+  const prefetching = useRef<Record<number, Promise<void> | undefined>>({});
+  useEffect(() => { slidesRef.current = slides; }, [slides]);
+
+  // Quietly load slide `idx` in the BACKGROUND (no spinner), so Next is instant
+  // for EVERY answer type — including AI-checked ones that don't block on it.
+  const prefetch = (idx: number): Promise<void> | undefined => {
+    if (idx < 0 || idx >= total() || slidesRef.current[idx] || prefetching.current[idx]) return prefetching.current[idx];
+    const p = (async () => {
+      try {
+        const prior = slidesRef.current.filter(Boolean).map((s) => (s as Slide).title);
+        const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: idx + 1, priorSummary: prior.slice(-6).join('; ') });
+        setSlides((sc) => { if (sc[idx]) return sc; const n = [...sc]; n[idx] = r; return n; });
+      } catch { /* goNext will fetch on demand if this failed */ }
+      finally { delete prefetching.current[idx]; }
+    })();
+    prefetching.current[idx] = p;
+    return p;
+  };
 
   const loadActivities = async () => {
     try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`); setActivities(shuffle(Array.isArray(r?.entries) ? r.entries : [])); } catch { /* ignore */ }
@@ -269,15 +307,19 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
 
   // Fetch slide `idx` (0-based) into the cache. Returns true on success.
   const fetchInto = async (idx: number, useCfg: Cfg, prior: string[]): Promise<boolean> => {
+    cfgRef.current = useCfg;
     setGenBusy(true); setErr('');
     try {
       const r = await API.post('/api/tools/lesson/slide', { lesson, values: useCfg, slideNumber: idx + 1, priorSummary: prior.slice(-6).join('; ') });
-      setSlides(sc => { const n = [...sc]; n[idx] = r; return n; });
-      setGenBusy(false); return true;
+      setSlides(sc => { const n = [...sc]; n[idx] = r; slidesRef.current = n; return n; });
+      setGenBusy(false);
+      prefetch(idx + 1);               // start loading the NEXT slide in the background
+      return true;
     } catch (e: any) { setErr(e?.message || 'Could not load the slide.'); setGenBusy(false); return false; }
   };
 
   const play = (c: Cfg) => {
+    cfgRef.current = c; slidesRef.current = []; prefetching.current = {};
     setCfg(c); setSlides([]); setResults({}); setCur(0); setPending(null); setShowReview(false); setErr(''); setPhase('play');
     fetchInto(0, c, []);
   };
@@ -321,15 +363,19 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     setChecking(false);
   };
 
-  const goBack = () => { if (cur > 0) { setPending(null); setCur(cur - 1); } };
+  const goBack = () => { if (cur > 0) { setPending(null); setCur(cur - 1); prefetch(cur); } };
   const goNext = async () => {
     const nxt = cur + 1;
     if (nxt >= total()) return;
     setPending(null);
-    if (slides[nxt]) { setCur(nxt); return; }
-    const prior = slides.filter(Boolean).map(s => (s as Slide).title);
-    const ok = await fetchInto(nxt, cfg, prior);
-    if (ok) setCur(nxt);
+    // Usually the next slide was already prefetched -> instant. Otherwise wait for
+    // an in-flight prefetch (or start one) with a spinner.
+    if (slidesRef.current[nxt]) { setCur(nxt); prefetch(nxt + 1); return; }
+    setGenBusy(true); setErr('');
+    await (prefetching.current[nxt] || prefetch(nxt));
+    setGenBusy(false);
+    if (slidesRef.current[nxt]) { setCur(nxt); prefetch(nxt + 1); }
+    else setErr('Could not load the next slide. Tap Next to retry.');
   };
 
   const label = (c: Cfg) => [lesson.subject, c.level || c.difficulty, c.topic].filter(Boolean).join(' · ');

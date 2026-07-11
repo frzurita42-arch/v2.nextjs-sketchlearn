@@ -111,6 +111,19 @@ class ApiClient {
     }
   }
 
+  // Multipart file upload (blob store). Returns the parsed JSON (e.g. { url }).
+  // Throws with .status so callers can fall back (e.g. 501 = blob not configured).
+  async upload(url: string, file: File): Promise<any> {
+    this.hydrate();
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(url, { method: 'POST', headers: this.token ? { Authorization: `Bearer ${this.token}` } : {}, body: fd });
+    let data: any = null;
+    try { data = await res.json(); } catch { /* non-JSON */ }
+    if (!res.ok) { const e: any = new Error((data && data.error) || `Upload failed (${res.status})`); e.status = res.status; throw e; }
+    return data;
+  }
+
   get(url: string, opts?: { retries?: number }) { return this.call('GET', url, undefined, opts); }
   post(url: string, body?: any, opts?: { retries?: number }) { return this.call('POST', url, body, opts); }
   put(url: string, body?: any, opts?: { retries?: number }) { return this.call('PUT', url, body, opts); }
