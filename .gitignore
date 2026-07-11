@@ -6,3 +6,4 @@ data/
 # Next.js
 .next/
 next-env.d.ts
+tsconfig.tsbuildinfo

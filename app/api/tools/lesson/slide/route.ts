@@ -64,12 +64,23 @@ function cleanOptions(opts: any, want: number) {
   return arr;
 }
 function cleanQuestion(q: any) {
-  const kind = ['mcq', 'fill-blank', 'input', 'writing'].includes(q?.kind) ? q.kind : 'mcq';
+  const kind = ['mcq', 'fill-blank', 'input', 'writing', 'annotation'].includes(q?.kind) ? q.kind : 'mcq';
   if (kind === 'writing') {
     // Handwriting drill: draw the target; the AI checks the drawing. No options/answer.
     const target = String(q?.target || q?.answer || '').trim();
     if (!target) return null;
     return { kind: 'writing', prompt: String(q?.prompt || 'Write this by hand:').slice(0, 200), target: target.slice(0, 40) };
+  }
+  if (kind === 'annotation') {
+    // Worked-answer drill: the learner writes the full solution/characters on a
+    // paginated paper pad; the AI scans the pages and grades against "answer".
+    const prompt = String(q?.prompt || q?.problem || '').trim();
+    if (!prompt) return null;
+    return {
+      kind: 'annotation',
+      prompt: prompt.slice(0, 400),
+      answer: String(q?.answer || q?.solution || '').slice(0, 400),
+    };
   }
   if (kind === 'mcq') {
     const want = q?.options?.length >= 4 ? 4 : 2;
@@ -102,6 +113,8 @@ function fbSlide(subject: string, n: number, kinds: string[]) {
     question = { kind: 'mcq', prompt: `Which is correct about ${subject}?`, options: cleanOptions(opts, want) };
   } else if (kind === 'writing') {
     question = { kind: 'writing', prompt: 'Write this by hand:', target: 'A' };
+  } else if (kind === 'annotation') {
+    question = { kind: 'annotation', prompt: `Work out and write the full answer for this ${subject} problem on the pad.`, answer: '' };
   } else {
     question = { kind, prompt: kind === 'fill-blank' ? `${subject} has ____ key idea per slide.` : `Type a key term from this ${subject} slide.`, answer: 'one', accept: ['one', '1'] };
   }
@@ -141,9 +154,10 @@ export async function POST(req: Request) {
   };
   const activityTypes: string[] = (Array.isArray(lesson.activityTypes) && lesson.activityTypes.length) ? lesson.activityTypes : ['mcq', 'fill-blank', 'input'];
 
-  // A pure handwriting drill needs no support material (no image/pronunciation/phrase).
-  const pureWriting = activityTypes.length === 1 && activityTypes[0] === 'writing';
-  // Randomly fluctuate this slide's shape. Handwriting drills stay to one task per slide.
+  // A pure handwriting/worked-answer drill needs no support clutter.
+  const onlyDrills = activityTypes.every((t) => t === 'writing' || t === 'annotation');
+  const pureWriting = onlyDrills;
+  // Randomly fluctuate this slide's shape. Drills stay to one task per slide.
   const numQ = pureWriting ? 1 : 1 + Math.floor(Math.random() * 3);   // 1-3 questions per slide
   const qKinds = Array.from({ length: numQ }, () => rand(activityTypes));
   const wolfram = wolframAvailable();
@@ -173,6 +187,7 @@ export async function POST(req: Request) {
     if (k === 'mcq') { const c = Math.random() < 0.5 ? 2 : 4; return `Q${i + 1}: kind "mcq" with EXACTLY ${c} options (one correct).`; }
     if (k === 'fill-blank') return `Q${i + 1}: kind "fill-blank" — a sentence with "____" and the missing "answer" (+ "accept" variants).`;
     if (k === 'writing') return `Q${i + 1}: kind "writing" — a handwriting drill: give "target" = the exact ${language || subject} character/word to hand-write, and a short "prompt" (e.g. "Write this hiragana"). No options, no answer. The learner will draw it and it will be AI-checked.`;
+    if (k === 'annotation') return `Q${i + 1}: kind "annotation" — a worked-answer drill for a ${subject} problem (math working, or CJK sentences/calligraphy). Give a full "prompt" stating the problem/task clearly, and "answer" = the complete expected solution/answer (so the AI can grade the hand-written pages). No options. The learner writes the full worked answer by hand across paginated pages and the AI scans and grades it.`;
     return `Q${i + 1}: kind "input" — a short-answer question with an "answer" (+ "accept" variants).`;
   }).join('\n');
   const codeHint = kind === 'language'

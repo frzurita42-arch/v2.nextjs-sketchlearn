@@ -12,6 +12,7 @@ import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
 import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
+import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad';
 
 type Q = { kind: string; prompt: string; options?: any[]; answer?: string; accept?: string[]; explanation?: string; target?: string };
 type Slide = { title: string; content: string; translation?: string; support?: any; questions: Q[]; fallback?: boolean };
@@ -61,6 +62,7 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
   const finish = (correct: boolean, detail?: any) => { if (state === 'open') { setState(correct ? 'right' : 'wrong'); onDone(correct, detail); } };
 
   if (q.kind === 'writing') return <WritingQuestion q={q} translateTo={translateTo} onDone={onDone} />;
+  if (q.kind === 'annotation') return <AnnotationQuestion q={q} onDone={onDone} />;
 
   if (q.kind === 'mcq') {
     const answered = picked !== null;
@@ -150,6 +152,56 @@ function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string
         <div style={{ marginTop: 12 }}>
           <p style={{ fontSize: 15 }}>{result.correct ? '✓ ' : '✗ '}{result.feedback}{typeof result.score === 'number' ? ` (${result.score}/100)` : ''}</p>
           <button className="btn green" onClick={() => onDone(!!result.correct, { prompt: q.prompt || 'Write it', your: '✍️ your drawing', answer: target, correct: !!result.correct })}>Continue →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Worked-answer drill: write the FULL solution / characters by hand on a
+// paginated paper pad, then the AI scans every page and grades it. The pages can
+// be downloaded as a PDF (print) for keeping / publishing.
+function AnnotationQuestion({ q, onDone }: { q: Q; onDone: (correct: boolean, detail?: any) => void }) {
+  const [getPages, setGetPages] = useState<null | (() => string[])>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  const collect = () => (getPages ? getPages().filter(Boolean) : []);
+
+  const check = async () => {
+    const pages = collect();
+    if (!pages.length) { alert('Write your answer on the pad first.'); return; }
+    setBusy(true);
+    try {
+      const image = await compositePages(pages);
+      const r = await API.post('/api/tools/lesson/check-annotation', { prompt: q.prompt || '', answer: q.answer || '', image });
+      setResult(r);
+    } catch { setResult({ correct: true, feedback: 'Saved.', checked: false }); }
+    setBusy(false);
+  };
+
+  // Open every page in a print window (learner can Save-as-PDF / print).
+  const download = () => {
+    const pages = collect();
+    if (!pages.length) { alert('Nothing written yet.'); return; }
+    const w = window.open('', '_blank'); if (!w) return;
+    const imgs = pages.map((p, i) => `<figure><img src="${p}"/><figcaption>Page ${i + 1} / ${pages.length}</figcaption></figure>`).join('');
+    w.document.write(`<!doctype html><title>My work</title><style>body{font-family:Georgia,serif;margin:24px;text-align:center}h1{font-size:18px}figure{margin:0 0 24px;page-break-after:always}img{width:100%;max-width:640px;border:1px solid #ccc}figcaption{font-size:12px;color:#666;margin-top:4px}@media print{h1{display:none}}</style><h1>${(q.prompt || 'My work').replace(/</g, '&lt;')}</h1>${imgs}<script>onload=()=>setTimeout(print,300)</script>`);
+    w.document.close();
+  };
+
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <p style={{ fontWeight: 600, margin: '0 0 10px' }}>📝 {q.prompt || 'Work out the full answer on the pad:'}</p>
+      <AnnotationPad onReady={(fn) => setGetPages(() => fn)} />
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+        {!result && <button className="btn green" disabled={busy} onClick={check}>{busy ? 'Scanning…' : '✅ Check with AI'}</button>}
+        <button className="btn small ghost" onClick={download}>📄 Download (PDF)</button>
+      </div>
+      {result && (
+        <div style={{ marginTop: 12 }}>
+          <p style={{ fontSize: 15 }}>{result.correct ? '✓ ' : '✗ '}{result.feedback}{typeof result.score === 'number' ? ` (${result.score}/100)` : ''}</p>
+          <button className="btn green" onClick={() => onDone(!!result.correct, { prompt: q.prompt || 'Worked answer', your: '📝 your written pages', answer: q.answer || '', correct: !!result.correct })}>Continue →</button>
         </div>
       )}
     </div>
@@ -321,9 +373,10 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
       {err && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchSlide(slideNum || 1, seenTitles, cfg)}>Retry</button></p>}
 
       {slide && (() => {
-        const isWritingSlide = qs.length > 0 && qs.every((q: any) => q.kind === 'writing');
+        const isWritingSlide = qs.length > 0 && qs.every((q: any) => q.kind === 'writing' || q.kind === 'annotation');
+        const isAnnotationSlide = qs.length > 0 && qs.some((q: any) => q.kind === 'annotation');
         return (
-        <div className="card" style={{ padding: '16px 18px', maxWidth: 560, margin: '0 auto' }}>
+        <div className="card" style={{ padding: '16px 18px', maxWidth: isAnnotationSlide ? 820 : 560, margin: '0 auto' }}>
           {slide.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7, textAlign: 'center' }}>Demo slide (no AI connected).</p>}
           <h3 style={{ marginTop: 0, textAlign: 'center' }}>{slide.title}</h3>
           {/* Writing drills speak/translate the target themselves — keep the intro plain. */}
