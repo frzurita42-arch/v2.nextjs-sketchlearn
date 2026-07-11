@@ -32,34 +32,66 @@ function OutputView({ out }: { out: any }) {
   return null;
 }
 
+function timeAgo(iso: string): string {
+  if (!iso) return '';
+  const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s`; const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`;
+}
+function Byline({ e }: { e: any }) {
+  return (
+    <div style={{ fontSize: 12, opacity: 0.65, marginTop: 4 }}>
+      {e.username ? `@${e.username}` : 'anon'}{e.createdAt ? ` · ${timeAgo(e.createdAt)} ago` : ''}
+      {e.status && e.status !== 'active' && e.status !== 'approved' && <em> · {e.status}</em>}
+    </div>
+  );
+}
+function fieldValue(f: any, e: any) {
+  const v = e.data?.[f.id];
+  if (f.type === 'image' && typeof v === 'string' && v.startsWith('data:')) {
+    return <img src={v} alt={f.label} style={{ width: '100%', borderRadius: 8, border: '2px solid var(--ink)', display: 'block' }} />;
+  }
+  if (f.type === 'toggle') return v ? 'yes' : 'no';
+  return String(v ?? '');
+}
+
 function EntryDisplay({ entries, display, fields }: { entries: any[]; display: string; fields: any[] }) {
   if (!entries.length) return <p style={{ opacity: 0.6 }}>No entries yet — add the first one above.</p>;
+  const imageFields = fields.filter((f: any) => f.type === 'image');
+  const textFields = fields.filter((f: any) => f.type !== 'image');
+
   if (display === 'table') return (
     <div style={{ overflowX: 'auto' }}>
       <table className="sketch-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead><tr>{fields.map(f => <th key={f.id} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{f.label}</th>)}<th /></tr></thead>
+        <thead><tr><th style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>By</th>{fields.map(f => <th key={f.id} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{f.label}</th>)}</tr></thead>
         <tbody>{entries.map(e => (
-          <tr key={e.id}>{fields.map(f => <td key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6 }}>{String(e.data?.[f.id] ?? '')}</td>)}
-            <td style={{ padding: 6, opacity: 0.6, fontSize: 12 }}>{e.status !== 'active' && e.status !== 'approved' ? e.status : ''}</td></tr>
+          <tr key={e.id}>
+            <td style={{ padding: 6, fontSize: 12, opacity: 0.7 }}>@{e.username || 'anon'}</td>
+            {fields.map(f => <td key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6, maxWidth: 160 }}>{fieldValue(f, e)}</td>)}
+          </tr>
         ))}</tbody>
       </table>
     </div>
   );
   if (display === 'list') return (
-    <ul style={{ paddingLeft: 18 }}>{entries.map(e => (
-      <li key={e.id} style={{ marginBottom: 6 }}>
-        {fields.map(f => <span key={f.id}><b>{f.label}:</b> {String(e.data?.[f.id] ?? '')} </span>)}
-        {e.status && e.status !== 'active' && e.status !== 'approved' && <em style={{ opacity: 0.6 }}> ({e.status})</em>}
-      </li>
-    ))}</ul>
+    <div>{entries.map(e => (
+      <div key={e.id} style={{ borderBottom: '2px dashed var(--ink)', padding: '8px 0' }}>
+        {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id} style={{ maxWidth: 320, marginBottom: 6 }}>{fieldValue(f, e)}</div>)}
+        {textFields.map((f: any) => <span key={f.id} style={{ marginRight: 10 }}><b>{f.label}:</b> {fieldValue(f, e)}</span>)}
+        <Byline e={e} />
+      </div>
+    ))}</div>
   );
-  // cards
+  // cards (social-page style)
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
       {entries.map(e => (
-        <div key={e.id} className="card" style={{ padding: '12px 14px' }}>
-          {fields.map(f => <div key={f.id} style={{ fontSize: 14, marginBottom: 4 }}><b>{f.label}:</b> {String(e.data?.[f.id] ?? '')}</div>)}
-          {e.status && e.status !== 'active' && e.status !== 'approved' && <div style={{ fontSize: 12, opacity: 0.6 }}>status: {e.status}</div>}
+        <div key={e.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id}>{fieldValue(f, e)}</div>)}
+          <div style={{ padding: '10px 12px' }}>
+            {textFields.map((f: any) => <div key={f.id} style={{ fontSize: 14, marginBottom: 3 }}>{f.type === 'textarea' ? fieldValue(f, e) : <><b>{f.label}:</b> {fieldValue(f, e)}</>}</div>)}
+            <Byline e={e} />
+          </div>
         </div>
       ))}
     </div>
@@ -111,11 +143,21 @@ export function ToolRunnerView() {
     try { await API.put('/api/tools/entries', { slug: tool.slug, entryId, status }); await loadEntries(); } catch { /* ignore */ }
   };
 
+  const share = () => {
+    const url = `${window.location.origin}/?tool=${encodeURIComponent(tool.slug)}`;
+    navigator.clipboard?.writeText(url).then(
+      () => alert(`Share link copied:\n${url}`),
+      () => window.prompt('Copy this share link:', url)
+    );
+  };
+
   return (
     <>
       <h1 className="view-title">{tool.title}</h1>
       <p className="view-sub">{def.description || (isApp ? 'Add and browse entries.' : 'Fill the settings and generate.')}{' '}
-        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button></p>
+        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>{' '}
+        {tool.visibility !== 'private' && <button className="btn small blue" onClick={share}>🔗 Share</button>}
+        <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 6 }}>{tool.visibility}</span></p>
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
         {!isApp ? (

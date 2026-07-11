@@ -37,6 +37,21 @@ function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v:
       </label>
     );
   }
+  if (f.type === 'image') {
+    const onFile = (file?: File) => {
+      if (!file) return;
+      if (file.size > 1_500_000) { alert('Please pick an image under 1.5 MB.'); return; }
+      const reader = new FileReader();
+      reader.onload = () => onChange(String(reader.result || ''));
+      reader.readAsDataURL(file);
+    };
+    return (
+      <label className="field" style={{ gridColumn: '1 / -1' }}><span>{f.label}</span>
+        <input type="file" accept="image/*" onChange={e => onFile(e.target.files?.[0])} />
+        {value && <img src={value} alt="" style={{ maxWidth: 160, marginTop: 6, borderRadius: 8, border: '2px solid var(--ink)' }} />}
+      </label>
+    );
+  }
   if (f.type === 'select') {
     return (
       <label className="field"><span>{f.label}</span>

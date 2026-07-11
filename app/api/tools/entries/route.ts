@@ -29,12 +29,17 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const tool = await getToolBySlug(String(b.slug || ''));
   if (!tool || tool.archetype !== 'app') return NextResponse.json({ error: 'Not an app tool' }, { status: 400 });
+  const data = (b.data && typeof b.data === 'object') ? b.data : {};
+  // Guard against oversized payloads (e.g. a huge embedded image data URL).
+  if (JSON.stringify(data).length > 2_200_000) {
+    return NextResponse.json({ error: 'Entry too large — use a smaller image.' }, { status: 413 });
+  }
   const record = {
     id: `e-${crypto.randomUUID().slice(0, 12)}`,
     toolId: tool.id,
     username: a.user.username,
     status: tool.definition?.app?.review ? 'pending' : 'active',
-    data: (b.data && typeof b.data === 'object') ? b.data : {},
+    data,
     createdAt: new Date().toISOString(),
   };
   await insertEntry(record);

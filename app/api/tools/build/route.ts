@@ -15,16 +15,20 @@ function heuristicProposal(text: string) {
   const t = text.toLowerCase();
   // Strong storage nouns => app; explicit generation verbs => generator; then weak signals.
   const strongApp = /\b(store|storage|track|tracker|journal|library|catalog|catalogue|repository|directory|inventory|log|collection|database|bookmark|planner|gallery)\b/.test(t);
+  const socialish = /\b(instagram|social|feed|page|posts?|photo|photos|album|portfolio|board|profile|upload|pictures?|images?|meme|scrapbook)\b/.test(t);
   const genVerb = /\b(generate|produce|write|draft|compose|summar|essay|outline|ideas|suggestions?|plan out)\b/.test(t);
-  const archetype = strongApp ? 'app' : genVerb ? 'generator' : /\b(list|collect|save)\b/.test(t) ? 'app' : 'generator';
+  const archetype = (strongApp || socialish) ? 'app' : genVerb ? 'generator' : /\b(list|collect|save)\b/.test(t) ? 'app' : 'generator';
   const title = (text.trim().split(/[.,\n]/)[0] || 'My Tool').replace(/^(a|an|make|build|create|i want|i'd like)\s+/i, '').slice(0, 60) || 'My Tool';
 
   if (archetype === 'app') {
-    const fields: any[] = [{ id: 'title', label: 'Title', type: 'text', required: true }];
+    const imagey = socialish || /\bphoto|image|picture|upload\b/.test(t);
+    const fields: any[] = [];
+    if (imagey) fields.push({ id: 'image', label: 'Image', type: 'image' });
+    fields.push({ id: socialish ? 'caption' : 'title', label: socialish ? 'Caption' : 'Title', type: socialish ? 'textarea' : 'text', required: !socialish });
     if (/\blink|url\b/.test(t)) fields.push({ id: 'link', label: 'Link', type: 'text' });
     if (/\bdate|due|deadline|schedule\b/.test(t)) fields.push({ id: 'date', label: 'Date', type: 'date' });
     if (/\blevel|category|topic|type|tag\b/.test(t)) fields.push({ id: 'category', label: 'Category', type: 'select-or-custom', options: ['General', 'Beginner', 'Intermediate', 'Advanced'] });
-    fields.push({ id: 'notes', label: 'Notes', type: 'textarea' });
+    if (!socialish) fields.push({ id: 'notes', label: 'Notes', type: 'textarea' });
     return { archetype, title, description: text.slice(0, 300), tags: [], settings: [], app: { entryFields: fields, display: 'cards', review: false } };
   }
   const output = /\bcards?|ideas|list|items|steps\b/.test(t) ? 'cards' : /\btable|rows|columns|data\b/.test(t) ? 'table' : 'text';
@@ -35,10 +39,11 @@ function heuristicProposal(text: string) {
   };
 }
 
-const PALETTE = `Field types: text, textarea, number, select (needs options), select-or-custom (dropdown the user can override), toggle, date.
+const PALETTE = `Field types: text, textarea, number, select (needs options), select-or-custom (dropdown the user can override), toggle, date, image (user uploads a picture).
 Archetypes:
 - "generator": settings[] (the inputs) + generator.promptTemplate (use {{fieldId}} placeholders) + generator.output ("text" | "cards" | "table").
-- "app": app.entryFields[] (fields per stored record) + app.display ("cards" | "list" | "table") + app.review (bool: new entries need owner approval).`;
+- "app": app.entryFields[] (fields per stored record) + app.display ("cards" | "list" | "table") + app.review (bool: new entries need owner approval).
+Guidance: anything like a social page, Instagram-style feed, photo gallery, portfolio, or "page with uploadable posts" is an APP whose entryFields include an "image" field plus a text/textarea caption, displayed as "cards". Entries are automatically stamped with the poster's username and time, so you never need a username field.`;
 
 export async function POST(req: Request) {
   const a = await requireAuth(req);

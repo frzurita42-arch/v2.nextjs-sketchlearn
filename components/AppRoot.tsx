@@ -64,6 +64,18 @@ export default function AppRoot() {
     if (typeof window !== 'undefined') window.location.reload();
   }, []);
 
+  // Deep-link: /?tool=<slug> opens a shared tool directly once signed in.
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    const slug = new URLSearchParams(window.location.search).get('tool');
+    if (!slug) return;
+    let cancelled = false;
+    API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
+      if (!cancelled && r?.tool) { appState.activeTool = r.tool; setView('tool'); }
+    }).catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [user]);
+
   // Demo-mode banner: show when the server has no AI provider connected.
   useEffect(() => {
     if (!user) return;
