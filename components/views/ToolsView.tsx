@@ -1,15 +1,18 @@
 'use client';
 /* Tool gallery: browse published tools (public + your own) and open them in the
  * runtime, or start the Builder chat to make a new one. */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
+import { toolCategory } from '@/lib/tool-category';
+import { CategoryFilter } from '@/components/tools/CategoryFilter';
 
 export function ToolsView() {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
 
   const HIDDEN_KEY = 'sl_hidden_examples';
   const loadHidden = (): string[] => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } };
@@ -24,6 +27,14 @@ export function ToolsView() {
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  // Category counts (for the filter chips) + the visible subset.
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: tools.length };
+    for (const t of tools) { const k = toolCategory(t); c[k] = (c[k] || 0) + 1; }
+    return c;
+  }, [tools]);
+  const shown = filter === 'all' ? tools : tools.filter(t => toolCategory(t) === filter);
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
   const isExample = (t: any) => (t.tags || []).includes('example');
@@ -47,15 +58,19 @@ export function ToolsView() {
         <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>{' '}
         <button className="btn small" onClick={load}>↻ Refresh</button></p>
 
+      {!loading && tools.length > 0 && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
+
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
         : tools.length === 0 ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: '0 0 10px' }}>No tools yet. Be the first — describe a tool and the AI will assemble it.</p>
             <button className="btn green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
           </div>
+        ) : shown.length === 0 ? (
+          <p style={{ textAlign: 'center', opacity: 0.7 }}>No tools in this category yet.</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, maxWidth: 900, margin: '0 auto' }}>
-            {tools.map(t => (
+            {shown.map(t => (
               <div key={t.id} className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                   <strong style={{ fontSize: 16 }}>{t.title}</strong>

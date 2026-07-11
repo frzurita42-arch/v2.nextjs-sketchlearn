@@ -56,7 +56,13 @@ export async function POST(req: Request) {
         id: `tool-${t.id}`, kind: 'tool',
         author: { handle: t.owner, name: t.owner, avatar: avatarFor(t.owner) },
         title: t.title || 'Untitled tool', body: t.description || '',
-        image: t.thumbnail || null, tool: { title: t.title, tags: t.tags || [], slug: t.slug },
+        image: t.thumbnail || null,
+        // Enough of the definition for the client to categorise/filter the tool.
+        tool: {
+          title: t.title, tags: t.tags || [], slug: t.slug, archetype: t.archetype,
+          lesson: t.definition?.lesson ? { activityTypes: t.definition.lesson.activityTypes || [], totalSlides: t.definition.lesson.totalSlides } : undefined,
+          appDisplay: t.definition?.app?.display,
+        },
         likeCount: t.likeCount || 0, commentCount: 0, comments: [],
         aiGenerated: !!t.aiGenerated, createdAt: t.updatedAt || t.createdAt,
       });

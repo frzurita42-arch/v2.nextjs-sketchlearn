@@ -4,9 +4,11 @@
  * shown in random order. Every AI-generated item is clearly badged. Posts the
  * viewer has already seen come back slightly morphed on the next load (the "10%
  * nudge") — a per-post seen-count in localStorage drives that on the server. */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
+import { toolCategory } from '@/lib/tool-category';
+import { CategoryFilter } from '@/components/tools/CategoryFilter';
 
 const SEEN_KEY = 'sl_feed_seen';
 function loadSeen(): Record<string, number> { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') || {}; } catch { return {}; } }
@@ -113,7 +115,17 @@ export function FeedView() {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
+  const [filter, setFilter] = useState('all');
   const seenRef = useRef<Record<string, number>>({});
+
+  // Counts by tool category (only tool posts are categorisable). "All" shows
+  // every post; picking a category narrows the feed to matching tools.
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: posts.length };
+    for (const p of posts) if (p.kind === 'tool' && p.tool) { const k = toolCategory(p.tool); c[k] = (c[k] || 0) + 1; }
+    return c;
+  }, [posts]);
+  const shown = filter === 'all' ? posts : posts.filter(p => p.kind === 'tool' && p.tool && toolCategory(p.tool) === filter);
 
   const load = async () => {
     setLoading(true);
@@ -153,8 +165,11 @@ export function FeedView() {
         ✦ Most posts below are AI-generated sample content to show how the feed works, and are labelled as such.
       </p>
 
+      {!loading && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
+
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading feed…</p>
-        : posts.map(p => <PostCard key={p.id + (p.morphed ? `-m${p.morphCount}` : '')} post={p} />)}
+        : shown.length === 0 ? <p style={{ textAlign: 'center', opacity: 0.7 }}>No tools in this category yet.</p>
+          : shown.map(p => <PostCard key={p.id + (p.morphed ? `-m${p.morphCount}` : '')} post={p} />)}
     </>
   );
 }
