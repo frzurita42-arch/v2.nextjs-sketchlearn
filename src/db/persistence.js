@@ -141,6 +141,22 @@ async function initDatabase() {
   `);
   await dbQuery('CREATE INDEX IF NOT EXISTS idx_entries_tool_created ON entries(tool_id, created_at DESC)');
 
+  // ---------- platform: feed posts (Twitter-style micro-posts) ----------
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      author TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'text',
+      title TEXT,
+      body TEXT NOT NULL,
+      image TEXT,
+      like_count INTEGER NOT NULL DEFAULT 0,
+      ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC)');
+
   // ---------- platform: comments (on tools + feed posts) ----------
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS comments (

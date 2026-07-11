@@ -214,8 +214,65 @@ async function listComments(targetType, targetId, { limit = 200 } = {}) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// posts — real user feed posts (dummy posts are generated, not stored)
+// ---------------------------------------------------------------------------
+function mapPostRow(r) {
+  return {
+    id: r.id,
+    author: r.author,
+    kind: r.kind,
+    title: r.title,
+    body: r.body,
+    image: r.image,
+    likeCount: r.like_count,
+    aiGenerated: r.ai_generated,
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
+  };
+}
+
+function insertPostFile(record) {
+  const posts = readJSON('posts.json', []);
+  posts.push(record);
+  writeJSON('posts.json', posts);
+}
+
+async function insertPost(record) {
+  if (!db.pool) { insertPostFile(record); return; }
+  try {
+    await withDbTimeout(dbQuery(
+      `INSERT INTO posts (id, author, kind, title, body, image, like_count, ai_generated)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [record.id, record.author, record.kind || 'text', record.title || null, record.body,
+       record.image || null, record.likeCount || 0, !!record.aiGenerated]
+    ), 8000, 'Save post');
+  } catch (e) {
+    console.error('DB insert for post failed; saving to file instead:', e.message);
+    insertPostFile(record);
+  }
+}
+
+async function listPosts({ limit = 100 } = {}) {
+  const lim = Math.max(1, Math.min(500, parseInt(limit, 10) || 100));
+  if (!db.pool) {
+    return readJSON('posts.json', [])
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .slice(0, lim);
+  }
+  try {
+    const { rows } = await withDbTimeout(dbQuery(
+      'SELECT * FROM posts ORDER BY created_at DESC LIMIT $1', [lim]
+    ), 8000, 'List posts');
+    return rows.map(mapPostRow);
+  } catch (e) {
+    console.error('DB list posts failed; falling back to file:', e.message);
+    return readJSON('posts.json', []).slice(-lim);
+  }
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools,
   insertEntry, listEntries, setEntryStatus,
   insertComment, listComments,
+  insertPost, listPosts,
 };

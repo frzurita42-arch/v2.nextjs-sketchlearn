@@ -18,6 +18,7 @@ import { ChatView } from '@/components/views/ChatView';
 import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
 import { CsPathView } from '@/components/views/CsPathView';
+import { FeedView } from '@/components/views/FeedView';
 
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
@@ -90,6 +91,7 @@ export default function AppRoot() {
     stats: <StatsView />,
     dashboard: <DashboardView />,
     cspath: <CsPathView />,
+    feed: <FeedView />,
   };
 
   return (
