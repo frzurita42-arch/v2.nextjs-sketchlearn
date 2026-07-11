@@ -39,7 +39,7 @@ function Spinner() {
 function Support({ s }: { s: any }) {
   if (!s) return null;
   if (s.type === 'image' && s.url) return <img src={s.url} alt={s.caption || ''} style={{ width: '100%', maxWidth: 360, borderRadius: 8, border: '2px solid var(--ink)', margin: '8px auto', display: 'block' }} />;
-  if (s.type === 'code') return <pre style={{ background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', fontSize: 13 }}><code>{s.code}</code></pre>;
+  if (s.type === 'code') return <pre style={{ background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', overflowY: 'auto', maxHeight: 320, fontSize: 13, margin: '8px 0' }}><code>{s.code}</code></pre>;
   if (s.type === 'table') return (
     <div style={{ overflowX: 'auto', margin: '8px 0' }}>
       <table className="sketch-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -54,15 +54,29 @@ function Support({ s }: { s: any }) {
       {s.caption && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{s.caption}</div>}
     </div>
   );
-  if (s.type === 'wolfram') return (
-    <div style={{ margin: '8px 0', padding: '10px 12px', background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 8, overflowX: 'auto' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>⚡ WOLFRAM ALPHA</div>
-      {s.latex && <div style={{ fontSize: 18, textAlign: 'center', margin: '4px 0' }} dangerouslySetInnerHTML={{ __html: renderMath(s.latex, true) }} />}
-      {s.query && <div style={{ fontSize: 12, opacity: 0.7 }}>Query: <code>{s.query}</code></div>}
-      {s.result && <div style={{ fontSize: 15, marginTop: 4 }}>= <b>{s.result}</b></div>}
-      {s.caption && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{s.caption}</div>}
-    </div>
-  );
+  if (s.type === 'wolfram') {
+    const steps = Array.isArray(s.steps) ? s.steps : [];
+    return (
+      <div style={{ margin: '8px 0', padding: '10px 12px', background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>⚡ WOLFRAM ALPHA</div>
+        {s.latex && <div style={{ fontSize: 18, textAlign: 'center', margin: '4px 0', overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: renderMath(s.latex, true) }} />}
+        {s.query && <div style={{ fontSize: 12, opacity: 0.7 }}>Query: <code>{s.query}</code></div>}
+        {s.result && <div style={{ fontSize: 15, marginTop: 4 }}>= <b>{s.result}</b></div>}
+        {/* Step-by-step working / pods — a fixed window you scroll through. */}
+        {steps.length > 0 && (
+          <div style={{ maxHeight: 300, overflowY: 'auto', marginTop: 8, borderTop: '1px dashed var(--ink)', paddingTop: 8 }}>
+            {steps.map((p: any, i: number) => (
+              <div key={i} style={{ marginBottom: 8 }}>
+                {p.title && <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.75 }}>{p.title}</div>}
+                <pre style={{ margin: '2px 0 0', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', fontSize: 13, lineHeight: 1.4 }}>{p.text}</pre>
+              </div>
+            ))}
+          </div>
+        )}
+        {s.caption && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{s.caption}</div>}
+      </div>
+    );
+  }
   return null;
 }
 
@@ -208,7 +222,7 @@ function ReviewCard({ res }: { res: Res }) {
       {d.prompt && <p style={{ fontWeight: 600, margin: '0 0 8px' }}>{d.prompt}</p>}
       <p style={{ fontSize: 15 }}>{res.correct ? '✓ ' : '✗ '}{res.feedback || (res.correct ? 'Correct.' : 'Reviewed.')}{typeof res.score === 'number' ? ` (${res.score}/100)` : ''}</p>
       {d.image && <img src={d.image} alt="your work" style={{ width: '100%', maxWidth: 320, border: '2px solid var(--ink)', borderRadius: 8, margin: '8px auto', display: 'block' }} />}
-      {d.code && <pre style={{ textAlign: 'left', background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', fontSize: 13 }}><code>{d.code}</code></pre>}
+      {d.code && <pre style={{ textAlign: 'left', background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', overflowY: 'auto', maxHeight: 300, fontSize: 13 }}><code>{d.code}</code></pre>}
       {!d.image && !d.code && d.your && <p style={{ fontSize: 13 }}>Your answer: <b>{d.your}</b></p>}
       {!res.correct && d.answer && <p style={{ fontSize: 13, color: 'var(--accent,#5c80bc)' }}>Expected: <b>{d.answer}</b></p>}
       {Array.isArray(d.pages) && d.pages.length > 0 && <button className="btn small ghost" style={{ marginTop: 6 }} onClick={() => printPages(d.prompt || 'My work', d.pages)}>📄 Download pages (PDF)</button>}
@@ -388,7 +402,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{i + 1}. {r.prompt}</div>
                   <div style={{ fontSize: 13 }}>{res.correct ? '✓' : '✗'} {res.feedback || ''}</div>
                   {r.image && <img src={r.image} alt="your work" style={{ width: '100%', maxWidth: 260, border: '2px solid var(--ink)', borderRadius: 8, margin: '6px 0', display: 'block' }} />}
-                  {r.code && <pre style={{ background: '#2d2a26', color: '#f7f3e9', padding: 10, borderRadius: 8, overflowX: 'auto', fontSize: 12 }}><code>{r.code}</code></pre>}
+                  {r.code && <pre style={{ background: '#2d2a26', color: '#f7f3e9', padding: 10, borderRadius: 8, overflowX: 'auto', overflowY: 'auto', maxHeight: 260, fontSize: 12 }}><code>{r.code}</code></pre>}
                   {!r.image && !r.code && r.your && <div style={{ fontSize: 13 }}>Your answer: <b>{r.your}</b></div>}
                   {!res.correct && r.answer && <div style={{ fontSize: 13, color: 'var(--accent,#5c80bc)' }}>Expected: <b>{r.answer}</b></div>}
                   {Array.isArray(r.pages) && r.pages.length > 0 && <button className="btn small ghost" style={{ marginTop: 4 }} onClick={() => printPages(r.prompt || 'My work', r.pages)}>📄 Download pages (PDF)</button>}

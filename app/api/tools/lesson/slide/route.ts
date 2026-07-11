@@ -8,7 +8,7 @@ const { fallbackImageDataUrl } = require('@/src/slides/visual-policy');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { wolframAvailable, wolframShortAnswer } = require('@/src/connectors/wolfram');
+const { wolframAvailable, wolframShortAnswer, wolframFull } = require('@/src/connectors/wolfram');
 
 // The menu of activities/displays proven out by the Language Learning tool. Fed
 // to the generator so it knows the full space and is FREE to mix formats.
@@ -191,11 +191,11 @@ export async function POST(req: Request) {
   if (support.code || kind === 'programming' || kind === 'language') allowedSupport.push('code');
   if (support.tables) allowedSupport.push('table');
   if (support.formulas || mathish) {
-    // Prefer a real Wolfram computation when the API key is present. When it is
-    // NOT available, lean on a worked code snippet (the computation / a proof
-    // with comments) — that reads better than a bare formula — while still
-    // keeping the formula in the mix.
-    if (wolfram) allowedSupport.push('wolfram');
+    // Prefer a real Wolfram computation when the API key is present — it can show
+    // the STEP-BY-STEP solution. Weight it heavily for quantitative subjects.
+    // When it is NOT available, lean on a worked code snippet (the computation /
+    // a proof with comments) — that reads better than a bare formula.
+    if (wolfram) { allowedSupport.push('wolfram'); if (mathish) allowedSupport.push('wolfram'); }
     allowedSupport.push('formula');
     if (mathish) {
       allowedSupport.push('code');
@@ -212,7 +212,9 @@ export async function POST(req: Request) {
     ? `This is a ${language} lesson: write "content" in ${language} and put the ${translateTo} meaning in "translation".`
     : `Write "content" as ${paras} ${pLen} paragraph(s).`;
   const subjectLine = mathish
-    ? 'MATH/SCIENCE FORMATTING (important): write EVERY formula, equation, variable or symbol as LaTeX inside $...$ in the "content" — e.g. $a^2+b^2=c^2$, $\\frac{1}{2}mv^2$, $\\theta=30^\\circ$, $\\ce{2H2 + O2 -> 2H2O}$ — NEVER as plain ASCII like "a^2 + b^2". Explain any method as SEVERAL short paragraphs, one step per paragraph (separate steps with a blank line), with the actual formula/fraction typeset in each step (not described in words). Put the key equation in a "formula" support block, use a diagram "image" for shapes/physics situations, and use a "code" snippet or a 3-column steps "table" for the worked solution.'
+    ? `MATH/SCIENCE FORMATTING (important): explain any method as SEVERAL short paragraphs, one step per paragraph (separate steps with a blank line). ${wolfram
+        ? 'For SOLVING equations, derivatives, integrals or simplifications, PREFER a "wolfram" support block — Wolfram returns the exact answer AND the step-by-step working, so you do NOT have to hand-write the steps.'
+        : 'Use a "code" support block (the working / a proof with #comments) or a 3-column steps "table" for the worked solution.'} AVOID hand-writing long LaTeX derivations. Keep LaTeX to at most ONE clean key formula in a "formula" block; for inline symbols in the prose you may use simple $...$ (e.g. $a^2+b^2=c^2$) but do not force everything into LaTeX. Use a diagram "image" for shapes/physics situations.`
     : kind === 'programming' ? 'Prefer concrete code and tables over prose.'
     : '';
   const qSpec = qKinds.map((k, i) => {
@@ -235,7 +237,7 @@ export async function POST(req: Request) {
     : supportType === 'table' ? (mathish
       ? 'Also include support = { "type": "table", "headers": ["Step", "Equation", "What we did"], "rows": [["1", "the equation for this step (plain math text)", "short reason"], ...] } — a 3-column step-by-step working table.'
       : 'Also include support = { "type": "table", "headers": [...], "rows": [[...]] }.')
-    : supportType === 'wolfram' ? 'Also include support = { "type": "wolfram", "query": "a precise Wolfram Alpha query that computes/derives the concept (e.g. \\"derivative of x^2\\", \\"solve 2x+3=7\\")", "latex": "the formula in LaTeX", "caption": "what it shows" }. Wolfram will compute the answer.'
+    : supportType === 'wolfram' ? 'Also include support = { "type": "wolfram", "query": "a precise, self-contained Wolfram Alpha query that SOLVES or COMPUTES this concept so it can show the STEP-BY-STEP working (e.g. \\"solve x^2-5x+6=0\\", \\"derivative of sin(x)*x^2\\", \\"integrate 1/(1+x^2)\\", \\"simplify (x^2-1)/(x-1)\\")", "latex": "the key formula in LaTeX", "caption": "what it shows" }. Wolfram will compute the answer AND return the step-by-step solution — so make the query something Wolfram can work out (an equation to solve, a derivative/integral/simplification), not an open-ended question.'
     : supportType === 'formula' ? 'Also include support = { "type": "formula", "latex": "a valid LaTeX formula (e.g. \\"c = \\\\sqrt{a^2+b^2}\\", \\"\\\\frac{d}{dx}x^n = n x^{n-1}\\") — NOT plain ASCII", "caption": "what it means" }.'
     : 'Set support to null.';
 
@@ -268,10 +270,12 @@ export async function POST(req: Request) {
     else if (s?.type === 'code') sup = { type: 'code', language: String(s.language || '').slice(0, 20), code: String(s.code || '').slice(0, 1200) };
     else if (s?.type === 'table' && Array.isArray(s.headers)) sup = { type: 'table', headers: s.headers.map((h: any) => String(h).slice(0, 40)).slice(0, 6), rows: (Array.isArray(s.rows) ? s.rows : []).slice(0, 12).map((row: any) => (Array.isArray(row) ? row.map((c: any) => String(c).slice(0, 80)).slice(0, 6) : [])) };
     else if (s?.type === 'wolfram') {
-      // Compute the answer via Wolfram when available; otherwise degrade to a formula.
-      const result = await wolframShortAnswer(s.query);
+      // Compute the answer AND fetch the step-by-step working via Wolfram; degrade
+      // to a formula when Wolfram can't interpret the query.
+      const [result, steps] = await Promise.all([wolframShortAnswer(s.query), wolframFull(s.query)]);
       const base = { query: String(s.query || '').slice(0, 300), latex: String(s.latex || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
-      sup = result ? { type: 'wolfram', ...base, result: String(result).slice(0, 400) }
+      sup = (result || (steps && steps.length))
+        ? { type: 'wolfram', ...base, result: result ? String(result).slice(0, 400) : '', steps: Array.isArray(steps) ? steps : [] }
         : (base.latex ? { type: 'formula', latex: base.latex, caption: base.caption } : null);
     }
     else if (s?.type === 'formula') sup = { type: 'formula', latex: String(s.latex || s.formula || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
