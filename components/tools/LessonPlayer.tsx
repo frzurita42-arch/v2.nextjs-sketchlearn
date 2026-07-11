@@ -21,7 +21,7 @@ function shuffle<T>(a: T[]): T[] { a = [...a]; for (let i = a.length - 1; i > 0;
 
 function Support({ s }: { s: any }) {
   if (!s) return null;
-  if (s.type === 'image' && s.url) return <img src={s.url} alt={s.caption || ''} style={{ width: '100%', maxWidth: 420, borderRadius: 8, border: '2px solid var(--ink)', margin: '8px 0' }} />;
+  if (s.type === 'image' && s.url) return <img src={s.url} alt={s.caption || ''} style={{ width: '100%', maxWidth: 360, borderRadius: 8, border: '2px solid var(--ink)', margin: '8px auto', display: 'block' }} />;
   if (s.type === 'code') return <pre style={{ background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', fontSize: 13 }}><code>{s.code}</code></pre>;
   if (s.type === 'table') return (
     <div style={{ overflowX: 'auto', margin: '8px 0' }}>
@@ -65,16 +65,16 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
     const answered = picked !== null;
     return (
       <div>
-        <p style={{ fontWeight: 600 }}>{q.prompt}</p>
-        <div style={{ display: 'grid', gap: 8 }}>
+        <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 10px' }}>{q.prompt}</p>
+        <div style={{ display: 'grid', gap: 8, maxWidth: 460, margin: '0 auto' }}>
           {opts.map((o: any, i: number) => {
             const isP = picked === i;
             const bg = !answered ? undefined : o.correct ? 'rgba(127,176,105,0.25)' : (isP ? 'rgba(228,87,46,0.2)' : undefined);
-            return <button key={i} className="btn" style={{ textAlign: 'left', background: bg }} disabled={answered}
+            return <button key={i} className="btn" style={{ textAlign: 'left', width: '100%', background: bg, borderColor: answered && o.correct ? 'var(--ink)' : undefined }} disabled={answered}
               onClick={() => { setPicked(i); finish(!!o.correct); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}{o.text}</button>;
           })}
         </div>
-        {answered && opts[picked!]?.explanation && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 8 }}>{opts[picked!].explanation}</p>}
+        {answered && opts[picked!]?.explanation && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 10, textAlign: 'center' }}>{opts[picked!].explanation}</p>}
       </div>
     );
   }
@@ -88,9 +88,9 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
     if (t >= 3) finish(false);
   };
   return (
-    <div>
-      <p style={{ fontWeight: 600 }}>{q.kind === 'fill-blank' ? '✍️ Fill in the blank' : '⌨️ Your answer'}: {q.prompt}</p>
-      <div className="chat-input-row">
+    <div style={{ textAlign: 'center' }}>
+      <p style={{ fontWeight: 600, margin: '0 0 8px' }}>{q.kind === 'fill-blank' ? '✍️ Fill in the blank' : '⌨️ Your answer'}: {q.prompt}</p>
+      <div className="chat-input-row" style={{ maxWidth: 420, margin: '0 auto' }}>
         <input type="text" value={val} disabled={state !== 'open'} placeholder="Type your answer…"
           onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); check(); } }} />
         {state === 'open' && <button className="btn primary" onClick={check}>Check</button>}
@@ -107,7 +107,15 @@ function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string
   const [drawing, setDrawing] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [meaning, setMeaning] = useState('');
+  const [trBusy, setTrBusy] = useState(false);
   const target = String(q.target || '');
+
+  const translate = async () => {
+    setTrBusy(true);
+    try { const r = await API.post('/api/tools/translate', { text: target, to: translateTo }); setMeaning(r?.translation || ''); } catch { /* ignore */ }
+    setTrBusy(false);
+  };
 
   const check = async () => {
     if (!drawing) { alert('Draw the character first.'); return; }
@@ -120,18 +128,24 @@ function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string
   };
 
   return (
-    <div>
-      <p style={{ fontWeight: 600 }}>✍️ {q.prompt}</p>
-      <div style={{ textAlign: 'center', margin: '4px 0 8px' }}>
-        <div style={{ fontSize: '3.6rem', lineHeight: 1.1 }}>{target}</div>
-        <AudioButton text={target} label="🔊" small showTextOnFail={false} />{' '}
-        <RichText text={target} translateTo={translateTo} />
+    <div style={{ textAlign: 'center' }}>
+      <p style={{ fontWeight: 600, margin: '0 0 4px' }}>✍️ {q.prompt || 'Write this by hand'}</p>
+      {/* The character to copy — big and centered. */}
+      <div style={{ fontSize: '4.2rem', lineHeight: 1.1, margin: '2px 0 6px' }}>{target}</div>
+      {/* Exactly one way to hear it + one to translate it. */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 10 }}>
+        <AudioButton text={target} label="🔊 Hear" small showTextOnFail={false} />
+        <button className="btn small ghost" disabled={trBusy} onClick={translate}>{trBusy ? '…' : '🌐 Meaning'}</button>
       </div>
-      <DrawField label="Trace / write it here" value={drawing} onChange={setDrawing} />
+      {meaning && <p style={{ fontSize: 13, opacity: 0.8, marginTop: -4 }}>“{meaning}”</p>}
+      {/* The drawing space (DrawField provides its own Clear button). */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <DrawField label="Trace / write it here" value={drawing} onChange={setDrawing} />
+      </div>
       {!result ? (
-        <button className="btn green" style={{ marginTop: 10 }} disabled={busy} onClick={check}>{busy ? 'Checking…' : '✅ Check with AI'}</button>
+        <button className="btn green" style={{ marginTop: 12 }} disabled={busy} onClick={check}>{busy ? 'Checking…' : '✅ Check with AI'}</button>
       ) : (
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 12 }}>
           <p style={{ fontSize: 15 }}>{result.correct ? '✓ ' : '✗ '}{result.feedback}{typeof result.score === 'number' ? ` (${result.score}/100)` : ''}</p>
           <button className="btn green" onClick={() => onDone(!!result.correct)}>Continue →</button>
         </div>
@@ -284,24 +298,32 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
       {busy && !slide && <p style={{ opacity: 0.7 }}>Generating slide…</p>}
       {err && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchSlide(slideNum || 1, seenTitles, cfg)}>Retry</button></p>}
 
-      {slide && (
-        <div className="card" style={{ padding: '16px 18px' }}>
-          {slide.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7 }}>Demo slide (no AI connected).</p>}
-          <h3 style={{ marginTop: 0 }}>{slide.title}</h3>
-          <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={slide.content} translateTo={lesson.translateTo || 'English'} /></p>
+      {slide && (() => {
+        const isWritingSlide = qs.length > 0 && qs.every((q: any) => q.kind === 'writing');
+        return (
+        <div className="card" style={{ padding: '16px 18px', maxWidth: 560, margin: '0 auto' }}>
+          {slide.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7, textAlign: 'center' }}>Demo slide (no AI connected).</p>}
+          <h3 style={{ marginTop: 0, textAlign: 'center' }}>{slide.title}</h3>
+          {/* Writing drills speak/translate the target themselves — keep the intro plain. */}
+          {slide.content && (isWritingSlide
+            ? <p style={{ fontSize: 15, lineHeight: 1.6, textAlign: 'center', opacity: 0.9 }}>{slide.content}</p>
+            : <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={slide.content} translateTo={lesson.translateTo || 'English'} /></p>)}
           <Support s={slide.support} />
 
-          <div style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 12 }}>
+          <div style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
             {/* key remounts the question so its per-question state resets */}
             <Question key={`${slideNum}-${qIndex}`} q={qs[qIndex]} translateTo={lesson.translateTo || 'English'} onDone={onQuestionDone} />
             {qDone && (
-              <button className="btn green" style={{ marginTop: 12 }} disabled={busy} onClick={advance}>
-                {qIndex < qs.length - 1 ? 'Next question →' : (slideNum >= tot ? 'Finish →' : 'Next slide →')}
-              </button>
+              <div style={{ textAlign: 'center' }}>
+                <button className="btn green" style={{ marginTop: 14 }} disabled={busy} onClick={advance}>
+                  {qIndex < qs.length - 1 ? 'Next question →' : (slideNum >= tot ? 'Finish →' : 'Next slide →')}
+                </button>
+              </div>
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
