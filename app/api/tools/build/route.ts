@@ -29,7 +29,12 @@ function heuristicProposal(text: string) {
   const annoty = /\b(annotat|worked? answer|worked example|work (it|them|the (problem|answer)) out|show (your )?work|working out|write (out |down )?the (answer|solution|working)|solve|math problem|word problem|proof|derivation|caligraph|calligraph|sentence|sentences|paragraph)\b/.test(t);
   // Single-character handwriting drill (draw one char, AI checks) — smaller canvas.
   const writey = /\b(write|writing|handwriting|hand-write|trace|tracing|character|characters|kanji|hiragana|katakana|hanzi|alphabet|stroke)\b/.test(t);
-  if (playable || annoty || writey || (languagey && /\b(course|study|quiz|slides?|play|test|practice)\b/.test(t))) {
+  // A code/text answer box that the AI grades (great for math without Wolfram,
+  // proofs with comments, or programming answers).
+  const codey = /\b(code ?snippet|code ?box|code ?block|code ?answer|write code|answer with code|type the answer|typed answer)\b/.test(t);
+  // The paper pad answer surface (annotation tool) is named explicitly.
+  const padWanted = /\b(annotation|annotate|paper pad|on paper|by hand|hand.?writ\w*|drawing pad|pen and paper|tool.?tip)\b/.test(t);
+  if (playable || annoty || writey || codey || padWanted || (languagey && /\b(course|study|quiz|slides?|play|test|practice)\b/.test(t))) {
     const langMatch = t.match(/\b(french|spanish|german|italian|portuguese|japanese|chinese|mandarin|arabic|hindi|english)\b/);
     const mathy = /\b(math|algebra|calculus|geometry|trigonometry|statistics|probability|equation|arithmetic)\b/.test(t);
     const progy = /\b(programming|coding|code|python|javascript|java|software|algorithm|sql|rust|typescript)\b/.test(t);
@@ -37,11 +42,20 @@ function heuristicProposal(text: string) {
     const cap = (s: string) => `${s[0].toUpperCase()}${s.slice(1)}`;
     const subject = (text.trim().split(/[.,\n]/)[0] || 'Lesson').replace(/^(a|an|make|build|create|i want|i'd like)\s+/i, '').slice(0, 60) || 'Lesson';
     const levels = langMatch ? ['A1', 'A2', 'B1', 'B2', 'C1'] : ['Beginner', 'Intermediate', 'Advanced'];
-    if (annoty) {
+    if (annoty || codey || padWanted) {
       const cjkCalligraphy = /\b(japanese|chinese|korean|mandarin|kanji|hanzi|hangul|caligraph|calligraph)\b/.test(t);
+      // Which answer surface(s)? The paper pad (annotation) is the DEFAULT for
+      // these worked-answer lessons. Only drop it if the user says they don't
+      // want it — then serve the same questions with a code/text box instead.
+      // The two can also be MIXED (one on the pad, one in a code box).
+      const noDraw = /\b(no|without|don'?t|do not|skip|no need for|rather not)\b[^.]*\b(annotation|draw(ing)?|pad|hand.?writ|pen|paper|canvas|tool.?tip)\b/.test(t);
+      const wantsCode = codey || /\b(code|snippet|text ?box)\b/.test(t);
+      const wantsBoth = /\bboth\b/.test(t) || (padWanted && wantsCode && !noDraw);
+      const acts = noDraw ? ['code'] : wantsBoth ? ['annotation', 'code'] : wantsCode && !padWanted && !annoty ? ['code'] : ['annotation'];
+      const surfaceTag = acts.includes('annotation') ? (cjkCalligraphy ? 'calligraphy' : 'worked-answer') : 'code';
       return {
         archetype: 'lesson', title: subject, description: text.slice(0, 300),
-        tags: [subjectKind === 'general' ? 'lesson' : subjectKind, 'annotation', cjkCalligraphy ? 'calligraphy' : 'worked-answer'].filter((v, i, arr) => arr.indexOf(v) === i),
+        tags: [subjectKind === 'general' ? 'lesson' : subjectKind, acts.includes('annotation') ? 'annotation' : 'code', surfaceTag].filter((v, i, arr) => arr.indexOf(v) === i),
         settings: [
           { id: 'topic', label: cjkCalligraphy ? 'Character set / topic' : 'Topic', type: 'text', placeholder: cjkCalligraphy ? 'e.g. greetings, a proverb' : 'Narrow the focus' },
           { id: 'difficulty', label: 'Level', type: 'select-or-custom', options: levels },
@@ -53,9 +67,9 @@ function heuristicProposal(text: string) {
           totalSlides: singleActivity ? 1 : 5,
           language: langMatch ? cap(langMatch[1]) : (cjkCalligraphy ? subject : undefined),
           translateTo: 'English',
-          // A worked-answer pad speaks for itself — no image/table clutter.
+          // A worked-answer pad / code box speaks for itself — no image/table clutter.
           support: { images: false, code: false, tables: false, formulas: false, audio: false },
-          activityTypes: ['annotation'],
+          activityTypes: acts,
         },
       };
     }
@@ -196,12 +210,17 @@ Guidance by kind:
 - Worked answers / math problems / "write the answer" / show-your-working / full
   sentences / calligraphy (e.g. "solve math problems on paper, checked by AI",
   "practice writing Chinese sentences / calligraphy"): make a LESSON with
-  activityTypes ["annotation"]. The learner writes the FULL worked answer by hand
-  on a big paginated paper pad (pen thickness/colours + typed text), and the AI
-  scans every page and grades it against the expected answer. Set subjectKind to
-  "math" for math, or "language" for CJK/calligraphy. Keep support material OFF
-  (no images/tables) and settings minimal: a "topic", a "difficulty", and a
-  "how many problems" number.
+  activityTypes ["annotation"] (ONE question per slide, AI-graded). The paper pad
+  is the DEFAULT answer surface — the learner writes the FULL worked answer by
+  hand on a big paginated pad (pen thickness/colours + typed text), and the AI
+  scans every page and grades it. Only DROP the pad if the user says they don't
+  want it — then use activityTypes ["code"] (a code/text box the AI grades),
+  which is also the best fit for math when Wolfram isn't available (write the
+  working / proof with comments) and for programming answers. You may MIX both:
+  activityTypes ["annotation","code"] puts some questions on the pad and some in
+  a code box. A lesson can also mix these with "mcq"/"fill-blank"/"input". Set
+  subjectKind to "math" for math, or "language" for CJK/calligraphy. Keep support
+  material OFF and settings minimal: "topic", "difficulty", "how many problems".
 - Social page / Instagram-style feed / photo gallery / portfolio / "page with uploadable posts":
   APP, display "cards", entryFields = an "image" field + a "textarea" caption (+ optional link/tags).
 - Language / lesson tools (e.g. "a French lesson"): APP, display "cards". Include a

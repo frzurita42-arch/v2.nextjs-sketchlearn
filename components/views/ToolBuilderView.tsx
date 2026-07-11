@@ -14,7 +14,7 @@ type Msg = { role: 'assistant' | 'user'; content: string };
 const PRESETS: { label: string; seed: string }[] = [
   { label: '📊 Presentation', seed: 'a playable multi-slide presentation/lesson with quiz questions and a score' },
   { label: '🎧 Single activity', seed: 'a single-page activity: one short lesson or listening/reading, a few questions, then a report I can review' },
-  { label: '📝 Annotation / Worked answers', seed: 'a worked-answer activity where the learner writes the full solution by hand on a paper pad (math problems, or calligraphy / full sentences), and the AI scans the pages and grades it' },
+  { label: '📝 Annotation / Worked answers', seed: 'a worked-answer quiz where the learner writes the full solution by hand on a paper pad (math problems, or calligraphy / full sentences), and the AI grades it — one question per slide. Include a code/text box option too, and let me mix pad questions and code-box questions' },
   { label: '🖼️ Gallery / Marketplace', seed: 'a marketplace-style gallery where people add items shown as cards on a grid, each with an image, a description and a link' },
   { label: '🗂️ Storage / Repository', seed: 'a document storage/repository shown as a list/table of items, each with a name, a category and a link to the file' },
   { label: '📰 Feed / Blog', seed: 'a feed/blog where people post entries shown as cards, with an image, text and an optional link' },

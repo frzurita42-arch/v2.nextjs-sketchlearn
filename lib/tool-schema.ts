@@ -42,7 +42,7 @@ export interface LessonSpec {
   paragraphsPerSlide?: number;      // 1-4
   paragraphLength?: 'brief' | 'medium' | 'detailed';
   support?: LessonSupport;          // which support materials may appear
-  activityTypes?: string[];         // subset of ['mcq','fill-blank','input','writing','annotation'] to shuffle
+  activityTypes?: string[];         // subset of ['mcq','fill-blank','input','writing','annotation','code'] to shuffle
 }
 
 export interface GeneratorSpec {
@@ -129,7 +129,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     if (!subject) errors.push('lesson.subject is required');
     const sk = ['general', 'language', 'math', 'programming'].includes(l.subjectKind) ? l.subjectKind : undefined;
     const sup = l.support && typeof l.support === 'object' ? l.support : {};
-    const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ['mcq', 'fill-blank', 'input', 'writing', 'annotation'].includes(x));
+    const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ['mcq', 'fill-blank', 'input', 'writing', 'annotation', 'code'].includes(x));
     lesson = {
       subject,
       level: String(l.level || '').slice(0, 40) || undefined,

@@ -82,6 +82,19 @@ function cleanQuestion(q: any) {
       answer: String(q?.answer || q?.solution || '').slice(0, 400),
     };
   }
+  if (kind === 'code') {
+    // Code-box drill: the learner types code / a worked expression; the AI grades
+    // it against the expected solution. Good when the annotation pad is unwanted.
+    const prompt = String(q?.prompt || q?.problem || '').trim();
+    if (!prompt) return null;
+    return {
+      kind: 'code',
+      prompt: prompt.slice(0, 400),
+      answer: String(q?.answer || q?.solution || '').slice(0, 600),
+      language: String(q?.language || '').slice(0, 20),
+      starter: String(q?.starter || '').slice(0, 400),
+    };
+  }
   if (kind === 'mcq') {
     const want = q?.options?.length >= 4 ? 4 : 2;
     const options = cleanOptions(q?.options, want);
@@ -115,6 +128,8 @@ function fbSlide(subject: string, n: number, kinds: string[]) {
     question = { kind: 'writing', prompt: 'Write this by hand:', target: 'A' };
   } else if (kind === 'annotation') {
     question = { kind: 'annotation', prompt: `Work out and write the full answer for this ${subject} problem on the pad.`, answer: '' };
+  } else if (kind === 'code') {
+    question = { kind: 'code', prompt: `Write the answer/solution for this ${subject} problem in the code box.`, answer: '', language: '', starter: '' };
   } else {
     question = { kind, prompt: kind === 'fill-blank' ? `${subject} has ____ key idea per slide.` : `Type a key term from this ${subject} slide.`, answer: 'one', accept: ['one', '1'] };
   }
@@ -154,12 +169,12 @@ export async function POST(req: Request) {
   };
   const activityTypes: string[] = (Array.isArray(lesson.activityTypes) && lesson.activityTypes.length) ? lesson.activityTypes : ['mcq', 'fill-blank', 'input'];
 
-  // A pure handwriting/worked-answer drill needs no support clutter.
-  const onlyDrills = activityTypes.every((t) => t === 'writing' || t === 'annotation');
+  // A pure handwriting/worked-answer/code drill needs no support clutter.
+  const onlyDrills = activityTypes.every((t) => t === 'writing' || t === 'annotation' || t === 'code');
   const pureWriting = onlyDrills;
-  // Randomly fluctuate this slide's shape. Drills stay to one task per slide.
-  const numQ = pureWriting ? 1 : 1 + Math.floor(Math.random() * 3);   // 1-3 questions per slide
-  const qKinds = Array.from({ length: numQ }, () => rand(activityTypes));
+  // Exactly ONE question per slide — keeps the player's Back / Next / Check / Finish
+  // navigation unambiguous, and lets a lesson MIX types slide to slide.
+  const qKinds = [rand(activityTypes)];
   const wolfram = wolframAvailable();
   const allowedSupport: string[] = [];
   if (support.images) allowedSupport.push('image');
@@ -187,7 +202,8 @@ export async function POST(req: Request) {
     if (k === 'mcq') { const c = Math.random() < 0.5 ? 2 : 4; return `Q${i + 1}: kind "mcq" with EXACTLY ${c} options (one correct).`; }
     if (k === 'fill-blank') return `Q${i + 1}: kind "fill-blank" — a sentence with "____" and the missing "answer" (+ "accept" variants).`;
     if (k === 'writing') return `Q${i + 1}: kind "writing" — a handwriting drill: give "target" = the exact ${language || subject} character/word to hand-write, and a short "prompt" (e.g. "Write this hiragana"). No options, no answer. The learner will draw it and it will be AI-checked.`;
-    if (k === 'annotation') return `Q${i + 1}: kind "annotation" — a worked-answer drill for a ${subject} problem (math working, or CJK sentences/calligraphy). Give a full "prompt" stating the problem/task clearly, and "answer" = the complete expected solution/answer (so the AI can grade the hand-written pages). No options. The learner writes the full worked answer by hand across paginated pages and the AI scans and grades it.`;
+    if (k === 'annotation') return `Q${i + 1}: kind "annotation" — a worked-answer drill for a REAL ${subject} problem at ${level} level about ${topic || subject} (full math working, or CJK sentences/calligraphy). Give a full "prompt" stating the specific problem/task clearly, and "answer" = the complete expected solution/answer (so the AI can grade the hand-written pages). No options. The learner writes the full worked answer by hand across paginated pages and the AI scans and grades it.`;
+    if (k === 'code') return `Q${i + 1}: kind "code" — a worked-answer drill answered in a CODE/TEXT box for a REAL ${subject} problem at ${level} level about ${topic || subject}. Give a full "prompt" stating the specific problem/task, "answer" = the complete expected solution, optionally "language" (e.g. "python", or "" for math/plain text) and a short "starter" (optional scaffold). No options. The learner types the full solution and the AI grades it.`;
     return `Q${i + 1}: kind "input" — a short-answer question with an "answer" (+ "accept" variants).`;
   }).join('\n');
   const codeHint = kind === 'language'
@@ -205,6 +221,8 @@ export async function POST(req: Request) {
     language ? `Level objective: ${levelGuidance(level)}` : '',
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
     priorSummary ? `Avoid repeating: ${priorSummary}.` : '',
+    // Content/level fidelity — the #1 correctness rule.
+    `CRITICAL: The teaching and the question MUST genuinely be about "${topic || subject}" and pitched at "${level}" level. If the subject is ${subject}, do NOT drift to unrelated easier material (e.g. for Trigonometry ask about sine/cosine/tangent, angles, identities or triangles — NOT plain arithmetic like "2+2"). Match the true difficulty of ${level}.`,
     ACTIVITY_MENU,
     langLine, subjectLine,
     'For THIS slide, teach one idea, then produce these specific questions (still applying the freedom above to vary content):', qSpec, supSpec,
@@ -212,7 +230,7 @@ export async function POST(req: Request) {
     '"content" MUST be plain, human-readable teaching text (a sentence or short paragraph) — NEVER JSON, never a nested object, never quoted JSON, never code. Put questions ONLY in the "questions" array, and support material ONLY in "support". Do not wrap the whole object in a string or another object.',
     'Return STRICT JSON only — no markdown fences, no commentary.',
   ].filter(Boolean).join('\n');
-  const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "support": {...} or null, "questions": [ { "kind": "mcq|fill-blank|input", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "...", "accept": ["..."] } ] }`;
+  const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "support": {...} or null, "questions": [ { "kind": "mcq|fill-blank|input|writing|annotation|code", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "the expected answer/solution", "accept": ["..."], "target": "for writing", "language": "for code, e.g. python or empty", "starter": "optional code/text scaffold" } ] }. Only include the fields the chosen kind needs.`;
 
   try {
     const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 1800 });
