@@ -30,6 +30,7 @@ export interface AppState {
   latexLab: any;
   languageLearning: any;
   languageLesson?: any;
+  csAcademy?: any;
   suggestedSettings: any;
   suggestedGuidance: string;
   concept: string | null;

@@ -13,15 +13,16 @@ import { SuggestedTopic, refreshSuggestedTopic } from '@/components/activities/S
 import { TimeTravel } from '@/components/activities/TimeTravel';
 import { StructuredExplanations } from '@/components/activities/StructuredExplanations';
 import { LanguageLearning } from '@/components/activities/LanguageLearning';
+import { CsAcademy } from '@/components/activities/CsAcademy';
 
-const SECTIONS = [LearningPath, SuggestedTopic, TimeTravel, StructuredExplanations, LanguageLearning];
+const SECTIONS = [LearningPath, SuggestedTopic, TimeTravel, StructuredExplanations, LanguageLearning, CsAcademy];
 
 export function HomeView() {
   const app = useApp();
   // Seed the chip pool once for this home mount (matches legacy viewHome()).
   useState(() => { appState.homeTopics = shuffled(PRESET_TOPICS); return null; });
   // Learning Path renders first (above the refresh button); these three shuffle below it.
-  const [order, setOrder] = useState<number[]>(() => shuffled([1, 2, 3, 4]));
+  const [order, setOrder] = useState<number[]>(() => shuffled([1, 2, 3, 4, 5]));
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +48,7 @@ export function HomeView() {
       <p className="view-sub">Pick a subject, or write your own.</p>
       <LearningPath />
       <div className="slide-actions" style={{ justifyContent: 'center', margin: '10px 0 10px', borderTop: '3px dashed var(--ink)', paddingTop: 14 }}>
-        <button className="btn small" id="refresh-home-feed" onClick={() => setOrder(shuffled([1, 2, 3, 4]))}>↻ Refresh feed</button>
+        <button className="btn small" id="refresh-home-feed" onClick={() => setOrder(shuffled([1, 2, 3, 4, 5]))}>↻ Refresh feed</button>
       </div>
       {order.map(i => {
         const Section = SECTIONS[i];
