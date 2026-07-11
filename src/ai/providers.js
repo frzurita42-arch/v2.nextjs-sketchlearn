@@ -346,9 +346,13 @@ async function generateSpeech(text) {
       body: JSON.stringify({ text: clean, model_id: ELEVENLABS_MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
     }, 30000, 'ElevenLabs TTS');
     if (!res.ok) {
-      const detail = (await res.text().catch(() => '')).slice(0, 200);
+      const detail = (await res.text().catch(() => '')).slice(0, 300);
       console.error('ElevenLabs error', res.status, detail);
-      return { audio: null, error: `ElevenLabs ${res.status}: ${detail || 'request rejected'}` };
+      let hint = '';
+      if (/unusual[_ ]?activity|abuse|vpn|proxy/i.test(detail)) hint = ' — ElevenLabs free tier blocks requests from cloud/server IPs (like Vercel). A paid ElevenLabs plan (even the cheapest) removes this block.';
+      else if (res.status === 401 || /unauthor|invalid.?api|missing.?api/i.test(detail)) hint = ' — key rejected: confirm ELEVENLABS_API_KEY is exact, that the key has Text-to-Speech permission (unrestricted), and that you redeployed after adding it.';
+      else if (res.status === 402 || /quota|credit|limit/i.test(detail)) hint = ' — ElevenLabs character quota/credits exhausted for this key.';
+      return { audio: null, error: `ElevenLabs ${res.status}: ${detail || 'request rejected'}${hint}` };
     }
     const buf = Buffer.from(await res.arrayBuffer());
     return { audio: `data:audio/mpeg;base64,${buf.toString('base64')}`, error: null };
