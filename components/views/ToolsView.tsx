@@ -11,16 +11,31 @@ export function ToolsView() {
   const [tools, setTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const HIDDEN_KEY = 'sl_hidden_examples';
+  const loadHidden = (): string[] => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } };
+
   const load = async () => {
     setLoading(true);
-    try { const r = await API.get('/api/tools'); setTools(Array.isArray(r?.tools) ? r.tools : []); } catch { /* ignore */ }
+    try {
+      const r = await API.get('/api/tools');
+      const hidden = loadHidden();
+      setTools((Array.isArray(r?.tools) ? r.tools : []).filter((t: any) => !hidden.includes(t.slug)));
+    } catch { /* ignore */ }
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
-  const canDelete = (t: any) => !(t.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === t.owner);
+  const isExample = (t: any) => (t.tags || []).includes('example');
+  // Real tools: owner/admin may delete. Built-in examples: anyone may hide from their own gallery.
+  const canRemove = (t: any) => isExample(t) || app.user?.role === 'admin' || app.user?.username === t.owner;
   const del = async (t: any) => {
+    if (isExample(t)) {
+      const hidden = Array.from(new Set([...loadHidden(), t.slug]));
+      try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden)); } catch { /* ignore */ }
+      setTools(ts => ts.filter(x => x.slug !== t.slug));
+      return;
+    }
     if (!confirm(`Delete “${t.title}”? This can't be undone.`)) return;
     try { await API.del(`/api/tools?slug=${encodeURIComponent(t.slug)}`); setTools(ts => ts.filter(x => x.slug !== t.slug)); } catch (e: any) { alert(e?.message || 'Could not delete.'); }
   };
@@ -53,7 +68,7 @@ export function ToolsView() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
                   <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>
                   <span style={{ display: 'flex', gap: 6 }}>
-                    {canDelete(t) && <button className="btn small ghost" title="Delete" onClick={() => del(t)}>🗑</button>}
+                    {canRemove(t) && <button className="btn small ghost" title={isExample(t) ? 'Hide this example' : 'Delete'} onClick={() => del(t)}>{isExample(t) ? '✕' : '🗑'}</button>}
                     <button className="btn small green" onClick={() => open(t)}>Open →</button>
                   </span>
                 </div>
