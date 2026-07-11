@@ -49,20 +49,22 @@ function Support({ s }: { s: any }) {
   return null;
 }
 
-// One question; calls onDone(correct) exactly once when it's been answered/revealed.
-function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean) => void }) {
+// One question; calls onDone(correct, detail) once when answered/revealed.
+// `detail` (prompt / your answer / correct answer) feeds the end-of-lesson review.
+function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean, detail?: any) => void }) {
   const [opts] = useState<any[]>(() => q.kind === 'mcq' ? shuffle(q.options || []) : []);
   const [picked, setPicked] = useState<number | null>(null);
   const [val, setVal] = useState('');
   const [tries, setTries] = useState(0);
   const [state, setState] = useState<'open' | 'right' | 'wrong'>('open');
 
-  const finish = (correct: boolean) => { if (state === 'open') { setState(correct ? 'right' : 'wrong'); onDone(correct); } };
+  const finish = (correct: boolean, detail?: any) => { if (state === 'open') { setState(correct ? 'right' : 'wrong'); onDone(correct, detail); } };
 
   if (q.kind === 'writing') return <WritingQuestion q={q} translateTo={translateTo} onDone={onDone} />;
 
   if (q.kind === 'mcq') {
     const answered = picked !== null;
+    const correctText = (opts.find((o: any) => o.correct) || {}).text || '';
     return (
       <div>
         <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 10px' }}>{q.prompt}</p>
@@ -71,7 +73,7 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
             const isP = picked === i;
             const bg = !answered ? undefined : o.correct ? 'rgba(127,176,105,0.25)' : (isP ? 'rgba(228,87,46,0.2)' : undefined);
             return <button key={i} className="btn" style={{ textAlign: 'left', width: '100%', background: bg, borderColor: answered && o.correct ? 'var(--ink)' : undefined }} disabled={answered}
-              onClick={() => { setPicked(i); finish(!!o.correct); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}{o.text}</button>;
+              onClick={() => { setPicked(i); finish(!!o.correct, { prompt: q.prompt, your: o.text, answer: correctText, correct: !!o.correct }); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}{o.text}</button>;
           })}
         </div>
         {answered && opts[picked!]?.explanation && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 10, textAlign: 'center' }}>{opts[picked!].explanation}</p>}
@@ -83,9 +85,9 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
   const accept = (q.accept && q.accept.length ? q.accept : [q.answer || '']).map(s => String(s).toLowerCase());
   const check = () => {
     const ok = accept.includes(val.trim().toLowerCase());
-    if (ok) { finish(true); return; }
+    if (ok) { finish(true, { prompt: q.prompt, your: val, answer: q.answer || '', correct: true }); return; }
     const t = tries + 1; setTries(t);
-    if (t >= 3) finish(false);
+    if (t >= 3) finish(false, { prompt: q.prompt, your: val || '(no answer)', answer: q.answer || '', correct: false });
   };
   return (
     <div style={{ textAlign: 'center' }}>
@@ -103,7 +105,7 @@ function Question({ q, translateTo, onDone }: { q: Q; translateTo: string; onDon
 }
 
 // Handwriting drill: draw the target character/word, then have the AI check it.
-function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean) => void }) {
+function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean, detail?: any) => void }) {
   const [drawing, setDrawing] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -147,7 +149,7 @@ function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string
       ) : (
         <div style={{ marginTop: 12 }}>
           <p style={{ fontSize: 15 }}>{result.correct ? '✓ ' : '✗ '}{result.feedback}{typeof result.score === 'number' ? ` (${result.score}/100)` : ''}</p>
-          <button className="btn green" onClick={() => onDone(!!result.correct)}>Continue →</button>
+          <button className="btn green" onClick={() => onDone(!!result.correct, { prompt: q.prompt || 'Write it', your: '✍️ your drawing', answer: target, correct: !!result.correct })}>Continue →</button>
         </div>
       )}
     </div>
@@ -176,6 +178,8 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const [err, setErr] = useState('');
   const [score, setScore] = useState(0);
   const [answered, setAnswered] = useState(0);
+  const [review, setReview] = useState<any[]>([]);
+  const [showReview, setShowReview] = useState(false);
   const [seenTitles, setSeenTitles] = useState<string[]>([]);
 
   const loadActivities = async () => {
@@ -197,7 +201,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     setBusy(false);
   };
 
-  const play = (c: Cfg) => { setCfg(c); setScore(0); setAnswered(0); setSeenTitles([]); setPhase('play'); fetchSlide(1, [], c); };
+  const play = (c: Cfg) => { setCfg(c); setScore(0); setAnswered(0); setReview([]); setShowReview(false); setSeenTitles([]); setPhase('play'); fetchSlide(1, [], c); };
 
   const createAndPlay = async () => {
     const c: Cfg = { ...form, level: form.level || form.difficulty || levels[0], topic: form.topic || '' };
@@ -206,7 +210,10 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     play(c);
   };
 
-  const onQuestionDone = (correct: boolean) => { setQDone(true); setAnswered(x => x + 1); if (correct) setScore(s => s + 1); };
+  const onQuestionDone = (correct: boolean, detail?: any) => {
+    setQDone(true); setAnswered(x => x + 1); if (correct) setScore(s => s + 1);
+    if (detail) setReview(r => [...r, detail]);
+  };
   const advance = () => {
     const qs = slide?.questions || [];
     if (qIndex < qs.length - 1) { setQIndex(qIndex + 1); setQDone(false); return; }
@@ -266,11 +273,26 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   if (phase === 'done') {
     const pct = answered ? Math.round((score / answered) * 100) : 0;
     return (
-      <div className="card" style={{ padding: '18px 20px', textAlign: 'center' }}>
-        <h2 style={{ marginTop: 0 }}>Lesson complete 🎉</h2>
-        <p style={{ fontSize: 14, opacity: 0.7 }}>{label(cfg)}</p>
-        <p style={{ fontSize: 20 }}>You scored <b>{score}/{answered}</b> ({pct}%)</p>
-        <div className="slide-actions" style={{ justifyContent: 'center', gap: 8 }}>
+      <div style={{ maxWidth: 560, margin: '0 auto' }}>
+        <div className="card" style={{ padding: '18px 20px', textAlign: 'center' }}>
+          <h2 style={{ marginTop: 0 }}>Lesson complete 🎉</h2>
+          <p style={{ fontSize: 14, opacity: 0.7 }}>{label(cfg)}</p>
+          <p style={{ fontSize: 20 }}>You scored <b>{score}/{answered}</b> ({pct}%)</p>
+          <button className="btn small ghost" onClick={() => setShowReview(v => !v)}>{showReview ? 'Hide review' : '🔎 Review your answers'}</button>
+        </div>
+        {showReview && (
+          <div className="card alt" style={{ padding: '14px 16px', marginTop: 12 }}>
+            <h4 style={{ margin: '0 0 8px' }}>Your answers</h4>
+            {review.length === 0 ? <p style={{ opacity: 0.6, fontSize: 13 }}>No questions recorded.</p> : review.map((r, i) => (
+              <div key={i} style={{ borderTop: i ? '1px dashed var(--ink)' : 'none', padding: '8px 0' }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{i + 1}. {r.prompt}</div>
+                <div style={{ fontSize: 13 }}>{r.correct ? '✓' : '✗'} Your answer: <b>{r.your}</b></div>
+                {!r.correct && r.answer && <div style={{ fontSize: 13, color: 'var(--accent,#5c80bc)' }}>Correct: <b>{r.answer}</b></div>}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="slide-actions" style={{ justifyContent: 'center', gap: 8, marginTop: 12 }}>
           <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>
           <button className="btn" onClick={() => { setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
         </div>

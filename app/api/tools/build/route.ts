@@ -114,7 +114,9 @@ function heuristicProposal(text: string) {
     if (/\bdate|due|deadline|schedule\b/.test(t)) fields.push({ id: 'date', label: 'Date', type: 'date' });
     if (/\blevel|category|topic|type|tag\b/.test(t)) fields.push({ id: 'category', label: 'Category', type: 'select-or-custom', options: ['General', 'Beginner', 'Intermediate', 'Advanced'] });
     if (!socialish) fields.push({ id: 'notes', label: 'Notes', type: 'textarea' });
-    return { archetype, title, description: text.slice(0, 300), tags: [], settings: [], app: { entryFields: fields, display: 'cards', review: false } };
+    // Storage/repository/directory read best as a table; galleries/feeds as cards.
+    const display = /\b(storage|repository|directory|table|catalog|catalogue|inventory|spreadsheet)\b/.test(t) ? 'table' : /\blist\b/.test(t) ? 'list' : 'cards';
+    return { archetype, title, description: text.slice(0, 300), tags: [], settings: [], app: { entryFields: fields, display, review: false } };
   }
   const output = /\bcards?|ideas|list|items|steps\b/.test(t) ? 'cards' : /\btable|rows|columns|data\b/.test(t) ? 'table' : 'text';
   return {

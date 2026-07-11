@@ -9,13 +9,14 @@ import { useApp } from '@/components/AppContext';
 
 type Msg = { role: 'assistant' | 'user'; content: string };
 
-const SUGGESTIONS = [
-  '🍌 A banana Instagram page where people upload photo posts with captions',
-  '🇫🇷 A French lesson where I set leveled slides and learners play them',
-  '🛡️ A cybersecurity CVE tracker dashboard',
-  '📓 A daily journal with mood and a photo',
-  '🔗 A link directory with categories',
-  '🗳️ A community poll board',
+// Preset tool TYPES — clicking one seeds the AI with that kind of tool, which
+// also steers the display (slides vs cards vs table vs feed).
+const PRESETS: { label: string; seed: string }[] = [
+  { label: '📊 Presentation', seed: 'a playable multi-slide presentation/lesson with quiz questions and a score' },
+  { label: '🎧 Single activity', seed: 'a single-page activity: one short lesson or listening/reading, a few questions, then a report I can review' },
+  { label: '🖼️ Gallery / Marketplace', seed: 'a marketplace-style gallery where people add items shown as cards on a grid, each with an image, a description and a link' },
+  { label: '🗂️ Storage / Repository', seed: 'a document storage/repository shown as a list/table of items, each with a name, a category and a link to the file' },
+  { label: '📰 Feed / Blog', seed: 'a feed/blog where people post entries shown as cards, with an image, text and an optional link' },
 ];
 
 export function ToolBuilderView() {
@@ -81,12 +82,15 @@ export function ToolBuilderView() {
           {busy && <div className="msg ai">✏️ …</div>}
         </div>
 
-        {/* Starter suggestions shown before the conversation gets going. */}
+        {/* Preset tool-type buttons shown before the conversation gets going. */}
         {messages.length <= 1 && !draft && !busy && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0' }}>
-            {SUGGESTIONS.map((s, i) => (
-              <button key={i} className="btn small" onClick={() => send(s.replace(/^\S+\s/, ''))}>{s}</button>
-            ))}
+          <div style={{ margin: '8px 0' }}>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Start from a type:</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {PRESETS.map((p, i) => (
+                <button key={i} className="btn small" title={p.seed} onClick={() => send(p.seed)}>{p.label}</button>
+              ))}
+            </div>
           </div>
         )}
 
