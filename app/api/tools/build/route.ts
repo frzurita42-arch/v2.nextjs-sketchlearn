@@ -114,10 +114,21 @@ fills in at run time (e.g. a "topic" text field and a "level" select-or-custom).
 
 Prompt-engineering: the user's prompt is usually short. EXPAND it into a well-rounded
 tool — infer the fields a thoughtful maker would include, write a clear title,
-a one-line description, and 2-4 tags. Don't ask more than necessary; if you can
-make something good, propose it.
+a one-line description, and 2-4 tags.
+
+SETTINGS DESIGN (important): keep the settings form MINIMAL and COMPACT so it
+looks good on a tall 9:16 phone screen. For any field that is a choice, use
+"select-or-custom" (it shows a small pencil to type a custom value) instead of a
+plain text box — avoid unnecessary input boxes. Only include settings that
+actually change the output.
 
 Guidance by kind:
+- Handwriting / character practice (e.g. "practice writing Japanese characters,
+  checked by AI"): make a LESSON with subjectKind "language", language set,
+  and activityTypes ["writing"]. The learner draws the character and the AI
+  checks it — so do NOT add pronunciation, image, phrase, or prompt fields.
+  Settings should be just a "topic/character set" and a "difficulty"
+  select-or-custom.
 - Social page / Instagram-style feed / photo gallery / portfolio / "page with uploadable posts":
   APP, display "cards", entryFields = an "image" field + a "textarea" caption (+ optional link/tags).
 - Language / lesson tools (e.g. "a French lesson"): APP, display "cards". Include a
@@ -127,6 +138,14 @@ Guidance by kind:
   field when handwriting/characters matter. Learners view the cards inside the tool.
 - Dashboards / trackers / directories / journals: APP with the natural fields, display "cards" or "table".`;
 
+// Deterministic gate questions (used without AI, or as a fallback). The builder
+// ALWAYS asks 2 settings questions + 1 recommendation before it may propose.
+function gateQuestion(userTurns: number) {
+  if (userTurns <= 1) return { question: 'Who is this tool mainly for, and how will it be used?', options: ['Just me / personal', 'A public community tool'], field: 'audience' };
+  if (userTurns === 2) return { question: 'How should people mainly use it each time?', options: ['Play / generate an activity', 'Add & browse saved entries'], field: 'interaction' };
+  return { question: 'I can also add a difficulty / level setting so it adapts to the user. Add that?', options: ['Add it', 'Generate as is'], field: 'recommendation' };
+}
+
 export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
@@ -134,39 +153,65 @@ export async function POST(req: Request) {
   const messages: any[] = Array.isArray(b.messages) ? b.messages.slice(-16) : [];
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
 
+  // Gate: turn 1 = the idea; force 2 follow-up questions (turns 1,2) + a
+  // recommendation (turn 3) BEFORE any proposal is allowed. Only from turn 4 on
+  // (i.e. after the user has answered all three) may the builder propose.
+  const userTurns = messages.filter((m) => m.role === 'user').length;
+  const inGate = userTurns <= 3;
+
   if (!geminiEnabled && !deepseekEnabled) {
+    if (inGate) return NextResponse.json({ kind: 'question', ...gateQuestion(userTurns) });
     const raw = heuristicProposal(String(lastUser || 'a simple tool'));
     const { def } = validateToolDefinition(raw);
-    return NextResponse.json({ kind: 'proposal', definition: def, summary: 'Assembled a starter tool from your description (no AI connected — edit or publish as-is).' });
+    return NextResponse.json({ kind: 'proposal', definition: def, summary: 'Assembled a starter tool from your answers (no AI connected — edit or publish as-is).' });
   }
 
   const system = [
     'You are a Tool Builder. Through a short chat you help the user design a "tool" that the platform will run.',
     'You compose ONLY from the fixed palette below — never invent code or components.',
     PALETTE,
-    'On each turn, return STRICT JSON that is EITHER a clarifying question OR a finished proposal:',
-    '{ "kind": "question", "question": "one short question", "options": ["opt1","opt2","opt3"], "field": "what this decides" }',
-    'OR',
-    '{ "kind": "proposal", "summary": "one sentence", "definition": { ...a full Tool Definition... } }',
-    'Ask at most 2-3 questions total, then propose. Keep questions short and always give 2-4 concrete options (the user can also type a custom answer). Prefer proposing once you have enough to make something useful.',
+    'Return STRICT JSON that is EITHER a clarifying question OR a finished proposal:',
+    '{ "kind": "question", "question": "one short question", "options": ["opt1","opt2"], "field": "what this decides" }',
+    'OR { "kind": "proposal", "summary": "one sentence", "definition": { ...a full Tool Definition... } }',
+    'Questions must be short, oriented to the tool\'s SETTINGS/design, and give exactly 2 concrete options (the user can also type a custom answer).',
   ].join('\n');
+  const convo = messages.map((m) => `${m.role === 'assistant' ? 'Builder' : 'User'}: ${String(m.content).slice(0, 800)}`).join('\n');
 
   try {
-    const convo = messages.map((m) => `${m.role === 'assistant' ? 'Builder' : 'User'}: ${String(m.content).slice(0, 800)}`).join('\n');
+    // While in the gate, force a settings-oriented question (never a proposal yet).
+    if (inGate) {
+      const directive = userTurns <= 2
+        ? `Ask clarifying question ${userTurns} of 2 about this tool's SETTINGS/design (2 options + allow custom). Return ONLY a "question" object, do NOT propose.`
+        : `Recommend ONE extra useful setting for this tool and ask whether to add it. The options MUST be exactly ["Add it","Generate as is"]. Return ONLY a "question" object, do NOT propose.`;
+      const r: any = await generateStructured(
+        [{ role: 'system', content: `${system}\n${directive}` }, { role: 'user', content: `Conversation so far:\n${convo}` }],
+        { temperature: 0.6, maxTokens: 700 }
+      ).catch(() => null);
+      const fb = gateQuestion(userTurns);
+      const options = (Array.isArray(r?.options) ? r.options : []).map((o: any) => String(o).slice(0, 60)).filter(Boolean).slice(0, 4);
+      return NextResponse.json({
+        kind: 'question',
+        question: String(r?.question || fb.question),
+        options: options.length ? options : fb.options,
+        field: String(r?.field || fb.field),
+      });
+    }
+
+    // Gate cleared -> propose.
     const r: any = await generateStructured(
-      [{ role: 'system', content: system }, { role: 'user', content: `Conversation so far:\n${convo}\n\nReturn the next JSON (question or proposal).` }],
+      [{ role: 'system', content: `${system}\nYou now have enough. Return a "proposal" with a full definition.` }, { role: 'user', content: `Conversation so far:\n${convo}\n\nReturn the proposal JSON.` }],
       { temperature: 0.6, maxTokens: 1500 }
     );
-    if (r?.kind === 'proposal') {
+    if (r?.kind === 'proposal' || r?.definition) {
       const { ok, def } = validateToolDefinition(r.definition);
-      if (ok) return NextResponse.json({ kind: 'proposal', definition: def, summary: String(r.summary || 'Here is a tool based on what you described.') });
-      // invalid proposal -> fall back to heuristic so the user still gets something
+      if (ok) return NextResponse.json({ kind: 'proposal', definition: def, summary: String(r.summary || 'Here is a tool based on your answers.') });
       const { def: hdef } = validateToolDefinition(heuristicProposal(String(lastUser)));
       return NextResponse.json({ kind: 'proposal', definition: hdef, summary: 'Here is a starter version — tweak it or publish.' });
     }
+    // Model still asked something -> pass it through.
     return NextResponse.json({
       kind: 'question',
-      question: String(r?.question || 'What should this tool do?'),
+      question: String(r?.question || 'Anything else to adjust?'),
       options: (Array.isArray(r?.options) ? r.options : []).map((o: any) => String(o).slice(0, 60)).slice(0, 4),
       field: String(r?.field || ''),
     });
