@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting, type ChatMessage } from '@/lib/app-state';
 import { downloadCsv } from '@/lib/util';
+import { AudioButton } from '@/components/ui/AudioButton';
+import { MicButton } from '@/components/ui/MicButton';
 
 export function ChatView() {
   const [messages, setMessages] = useState<ChatMessage[]>(appState.chat);
@@ -43,13 +45,21 @@ export function ChatView() {
         <button className="btn small" id="chat-export" onClick={downloadCsv}>⬇ spreadsheet</button></p>
       <div className="chat-shell">
         <div className="chat-log" id="chat-log" ref={logRef}>
-          {messages.map((m, i) => <div key={i} className={`msg ${m.role === 'user' ? 'user' : 'ai'}`}>{m.content}</div>)}
+          {messages.map((m, i) => (
+            <div key={i} className={`msg ${m.role === 'user' ? 'user' : 'ai'}`}>
+              <span>{m.content}</span>
+              {m.role === 'assistant' && (
+                <div style={{ marginTop: 6 }}><AudioButton text={m.content} label="🔊" small showTextOnFail={false} /></div>
+              )}
+            </div>
+          ))}
           {thinking && <div className="msg ai">✏️ …</div>}
         </div>
         <div className="chat-input-row">
-          <textarea id="chat-input" placeholder="Ask what to study next, or how the site works…"
+          <textarea id="chat-input" placeholder="Ask what to study next, or how the site works… (or tap 🎤)"
             value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
+          <MicButton lang="en-US" title="Speak your message" onText={(t: string) => setInput(v => (v ? v + ' ' : '') + t)} />
           <button className="btn primary" id="chat-send" onClick={send}>Send</button>
         </div>
         <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>

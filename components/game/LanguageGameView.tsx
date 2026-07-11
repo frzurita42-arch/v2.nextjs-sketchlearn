@@ -9,6 +9,9 @@ import { appState, LANG_LEVELS } from '@/lib/app-state';
 import { shuffled } from '@/lib/util';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
+import { AudioButton } from '@/components/ui/AudioButton';
+import { MicButton } from '@/components/ui/MicButton';
+import { langCode } from '@/lib/lang-codes';
 
 const MAX_SLIDES = 12;
 
@@ -150,10 +153,11 @@ export function LanguageGameView() {
   if (ui === 'slide' && cur) {
     const gg = g.current;
     const header = <SlideHeader idx={gg.idx} total={gg.plan.length} type={cur.type} />;
+    const lang = langCode(gg.language);
     if (cur.type === 'grammar') return <>{header}<GrammarSlide slide={cur} onDone={advance} /></>;
-    if (cur.type === 'vocabulary') return <>{header}<VocabSlide slide={cur} onDone={advance} /></>;
+    if (cur.type === 'vocabulary') return <>{header}<VocabSlide slide={cur} onDone={advance} lang={lang} /></>;
     if (cur.type === 'listening') return <>{header}<ListeningSlide slide={cur} onDone={advance} /></>;
-    if (cur.type === 'spelling') return <>{header}<SpellingSlide slide={cur} onDone={advance} /></>;
+    if (cur.type === 'spelling') return <>{header}<SpellingSlide slide={cur} onDone={advance} lang={lang} /></>;
     return <>{header}<ReadingSlide slide={cur} onDone={advance} /></>;
   }
   return <Loading text={loadingMsg} />;
@@ -262,7 +266,7 @@ function Support({ support }: { support: any }) {
 }
 
 // ---- Vocabulary: 4 items (2 MCQ + 2 typed, 3 tries) ----
-function VocabSlide({ slide, onDone }: any) {
+function VocabSlide({ slide, onDone, lang }: any) {
   const [ii, setII] = useState(0);
   const acc = useRef<{ correct: number; answers: any[] }>({ correct: 0, answers: [] });
   const item = slide.items[ii];
@@ -278,7 +282,7 @@ function VocabSlide({ slide, onDone }: any) {
       <p style={{ opacity: 0.7, fontSize: '.9rem' }}>Item {ii + 1} of {slide.items.length}</p>
       {item.image && <img src={item.image} alt="" style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 10, border: '2px solid var(--ink)', display: 'block', margin: '0 auto 10px' }} />}
       {item.kind === 'input'
-        ? <VocabInput key={ii} item={item} onDone={advance} />
+        ? <VocabInput key={ii} item={item} onDone={advance} lang={lang} />
         : <VocabMcq key={ii} item={item} onDone={advance} />}
     </div>
   );
@@ -301,7 +305,7 @@ function VocabMcq({ item, onDone }: any) {
 }
 
 // Typed answer with up to 3 tries; reveals the answer only on the 3rd miss.
-function VocabInput({ item, onDone }: any) {
+function VocabInput({ item, onDone, lang }: any) {
   const [val, setVal] = useState('');
   const [tries, setTries] = useState(0);
   const [feedback, setFeedback] = useState('');
@@ -320,7 +324,8 @@ function VocabInput({ item, onDone }: any) {
       <p style={{ fontWeight: 600 }}>{item.question}</p>
       {solved === null ? (
         <div className="slide-actions" style={{ gap: 8 }}>
-          <input type="text" value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} placeholder="Type your answer…" style={{ flex: 1 }} />
+          <input type="text" value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} placeholder="Type or speak your answer…" style={{ flex: 1 }} />
+          <MicButton lang={lang} onText={(t: string) => setVal(t)} />
           <button className="btn primary" onClick={submit}>Check</button>
         </div>
       ) : null}
@@ -331,35 +336,6 @@ function VocabInput({ item, onDone }: any) {
         </div>
       )}
     </>
-  );
-}
-
-// Play a bit of text via the TTS proxy; falls back to showing the text when audio
-// is unavailable (no ElevenLabs key). Caches the fetched audio per instance.
-function AudioButton({ text, label = '🔊 Play', autoRevealText = true }: { text: string; label?: string; autoRevealText?: boolean }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
-  const [err, setErr] = useState('');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const srcRef = useRef<string | null>(null);
-  const play = async () => {
-    if (srcRef.current) { audioRef.current?.play().catch(() => {}); return; }
-    setState('loading');
-    try {
-      const r = await API.post('/api/ai/language/tts', { text });
-      if (r?.audio) { srcRef.current = r.audio; setState('ready'); setTimeout(() => audioRef.current?.play().catch(() => {}), 50); }
-      else { setErr(r?.error || ''); setState('unavailable'); }
-    } catch (e: any) { setErr(e?.message || ''); setState('unavailable'); }
-  };
-  return (
-    <div style={{ margin: '8px 0' }}>
-      <button className="btn blue" type="button" onClick={play} disabled={state === 'loading'}>
-        {state === 'loading' ? '…' : state === 'unavailable' ? '🔇 Audio off' : label}
-      </button>
-      {srcRef.current && <audio ref={audioRef} src={srcRef.current} />}
-      {state === 'unavailable' && autoRevealText && (
-        <p style={{ marginTop: 6, fontStyle: 'italic', opacity: 0.85 }}>“{text}” <small>(showing text{err ? ` — ${err}` : ' — audio unavailable'})</small></p>
-      )}
-    </div>
   );
 }
 
@@ -403,7 +379,7 @@ function ListeningSlide({ slide, onDone }: any) {
 }
 
 // ---- Spelling: 4 audios, type the word (3 tries) ----
-function SpellingSlide({ slide, onDone }: any) {
+function SpellingSlide({ slide, onDone, lang }: any) {
   const [ii, setII] = useState(0);
   const acc = useRef<{ correct: number; answers: any[] }>({ correct: 0, answers: [] });
   const item = slide.items[ii];
@@ -420,12 +396,12 @@ function SpellingSlide({ slide, onDone }: any) {
       <p style={{ fontWeight: 600 }}>Listen, then type the word you hear.</p>
       <AudioButton key={ii} text={item.audioText} label="🔊 Play word" />
       {item.usage && <p style={{ opacity: 0.75, fontSize: '.9rem' }}>Hint (meaning): {item.usage}</p>}
-      <SpellInput key={`in-${ii}`} item={item} onDone={advance} />
+      <SpellInput key={`in-${ii}`} item={item} onDone={advance} lang={lang} />
     </div>
   );
 }
 
-function SpellInput({ item, onDone }: any) {
+function SpellInput({ item, onDone, lang }: any) {
   const [val, setVal] = useState('');
   const [tries, setTries] = useState(0);
   const [feedback, setFeedback] = useState('');
@@ -443,7 +419,8 @@ function SpellInput({ item, onDone }: any) {
     <>
       {solved === null && (
         <div className="slide-actions" style={{ gap: 8 }}>
-          <input type="text" value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} placeholder="Type the word…" style={{ flex: 1 }} />
+          <input type="text" value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} placeholder="Type or speak the word…" style={{ flex: 1 }} />
+          <MicButton lang={lang} onText={(t: string) => setVal(t)} />
           <button className="btn primary" onClick={submit}>Check</button>
         </div>
       )}
