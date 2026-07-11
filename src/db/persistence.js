@@ -123,6 +123,9 @@ async function initDatabase() {
   `);
   await dbQuery('CREATE INDEX IF NOT EXISTS idx_tools_visibility_updated ON tools(visibility, updated_at DESC)');
   await dbQuery('CREATE INDEX IF NOT EXISTS idx_tools_owner ON tools(owner)');
+  // Owner-supplied API keys, added later via the tool's settings page. Kept out of
+  // every public read; only the owner-only settings endpoint returns them.
+  await dbQuery('ALTER TABLE tools ADD COLUMN IF NOT EXISTS api_keys JSONB');
 
   // ---------- platform: generic entry store ----------
   // Rows created BY a tool at runtime (storage-system items, journal notes,

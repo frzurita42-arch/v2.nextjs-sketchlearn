@@ -212,6 +212,9 @@ export function ToolRunnerView() {
         </div>
         <button className="btn small ghost" onClick={toggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
         {tool.visibility !== 'private' && <button className="btn small blue" onClick={share}>🔗 Share</button>}
+        {(app.user?.role === 'admin' || app.user?.username === tool.owner) && (
+          <button className="btn small ghost" onClick={() => app.nav('toolsettings')}>⚙️ Settings</button>
+        )}
         <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>
       </div>
       {def.description && <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>{def.description}</p>}

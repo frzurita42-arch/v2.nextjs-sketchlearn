@@ -15,6 +15,14 @@ function parseJsonb(v, fallback) {
 }
 function asArr(v) { const p = parseJsonb(v, []); return Array.isArray(p) ? p : []; }
 
+// Strip owner-only secrets before returning a tool through any PUBLIC read
+// (the file-storage path stores the whole object, incl. apiKeys, on disk).
+function stripSecret(t) {
+  if (!t) return t;
+  const { apiKeys, api_keys, ...rest } = t;
+  return rest;
+}
+
 // ---------------------------------------------------------------------------
 // tools — published Tool Definitions (the spec the runtime interprets)
 // ---------------------------------------------------------------------------
@@ -64,13 +72,62 @@ async function insertTool(record) {
 }
 
 async function getToolBySlug(slug) {
-  if (!db.pool) return readJSON('tools.json', []).find(t => t.slug === slug) || null;
+  if (!db.pool) return stripSecret(readJSON('tools.json', []).find(t => t.slug === slug)) || null;
   try {
     const { rows } = await withDbTimeout(dbQuery('SELECT * FROM tools WHERE slug = $1', [slug]), 8000, 'Get tool');
     return rows[0] ? mapToolRow(rows[0]) : null;
   } catch (e) {
     console.error('DB read for tool failed; falling back to file:', e.message);
-    return readJSON('tools.json', []).find(t => t.slug === slug) || null;
+    return stripSecret(readJSON('tools.json', []).find(t => t.slug === slug)) || null;
+  }
+}
+
+// Owner-only read that INCLUDES the stored API keys (never use for public reads).
+async function getToolWithKeys(slug) {
+  if (!db.pool) {
+    const t = readJSON('tools.json', []).find(x => x.slug === slug) || null;
+    return t ? { ...t, apiKeys: Array.isArray(t.apiKeys) ? t.apiKeys : [] } : null;
+  }
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT * FROM tools WHERE slug = $1', [slug]), 8000, 'Get tool w/keys');
+    if (!rows[0]) return null;
+    return { ...mapToolRow(rows[0]), apiKeys: asArr(rows[0].api_keys) };
+  } catch (e) {
+    console.error('DB read (with keys) failed; file fallback:', e.message);
+    const t = readJSON('tools.json', []).find(x => x.slug === slug) || null;
+    return t ? { ...t, apiKeys: Array.isArray(t.apiKeys) ? t.apiKeys : [] } : null;
+  }
+}
+
+// Update a tool's definition / visibility / api keys. Only fields provided change.
+async function updateTool(slug, patch) {
+  if (!db.pool) {
+    const tools = readJSON('tools.json', []);
+    const t = tools.find(x => x.slug === slug);
+    if (!t) return false;
+    if (patch.definition !== undefined) { t.definition = patch.definition; t.title = patch.definition.title || t.title; t.description = patch.definition.description || t.description; t.archetype = patch.definition.archetype || t.archetype; t.tags = patch.definition.tags || t.tags; }
+    if (patch.visibility !== undefined) t.visibility = patch.visibility;
+    if (patch.apiKeys !== undefined) t.apiKeys = patch.apiKeys;
+    t.updatedAt = new Date().toISOString();
+    writeJSON('tools.json', tools);
+    return true;
+  }
+  try {
+    const sets = []; const vals = []; let i = 1;
+    if (patch.definition !== undefined) {
+      sets.push(`definition = $${i++}::jsonb`, `title = $${i++}`, `description = $${i++}`, `archetype = $${i++}`, `tags = $${i++}::jsonb`);
+      vals.push(JSON.stringify(patch.definition), patch.definition.title || '', patch.definition.description || '', patch.definition.archetype || 'app', JSON.stringify(patch.definition.tags || []));
+    }
+    if (patch.visibility !== undefined) { sets.push(`visibility = $${i++}`); vals.push(patch.visibility); }
+    if (patch.apiKeys !== undefined) { sets.push(`api_keys = $${i++}::jsonb`); vals.push(JSON.stringify(patch.apiKeys)); }
+    if (!sets.length) return true;
+    sets.push(`updated_at = NOW()`);
+    vals.push(slug);
+    const { rowCount } = await withDbTimeout(dbQuery(`UPDATE tools SET ${sets.join(', ')} WHERE slug = $${i}`, vals), 8000, 'Update tool');
+    return rowCount > 0;
+  } catch (e) {
+    console.error('DB update tool failed:', e.message);
+    return false;
   }
 }
 
@@ -104,7 +161,7 @@ async function listTools({ viewer = null, includePrivateFor = null, limit = 50 }
     return readJSON('tools.json', [])
       .filter(t => t.visibility === 'public' || (includePrivateFor && t.owner === includePrivateFor))
       .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
-      .slice(0, lim);
+      .slice(0, lim).map(stripSecret);
   }
   try {
     const { rows } = await withDbTimeout(dbQuery(
@@ -118,7 +175,7 @@ async function listTools({ viewer = null, includePrivateFor = null, limit = 50 }
     console.error('DB list tools failed; falling back to file:', e.message);
     return readJSON('tools.json', [])
       .filter(t => t.visibility === 'public' || (includePrivateFor && t.owner === includePrivateFor))
-      .slice(0, lim);
+      .slice(0, lim).map(stripSecret);
   }
 }
 
@@ -304,7 +361,7 @@ async function listPosts({ limit = 100 } = {}) {
 }
 
 module.exports = {
-  insertTool, getToolBySlug, listTools, setToolLikeDelta,
+  insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool,
   insertEntry, listEntries, setEntryStatus,
   insertComment, listComments,
   insertPost, listPosts,

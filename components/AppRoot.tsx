@@ -23,6 +23,7 @@ import { FeedView } from '@/components/views/FeedView';
 import { ToolsView } from '@/components/views/ToolsView';
 import { ToolRunnerView } from '@/components/views/ToolRunnerView';
 import { ToolBuilderView } from '@/components/views/ToolBuilderView';
+import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
@@ -111,6 +112,7 @@ export default function AppRoot() {
     tools: <ToolsView />,
     tool: <ToolRunnerView />,
     toolbuilder: <ToolBuilderView />,
+    toolsettings: <ToolSettingsView />,
   };
 
   return (
