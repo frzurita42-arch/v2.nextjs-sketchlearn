@@ -23,6 +23,9 @@ export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () =
   const [fontSize, setFontSize] = useState(32);
   const [textVal, setTextVal] = useState('');
   const [expanded, setExpanded] = useState(false);
+  // Drawing starts OFF so a touch scrolls the page. Turn it on to write without
+  // the page sliding; turn it off again to scroll past the pad.
+  const [drawOn, setDrawOn] = useState(false);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
 
@@ -43,6 +46,7 @@ export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () =
     return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
   };
   const down = (e: React.PointerEvent) => {
+    if (!drawOn) return;                          // scroll mode — let the touch scroll the page
     if (tool === 'text') { if (!textVal.trim()) { alert('Type your text in the box first, then tap where it goes.'); return; } const p = pos(e); const x = ctx(); x.fillStyle = color; x.font = `${fontSize}px ${font}`; x.textBaseline = 'top'; x.fillText(textVal, p.x, p.y); onChange?.(); return; }
     drawing.current = true; last.current = pos(e);
   };
@@ -60,12 +64,17 @@ export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () =
 
   const swatch = (c: string) => <button key={c} type="button" onClick={() => { setColor(c); setTool('pen'); }} title={c}
     style={{ width: 24, height: 24, borderRadius: '50%', background: c, border: color === c ? '3px solid var(--ink)' : '2px solid rgba(0,0,0,0.3)', cursor: 'pointer' }} />;
-  const toolBtn = (id: any, label: string) => <button type="button" className={`btn small ${tool === id ? 'blue' : 'ghost'}`} onClick={() => setTool(id)}>{label}</button>;
+  // Picking a tool also turns drawing on (you tapped it to write).
+  const toolBtn = (id: any, label: string) => <button type="button" className={`btn small ${drawOn && tool === id ? 'blue' : 'ghost'}`} onClick={() => { setTool(id); setDrawOn(true); }}>{label}</button>;
 
   const inner = (
     <div style={{ maxWidth: expanded ? '100%' : W, margin: '0 auto', width: '100%' }}>
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+        {/* Master toggle: draw vs. scroll the page. */}
+        <button type="button" className={`btn small ${drawOn ? 'green' : 'ghost'}`} onClick={() => setDrawOn(v => !v)} title={drawOn ? 'Drawing on — tap to scroll the page' : 'Scroll mode — tap to draw'}>
+          {drawOn ? '✍️ Writing' : '🖐️ Scroll'}
+        </button>
         {toolBtn('pen', '✏️ Pen')}{toolBtn('eraser', '🩹 Eraser')}{toolBtn('text', '🔤 Text')}
         <span style={{ display: 'flex', gap: 5 }}>{COLORS.map(swatch)}</span>
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>Thick
@@ -79,9 +88,14 @@ export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () =
           <input type="number" min={12} max={90} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} style={{ width: 60 }} />
         </div>
       )}
-      {/* The page — grows to fill the available height (bigger when expanded). */}
+      {/* The page — grows to fill the available height (bigger when expanded).
+          In scroll mode the canvas lets touches pan the page (touchAction pan-y);
+          in writing mode it captures them (touchAction none). */}
       <canvas ref={canvasRef} width={W} height={H} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
-        style={{ width: '100%', maxWidth: expanded ? '100%' : W, aspectRatio: `${W} / ${H}`, maxHeight: expanded ? '82vh' : '68vh', border: '2px solid var(--ink)', borderRadius: 8, background: '#fff', touchAction: 'none', display: 'block', margin: '0 auto' }} />
+        style={{ width: '100%', maxWidth: expanded ? '100%' : W, aspectRatio: `${W} / ${H}`, maxHeight: expanded ? '82vh' : '68vh', border: `2px ${drawOn ? 'solid' : 'dashed'} var(--ink)`, borderRadius: 8, background: '#fff', touchAction: drawOn ? 'none' : 'pan-y', cursor: drawOn ? 'crosshair' : 'default', display: 'block', margin: '0 auto' }} />
+      <div style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 4 }}>
+        {drawOn ? '✍️ Writing mode — the page won’t scroll while you draw. Tap 🖐️ Scroll to move the page.' : '🖐️ Scroll mode — swipe to move the page. Tap ✏️ Pen (or ✍️ Writing) to draw.'}
+      </div>
       {/* Page navigation — add a fresh page (a new "window") when you run out. */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
         <button className="btn small ghost" disabled={pageIdx === 0} onClick={() => goto(pageIdx - 1)}>← Prev page</button>
