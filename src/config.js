@@ -25,22 +25,29 @@ function hasConfiguredKey(value) {
 function hasPooledConnectionString(value) {
   const v = String(value || '').trim();
   if (!hasConfiguredKey(v)) return false;
-  return /-pooler\b/i.test(v) || /[?&]channel_binding=require/i.test(v);
+  return /-pooler\b/i.test(v) || /[?&]channel_binding=require/i.test(v) || /[?&]pgbouncer=true/i.test(v);
 }
 
 const PORT = process.env.PORT || 3000;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_URL = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions';
 const DATABASE_URL = (() => {
-  const pooledCandidates = [
+  // Prefer these well-known names, in order...
+  const named = [
     process.env.DATABASE_URL,
     process.env.POSTGRES_URL,
     process.env.SKETCHDB_DATABASE_URL,
-    // Vercel Storage integrations can inject custom-prefixed URLs like SKETCHDB_URL.
-    process.env.SKETCHDB_URL
+    process.env.SKETCHDB_URL,
   ];
-
-  return pooledCandidates.find(hasPooledConnectionString) || pooledCandidates.find(hasConfiguredKey) || '';
+  // ...then fall back to ANY env var whose value is a Postgres connection string.
+  // Vercel Storage integrations inject custom-prefixed URLs (e.g. SKETCHDB_POSTGRES_URL,
+  // *_PRISMA_URL, *_URL_NON_POOLING); this catches them without enumerating each name.
+  const scanned = Object.keys(process.env)
+    .filter(k => /^postgres(ql)?:\/\//i.test(String(process.env[k] || '')))
+    .map(k => process.env[k]);
+  const all = [...named, ...scanned].filter(Boolean);
+  // Prefer a pooled connection (best for serverless), else any valid one.
+  return all.find(hasPooledConnectionString) || all.find(hasConfiguredKey) || '';
 })();
 
 const SUGGESTED_STORE_FILE = 'suggested_topics.json';
@@ -101,6 +108,7 @@ const DEFAULT_HOME_TOPIC_POOL = [
 ];
 
 const dbEnabled = hasConfiguredKey(DATABASE_URL);
+const dbPooled = hasPooledConnectionString(DATABASE_URL);
 
 // Optional: Google Gemini. One key powers BOTH the lesson text (replacing DeepSeek)
 // and real generated images (Gemini's native image models). Set GEMINI_API_KEY to use it.
@@ -170,6 +178,7 @@ module.exports = {
   DEEPSEEK_URL,
   DATABASE_URL,
   dbEnabled,
+  dbPooled,
   SUGGESTED_STORE_FILE,
   HOME_TOPICS_STORE_FILE,
   GLOBAL_TREND_SEEDS,

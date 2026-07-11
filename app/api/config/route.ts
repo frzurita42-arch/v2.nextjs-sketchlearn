@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled } from '@/src/config';
+import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled } from '@/src/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -13,6 +13,8 @@ export async function GET() {
       provider: geminiEnabled ? 'gemini' : (deepseekEnabled ? 'deepseek' : null),
       imagesEnabled: !!imageEnabled,
       voiceEnabled: !!elevenlabsEnabled,
+      dbEnabled: !!dbEnabled,
+      dbPooled: !!dbPooled,
     },
     { headers: { 'Cache-Control': 'no-cache' } }
   );
