@@ -13,6 +13,7 @@ import { ToolFields } from '@/components/tools/ToolFields';
 import { CommentSection } from '@/components/social/CommentSection';
 import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
+import { isRenderableImage } from '@/lib/img';
 
 // Deterministic emoji+color avatar from a username (matches the feed's style).
 const AV_EMOJI = ['🦊', '📊', '🐛', '🦉', '🤖', '⚙️', '🗣️', '🛡️', '🔧', '📈', '✏️', '☁️', '🎨', '🔐', '📝', '🌊'];
@@ -63,8 +64,8 @@ function Byline({ e }: { e: any }) {
 }
 function fieldValue(f: any, e: any) {
   const v = e.data?.[f.id];
-  if ((f.type === 'image' || f.type === 'drawing') && typeof v === 'string' && v.startsWith('data:')) {
-    return <img src={v} alt={f.label} style={{ width: '100%', borderRadius: 8, border: '2px solid var(--ink)', display: 'block' }} />;
+  if ((f.type === 'image' || f.type === 'drawing') && isRenderableImage(v)) {
+    return <img src={v} alt={f.label} style={{ width: '100%', borderRadius: 8, border: '2px solid var(--ink)', display: 'block' }} loading="lazy" />;
   }
   if (f.type === 'audio' && typeof v === 'string' && v.startsWith('data:')) {
     return <audio controls src={v} style={{ width: '100%', height: 36 }} />;
