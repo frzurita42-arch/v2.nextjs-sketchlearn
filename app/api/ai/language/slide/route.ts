@@ -80,6 +80,14 @@ function fbReading(topic: string) {
   };
 }
 
+function fbWriting(topic: string) {
+  return {
+    type: 'writing', title: `Character practice: ${topic}`.slice(0, 60),
+    target: 'a', romanization: '', meaning: 'the letter a', audioText: 'a', tip: 'Trace slowly, following the shape.',
+    sticky: cleanSticky({ color: 'blue', title: 'Write it', note: 'Practice makes the hand remember.' }),
+  };
+}
+
 async function fillImage(prompt: string): Promise<string> {
   if (imageEnabled) {
     try { const url = await generateImage(prompt); if (url) return url; } catch { /* fall through */ }
@@ -91,10 +99,10 @@ export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const type = ['grammar', 'vocabulary', 'reading', 'listening', 'spelling'].includes(b.type) ? b.type : 'reading';
+  const type = ['grammar', 'vocabulary', 'reading', 'listening', 'spelling', 'writing'].includes(b.type) ? b.type : 'reading';
   const { language = 'Spanish', level = 'A1', topic = 'everyday life', grammarTopic = '', slideNumber = 1, totalSlides = 1, priorSummary = '' } = b;
 
-  const fb = (ty: string) => ty === 'grammar' ? fbGrammar(topic) : ty === 'vocabulary' ? fbVocab(topic) : ty === 'listening' ? fbListening(topic) : ty === 'spelling' ? fbSpelling(topic) : fbReading(topic);
+  const fb = (ty: string) => ty === 'grammar' ? fbGrammar(topic) : ty === 'vocabulary' ? fbVocab(topic) : ty === 'listening' ? fbListening(topic) : ty === 'spelling' ? fbSpelling(topic) : ty === 'writing' ? fbWriting(topic) : fbReading(topic);
   const useFallback = !geminiEnabled && !deepseekEnabled;
   let slide: any;
 
@@ -130,6 +138,13 @@ export async function POST(req: Request) {
           return { kind: 'mcq', image, question: String(it?.question || 'What is shown?'), options: cleanOptions(it?.options, 4) };
         }));
         if (!slide.items.length) slide = fbVocab(topic);
+      } else if (type === 'writing') {
+        slide.target = String(slide.target || '').trim();
+        slide.romanization = String(slide.romanization || '').trim();
+        slide.meaning = String(slide.meaning || '').trim();
+        slide.audioText = String(slide.audioText || slide.target || '').trim();
+        slide.tip = String(slide.tip || '').trim();
+        if (!slide.target) slide = fbWriting(topic);
       } else {
         slide.passage = String(slide.passage || '').trim();
         const sup = slide.support;

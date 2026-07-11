@@ -6,13 +6,13 @@
  * engine; grammar/listening/spelling/vocabulary land in later phases. */
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
-import { appState, LANGUAGES, LANG_LEVELS } from '@/lib/app-state';
+import { appState, LANGUAGES, LANG_LEVELS, WRITING_DEFAULT_BY_LEVEL } from '@/lib/app-state';
 import { withTimeout } from '@/lib/util';
 import { useApp } from '@/components/AppContext';
 import { InstructionPlank } from './InstructionPlank';
 
 const ACTIVITIES: [string, string][] = [
-  ['grammar', 'Grammar'], ['reading', 'Reading'], ['listening', 'Listening'], ['spelling', 'Spelling'], ['vocabulary', 'Vocabulary'],
+  ['grammar', 'Grammar'], ['reading', 'Reading'], ['listening', 'Listening'], ['spelling', 'Spelling'], ['vocabulary', 'Vocabulary'], ['writing', 'Character practice'],
 ];
 const MAX_SLIDES = 12;
 
@@ -68,7 +68,12 @@ export function LanguageLearning() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onLevel = (level: string) => { patch({ level }); if (!st.customGrammar) loadGrammarTopics(st.language, level); };
+  const onLevel = (level: string) => {
+    // Seed a level-appropriate amount of character practice (more at Zero/Beginner).
+    const writing = WRITING_DEFAULT_BY_LEVEL[level] ?? 0;
+    patch({ level, counts: { ...(st.counts || {}), writing } });
+    if (!st.customGrammar) loadGrammarTopics(st.language, level);
+  };
   const onLanguage = (language: string) => { patch({ language }); if (!st.customGrammar) loadGrammarTopics(language, st.level); };
 
   const counts = st.counts || {};
@@ -92,7 +97,7 @@ export function LanguageLearning() {
     const level = LANG_LEVELS[Math.floor(Math.random() * LANG_LEVELS.length)];
     // Random counts summing to 3-6 with grammar always >= 1.
     const target = 3 + Math.floor(Math.random() * 4);
-    const next: any = { grammar: 1, reading: 0, listening: 0, spelling: 0, vocabulary: 0 };
+    const next: any = { grammar: 1, reading: 0, listening: 0, spelling: 0, vocabulary: 0, writing: WRITING_DEFAULT_BY_LEVEL[level] ?? 0 };
     let remaining = target - 1;
     const keys = ['reading', 'listening', 'spelling', 'vocabulary', 'grammar'];
     while (remaining > 0) { const k = keys[Math.floor(Math.random() * keys.length)]; next[k] += 1; remaining--; }

@@ -12,6 +12,7 @@ import { Loading } from '@/components/ui/Loading';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { MicButton } from '@/components/ui/MicButton';
 import { langCode } from '@/lib/lang-codes';
+import { DrawField } from '@/components/tools/MediaFields';
 
 const MAX_SLIDES = 12;
 
@@ -41,6 +42,7 @@ function buildPlan(counts: any): string[] {
     ...Array(n('vocabulary')).fill('vocabulary'),
     ...Array(n('listening')).fill('listening'),
     ...Array(n('spelling')).fill('spelling'),
+    ...Array(n('writing')).fill('writing'),
   ];
   const plan = [...grammar, ...shuffled(rest)].slice(0, MAX_SLIDES);
   return plan.length ? plan : ['reading'];
@@ -158,6 +160,7 @@ export function LanguageGameView() {
     if (cur.type === 'vocabulary') return <>{header}<VocabSlide slide={cur} onDone={advance} lang={lang} /></>;
     if (cur.type === 'listening') return <>{header}<ListeningSlide slide={cur} onDone={advance} /></>;
     if (cur.type === 'spelling') return <>{header}<SpellingSlide slide={cur} onDone={advance} lang={lang} /></>;
+    if (cur.type === 'writing') return <>{header}<WritingSlide slide={cur} onDone={advance} /></>;
     return <>{header}<ReadingSlide slide={cur} onDone={advance} /></>;
   }
   return <Loading text={loadingMsg} />;
@@ -431,6 +434,34 @@ function SpellInput({ item, onDone, lang }: any) {
         </div>
       )}
     </>
+  );
+}
+
+// ---- Writing: trace/write a character or word on a canvas, self-check ----
+function WritingSlide({ slide, onDone }: any) {
+  const [drawing, setDrawing] = useState('');
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
+      <Sticky sticky={slide.sticky} />
+      <p style={{ fontWeight: 600 }}>✍️ Write it by hand — trace the character/word below.</p>
+      <div style={{ textAlign: 'center', margin: '8px 0' }}>
+        <div style={{ fontSize: '3.4rem', lineHeight: 1.1 }}>{slide.target}</div>
+        {slide.romanization && <div style={{ opacity: 0.75 }}>{slide.romanization}</div>}
+        {slide.meaning && <div style={{ opacity: 0.9 }}>“{slide.meaning}”</div>}
+        <div style={{ marginTop: 6 }}><AudioButton text={slide.audioText || slide.target} label="🔊 Hear it" small /></div>
+      </div>
+      {slide.tip && <p style={{ opacity: 0.75, fontSize: '.9rem' }}>✏️ {slide.tip}</p>}
+      <DrawField label="Trace it here (then check your work)" value={drawing} onChange={setDrawing} />
+      <div className="slide-actions" style={{ justifyContent: 'space-between', marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+        <button className="btn ghost" onClick={() => setRevealed(r => !r)}>{revealed ? 'Hide model' : 'Show model'}</button>
+        <span style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => onDone({ correct: 0, total: 1, answers: [{ question: `Write “${slide.target}”`, chosen: 'needs practice', correct: false, misconception: '' }] })}>Need more practice</button>
+          <button className="btn primary" onClick={() => onDone({ correct: 1, total: 1, answers: [{ question: `Write “${slide.target}”`, chosen: 'wrote it', correct: true, misconception: '' }] })}>I wrote it ✓</button>
+        </span>
+      </div>
+      {revealed && <div style={{ textAlign: 'center', fontSize: '4rem', marginTop: 8, opacity: 0.85 }}>{slide.target}</div>}
+    </div>
   );
 }
 

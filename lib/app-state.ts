@@ -12,7 +12,13 @@ export const LANGUAGES = ['English', 'Spanish', 'Mandarin Chinese', 'Hindi', 'Ar
 // CEFR-style levels plus "Zero" (absolute beginner, alphabet/characters up).
 export const LANG_LEVELS = ['Zero', 'Beginner', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 // The five sub-activity types the language lesson can mix (grammar always first).
-export const LANG_ACTIVITY_TYPES = ['grammar', 'reading', 'listening', 'spelling', 'vocabulary'] as const;
+export const LANG_ACTIVITY_TYPES = ['grammar', 'reading', 'listening', 'spelling', 'vocabulary', 'writing'] as const;
+
+// Suggested default number of handwriting/character-practice slides by level:
+// heaviest at Zero/Beginner, tapering off (still available) at higher levels.
+export const WRITING_DEFAULT_BY_LEVEL: Record<string, number> = {
+  Zero: 3, Beginner: 2, A1: 1, A2: 1, B1: 1, B2: 0, C1: 0, C2: 0,
+};
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -84,7 +90,9 @@ export const appState: AppState = {
     customGrammar: false,
     topic: '',
     // Per-sub-activity slide counts; grammar renders first, the rest shuffle.
-    counts: { grammar: 1, reading: 1, listening: 0, spelling: 0, vocabulary: 0 },
+    // `writing` = character/handwriting practice on a canvas (defaults higher at
+    // Zero/Beginner via the level picker).
+    counts: { grammar: 1, reading: 1, listening: 0, spelling: 0, vocabulary: 0, writing: 2 },
     grammarTopicOptions: [] as string[],
   },
   suggestedSettings: null,

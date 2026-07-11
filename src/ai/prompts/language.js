@@ -78,6 +78,12 @@ function buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slid
       user: base,
     };
   }
+  if (type === 'writing') {
+    return {
+      system: `You are a ${language} handwriting/character coach. The learner will TRACE/WRITE the target by hand on a canvas. Respond ONLY with JSON: {"title": string, "target": string (the ${language} CHARACTER or short WORD to write by hand — for Zero/Beginner pick a SINGLE letter/character or a 2-4 character word; higher levels a short word), "romanization": string (pronunciation/romanization, or "" if not applicable), "meaning": string (its meaning in the learner's language), "audioText": string (the target, to be read aloud), "tip": string (a one-line stroke/formation tip), "sticky": {...}}. Pick something at the ${level} level and relevant to the theme; for script languages (Japanese, Mandarin, Arabic) prefer a real character. ${sticky}`,
+      user: base,
+    };
+  }
   if (type === 'spelling') {
     return {
       system: `You are a ${language} spelling/dictation teacher. Respond ONLY with JSON: {"title": string, "sticky": {...}, "items": [item, item, item, item]}. EXACTLY 4 items, each {"audioText": string (the ${language} target WORD, then a short example sentence using it, to be spoken aloud), "answer": string (just the target word the learner must type), "accept": [string, ...] (lowercased acceptable spellings), "usage": string (a brief English gloss of the example)}. Choose words at the ${level} level and relevant to the theme. ${sticky}`,
