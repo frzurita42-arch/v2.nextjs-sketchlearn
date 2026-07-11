@@ -169,7 +169,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const [exBusy, setExBusy] = useState(false);
 
   const [cfg, setCfg] = useState<Cfg>({});
-  const total = () => Math.max(3, Math.min(15, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
+  const total = () => Math.max(1, Math.min(15, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const [slideNum, setSlideNum] = useState(0);
   const [slide, setSlide] = useState<Slide | null>(null);
   const [qIndex, setQIndex] = useState(0);

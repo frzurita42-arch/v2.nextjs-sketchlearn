@@ -124,7 +124,7 @@ export async function POST(req: Request) {
   const translateTo = String(lesson.translateTo || 'English').slice(0, 40);
   const kind = lesson.subjectKind || inferKind(subject, language);
   const n = Math.max(1, parseInt(b.slideNumber, 10) || 1);
-  const total = Math.max(3, Math.min(15, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
+  const total = Math.max(1, Math.min(15, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const priorSummary = String(b.priorSummary || '').slice(0, 600);
   const paras = Math.max(1, Math.min(4, parseInt(b.values?.paragraphs, 10) || parseInt(lesson.paragraphsPerSlide, 10) || 1));
   const pLen = ['brief', 'medium', 'detailed'].includes(b.values?.length) ? b.values.length : (lesson.paragraphLength || 'medium');

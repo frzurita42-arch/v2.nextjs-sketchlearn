@@ -133,7 +133,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     lesson = {
       subject,
       level: String(l.level || '').slice(0, 40) || undefined,
-      totalSlides: Math.max(3, Math.min(15, parseInt(l.totalSlides, 10) || 5)),
+      totalSlides: Math.max(1, Math.min(15, parseInt(l.totalSlides, 10) || 5)),
       language: String(l.language || '').slice(0, 40) || undefined,
       translateTo: String(l.translateTo || 'English').slice(0, 40),
       style: String(l.style || '').slice(0, 500) || undefined,

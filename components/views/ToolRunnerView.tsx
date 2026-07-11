@@ -71,11 +71,32 @@ function fieldValue(f: any, e: any) {
     return <audio controls src={v} style={{ width: '100%', height: 36 }} />;
   }
   if (f.type === 'toggle') return v ? 'yes' : 'no';
-  if (f.type === 'textarea' || f.type === 'text') return <RichText text={String(v ?? '')} />;
+  if (f.type === 'textarea' || f.type === 'text') {
+    const s = String(v ?? '');
+    if (/^https?:\/\//i.test(s.trim())) return <a href={s.trim()} target="_blank" rel="noreferrer">{s.trim()}</a>;
+    return <RichText text={s} />;
+  }
   return String(v ?? '');
 }
 
-function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn }: { entries: any[]; display: string; fields: any[] }) {
+// Open a print-friendly window of one entry so the browser can Save-as-PDF.
+function printPost(title: string, entry: any, fields: any[], author: string) {
+  const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
+  const body = asArray(fields).map((f: any) => {
+    const v = entry.data?.[f.id];
+    if (!v) return '';
+    if ((f.type === 'image' || f.type === 'drawing') && String(v).match(/^(data:|https?:)/)) return `<div><img src="${esc(String(v))}" style="max-width:100%;border:1px solid #2d2a26;border-radius:8px"/></div>`;
+    if (f.type === 'audio') return `<p><b>${esc(f.label)}:</b> (audio clip)</p>`;
+    if (/^https?:\/\//i.test(String(v).trim())) return `<p><b>${esc(f.label)}:</b> <a href="${esc(String(v).trim())}">${esc(String(v).trim())}</a></p>`;
+    return `<p><b>${esc(f.label)}:</b> ${esc(String(v))}</p>`;
+  }).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Georgia,serif;max-width:640px;margin:28px auto;padding:0 18px;color:#2d2a26;line-height:1.5}h1{margin:0 0 4px}.by{opacity:.6;margin:0 0 16px}</style></head><body><h1>${esc(title)}</h1><p class="by">by @${esc(author)}</p>${body}<script>window.onload=function(){setTimeout(function(){window.print();},250);}</script></body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { alert('Allow pop-ups to save as PDF.'); return; }
+  w.document.write(html); w.document.close();
+}
+
+function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn, onOpen }: { entries: any[]; display: string; fields: any[]; onOpen: (e: any) => void }) {
   const entries = asArray(entriesIn);
   const fields = asArray(fieldsIn);
   if (!entries.length) return <p style={{ opacity: 0.6 }}>No entries yet — add the first one above.</p>;
@@ -85,11 +106,12 @@ function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn }: { entri
   if (display === 'table') return (
     <div style={{ overflowX: 'auto' }}>
       <table className="sketch-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead><tr><th style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>By</th>{fields.map(f => <th key={f.id} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{f.label}</th>)}</tr></thead>
+        <thead><tr><th style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>By</th>{fields.map(f => <th key={f.id} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{f.label}</th>)}<th /></tr></thead>
         <tbody>{entries.map(e => (
           <tr key={e.id}>
             <td style={{ padding: 6, fontSize: 12, opacity: 0.7 }}>@{e.username || 'anon'}</td>
             {fields.map(f => <td key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6, maxWidth: 160 }}>{fieldValue(f, e)}</td>)}
+            <td style={{ padding: 6 }}><button className="btn small ghost" onClick={() => onOpen(e)}>⤢</button></td>
           </tr>
         ))}</tbody>
       </table>
@@ -100,7 +122,7 @@ function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn }: { entri
       <div key={e.id} style={{ borderBottom: '2px dashed var(--ink)', padding: '8px 0' }}>
         {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id} style={{ maxWidth: 320, marginBottom: 6 }}>{fieldValue(f, e)}</div>)}
         {textFields.map((f: any) => <span key={f.id} style={{ marginRight: 10 }}><b>{f.label}:</b> {fieldValue(f, e)}</span>)}
-        <Byline e={e} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></div>
       </div>
     ))}</div>
   );
@@ -112,7 +134,7 @@ function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn }: { entri
           {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id}>{fieldValue(f, e)}</div>)}
           <div style={{ padding: '10px 12px' }}>
             {textFields.map((f: any) => <div key={f.id} style={{ fontSize: 14, marginBottom: 3 }}>{f.type === 'textarea' ? fieldValue(f, e) : <><b>{f.label}:</b> {fieldValue(f, e)}</>}</div>)}
-            <Byline e={e} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></div>
           </div>
         </div>
       ))}
@@ -139,6 +161,7 @@ export function ToolRunnerView() {
   const [entryVals, setEntryVals] = useState<Record<string, any>>(() => defaultsFor(entryFields));
   const [entries, setEntries] = useState<any[]>([]);
   const [isOwner, setIsOwner] = useState(false);
+  const [detail, setDetail] = useState<any>(null);   // entry opened as a post
 
   // Like state (platform chrome): count from the tool, per-user liked flag in localStorage.
   const [likes, setLikes] = useState<number>(tool?.likeCount || 0);
@@ -254,7 +277,7 @@ export function ToolRunnerView() {
               {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
             </div>
             <div style={{ marginTop: 16 }}>
-              <EntryDisplay entries={entries} display={def.app?.display || 'cards'} fields={entryFields} />
+              <EntryDisplay entries={entries} display={def.app?.display || 'cards'} fields={entryFields} onOpen={setDetail} />
               {isOwner && def.app?.review && asArray(entries).some((e: any) => e.status === 'pending') && (
                 <div className="card" style={{ padding: '12px 14px', marginTop: 12 }}>
                   <h4 style={{ margin: '0 0 8px' }}>Review queue (owner)</h4>
@@ -273,6 +296,26 @@ export function ToolRunnerView() {
           </>
         )}
       </section>
+
+      {/* Entry opened as a full post, with a Save-as-PDF (print) option. */}
+      {detail && (
+        <div onClick={() => setDetail(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'auto', padding: '24px 12px' }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <b>@{detail.username || 'anon'}</b>
+              <button className="btn small ghost" onClick={() => setDetail(null)}>✕</button>
+            </div>
+            {entryFields.map((f: any) => {
+              const v = detail.data?.[f.id];
+              if (!v) return null;
+              return <div key={f.id} style={{ margin: '8px 0' }}>{(f.type === 'image' || f.type === 'drawing' || f.type === 'audio') ? fieldValue(f, detail) : <div><b>{f.label}:</b> {fieldValue(f, detail)}</div>}</div>;
+            })}
+            <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
+              <button className="btn blue" onClick={() => printPost(tool.title, detail, entryFields, detail.username || 'anon')}>📄 Save as PDF</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Platform-provided comment section on every tool. */}
       <CommentSection targetType="tool" targetId={tool.slug} />

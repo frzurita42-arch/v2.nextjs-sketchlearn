@@ -17,8 +17,10 @@ function heuristicProposal(text: string) {
   const strongApp = /\b(store|storage|track|tracker|journal|library|catalog|catalogue|repository|directory|inventory|log|collection|database|bookmark|planner|gallery)\b/.test(t);
   const socialish = /\b(instagram|social|feed|page|posts?|photo|photos|album|portfolio|board|profile|upload|pictures?|images?|meme|scrapbook)\b/.test(t);
   const languagey = /\b(french|spanish|german|italian|portuguese|japanese|chinese|mandarin|arabic|hindi|english|language|lesson|vocab|vocabulary|phrase|flashcard|flashcards|learn|pronunciation)\b/.test(t);
+  // A single-page activity is just a 1-slide lesson (content + questions + report).
+  const singleActivity = /\b(single[- ]?page|single activity|one activity|one[- ]?page)\b/.test(t);
   // A playable, scored lesson (quiz slides) — distinct from a static lesson-card app.
-  const playable = /\b(quiz|quizz|test|exam|play|playable|scored|slides?|course|study|practice questions|interactive lesson)\b/.test(t);
+  const playable = /\b(quiz|quizz|test|exam|play|playable|scored|slides?|course|study|practice questions|interactive lesson|activity|report)\b/.test(t);
   if (playable || (languagey && /\b(course|study|quiz|slides?|play|test|practice)\b/.test(t))) {
     const langMatch = t.match(/\b(french|spanish|german|italian|portuguese|japanese|chinese|mandarin|arabic|hindi|english)\b/);
     const mathy = /\b(math|algebra|calculus|geometry|trigonometry|statistics|probability|equation|arithmetic)\b/.test(t);
@@ -63,7 +65,7 @@ function heuristicProposal(text: string) {
         { id: 'topic', label: 'Topic', type: 'text', placeholder: 'Narrow the focus' },
         { id: 'difficulty', label: 'Level', type: 'select-or-custom', options: levels },
         { id: 'tone', label: 'Tone', type: 'select-or-custom', options: ['Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling'] },
-        { id: 'slides', label: 'Slides', type: 'number', default: 5 },
+        { id: 'slides', label: 'Slides', type: 'number', default: singleActivity ? 1 : 5 },
         { id: 'length', label: 'Paragraph length', type: 'select', options: ['brief', 'medium', 'detailed'], default: 'medium' },
         { id: 'paragraphs', label: 'Paragraphs / slide', type: 'number', default: 1 },
         ...supToggles,
@@ -71,7 +73,7 @@ function heuristicProposal(text: string) {
       lesson: {
         subject: langMatch ? cap(langMatch[1]) : subject,
         subjectKind,
-        totalSlides: 5,
+        totalSlides: singleActivity ? 1 : 5,
         paragraphsPerSlide: 1,
         paragraphLength: 'medium',
         language: langMatch ? cap(langMatch[1]) : undefined,
