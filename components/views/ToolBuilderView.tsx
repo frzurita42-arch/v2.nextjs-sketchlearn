@@ -15,6 +15,8 @@ const PRESETS: { label: string; seed: string }[] = [
   { label: '📊 Presentation', seed: 'a playable multi-slide presentation/lesson with quiz questions and a score' },
   { label: '🎧 Single activity', seed: 'a single-page activity: one short lesson or listening/reading, a few questions, then a report I can review' },
   { label: '📝 Annotation / Worked answers', seed: 'a worked-answer quiz where the learner writes the full solution by hand on a paper pad (math problems, or calligraphy / full sentences), and the AI grades it — one question per slide. Include a code/text box option too, and let me mix pad questions and code-box questions' },
+  { label: '💬 AI canvas chat', seed: 'an AI conversation on the annotation pad: I write or draw a message, send it, and the AI replies at the top like a chat. No set length — I can exit any time and publish the whole conversation with an AI recap' },
+  { label: '📓 Journal / Diary', seed: 'a journal/diary with no AI — I write pages by hand on the pad, add as many as I like, then publish the pages' },
   { label: '🖼️ Gallery / Marketplace', seed: 'a marketplace-style gallery where people add items shown as cards on a grid, each with an image, a description and a link' },
   { label: '🗂️ Storage / Repository', seed: 'a document storage/repository shown as a list/table of items, each with a name, a category and a link to the file' },
   { label: '📰 Feed / Blog', seed: 'a feed/blog where people post entries shown as cards, with an image, text and an optional link' },

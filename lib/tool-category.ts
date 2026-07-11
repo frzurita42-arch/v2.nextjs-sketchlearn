@@ -6,7 +6,7 @@
 
 export type CategoryKey =
   | 'presentation' | 'single' | 'annotation' | 'code' | 'math-mix'
-  | 'writing' | 'gallery' | 'storage' | 'generator' | 'other';
+  | 'writing' | 'conversation' | 'journal' | 'gallery' | 'storage' | 'generator' | 'other';
 
 export const TOOL_CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: 'presentation', label: '📊 Presentations' },
@@ -15,6 +15,8 @@ export const TOOL_CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: 'code', label: '⌨️ Code / math boxes' },
   { key: 'math-mix', label: '🧮 Annotation + code' },
   { key: 'writing', label: '✍️ Writing / characters' },
+  { key: 'conversation', label: '💬 AI canvas chats' },
+  { key: 'journal', label: '📓 Journals' },
   { key: 'gallery', label: '🖼️ Galleries' },
   { key: 'storage', label: '🗂️ Storage' },
   { key: 'generator', label: '✨ Generators' },
@@ -30,6 +32,8 @@ export function toolCategory(t: any): CategoryKey {
   const archetype = t.archetype || def.archetype;
   if (archetype === 'lesson') {
     const lesson = def.lesson || t.lesson || {};
+    if (lesson.mode === 'journal') return 'journal';
+    if (lesson.mode === 'conversation') return 'conversation';
     const acts: string[] = Array.isArray(lesson.activityTypes) ? lesson.activityTypes : [];
     const hasAnno = acts.includes('annotation');
     const hasCode = acts.includes('code');

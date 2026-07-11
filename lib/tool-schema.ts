@@ -31,9 +31,16 @@ export interface LessonSupport {
   audio?: boolean;
 }
 
+export type LessonMode = 'slides' | 'conversation' | 'journal';
+
 export interface LessonSpec {
   subject: string;         // "French", "Algebra", "World History"...
   level?: string;          // default level label
+  // 'slides'       -> the scored slide deck (default).
+  // 'conversation' -> an AI chat on the annotation pad: write/draw a message, the
+  //                   AI replies at the top; exit anytime for a published report.
+  // 'journal'      -> a no-AI diary: write pages and post them.
+  mode?: LessonMode;
   totalSlides: number;     // how many slides to play (clamped 3-15)
   language?: string;       // target language for a language lesson (enables speak/translate)
   translateTo?: string;    // default 'English'
@@ -130,9 +137,11 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const sk = ['general', 'language', 'math', 'programming'].includes(l.subjectKind) ? l.subjectKind : undefined;
     const sup = l.support && typeof l.support === 'object' ? l.support : {};
     const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ['mcq', 'fill-blank', 'input', 'writing', 'annotation', 'code'].includes(x));
+    const mode: LessonMode = ['slides', 'conversation', 'journal'].includes(l.mode) ? l.mode : 'slides';
     lesson = {
       subject,
       level: String(l.level || '').slice(0, 40) || undefined,
+      mode,
       totalSlides: Math.max(1, Math.min(15, parseInt(l.totalSlides, 10) || 5)),
       language: String(l.language || '').slice(0, 40) || undefined,
       translateTo: String(l.translateTo || 'English').slice(0, 40),

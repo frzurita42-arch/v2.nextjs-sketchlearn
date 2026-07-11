@@ -1,21 +1,24 @@
 'use client';
-/* A paper-like annotation pad for writing answers by hand: pen (thickness +
- * colours), eraser, and stamped text (font + size), across MULTIPLE PAGES with
- * pagination (add a fresh blank page when you run out). It can EXPAND to fill the
- * whole screen when you need more room. Everything is drawn onto the canvas so
- * each page exports as a PNG data URL — used for AI grading, PDF download, and
- * the lesson report. Responsive: the tall page scales to fit the space. */
+/* A paper-like annotation pad for writing/drawing by hand: pen (thickness +
+ * colours), eraser, and stamped text (font + size). Two layouts:
+ *   - PAGED (default): discrete portrait pages with "＋ New page" pagination.
+ *   - SCROLL (scroll=true): one continuous surface sized to ~half the screen that
+ *     you can grow DOWNWARD ("＋ Add space") to keep writing vertically instead of
+ *     turning pages — used by the canvas-chat / journal modes.
+ * It can EXPAND to fill the whole screen. Everything is drawn onto the canvas so
+ * it exports as a PNG data URL for AI reading, PDF download, and publishing. */
 import { useEffect, useRef, useState } from 'react';
 
-const W = 820, H = 1160;                        // portrait "page"
+const W = 820, H = 1160;                        // portrait "page" backing size
 const COLORS = ['#2d2a26', '#e4572e', '#5c80bc', '#7fb069', '#f9a03f'];
 const FONTS = [['Serif', 'Georgia, serif'], ['Sans', 'system-ui, sans-serif'], ['Mono', 'ui-monospace, monospace']];
 
-export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () => string[]) => void; onChange?: () => void }) {
+export function AnnotationPad({ onReady, onChange, scroll = false }: { onReady?: (getPages: () => string[]) => void; onChange?: () => void; scroll?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pagesRef = useRef<string[]>(['']);      // saved page images ('' = blank)
   const [pageIdx, setPageIdx] = useState(0);
   const [pageCount, setPageCount] = useState(1);
+  const [padH, setPadH] = useState(scroll ? 900 : H);   // scroll mode grows this
   const [tool, setTool] = useState<'pen' | 'eraser' | 'text'>('pen');
   const [color, setColor] = useState(COLORS[0]);
   const [size, setSize] = useState(3);
@@ -28,22 +31,25 @@ export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () =
   const [drawOn, setDrawOn] = useState(false);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
+  const growFrom = useRef<string | null>(null);         // ink to restore after a grow
 
   const ctx = () => canvasRef.current!.getContext('2d')!;
-  const paintBlank = (dataUrl: string) => {
+  const paintBlank = (dataUrl: string, h = padH) => {
     const x = ctx();
-    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#fff'; x.fillRect(0, 0, W, h);
     x.strokeStyle = 'rgba(92,128,188,0.12)'; x.lineWidth = 1;
-    for (let gy = 44; gy < H; gy += 44) { x.beginPath(); x.moveTo(0, gy); x.lineTo(W, gy); x.stroke(); }
-    if (dataUrl) { const img = new Image(); img.onload = () => x.drawImage(img, 0, 0, W, H); img.src = dataUrl; }
+    for (let gy = 44; gy < h; gy += 44) { x.beginPath(); x.moveTo(0, gy); x.lineTo(W, gy); x.stroke(); }
+    if (dataUrl) { const img = new Image(); img.onload = () => x.drawImage(img, 0, 0); img.src = dataUrl; } // natural size, top-aligned
   };
   const getPages = () => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); return [...pagesRef.current]; };
 
   useEffect(() => { paintBlank(pagesRef.current[0]); onReady?.(getPages); /* eslint-disable-next-line */ }, []);
+  // After a grow, the canvas element was recreated blank — restore prior ink on top.
+  useEffect(() => { if (growFrom.current != null) { paintBlank(growFrom.current); growFrom.current = null; } /* eslint-disable-next-line */ }, [padH]);
 
   const pos = (e: React.PointerEvent) => {
     const c = canvasRef.current!, r = c.getBoundingClientRect();
-    return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
+    return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (padH / r.height) };
   };
   const down = (e: React.PointerEvent) => {
     if (!drawOn) return;                          // scroll mode — let the touch scroll the page
@@ -60,12 +66,23 @@ export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () =
 
   const goto = (i: number) => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); setPageIdx(i); paintBlank(pagesRef.current[i] || ''); };
   const addPage = () => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); pagesRef.current.push(''); const i = pagesRef.current.length - 1; setPageCount(pagesRef.current.length); setPageIdx(i); paintBlank(''); onChange?.(); };
-  const clearPage = () => { if (!confirm('Clear this page?')) return; pagesRef.current[pageIdx] = ''; paintBlank(''); };
+  const clearPage = () => { if (!confirm(scroll ? 'Clear everything written here?' : 'Clear this page?')) return; pagesRef.current[pageIdx] = ''; if (scroll) setPadH(900); paintBlank('', scroll ? 900 : padH); };
+  // SCROLL mode: extend the writing surface downward (keeps what you already wrote).
+  const addSpace = () => { growFrom.current = canvasRef.current!.toDataURL('image/png'); setPadH(h => Math.min(h + 700, 6000)); };
 
   const swatch = (c: string) => <button key={c} type="button" onClick={() => { setColor(c); setTool('pen'); }} title={c}
     style={{ width: 24, height: 24, borderRadius: '50%', background: c, border: color === c ? '3px solid var(--ink)' : '2px solid rgba(0,0,0,0.3)', cursor: 'pointer' }} />;
   // Picking a tool also turns drawing on (you tapped it to write).
   const toolBtn = (id: any, label: string) => <button type="button" className={`btn small ${drawOn && tool === id ? 'blue' : 'ghost'}`} onClick={() => { setTool(id); setDrawOn(true); }}>{label}</button>;
+
+  // In scroll mode the canvas lives in a fixed-height window you scroll through;
+  // in paged mode it scales to fit. Both toggle touchAction so writing mode
+  // doesn't scroll and scroll mode does.
+  const winMax = expanded ? '86vh' : (scroll ? '50vh' : '68vh');
+  const canvas = (
+    <canvas ref={canvasRef} width={W} height={padH} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
+      style={{ width: '100%', maxWidth: expanded ? '100%' : W, aspectRatio: `${W} / ${padH}`, border: `2px ${drawOn ? 'solid' : 'dashed'} var(--ink)`, borderRadius: 8, background: '#fff', touchAction: drawOn ? 'none' : 'pan-y', cursor: drawOn ? 'crosshair' : 'default', display: 'block', margin: '0 auto' }} />
+  );
 
   const inner = (
     <div style={{ maxWidth: expanded ? '100%' : W, margin: '0 auto', width: '100%' }}>
@@ -88,22 +105,31 @@ export function AnnotationPad({ onReady, onChange }: { onReady?: (getPages: () =
           <input type="number" min={12} max={90} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} style={{ width: 60 }} />
         </div>
       )}
-      {/* The page — grows to fill the available height (bigger when expanded).
-          In scroll mode the canvas lets touches pan the page (touchAction pan-y);
-          in writing mode it captures them (touchAction none). */}
-      <canvas ref={canvasRef} width={W} height={H} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
-        style={{ width: '100%', maxWidth: expanded ? '100%' : W, aspectRatio: `${W} / ${H}`, maxHeight: expanded ? '82vh' : '68vh', border: `2px ${drawOn ? 'solid' : 'dashed'} var(--ink)`, borderRadius: 8, background: '#fff', touchAction: drawOn ? 'none' : 'pan-y', cursor: drawOn ? 'crosshair' : 'default', display: 'block', margin: '0 auto' }} />
+
+      {scroll
+        ? <div style={{ maxHeight: winMax, overflowY: 'auto', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, padding: 2 }}>{canvas}</div>
+        : <div style={{ maxHeight: winMax, display: 'flex' }}>{canvas}</div>}
+
       <div style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 4 }}>
-        {drawOn ? '✍️ Writing mode — the page won’t scroll while you draw. Tap 🖐️ Scroll to move the page.' : '🖐️ Scroll mode — swipe to move the page. Tap ✏️ Pen (or ✍️ Writing) to draw.'}
+        {drawOn ? '✍️ Writing mode — it won’t scroll while you draw. Tap 🖐️ Scroll to move.' : '🖐️ Scroll mode — swipe to move. Tap ✏️ Pen (or ✍️ Writing) to draw.'}
       </div>
-      {/* Page navigation — add a fresh page (a new "window") when you run out. */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-        <button className="btn small ghost" disabled={pageIdx === 0} onClick={() => goto(pageIdx - 1)}>← Prev page</button>
-        <span style={{ fontSize: 13, opacity: 0.7 }}>Page {pageIdx + 1} / {pageCount}</span>
-        <button className="btn small ghost" disabled={pageIdx >= pageCount - 1} onClick={() => goto(pageIdx + 1)}>Next page →</button>
-        <button className="btn small" onClick={addPage}>＋ New page</button>
-        <button className="btn small ghost" onClick={clearPage}>Clear page</button>
-      </div>
+
+      {scroll ? (
+        /* SCROLL: grow the surface downward instead of turning pages. */
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <button className="btn small" onClick={addSpace}>＋ Add space ↓</button>
+          <button className="btn small ghost" onClick={clearPage}>Clear</button>
+        </div>
+      ) : (
+        /* PAGED: add a fresh page (a new "window") when you run out. */
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <button className="btn small ghost" disabled={pageIdx === 0} onClick={() => goto(pageIdx - 1)}>← Prev page</button>
+          <span style={{ fontSize: 13, opacity: 0.7 }}>Page {pageIdx + 1} / {pageCount}</span>
+          <button className="btn small ghost" disabled={pageIdx >= pageCount - 1} onClick={() => goto(pageIdx + 1)}>Next page →</button>
+          <button className="btn small" onClick={addPage}>＋ New page</button>
+          <button className="btn small ghost" onClick={clearPage}>Clear page</button>
+        </div>
+      )}
     </div>
   );
 

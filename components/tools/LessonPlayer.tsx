@@ -15,6 +15,7 @@ import { RichText } from '@/components/tools/RichText';
 import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad';
+import { CanvasConversation } from '@/components/tools/CanvasConversation';
 
 type Q = { kind: string; prompt: string; options?: any[]; answer?: string; accept?: string[]; explanation?: string; target?: string; language?: string; starter?: string };
 type Slide = { title: string; content: string; translation?: string; support?: any; questions: Q[]; fallback?: boolean };
@@ -144,8 +145,9 @@ function WritingCollector({ q, translateTo, onAnswer }: { q: Q; translateTo: str
 function AnnotationCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void }) {
   const getPagesRef = useRef<null | (() => string[])>(null);
   const [ready, setReady] = useState(false);
-  const emit = (rdy: boolean) => onAnswer({ kind: 'annotation', prompt: q.prompt || 'Worked answer', answer: q.answer || '', getPages: getPagesRef.current, ready: rdy });
-  useEffect(() => { emit(ready); /* eslint-disable-next-line */ }, [ready]);
+  const [text, setText] = useState('');
+  const emit = (rdy: boolean, txt: string) => onAnswer({ kind: 'annotation', prompt: q.prompt || 'Worked answer', answer: q.answer || '', getPages: getPagesRef.current, text: txt, ready: rdy || !!txt.trim() });
+  useEffect(() => { emit(ready, text); /* eslint-disable-next-line */ }, [ready, text]);
 
   // Open every page in a print window (learner can Save-as-PDF / print).
   const download = () => {
@@ -156,7 +158,13 @@ function AnnotationCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void
   return (
     <div style={{ textAlign: 'center' }}>
       <p style={{ fontWeight: 600, margin: '0 0 10px' }}>📝 {q.prompt || 'Work out the full answer on the pad:'}</p>
-      <AnnotationPad onReady={(fn) => { getPagesRef.current = fn; emit(ready); }} onChange={() => setReady(true)} />
+      <AnnotationPad onReady={(fn) => { getPagesRef.current = fn; emit(ready, text); }} onChange={() => setReady(true)} />
+      {/* Optional: type the answer instead of / alongside drawing. The keyboard's
+          mic 🎤 dictates into this box, so answers can be spoken too. */}
+      <div style={{ maxWidth: 520, margin: '10px auto 0' }}>
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="…or type your answer here (use your keyboard's 🎤 to speak it)"
+          style={{ width: '100%', minHeight: 54, resize: 'vertical', fontSize: 14, padding: 8, borderRadius: 8, border: '1.5px solid var(--ink)', boxSizing: 'border-box' }} />
+      </div>
       <div style={{ marginTop: 10 }}>
         <button className="btn small ghost" onClick={download}>📄 Download pages (PDF)</button>
       </div>
@@ -204,6 +212,10 @@ function ReviewCard({ res }: { res: Res }) {
 
 export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const lesson = def?.lesson || {};
+  // Conversation / journal modes are a growing canvas thread, not a slide deck.
+  if (lesson.mode === 'conversation' || lesson.mode === 'journal') {
+    return <CanvasConversation def={def} slug={slug} />;
+  }
   const settings = Array.isArray(def?.settings) ? def.settings : [];
   const levelField = settings.find((f: any) => f.id === 'level' || f.id === 'difficulty');
   const levels: string[] = levelField?.options?.length ? levelField.options : ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1'];
@@ -271,8 +283,8 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
       if (p.kind === 'annotation') {
         const pages = (p.getPages ? p.getPages() : []).filter(Boolean);
         const image = await compositePages(pages);
-        r = await API.post('/api/tools/lesson/check-annotation', { prompt: p.prompt, answer: p.answer, image });
-        detail = { prompt: p.prompt, your: '📝 your written pages', answer: p.answer || '', correct: !!r.correct, image, pages, feedback: r.feedback };
+        r = await API.post('/api/tools/lesson/check-annotation', { prompt: p.prompt, answer: p.answer, image, text: p.text || '' });
+        detail = { prompt: p.prompt, your: p.text ? p.text : '📝 your written pages', answer: p.answer || '', correct: !!r.correct, image: image || undefined, pages, feedback: r.feedback };
       } else if (p.kind === 'code') {
         r = await API.post('/api/tools/lesson/check-code', { prompt: p.prompt, answer: p.answer, code: p.code, language: p.language });
         detail = { prompt: p.prompt, your: p.code, answer: p.answer || '', correct: !!r.correct, code: p.code, feedback: r.feedback };

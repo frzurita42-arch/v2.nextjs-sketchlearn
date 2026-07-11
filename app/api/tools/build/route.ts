@@ -34,7 +34,10 @@ function heuristicProposal(text: string) {
   const codey = /\b(code ?snippet|code ?box|code ?block|code ?answer|write code|answer with code|type the answer|typed answer)\b/.test(t);
   // The paper pad answer surface (annotation tool) is named explicitly.
   const padWanted = /\b(annotation|annotate|paper pad|on paper|by hand|hand.?writ\w*|drawing pad|pen and paper|tool.?tip)\b/.test(t);
-  if (playable || annoty || writey || codey || padWanted || (languagey && /\b(course|study|quiz|slides?|play|test|practice)\b/.test(t))) {
+  // A no-AI diary (write pages, publish them), or an AI chat on the pad.
+  const journaly = /\b(journal|journalling|journaling|diary|diaries|dear diary|daily log|logbook|scrapbook)\b/.test(t);
+  const convoy = /\b(ai conversation|conversation with (the )?ai|chat with (the )?ai|talk to (the )?ai|tutor chat|ai chat|conversation blog|canvas chat|ask (the )?ai by (writing|drawing)|write to the ai|chat but with)\b/.test(t);
+  if (playable || annoty || writey || codey || padWanted || journaly || convoy || (languagey && /\b(course|study|quiz|slides?|play|test|practice)\b/.test(t))) {
     const langMatch = t.match(/\b(french|spanish|german|italian|portuguese|japanese|chinese|mandarin|arabic|hindi|english)\b/);
     const mathy = /\b(math|algebra|calculus|geometry|trigonometry|statistics|probability|equation|arithmetic)\b/.test(t);
     const progy = /\b(programming|coding|code|python|javascript|java|software|algorithm|sql|rust|typescript)\b/.test(t);
@@ -49,6 +52,28 @@ function heuristicProposal(text: string) {
     const countMatch = t.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen)\s+(?:\w+\s+){0,2}(slides?|problems?|questions?|cards?|pages?|characters?|activities|activity|items?)\b/);
     const wantSlides = countMatch ? Math.max(1, Math.min(15, WORDNUM[countMatch[1]] || parseInt(countMatch[1], 10) || 0)) : 0;
     const nSlides = (n: number) => (wantSlides || (singleActivity ? 1 : n));   // requested count wins
+    // Canvas conversation / journal modes: a growing pad thread, published as a
+    // post. No set length. Journal = no AI; conversation = AI replies on top.
+    if (convoy || journaly) {
+      const journal = journaly && !convoy;
+      return {
+        archetype: 'lesson', title: mkTitle(journal ? 'Journal' : 'Canvas chat'), description: text.slice(0, 300),
+        tags: [subjectKind === 'general' ? 'lesson' : subjectKind, journal ? 'journal' : 'conversation', 'annotation'].filter((v, i, arr) => arr.indexOf(v) === i),
+        settings: [
+          { id: 'topic', label: journal ? 'Journal topic (optional)' : 'Topic', type: 'text', placeholder: journal ? 'What is this journal about?' : 'What do you want to talk about?' },
+        ],
+        lesson: {
+          subject: langMatch ? cap(langMatch[1]) : subject,
+          subjectKind,
+          mode: journal ? 'journal' : 'conversation',
+          totalSlides: 1,
+          language: langMatch ? cap(langMatch[1]) : undefined,
+          translateTo: 'English',
+          support: { images: false, code: false, tables: false, formulas: false, audio: false },
+          activityTypes: ['annotation'],
+        },
+      };
+    }
     if (annoty || codey || padWanted) {
       const cjkCalligraphy = /\b(japanese|chinese|korean|mandarin|kanji|hanzi|hangul|caligraph|calligraph)\b/.test(t);
       // Which answer surface(s)? The paper pad (annotation) is the DEFAULT for
@@ -241,6 +266,16 @@ Guidance by kind:
   a code box. A lesson can also mix these with "mcq"/"fill-blank"/"input". Set
   subjectKind to "math" for math, or "language" for CJK/calligraphy. Keep support
   material OFF and settings minimal: "topic", "difficulty", "how many problems".
+- AI conversation on the annotation pad / "chat with the AI by writing or drawing" /
+  "canvas chat" / "AI conversation blog": make a LESSON with lesson.mode
+  "conversation" (activityTypes ["annotation"], totalSlides 1). The learner writes
+  or draws a message on the pad, sends it, and the AI replies at the top like a
+  chat; there is NO set length — they exit whenever they like and the whole thread
+  is published as a post with an AI recap. Keep settings to just a "topic".
+- Journal / diary / "write pages and post them" with NO AI: make a LESSON with
+  lesson.mode "journal" (activityTypes ["annotation"], totalSlides 1). The learner
+  writes pages by hand and publishes the collection — no grading, no AI. Settings:
+  just an optional "topic".
 - Social page / Instagram-style feed / photo gallery / portfolio / "page with uploadable posts":
   APP, display "cards", entryFields = an "image" field + a "textarea" caption (+ optional link/tags).
 - Language / lesson tools (e.g. "a French lesson"): APP, display "cards". Include a
