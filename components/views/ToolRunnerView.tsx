@@ -218,7 +218,7 @@ export function ToolRunnerView() {
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
         {isLesson ? (
-          <LessonPlayer def={def} />
+          <LessonPlayer def={def} slug={tool.slug} />
         ) : !isApp ? (
           !def.generator ? (
             <div className="card alt" style={{ padding: '14px 16px' }}><p style={{ margin: 0 }}>This tool&apos;s definition is incomplete and can&apos;t run. Try rebuilding it from the Builder.</p></div>

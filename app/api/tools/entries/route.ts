@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   if (!a.ok) return a.response;
   const slug = new URL(req.url).searchParams.get('slug') || '';
   const tool = await getToolBySlug(slug);
-  if (!tool || tool.archetype !== 'app') return NextResponse.json({ entries: [] });
+  if (!tool || !['app', 'lesson'].includes(tool.archetype)) return NextResponse.json({ entries: [] });
   const all = await listEntries(tool.id, { limit: 300 });
   const isOwner = tool.owner === a.user.username;
   const entries = isOwner ? all : all.filter((e: any) => e.status === 'active' || e.status === 'approved');
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const tool = await getToolBySlug(String(b.slug || ''));
-  if (!tool || tool.archetype !== 'app') return NextResponse.json({ error: 'Not an app tool' }, { status: 400 });
+  if (!tool || !['app', 'lesson'].includes(tool.archetype)) return NextResponse.json({ error: 'Not an app or lesson tool' }, { status: 400 });
   const data = (b.data && typeof b.data === 'object') ? b.data : {};
   // Guard against oversized payloads (e.g. a huge embedded image data URL).
   if (JSON.stringify(data).length > 2_200_000) {
