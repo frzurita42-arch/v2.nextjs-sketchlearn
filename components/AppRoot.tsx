@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { API, type SessionUser } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { AppContext, type ViewName } from '@/components/AppContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { LoginView } from '@/components/views/LoginView';
@@ -115,7 +116,9 @@ export default function AppRoot() {
       )}
       {/* key={view} remounts only on a view switch (fresh state per view, like
           the legacy SPA); in-view rerender() updates in place. */}
-      <main id="app" key={view}>{views[view]}</main>
+      <main id="app" key={view}>
+        <ErrorBoundary onHome={() => nav('home')}>{views[view]}</ErrorBoundary>
+      </main>
       <Footer />
     </AppContext.Provider>
   );
