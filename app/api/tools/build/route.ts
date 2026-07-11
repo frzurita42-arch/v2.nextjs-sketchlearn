@@ -42,6 +42,13 @@ function heuristicProposal(text: string) {
     const cap = (s: string) => `${s[0].toUpperCase()}${s.slice(1)}`;
     const subject = (text.trim().split(/[.,\n]/)[0] || 'Lesson').replace(/^(a|an|make|build|create|i want|i'd like)\s+/i, '').slice(0, 60) || 'Lesson';
     const levels = langMatch ? ['A1', 'A2', 'B1', 'B2', 'C1'] : ['Beginner', 'Intermediate', 'Advanced'];
+    // Titles read "Type — first words of the idea" so the gallery is scannable.
+    const mkTitle = (typeLabel: string) => `${typeLabel} — ${subject}`.slice(0, 70);
+    // Honour a requested count ("two slides", "3 problems", "5 questions"…).
+    const WORDNUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15 };
+    const countMatch = t.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen)\s+(?:\w+\s+){0,2}(slides?|problems?|questions?|cards?|pages?|characters?|activities|activity|items?)\b/);
+    const wantSlides = countMatch ? Math.max(1, Math.min(15, WORDNUM[countMatch[1]] || parseInt(countMatch[1], 10) || 0)) : 0;
+    const nSlides = (n: number) => (wantSlides || (singleActivity ? 1 : n));   // requested count wins
     if (annoty || codey || padWanted) {
       const cjkCalligraphy = /\b(japanese|chinese|korean|mandarin|kanji|hanzi|hangul|caligraph|calligraph)\b/.test(t);
       // Which answer surface(s)? The paper pad (annotation) is the DEFAULT for
@@ -53,18 +60,20 @@ function heuristicProposal(text: string) {
       const wantsBoth = /\bboth\b/.test(t) || (padWanted && wantsCode && !noDraw);
       const acts = noDraw ? ['code'] : wantsBoth ? ['annotation', 'code'] : wantsCode && !padWanted && !annoty ? ['code'] : ['annotation'];
       const surfaceTag = acts.includes('annotation') ? (cjkCalligraphy ? 'calligraphy' : 'worked-answer') : 'code';
+      const typeLabel = acts.includes('annotation') && acts.includes('code') ? 'Annotation + code'
+        : acts[0] === 'code' ? 'Code activity' : (cjkCalligraphy ? 'Calligraphy' : 'Annotation');
       return {
-        archetype: 'lesson', title: subject, description: text.slice(0, 300),
+        archetype: 'lesson', title: mkTitle(typeLabel), description: text.slice(0, 300),
         tags: [subjectKind === 'general' ? 'lesson' : subjectKind, acts.includes('annotation') ? 'annotation' : 'code', surfaceTag].filter((v, i, arr) => arr.indexOf(v) === i),
         settings: [
           { id: 'topic', label: cjkCalligraphy ? 'Character set / topic' : 'Topic', type: 'text', placeholder: cjkCalligraphy ? 'e.g. greetings, a proverb' : 'Narrow the focus' },
           { id: 'difficulty', label: 'Level', type: 'select-or-custom', options: levels },
-          { id: 'slides', label: singleActivity ? 'Problems' : 'How many problems', type: 'number', default: singleActivity ? 1 : 5 },
+          { id: 'slides', label: singleActivity ? 'Problems' : 'How many problems', type: 'number', default: nSlides(5) },
         ],
         lesson: {
           subject: langMatch ? cap(langMatch[1]) : subject,
           subjectKind: cjkCalligraphy ? 'language' : subjectKind,
-          totalSlides: singleActivity ? 1 : 5,
+          totalSlides: nSlides(5),
           language: langMatch ? cap(langMatch[1]) : (cjkCalligraphy ? subject : undefined),
           translateTo: 'English',
           // A worked-answer pad / code box speaks for itself — no image/table clutter.
@@ -77,16 +86,16 @@ function heuristicProposal(text: string) {
     // pronunciation/image/phrase — just a character set + difficulty.
     if (writey) {
       return {
-        archetype: 'lesson', title: subject, description: text.slice(0, 300),
+        archetype: 'lesson', title: mkTitle('Writing'), description: text.slice(0, 300),
         tags: ['language', 'writing', 'handwriting'].filter((v, i, arr) => arr.indexOf(v) === i),
         settings: [
           { id: 'topic', label: 'Character set / topic', type: 'select-or-custom', options: langMatch && /japanese/.test(t) ? ['Hiragana', 'Katakana', 'Basic Kanji'] : ['Basics', 'Common words'] },
           { id: 'difficulty', label: 'Difficulty', type: 'select-or-custom', options: levels },
-          { id: 'slides', label: 'How many characters', type: 'number', default: 5 },
+          { id: 'slides', label: 'How many characters', type: 'number', default: nSlides(5) },
         ],
         lesson: {
           subject: langMatch ? cap(langMatch[1]) : subject, subjectKind: 'language',
-          totalSlides: 5, language: langMatch ? cap(langMatch[1]) : subject, translateTo: 'English',
+          totalSlides: nSlides(5), language: langMatch ? cap(langMatch[1]) : subject, translateTo: 'English',
           support: { images: false, code: false, tables: false, formulas: false, audio: false },
           activityTypes: ['writing'],
         },
@@ -101,14 +110,14 @@ function heuristicProposal(text: string) {
           ? [{ id: 'sup_images', label: 'Images', type: 'toggle', default: true }, { id: 'sup_audio', label: 'Audio', type: 'toggle', default: true }]
           : [{ id: 'sup_images', label: 'Images', type: 'toggle', default: true }, { id: 'sup_tables', label: 'Tables', type: 'toggle', default: false }];
     return {
-      archetype: 'lesson', title: subject, description: text.slice(0, 300),
+      archetype: 'lesson', title: mkTitle(singleActivity ? 'Activity' : 'Lesson'), description: text.slice(0, 300),
       tags: [subjectKind === 'general' ? 'lesson' : subjectKind, 'lesson'].filter((v, i, arr) => arr.indexOf(v) === i),
       // The standard slide-presentation settings, kept compact for 9:16.
       settings: [
         { id: 'topic', label: 'Topic', type: 'text', placeholder: 'Narrow the focus' },
         { id: 'difficulty', label: 'Level', type: 'select-or-custom', options: levels },
         { id: 'tone', label: 'Tone', type: 'select-or-custom', options: ['Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling'] },
-        { id: 'slides', label: 'Slides', type: 'number', default: singleActivity ? 1 : 5 },
+        { id: 'slides', label: 'Slides', type: 'number', default: nSlides(5) },
         { id: 'length', label: 'Paragraph length', type: 'select', options: ['brief', 'medium', 'detailed'], default: 'medium' },
         { id: 'paragraphs', label: 'Paragraphs / slide', type: 'number', default: 1 },
         ...supToggles,
@@ -116,7 +125,7 @@ function heuristicProposal(text: string) {
       lesson: {
         subject: langMatch ? cap(langMatch[1]) : subject,
         subjectKind,
-        totalSlides: singleActivity ? 1 : 5,
+        totalSlides: nSlides(5),
         paragraphsPerSlide: 1,
         paragraphLength: 'medium',
         language: langMatch ? cap(langMatch[1]) : undefined,
@@ -147,7 +156,7 @@ function heuristicProposal(text: string) {
       { id: 'audio', label: 'Pronunciation (record)', type: 'audio' },
     ];
     if (drawy) fields.push({ id: 'writing', label: 'Handwriting', type: 'drawing' });
-    return { archetype, title, description: text.slice(0, 300), tags: ['language', 'lesson'], settings: [], app: { entryFields: fields, display: 'cards', review: false } };
+    return { archetype, title: `Lesson — ${title}`.slice(0, 70), description: text.slice(0, 300), tags: ['language', 'lesson'], settings: [], app: { entryFields: fields, display: 'cards', review: false } };
   }
 
   if (archetype === 'app') {
@@ -161,11 +170,12 @@ function heuristicProposal(text: string) {
     if (!socialish) fields.push({ id: 'notes', label: 'Notes', type: 'textarea' });
     // Storage/repository/directory read best as a table; galleries/feeds as cards.
     const display = /\b(storage|repository|directory|table|catalog|catalogue|inventory|spreadsheet)\b/.test(t) ? 'table' : /\blist\b/.test(t) ? 'list' : 'cards';
-    return { archetype, title, description: text.slice(0, 300), tags: [], settings: [], app: { entryFields: fields, display, review: false } };
+    const appType = display === 'table' || display === 'list' ? 'Storage' : 'Gallery';
+    return { archetype, title: `${appType} — ${title}`.slice(0, 70), description: text.slice(0, 300), tags: [], settings: [], app: { entryFields: fields, display, review: false } };
   }
   const output = /\bcards?|ideas|list|items|steps\b/.test(t) ? 'cards' : /\btable|rows|columns|data\b/.test(t) ? 'table' : 'text';
   return {
-    archetype, title, description: text.slice(0, 300), tags: [],
+    archetype, title: `Generator — ${title}`.slice(0, 70), description: text.slice(0, 300), tags: [],
     settings: [{ id: 'topic', label: 'Topic', type: 'text', required: true, placeholder: 'What should it be about?' }],
     generator: { promptTemplate: `Based on this request: "${text.slice(0, 200)}". Produce output about: {{topic}}.`, output },
   };
@@ -193,6 +203,16 @@ fills in at run time (e.g. a "topic" text field and a "level" select-or-custom).
 Prompt-engineering: the user's prompt is usually short. EXPAND it into a well-rounded
 tool — infer the fields a thoughtful maker would include, write a clear title,
 a one-line description, and 2-4 tags.
+
+TITLE FORMAT: the title MUST start with a short TYPE label, then "— ", then a few
+words from the idea. Examples: "Annotation — Algebra worked answers",
+"Annotation + code — Trig practice", "Lesson — French basics", "Gallery — Sticker
+board", "Storage — Course PDFs", "Generator — Haiku maker". Keep it under ~70 chars.
+
+HONOUR REQUESTED COUNTS: if the user says how many slides/problems/questions/cards
+they want ("two slides", "3 problems"), set lesson.totalSlides (and the "slides"
+setting default) to exactly that number. Otherwise default to 5 (or 1 for an
+explicit single-page activity). Never override a count the user asked for.
 
 SETTINGS DESIGN (important): keep the settings form MINIMAL and COMPACT so it
 looks good on a tall 9:16 phone screen. For any field that is a choice, use
@@ -246,7 +266,7 @@ export async function POST(req: Request) {
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
   // All the user's turns joined (first = the idea) so the heuristic proposal
   // captures the whole request, not just the last "generate as is" answer.
-  const ideaText = messages.filter((m) => m.role === 'user').map((m) => String(m.content)).join('. ') || String(lastUser || 'a simple tool');
+  const ideaText = messages.filter((m) => m.role === 'user').map((m) => String(m.content || '').trim()).filter(Boolean).join('. ') || String(lastUser || 'a simple tool');
 
   // Gate: turn 1 = the idea; force 2 follow-up questions (turns 1,2) + a
   // recommendation (turn 3) BEFORE any proposal is allowed. Only from turn 4 on

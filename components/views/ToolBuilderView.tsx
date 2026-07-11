@@ -29,18 +29,19 @@ export function ToolBuilderView() {
   const [draft, setDraft] = useState<any>(null);         // proposed definition
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');                // last failure (shows a retry bar)
   const [visibility, setVisibility] = useState('unlisted');
   const logRef = useRef<HTMLDivElement>(null);
+  const retryRef = useRef<null | (() => void)>(null);    // what "Try again" re-runs
 
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, busy, draft]);
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, busy, draft, error]);
 
-  const send = async (text: string) => {
-    const t = text.trim(); if (!t || busy) return;
-    setInput('');
-    const next: Msg[] = [...messages, { role: 'user', content: t }];
-    setMessages(next); setBusy(true); setResp(null);
+  // Post the conversation to the Builder. The API auto-retries transient network
+  // failures; if it still fails, we surface a retry bar instead of a dead-end.
+  const runBuild = async (next: Msg[]) => {
+    setMessages(next); setBusy(true); setResp(null); setError('');
     try {
-      const r = await API.post('/api/tools/build', { messages: next });
+      const r = await API.post('/api/tools/build', { messages: next }, { retries: 2 });
       if (r?.kind === 'proposal') {
         setDraft(r.definition);
         setMessages([...next, { role: 'assistant', content: r.summary || 'Here is a tool based on what you described. Preview it below, then publish.' }]);
@@ -49,14 +50,29 @@ export function ToolBuilderView() {
         setMessages([...next, { role: 'assistant', content: r?.question || 'Tell me more.' }]);
       }
     } catch (e: any) {
-      setMessages([...next, { role: 'assistant', content: `(Builder hiccup: ${e.message})` }]);
+      // Keep the conversation intact and offer a one-tap retry of this same turn.
+      setError(e?.message || 'Something went wrong reaching the Builder.');
+      retryRef.current = () => runBuild(next);
     }
     setBusy(false);
   };
 
+  const send = (text: string) => {
+    const t = text.trim(); if (!t || busy) return;
+    setInput('');
+    runBuild([...messages, { role: 'user', content: t }]);
+  };
+
+  const retry = () => { const fn = retryRef.current; if (fn && !busy) { setError(''); fn(); } };
+
+  const restart = () => {
+    setMessages([{ role: 'assistant', content: "Tell me what you want to build — a generator (makes something from a prompt) or an app (stores and shows entries). Describe it in a sentence or two." }]);
+    setResp(null); setDraft(null); setInput(''); setError(''); retryRef.current = null;
+  };
+
   const publish = async () => {
     if (!draft) return;
-    setBusy(true);
+    setBusy(true); setError('');
     try {
       const r = await API.post('/api/tools', { definition: draft, visibility, aiGenerated: true });
       // Open the freshly published tool in the runtime.
@@ -64,7 +80,8 @@ export function ToolBuilderView() {
       if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
       app.nav('tools');
     } catch (e: any) {
-      setMessages(m => [...m, { role: 'assistant', content: `(Could not publish: ${e.message})` }]);
+      setError(e?.message || 'Could not publish the tool.');
+      retryRef.current = () => publish();
     }
     setBusy(false);
   };
@@ -73,7 +90,8 @@ export function ToolBuilderView() {
     <>
       <h1 className="view-title">Build a <span className="scribble-underline">tool</span></h1>
       <p className="view-sub">Describe it — the AI assembles it from the platform&apos;s components.{' '}
-        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Gallery</button></p>
+        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Gallery</button>{' '}
+        <button className="btn small ghost" onClick={restart} disabled={busy} title="Clear the conversation and start over">↻ Restart</button></p>
 
       <div className="chat-shell" style={{ maxWidth: 720 }}>
         <div className="chat-log" ref={logRef}>
@@ -82,6 +100,17 @@ export function ToolBuilderView() {
           ))}
           {busy && <div className="msg ai">✏️ …</div>}
         </div>
+
+        {/* A failed request never dead-ends: retry the same turn, or restart. */}
+        {error && !busy && (
+          <div className="card" style={{ padding: '10px 14px', margin: '8px 0', borderColor: 'var(--danger,#e4572e)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13 }}>⚠️ {error}</span>
+            <span style={{ display: 'flex', gap: 8 }}>
+              {retryRef.current && <button className="btn small green" onClick={retry}>↻ Try again</button>}
+              <button className="btn small ghost" onClick={restart}>Restart chat</button>
+            </span>
+          </div>
+        )}
 
         {/* Preset tool-type buttons shown before the conversation gets going. */}
         {messages.length <= 1 && !draft && !busy && (
