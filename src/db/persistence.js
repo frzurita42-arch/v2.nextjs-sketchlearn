@@ -98,6 +98,62 @@ async function initDatabase() {
       trigger_topic TEXT
     )
   `);
+
+  // ---------- platform: user-built tools ----------
+  // A published Tool Definition: the archetype + the JSON spec (settings schema,
+  // prompt, chosen components, connectors) that the runtime interprets. This is
+  // the core of the general-purpose tool maker.
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS tools (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE NOT NULL,
+      owner TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      archetype TEXT NOT NULL,
+      definition JSONB NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'private',
+      tags JSONB,
+      thumbnail TEXT,
+      like_count INTEGER NOT NULL DEFAULT 0,
+      ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_tools_visibility_updated ON tools(visibility, updated_at DESC)');
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_tools_owner ON tools(owner)');
+
+  // ---------- platform: generic entry store ----------
+  // Rows created BY a tool at runtime (storage-system items, journal notes,
+  // calendar events, contest/payment submissions...). `data` is schema-shaped
+  // per tool; `status` supports review-queue state machines (pending/approved).
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS entries (
+      id TEXT PRIMARY KEY,
+      tool_id TEXT NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+      username TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_entries_tool_created ON entries(tool_id, created_at DESC)');
+
+  // ---------- platform: comments (on tools + feed posts) ----------
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS comments (
+      id TEXT PRIMARY KEY,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      author TEXT NOT NULL,
+      body TEXT NOT NULL,
+      ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_comments_target ON comments(target_type, target_id, created_at DESC)');
 }
 
 // Persist every AI generation to a JSON file, as the site's content source of record.
