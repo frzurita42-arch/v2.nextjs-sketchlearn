@@ -182,11 +182,16 @@ export async function POST(req: Request) {
   if (support.code || kind === 'programming' || kind === 'language') allowedSupport.push('code');
   if (support.tables) allowedSupport.push('table');
   if (support.formulas || kind === 'math') {
-    // Prefer a real Wolfram computation when the API key is present; always keep
-    // formula (and code) as fallbacks, and mix between them.
+    // Prefer a real Wolfram computation when the API key is present. When it is
+    // NOT available, lean on a worked code snippet (the computation / a proof
+    // with comments) — that reads better than a bare formula — while still
+    // keeping the formula in the mix.
     if (wolfram) allowedSupport.push('wolfram');
     allowedSupport.push('formula');
-    if (kind === 'math' && !allowedSupport.includes('code')) allowedSupport.push('code');
+    if (kind === 'math') {
+      allowedSupport.push('code');
+      if (!wolfram) allowedSupport.push('code');   // extra weight: bias to code when no Wolfram
+    }
   }
   const supportType = (!pureWriting && allowedSupport.length && Math.random() < 0.7) ? rand(allowedSupport) : null;
 
@@ -208,7 +213,9 @@ export async function POST(req: Request) {
   }).join('\n');
   const codeHint = kind === 'language'
     ? 'a short snippet showing the SYNTAX/grammar logic (e.g. "subject + verb(conjugated) + object", or a conjugation pattern)'
-    : 'a short, correct code snippet';
+    : kind === 'math'
+      ? 'a short worked computation or proof shown as code/pseudocode, using COMMENTS to explain each step (e.g. "# derivative of x^2\\nf = x**2\\n# power rule: 2*x**(2-1)\\nf_prime = 2*x") — no Wolfram needed'
+      : 'a short, correct code snippet';
   const supSpec = supportType === 'image' ? 'Also include support = { "type": "image", "prompt": "a vivid image description" }.'
     : supportType === 'code' ? `Also include support = { "type": "code", "language": "...", "code": ${JSON.stringify(codeHint)} }.`
     : supportType === 'table' ? 'Also include support = { "type": "table", "headers": [...], "rows": [[...]] }.'
