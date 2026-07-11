@@ -43,7 +43,25 @@ const PALETTE = `Field types: text, textarea, number, select (needs options), se
 Archetypes:
 - "generator": settings[] (the inputs) + generator.promptTemplate (use {{fieldId}} placeholders) + generator.output ("text" | "cards" | "table").
 - "app": app.entryFields[] (fields per stored record) + app.display ("cards" | "list" | "table") + app.review (bool: new entries need owner approval).
-Guidance: anything like a social page, Instagram-style feed, photo gallery, portfolio, or "page with uploadable posts" is an APP whose entryFields include an "image" field plus a text/textarea caption, displayed as "cards". Entries are automatically stamped with the poster's username and time, so you never need a username field.`;
+
+The PLATFORM already wraps EVERY published tool in social chrome: the author's
+profile, a like button + like count, a share link, and a full comment section.
+So NEVER add fields for username/author, likes, comments, or profile — they exist
+for free around the tool. Focus the definition purely on the tool's actual content.
+
+Prompt-engineering: the user's prompt is usually short. EXPAND it into a well-rounded
+tool — infer the fields a thoughtful maker would include, write a clear title,
+a one-line description, and 2-4 tags. Don't ask more than necessary; if you can
+make something good, propose it.
+
+Guidance by kind:
+- Social page / Instagram-style feed / photo gallery / portfolio / "page with uploadable posts":
+  APP, display "cards", entryFields = an "image" field + a "textarea" caption (+ optional link/tags).
+- Language / lesson tools (e.g. "a French lesson"): include a "select-or-custom" level field
+  (options like Beginner, A1, A2, B1, B2, C1) and content fields suited to the activity —
+  text prompts, an image, and (audio/translation coming soon). Prefer an APP whose entries are
+  the lesson cards the creator adds, displayed as "cards"; learners view them inside the tool.
+- Dashboards / trackers / directories / journals: APP with the natural fields, display "cards" or "table".`;
 
 export async function POST(req: Request) {
   const a = await requireAuth(req);

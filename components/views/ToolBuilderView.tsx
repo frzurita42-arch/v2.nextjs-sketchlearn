@@ -9,6 +9,15 @@ import { useApp } from '@/components/AppContext';
 
 type Msg = { role: 'assistant' | 'user'; content: string };
 
+const SUGGESTIONS = [
+  '🍌 A banana Instagram page where people upload photo posts with captions',
+  '🇫🇷 A French lesson where I set leveled slides and learners play them',
+  '🛡️ A cybersecurity CVE tracker dashboard',
+  '📓 A daily journal with mood and a photo',
+  '🔗 A link directory with categories',
+  '🗳️ A community poll board',
+];
+
 export function ToolBuilderView() {
   const app = useApp();
   const [messages, setMessages] = useState<Msg[]>([
@@ -71,6 +80,15 @@ export function ToolBuilderView() {
           ))}
           {busy && <div className="msg ai">✏️ …</div>}
         </div>
+
+        {/* Starter suggestions shown before the conversation gets going. */}
+        {messages.length <= 1 && !draft && !busy && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0' }}>
+            {SUGGESTIONS.map((s, i) => (
+              <button key={i} className="btn small" onClick={() => send(s.replace(/^\S+\s/, ''))}>{s}</button>
+            ))}
+          </div>
+        )}
 
         {/* Multiple-choice chips for a question (custom answer still allowed below). */}
         {resp?.kind === 'question' && resp.options?.length > 0 && !busy && (

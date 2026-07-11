@@ -74,6 +74,29 @@ async function getToolBySlug(slug) {
   }
 }
 
+// Adjust a tool's like counter by delta (+1 / -1). Returns the new count or null.
+async function setToolLikeDelta(slug, delta) {
+  const d = Math.sign(parseInt(delta, 10) || 0);
+  if (!db.pool) {
+    const tools = readJSON('tools.json', []);
+    const t = tools.find(x => x.slug === slug);
+    if (!t) return null;
+    t.likeCount = Math.max(0, (t.likeCount || 0) + d);
+    writeJSON('tools.json', tools);
+    return t.likeCount;
+  }
+  try {
+    const { rows } = await withDbTimeout(dbQuery(
+      'UPDATE tools SET like_count = GREATEST(0, like_count + $2) WHERE slug = $1 RETURNING like_count',
+      [slug, d]
+    ), 8000, 'Like tool');
+    return rows[0] ? rows[0].like_count : null;
+  } catch (e) {
+    console.error('DB like update failed:', e.message);
+    return null;
+  }
+}
+
 // Public gallery: visible tools, newest first. Owner sees their own private ones too.
 async function listTools({ viewer = null, includePrivateFor = null, limit = 50 } = {}) {
   const lim = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
@@ -281,7 +304,7 @@ async function listPosts({ limit = 100 } = {}) {
 }
 
 module.exports = {
-  insertTool, getToolBySlug, listTools,
+  insertTool, getToolBySlug, listTools, setToolLikeDelta,
   insertEntry, listEntries, setEntryStatus,
   insertComment, listComments,
   insertPost, listPosts,

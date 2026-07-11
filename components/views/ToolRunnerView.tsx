@@ -10,6 +10,15 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
+import { CommentSection } from '@/components/social/CommentSection';
+
+// Deterministic emoji+color avatar from a username (matches the feed's style).
+const AV_EMOJI = ['🦊', '📊', '🐛', '🦉', '🤖', '⚙️', '🗣️', '🛡️', '🔧', '📈', '✏️', '☁️', '🎨', '🔐', '📝', '🌊'];
+const AV_COLOR = ['#f9a03f', '#5c80bc', '#7fb069', '#e4572e', '#9b5de5', '#00b4d8', '#f15bb5', '#2d6a4f'];
+function avatarFor(name: string) {
+  let h = 0; for (let i = 0; i < String(name).length; i++) h = (h * 31 + String(name).charCodeAt(i)) >>> 0;
+  return { emoji: AV_EMOJI[h % AV_EMOJI.length], color: AV_COLOR[(h >> 4) % AV_COLOR.length] };
+}
 
 // Coerce anything the API/DB hands us into an array, so a stray non-array shape
 // (e.g. tags/entries returned oddly) can never throw `.map is not a function`.
@@ -124,6 +133,13 @@ export function ToolRunnerView() {
   const [entries, setEntries] = useState<any[]>([]);
   const [isOwner, setIsOwner] = useState(false);
 
+  // Like state (platform chrome): count from the tool, per-user liked flag in localStorage.
+  const [likes, setLikes] = useState<number>(tool?.likeCount || 0);
+  const [liked, setLiked] = useState<boolean>(false);
+  useEffect(() => {
+    try { const set = JSON.parse(localStorage.getItem('sl_tool_likes') || '{}'); setLiked(!!set[tool?.slug]); } catch { /* ignore */ }
+  }, [tool?.slug]);
+
   const isApp = def?.archetype === 'app';
   const loadEntries = useMemo(() => async () => {
     if (!isApp || !tool?.slug) return;
@@ -161,13 +177,37 @@ export function ToolRunnerView() {
     );
   };
 
+  const toggleLike = async () => {
+    const next = !liked;
+    setLiked(next); setLikes(n => Math.max(0, n + (next ? 1 : -1)));
+    try {
+      const set = JSON.parse(localStorage.getItem('sl_tool_likes') || '{}');
+      if (next) set[tool.slug] = 1; else delete set[tool.slug];
+      localStorage.setItem('sl_tool_likes', JSON.stringify(set));
+    } catch { /* ignore */ }
+    try { await API.post('/api/tools/like', { slug: tool.slug, liked: next }); } catch { /* ignore */ }
+  };
+
+  const authorAv = avatarFor(tool.owner);
+  const created = tool.createdAt ? new Date(tool.createdAt).toLocaleDateString() : '';
+
   return (
     <>
       <h1 className="view-title">{tool.title}</h1>
-      <p className="view-sub">{def.description || (isApp ? 'Add and browse entries.' : 'Fill the settings and generate.')}{' '}
-        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>{' '}
+
+      {/* Social chrome: author + stats + like + share, provided by the platform
+          (so tools never build their own author/like/comment components). */}
+      <div className="card" style={{ maxWidth: 820, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: authorAv.color, border: '2px solid var(--ink)', fontSize: 20 }}>{authorAv.emoji}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700 }}>@{tool.owner}</div>
+          <div style={{ fontSize: 12, opacity: 0.65 }}>{created}{created ? ' · ' : ''}{tool.archetype === 'app' ? 'app' : 'generator'} · {tool.visibility}{tool.aiGenerated ? ' · ✦AI-built' : ''}</div>
+        </div>
+        <button className="btn small ghost" onClick={toggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
         {tool.visibility !== 'private' && <button className="btn small blue" onClick={share}>🔗 Share</button>}
-        <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 6 }}>{tool.visibility}</span></p>
+        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>
+      </div>
+      {def.description && <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>{def.description}</p>}
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
         {!isApp ? (
@@ -220,6 +260,9 @@ export function ToolRunnerView() {
           </>
         )}
       </section>
+
+      {/* Platform-provided comment section on every tool. */}
+      <CommentSection targetType="tool" targetId={tool.slug} />
     </>
   );
 }
