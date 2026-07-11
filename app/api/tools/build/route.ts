@@ -17,6 +17,26 @@ function heuristicProposal(text: string) {
   const strongApp = /\b(store|storage|track|tracker|journal|library|catalog|catalogue|repository|directory|inventory|log|collection|database|bookmark|planner|gallery)\b/.test(t);
   const socialish = /\b(instagram|social|feed|page|posts?|photo|photos|album|portfolio|board|profile|upload|pictures?|images?|meme|scrapbook)\b/.test(t);
   const languagey = /\b(french|spanish|german|italian|portuguese|japanese|chinese|mandarin|arabic|hindi|english|language|lesson|vocab|vocabulary|phrase|flashcard|flashcards|learn|pronunciation)\b/.test(t);
+  // A playable, scored lesson (quiz slides) — distinct from a static lesson-card app.
+  const playable = /\b(quiz|quizz|test|exam|play|playable|scored|slides?|course|study|practice questions|interactive lesson)\b/.test(t);
+  if (playable || (languagey && /\b(course|study|quiz|slides?|play|test|practice)\b/.test(t))) {
+    const langMatch = t.match(/\b(french|spanish|german|italian|portuguese|japanese|chinese|mandarin|arabic|hindi|english)\b/);
+    const subject = (text.trim().split(/[.,\n]/)[0] || 'Lesson').replace(/^(a|an|make|build|create|i want|i'd like)\s+/i, '').slice(0, 60) || 'Lesson';
+    return {
+      archetype: 'lesson', title: subject, description: text.slice(0, 300),
+      tags: langMatch ? ['language', 'lesson'] : ['lesson'],
+      settings: [
+        { id: 'topic', label: 'Topic (optional)', type: 'text', placeholder: 'Narrow the focus' },
+        { id: 'level', label: 'Level', type: 'select-or-custom', options: ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1', 'Intermediate', 'Advanced'] },
+      ],
+      lesson: {
+        subject: langMatch ? `${langMatch[1][0].toUpperCase()}${langMatch[1].slice(1)}` : subject,
+        totalSlides: 5,
+        language: langMatch ? `${langMatch[1][0].toUpperCase()}${langMatch[1].slice(1)}` : undefined,
+        translateTo: 'English',
+      },
+    };
+  }
   const genVerb = /\b(generate|produce|write|draft|compose|summar|essay|outline|ideas|suggestions?|plan out)\b/.test(t);
   const archetype = (strongApp || socialish || languagey) ? 'app' : genVerb ? 'generator' : /\b(list|collect|save)\b/.test(t) ? 'app' : 'generator';
   const title = (text.trim().split(/[.,\n]/)[0] || 'My Tool').replace(/^(a|an|make|build|create|i want|i'd like)\s+/i, '').slice(0, 60) || 'My Tool';
@@ -58,6 +78,7 @@ const PALETTE = `Field types: text, textarea, number, select (needs options), se
 Archetypes:
 - "generator": settings[] (the inputs) + generator.promptTemplate (use {{fieldId}} placeholders) + generator.output ("text" | "cards" | "table").
 - "app": app.entryFields[] (fields per stored record) + app.display ("cards" | "list" | "table") + app.review (bool: new entries need owner approval).
+- "lesson": a PLAYABLE, scored slide deck. Use for quizzes, courses, study/practice, and interactive language lessons. settings[] are learner options (e.g. a "topic" text field and a "select-or-custom" level). lesson = { subject, totalSlides (3-15, default 5), language (set for language lessons -> content is generated in that language with speaker+translate), translateTo (default "English"), style }. The runtime generates the slides and scores the learner.
 
 The PLATFORM already wraps EVERY published tool in social chrome: the author's
 profile, a like button + like count, a share link, and a full comment section.

@@ -39,7 +39,7 @@ export function ToolsView() {
               <div key={t.id} className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                   <strong style={{ fontSize: 16 }}>{t.title}</strong>
-                  <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{t.archetype === 'app' ? 'APP' : 'GEN'}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : 'GEN'}</span>
                 </div>
                 <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}</p>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

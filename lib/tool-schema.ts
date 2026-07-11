@@ -17,9 +17,18 @@ export interface ToolField {
   required?: boolean;
 }
 
-export type Archetype = 'generator' | 'app';
+export type Archetype = 'generator' | 'app' | 'lesson';
 export type GeneratorOutput = 'text' | 'cards' | 'table';
 export type AppDisplay = 'cards' | 'list' | 'table';
+
+export interface LessonSpec {
+  subject: string;         // "French", "Algebra", "World History"...
+  level?: string;          // default level label
+  totalSlides: number;     // how many slides to play (clamped 3-15)
+  language?: string;       // target language for a language lesson (enables speak/translate)
+  translateTo?: string;    // default 'English'
+  style?: string;          // extra generation guidance
+}
 
 export interface GeneratorSpec {
   systemPrompt?: string;
@@ -39,9 +48,10 @@ export interface ToolDefinition {
   title: string;
   description?: string;
   tags?: string[];
-  settings: ToolField[];     // generator: the inputs; app: usually empty (config-level)
+  settings: ToolField[];     // generator: the inputs; app: usually empty; lesson: learner options
   generator?: GeneratorSpec;
   app?: AppSpec;
+  lesson?: LessonSpec;
 }
 
 const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'select', 'select-or-custom', 'toggle', 'date', 'image', 'audio', 'drawing'];
@@ -88,7 +98,7 @@ function cleanField(f: any): ToolField | null {
 export function validateToolDefinition(input: any): { ok: boolean; errors: string[]; def?: ToolDefinition } {
   const errors: string[] = [];
   const d = input || {};
-  const archetype: Archetype = d.archetype === 'app' ? 'app' : d.archetype === 'generator' ? 'generator' : (errors.push('archetype must be "generator" or "app"'), 'generator');
+  const archetype: Archetype = d.archetype === 'app' ? 'app' : d.archetype === 'lesson' ? 'lesson' : d.archetype === 'generator' ? 'generator' : (errors.push('archetype must be "generator", "app", or "lesson"'), 'generator');
   const title = String(d.title || '').trim().slice(0, 100);
   if (!title) errors.push('title is required');
 
@@ -96,8 +106,21 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
 
   let generator: GeneratorSpec | undefined;
   let app: AppSpec | undefined;
+  let lesson: LessonSpec | undefined;
 
-  if (archetype === 'generator') {
+  if (archetype === 'lesson') {
+    const l = d.lesson || {};
+    const subject = String(l.subject || title || '').trim().slice(0, 80);
+    if (!subject) errors.push('lesson.subject is required');
+    lesson = {
+      subject,
+      level: String(l.level || '').slice(0, 40) || undefined,
+      totalSlides: Math.max(3, Math.min(15, parseInt(l.totalSlides, 10) || 5)),
+      language: String(l.language || '').slice(0, 40) || undefined,
+      translateTo: String(l.translateTo || 'English').slice(0, 40),
+      style: String(l.style || '').slice(0, 500) || undefined,
+    };
+  } else if (archetype === 'generator') {
     const g = d.generator || {};
     const promptTemplate = String(g.promptTemplate || '').trim();
     if (!promptTemplate) errors.push('generator.promptTemplate is required');
@@ -124,6 +147,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       settings,
       generator,
       app,
+      lesson,
     },
   };
 }

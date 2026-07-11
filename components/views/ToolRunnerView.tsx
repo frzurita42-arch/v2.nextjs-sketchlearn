@@ -11,28 +11,8 @@ import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { CommentSection } from '@/components/social/CommentSection';
-import { AudioButton } from '@/components/ui/AudioButton';
-
-// Text value with speaker (TTS) + translate actions — the "speaker/translation
-// options when appropriate" for language and content tools.
-function RichText({ text }: { text: string }) {
-  const [tr, setTr] = useState('');
-  const [busy, setBusy] = useState(false);
-  if (!text) return <></>;
-  const translate = async () => {
-    setBusy(true);
-    try { const r = await API.post('/api/tools/translate', { text, to: 'English' }); setTr(r?.translation || ''); } catch { /* ignore */ }
-    setBusy(false);
-  };
-  return (
-    <span>
-      {text}{' '}
-      <AudioButton text={text} label="🔊" small showTextOnFail={false} />{' '}
-      <button className="btn small ghost" onClick={translate} disabled={busy} title="Translate to English">{busy ? '…' : '🌐'}</button>
-      {tr && <em style={{ display: 'block', fontSize: 13, opacity: 0.8, marginTop: 2 }}>→ {tr}</em>}
-    </span>
-  );
-}
+import { RichText } from '@/components/tools/RichText';
+import { LessonPlayer } from '@/components/tools/LessonPlayer';
 
 // Deterministic emoji+color avatar from a username (matches the feed's style).
 const AV_EMOJI = ['🦊', '📊', '🐛', '🦉', '🤖', '⚙️', '🗣️', '🛡️', '🔧', '📈', '✏️', '☁️', '🎨', '🔐', '📝', '🌊'];
@@ -167,6 +147,7 @@ export function ToolRunnerView() {
   }, [tool?.slug]);
 
   const isApp = def?.archetype === 'app';
+  const isLesson = def?.archetype === 'lesson';
   const loadEntries = useMemo(() => async () => {
     if (!isApp || !tool?.slug) return;
     try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(tool.slug)}`); setEntries(asArray(r?.entries)); setIsOwner(!!r?.isOwner); } catch { /* ignore */ }
@@ -227,7 +208,7 @@ export function ToolRunnerView() {
         <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: authorAv.color, border: '2px solid var(--ink)', fontSize: 20 }}>{authorAv.emoji}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700 }}>@{tool.owner}</div>
-          <div style={{ fontSize: 12, opacity: 0.65 }}>{created}{created ? ' · ' : ''}{tool.archetype === 'app' ? 'app' : 'generator'} · {tool.visibility}{tool.aiGenerated ? ' · ✦AI-built' : ''}</div>
+          <div style={{ fontSize: 12, opacity: 0.65 }}>{created}{created ? ' · ' : ''}{tool.archetype} · {tool.visibility}{tool.aiGenerated ? ' · ✦AI-built' : ''}</div>
         </div>
         <button className="btn small ghost" onClick={toggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
         {tool.visibility !== 'private' && <button className="btn small blue" onClick={share}>🔗 Share</button>}
@@ -236,7 +217,9 @@ export function ToolRunnerView() {
       {def.description && <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>{def.description}</p>}
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
-        {!isApp ? (
+        {isLesson ? (
+          <LessonPlayer def={def} />
+        ) : !isApp ? (
           !def.generator ? (
             <div className="card alt" style={{ padding: '14px 16px' }}><p style={{ margin: 0 }}>This tool&apos;s definition is incomplete and can&apos;t run. Try rebuilding it from the Builder.</p></div>
           ) : (
