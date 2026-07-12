@@ -21,6 +21,7 @@ export interface StudioItem {
   note?: boolean;                    // pure custom instruction (a comment for the AI)
   linkField?: boolean;              // shows a reference image/link input (e.g. image gen)
   requires?: string;                // capability path in /api/config caps (e.g. 'music', 'providers.grok')
+  deco?: boolean;                   // a decoration (link / personalized message), not an activity
 }
 
 // Read a dotted capability path from the /api/config caps object.
@@ -82,6 +83,15 @@ export const STUDIO_CATEGORIES: StudioCategory[] = [
     ],
   },
   {
+    id: 'decorations', label: '🎨 Decorations (links & messages)', for: 'both', items: [
+      { id: 'deco-coffee', emoji: '☕', name: 'Coffee cup (donation link)', desc: 'A clickable coffee cup that opens your donation / support link.', deco: true, linkField: true },
+      { id: 'deco-note', emoji: '🗒️', name: 'Sticky note (message)', desc: 'A sticky note showing a personalized message.', deco: true },
+      { id: 'deco-banner', emoji: '🎌', name: 'Banner (headline message)', desc: 'A banner across the slide with your message.', deco: true },
+      { id: 'deco-hint', emoji: '✏️', name: 'Hint pencil', desc: 'A pencil the learner taps to reveal a hint message.', deco: true },
+      { id: 'deco-tv', emoji: '📺', name: 'Mini-TV (YouTube embed)', desc: 'A small embedded YouTube video from a link.', deco: true, linkField: true },
+    ],
+  },
+  {
     id: 'language', label: '🗣️ Language', for: 'presentation', items: [
       { id: 'audio', emoji: '🔊', name: 'Listening / speak aloud', desc: 'The content is spoken aloud (text-to-speech).', support: 'audio', language: true },
       { id: 'translate', emoji: '🌐', name: 'Translation', desc: 'A translate button on the content.', language: true },
@@ -127,6 +137,7 @@ function compilePage(comps: StudioComponent[]) {
   const support: any = { images: false, code: false, tables: false, formulas: false, audio: false };
   let language = false;
   let padSize: 'large' | 'medium' | 'adaptive' | undefined;
+  const decorations: { kind: string; message: string; link: string }[] = [];
   const lines: string[] = [];
   const providers: string[] = [];
   for (const c of comps) {
@@ -135,16 +146,17 @@ function compilePage(comps: StudioComponent[]) {
     if (it.support) support[it.support] = true;
     if (it.language) language = true;
     const how = String(c.instr || '').trim();
+    const link = String(c.link || '').trim();
     if (it.note) { if (how) lines.push(`• Note: ${how}`); continue; }
+    if (it.deco) { decorations.push({ kind: it.id.replace('deco-', ''), message: how, link }); lines.push(`• Decoration — ${it.name}${how ? `: “${how}”` : ''}${link ? ` (${link})` : ''}`); continue; }
     if (it.id.startsWith('ai-')) { providers.push(it.name); continue; }
     const size = it.sizes && c.opt ? ` [${c.opt}]` : '';
     if (it.sizes) padSize = annotationSizeKey(c.opt);   // the pad size for this slide
-    const link = String(c.link || '').trim();
     const ref = it.linkField && link ? ` (reference: ${link})` : '';
     lines.push(`• ${it.name}${size}${ref}${how ? `: ${how}` : ''}`);
   }
   if (providers.length) lines.push(`• Preferred AI model: ${providers.join(', ')}`);
-  return { activities: Array.from(new Set(activities)), support, language, lines, padSize };
+  return { activities: Array.from(new Set(activities)), support, language, lines, padSize, decorations };
 }
 
 function inferKind(subject: string, language: boolean): string {
@@ -192,6 +204,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       paragraphLength: (pg.length || 'medium') as 'brief' | 'medium' | 'detailed',
       style: c.lines.length ? c.lines.join('\n').slice(0, 400) : undefined,
       padSize: c.padSize,   // annotation pad size for this slide, if it has one
+      decorations: c.decorations.length ? c.decorations : undefined,
     };
   });
   const subject = String(cfg.subject || title);

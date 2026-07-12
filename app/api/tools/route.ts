@@ -61,6 +61,9 @@ export async function POST(req: Request) {
     thumbnail: null,
     likeCount: 0,
     aiGenerated: !!b.aiGenerated,
+    // Stamped for file-storage mode; in DB mode the created_at column default wins.
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   await insertTool(record);
   return NextResponse.json({ slug, id: record.id, visibility });

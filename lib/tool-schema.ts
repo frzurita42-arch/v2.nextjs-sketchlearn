@@ -43,6 +43,7 @@ export interface LessonPage {
   paragraphLength?: 'brief' | 'medium' | 'detailed';
   style?: string;          // compiled per-page "how to use these components"
   padSize?: 'large' | 'medium' | 'adaptive';   // annotation pad size for this slide
+  decorations?: { kind: string; message?: string; link?: string }[];   // links / messages on the slide
 }
 
 export interface LessonSpec {
@@ -161,6 +162,11 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       paragraphLength: ['brief', 'medium', 'detailed'].includes(pg?.paragraphLength) ? pg.paragraphLength : 'medium',
       style: String(pg?.style || '').slice(0, 400) || undefined,
       padSize: ['large', 'medium', 'adaptive'].includes(pg?.padSize) ? pg.padSize : undefined,
+      decorations: (Array.isArray(pg?.decorations) ? pg.decorations : []).slice(0, 6).map((d: any) => ({
+        kind: ['coffee', 'note', 'banner', 'hint', 'tv'].includes(d?.kind) ? d.kind : 'note',
+        message: String(d?.message || '').slice(0, 300),
+        link: String(d?.link || '').slice(0, 400),
+      })).filter((d: any) => d.message || d.link) || undefined,
     }));
     lesson = {
       subject,

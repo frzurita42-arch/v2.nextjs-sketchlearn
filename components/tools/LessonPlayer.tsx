@@ -139,6 +139,26 @@ function SupportsLoader({ slide, ctx }: { slide: Slide; ctx: any }) {
   );
 }
 
+// Decorations placed on a slide from the Studio: links & personalized messages.
+function ytId(url: string): string { const m = String(url || '').match(/(?:youtu\.be\/|[?&]v=|embed\/|shorts\/)([\w-]{11})/); return m ? m[1] : ''; }
+function safeHref(u: string): string { return /^https?:\/\//i.test(String(u || '')) ? String(u) : '#'; }
+function Decorations({ items }: { items: any[] }) {
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  if (!Array.isArray(items) || !items.length) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', alignItems: 'center', margin: '2px 0 12px' }}>
+      {items.map((d: any, i: number) => {
+        if (d.kind === 'coffee') return <a key={i} className="btn small" href={safeHref(d.link)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>☕ {d.message || 'Buy me a coffee'}</a>;
+        if (d.kind === 'banner') return <div key={i} style={{ width: '100%', textAlign: 'center', padding: '8px 12px', background: 'var(--accent,#5c80bc)', color: '#fff', borderRadius: 8, fontWeight: 700 }}>{d.message}</div>;
+        if (d.kind === 'note') return <div key={i} style={{ background: '#fdf6b2', border: '1.5px solid var(--ink)', borderRadius: 4, padding: '8px 12px', transform: 'rotate(-1.5deg)', fontSize: 14, boxShadow: '2px 2px 0 rgba(0,0,0,0.15)' }}>🗒️ {d.message}</div>;
+        if (d.kind === 'hint') return <button key={i} className="btn small ghost" onClick={() => setRevealed(r => ({ ...r, [i]: !r[i] }))}>✏️ {revealed[i] ? (d.message || 'No hint') : 'Hint'}</button>;
+        if (d.kind === 'tv') { const id = ytId(d.link); return id ? <iframe key={i} width="100%" height={200} src={`https://www.youtube.com/embed/${id}`} title="video" style={{ border: '2px solid var(--ink)', borderRadius: 8, maxWidth: 380 }} allowFullScreen /> : null; }
+        return null;
+      })}
+    </div>
+  );
+}
+
 // ---- Self-resolving questions (mcq / fill-blank / input) — no AI check. ----
 // Report the outcome via onDone(correct, detail).
 function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean, detail: any) => void }) {
@@ -588,6 +608,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
         <div className="card" style={{ padding: '16px 18px', maxWidth: isAnnotation ? 900 : 560, margin: '0 auto' }}>
           {curSlide.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7, textAlign: 'center' }}>Demo slide (no AI connected).</p>}
           <h3 style={{ marginTop: 0, textAlign: 'center' }}>{curSlide.title}</h3>
+          {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} /> : null}
           {curSlide.content && (isWritingSlide
             ? <p style={{ fontSize: 15, lineHeight: 1.6, textAlign: 'center', opacity: 0.9 }}>{curSlide.content}</p>
             : <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>)}

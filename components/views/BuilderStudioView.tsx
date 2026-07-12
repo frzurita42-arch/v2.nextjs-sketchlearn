@@ -100,8 +100,10 @@ export function BuilderStudioView() {
       {cats.map((cat) => (
         <optgroup key={cat.id} label={cat.label}>
           {cat.items.map((it) => {
+            // Gated items (news/music/AI providers) can still be ADDED — they need
+            // a key to fully work, so we only hint that, never block selection.
             const off = !capAvailable(caps || {}, it.requires);
-            return <option key={it.id} value={it.id} disabled={disabledIds.includes(it.id) || off}>{it.emoji} {it.name}{off ? ' — unavailable' : ''}</option>;
+            return <option key={it.id} value={it.id} disabled={disabledIds.includes(it.id)}>{it.emoji} {it.name}{off ? ' — needs a key' : ''}</option>;
           })}
         </optgroup>
       ))}
@@ -121,8 +123,8 @@ export function BuilderStudioView() {
                 {ANNOTATION_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             )}
-            <input value={c.instr || ''} placeholder={it.note ? 'Your instruction for this slide…' : 'How should the AI use this? (optional)'} onChange={(e) => patch({ instr: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />
-            {it.linkField && <input value={c.link || ''} placeholder="Reference image URL / Drive link (optional)" onChange={(e) => patch({ link: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />}
+            <input value={c.instr || ''} placeholder={it.deco ? 'Your message…' : it.note ? 'Your instruction for this slide…' : 'How should the AI use this? (optional)'} onChange={(e) => patch({ instr: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />
+            {it.linkField && <input value={c.link || ''} placeholder={it.deco ? 'Link (donation / YouTube / URL)' : 'Reference image URL / Drive link (optional)'} onChange={(e) => patch({ link: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />}
           </div>
         </div>
         <button className="btn small ghost" title="Remove" onClick={onRemove}>✕</button>

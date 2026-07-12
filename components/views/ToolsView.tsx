@@ -8,11 +8,15 @@ import { useApp } from '@/components/AppContext';
 import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 
+const PER_PAGE = 9;   // gallery shows 9 tools per page
+
 export function ToolsView() {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [newestFirst, setNewestFirst] = useState(true);   // sort order; toggle below
+  const [page, setPage] = useState(0);                    // 0-based page index
 
   const HIDDEN_KEY = 'sl_hidden_examples';
   const loadHidden = (): string[] => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } };
@@ -34,7 +38,26 @@ export function ToolsView() {
     for (const t of tools) { const k = toolCategory(t); c[k] = (c[k] || 0) + 1; }
     return c;
   }, [tools]);
-  const shown = filter === 'all' ? tools : tools.filter(t => toolCategory(t) === filter);
+  const filtered = filter === 'all' ? tools : tools.filter(t => toolCategory(t) === filter);
+  // Sort by creation time; newest→oldest by default, toggleable to oldest→newest.
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const ta = new Date(a.createdAt || 0).getTime();
+      const tb = new Date(b.createdAt || 0).getTime();
+      return newestFirst ? tb - ta : ta - tb;
+    });
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tools, filter, newestFirst]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+  // Keep the page in range when the filter/sort/list changes.
+  useEffect(() => { setPage(p => Math.min(p, pageCount - 1)); }, [pageCount]);
+  useEffect(() => { setPage(0); }, [filter, newestFirst]);
+  const shown = sorted.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+
+  // A dashed rule that separates gallery sections, matching the sketch theme.
+  const Divider = () => <div style={{ maxWidth: 900, margin: '16px auto', borderTop: '2px dashed var(--ink)', opacity: 0.5 }} />;
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
   const isExample = (t: any) => (t.tags || []).includes('example');
@@ -58,7 +81,18 @@ export function ToolsView() {
         <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>{' '}
         <button className="btn small" onClick={load}>↻ Refresh</button></p>
 
-      {!loading && tools.length > 0 && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
+      {!loading && tools.length > 0 && (
+        <>
+          <CategoryFilter value={filter} onChange={setFilter} counts={counts} />
+          <Divider />
+          <div style={{ maxWidth: 900, margin: '0 auto 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, opacity: 0.6 }}>{sorted.length} tool{sorted.length === 1 ? '' : 's'}</span>
+            <button className="btn small" onClick={() => setNewestFirst(v => !v)} title="Toggle sort order">
+              {newestFirst ? '↓ Newest first' : '↑ Oldest first'}
+            </button>
+          </div>
+        </>
+      )}
 
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
         : tools.length === 0 ? (
@@ -69,6 +103,7 @@ export function ToolsView() {
         ) : shown.length === 0 ? (
           <p style={{ textAlign: 'center', opacity: 0.7 }}>No tools in this category yet.</p>
         ) : (
+          <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, maxWidth: 900, margin: '0 auto' }}>
             {shown.map(t => (
               <div key={t.id} className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -90,6 +125,17 @@ export function ToolsView() {
               </div>
             ))}
           </div>
+          {pageCount > 1 && (
+            <>
+              <Divider />
+              <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
+                <button className="btn small" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>← Prev</button>
+                <span style={{ fontSize: 13, opacity: 0.7 }}>Page {page + 1} / {pageCount}</span>
+                <button className="btn small" disabled={page >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Next →</button>
+              </div>
+            </>
+          )}
+          </>
         )}
     </>
   );
