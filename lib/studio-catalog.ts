@@ -31,7 +31,18 @@ export function capAvailable(caps: any, path?: string): boolean {
 
 export interface StudioCategory { id: string; label: string; for: ArtifactKind | 'both'; items: StudioItem[]; }
 
-export const ANNOTATION_SIZES = ['Large (full 9:16)', 'Medium (half screen)', 'Small (quarter)', 'Customizable (± on the fly)'];
+// The three annotation-pad sizes, each a full pad with pen/colours/text.
+// (The old cramped "Small (quarter)" option was dropped — it had no room for the
+// colour + text toolbar.) The label's leading keyword maps to a pad size below.
+export const ANNOTATION_SIZES = ['Large (full page)', 'Medium (half screen)', 'Adaptive (grows by height)'];
+
+// Map an ANNOTATION_SIZES label to the AnnotationPad size key.
+export function annotationSizeKey(label?: string): 'large' | 'medium' | 'adaptive' {
+  const s = String(label || '').toLowerCase();
+  if (s.startsWith('large')) return 'large';
+  if (s.startsWith('medium')) return 'medium';
+  return 'adaptive';
+}
 
 export const STUDIO_CATEGORIES: StudioCategory[] = [
   {
@@ -115,6 +126,7 @@ function compilePage(comps: StudioComponent[]) {
   const activities: string[] = [];
   const support: any = { images: false, code: false, tables: false, formulas: false, audio: false };
   let language = false;
+  let padSize: 'large' | 'medium' | 'adaptive' | undefined;
   const lines: string[] = [];
   const providers: string[] = [];
   for (const c of comps) {
@@ -126,12 +138,13 @@ function compilePage(comps: StudioComponent[]) {
     if (it.note) { if (how) lines.push(`• Note: ${how}`); continue; }
     if (it.id.startsWith('ai-')) { providers.push(it.name); continue; }
     const size = it.sizes && c.opt ? ` [${c.opt}]` : '';
+    if (it.sizes) padSize = annotationSizeKey(c.opt);   // the pad size for this slide
     const link = String(c.link || '').trim();
     const ref = it.linkField && link ? ` (reference: ${link})` : '';
     lines.push(`• ${it.name}${size}${ref}${how ? `: ${how}` : ''}`);
   }
   if (providers.length) lines.push(`• Preferred AI model: ${providers.join(', ')}`);
-  return { activities: Array.from(new Set(activities)), support, language, lines };
+  return { activities: Array.from(new Set(activities)), support, language, lines, padSize };
 }
 
 function inferKind(subject: string, language: boolean): string {
@@ -178,6 +191,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       paragraphsPerSlide: clamp(pg.paragraphs, 1, 4, 1),
       paragraphLength: (pg.length || 'medium') as 'brief' | 'medium' | 'detailed',
       style: c.lines.length ? c.lines.join('\n').slice(0, 400) : undefined,
+      padSize: c.padSize,   // annotation pad size for this slide, if it has one
     };
   });
   const subject = String(cfg.subject || title);

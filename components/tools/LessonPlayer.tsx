@@ -238,7 +238,7 @@ function WritingCollector({ q, translateTo, onAnswer }: { q: Q; translateTo: str
   );
 }
 
-function AnnotationCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void }) {
+function AnnotationCollector({ q, onAnswer, size }: { q: Q; onAnswer: (p: any) => void; size?: 'large' | 'medium' | 'adaptive' }) {
   const getPagesRef = useRef<null | (() => string[])>(null);
   const [ready, setReady] = useState(false);
   const [text, setText] = useState('');
@@ -254,7 +254,7 @@ function AnnotationCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void
   return (
     <div style={{ textAlign: 'center' }}>
       <p style={{ fontWeight: 600, margin: '0 0 10px' }}>📝 <MathText text={q.prompt || 'Work out the full answer on the pad:'} /></p>
-      <AnnotationPad onReady={(fn) => { getPagesRef.current = fn; emit(ready, text); }} onChange={() => setReady(true)} />
+      <AnnotationPad padSize={size} onReady={(fn) => { getPagesRef.current = fn; emit(ready, text); }} onChange={() => setReady(true)} />
       {/* Optional: type the answer instead of / alongside drawing. The keyboard's
           mic 🎤 dictates into this box, so answers can be spoken too. */}
       <div style={{ maxWidth: 520, margin: '10px auto 0' }}>
@@ -597,7 +597,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
             {reviewing ? <SlideReviewCard res={res!} />
               : curQ ? (
                 curQ.kind === 'writing' ? <WritingCollector key={`${cur}-${safeQ}`} q={curQ} onAnswer={setPending} translateTo={lesson.translateTo || 'English'} />
-                  : curQ.kind === 'annotation' ? <AnnotationCollector key={`${cur}-${safeQ}`} q={curQ} onAnswer={setPending} />
+                  : curQ.kind === 'annotation' ? <AnnotationCollector key={`${cur}-${safeQ}`} q={curQ} onAnswer={setPending} size={(Array.isArray(lesson.pages) && lesson.pages[cur]?.padSize) || 'large'} />
                     : curQ.kind === 'code' ? <CodeCollector key={`${cur}-${safeQ}`} q={curQ} onAnswer={setPending} />
                       : <ChoiceQuestion key={`${cur}-${safeQ}`} q={curQ} translateTo={lesson.translateTo || 'English'} onDone={onChoiceDone} />
               ) : <p style={{ opacity: 0.6, textAlign: 'center' }}>No question on this slide.</p>}

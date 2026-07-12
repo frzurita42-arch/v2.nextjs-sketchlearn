@@ -13,12 +13,17 @@ const W = 820, H = 1160;                        // portrait "page" backing size
 const COLORS = ['#2d2a26', '#e4572e', '#5c80bc', '#7fb069', '#f9a03f'];
 const FONTS = [['Serif', 'Georgia, serif'], ['Sans', 'system-ui, sans-serif'], ['Mono', 'ui-monospace, monospace']];
 
-export function AnnotationPad({ onReady, onChange, scroll = false }: { onReady?: (getPages: () => string[]) => void; onChange?: () => void; scroll?: boolean }) {
+// `size` chooses the pad layout (all three keep the full pen/colour/text toolbar):
+//   large    — a full portrait page you page through
+//   medium   — a shorter half-screen page
+//   adaptive — one surface you grow DOWNWARD ("＋ Add space") — same as scroll mode
+export function AnnotationPad({ onReady, onChange, scroll = false, padSize = 'large' }: { onReady?: (getPages: () => string[]) => void; onChange?: () => void; scroll?: boolean; padSize?: 'large' | 'medium' | 'adaptive' }) {
+  const scrollMode = scroll || padSize === 'adaptive';
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pagesRef = useRef<string[]>(['']);      // saved page images ('' = blank)
   const [pageIdx, setPageIdx] = useState(0);
   const [pageCount, setPageCount] = useState(1);
-  const [padH, setPadH] = useState(scroll ? 900 : H);   // scroll mode grows this
+  const [padH, setPadH] = useState(scrollMode ? 900 : H);   // adaptive/scroll grows this
   const [tool, setTool] = useState<'pen' | 'eraser' | 'text'>('pen');
   const [color, setColor] = useState(COLORS[0]);
   const [size, setSize] = useState(3);
@@ -66,7 +71,7 @@ export function AnnotationPad({ onReady, onChange, scroll = false }: { onReady?:
 
   const goto = (i: number) => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); setPageIdx(i); paintBlank(pagesRef.current[i] || ''); };
   const addPage = () => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); pagesRef.current.push(''); const i = pagesRef.current.length - 1; setPageCount(pagesRef.current.length); setPageIdx(i); paintBlank(''); onChange?.(); };
-  const clearPage = () => { if (!confirm(scroll ? 'Clear everything written here?' : 'Clear this page?')) return; pagesRef.current[pageIdx] = ''; if (scroll) setPadH(900); paintBlank('', scroll ? 900 : padH); };
+  const clearPage = () => { if (!confirm(scrollMode ? 'Clear everything written here?' : 'Clear this page?')) return; pagesRef.current[pageIdx] = ''; if (scrollMode) setPadH(900); paintBlank('', scrollMode ? 900 : padH); };
   // SCROLL mode: extend the writing surface downward (keeps what you already wrote).
   const addSpace = () => { growFrom.current = canvasRef.current!.toDataURL('image/png'); setPadH(h => Math.min(h + 700, 6000)); };
 
@@ -78,7 +83,7 @@ export function AnnotationPad({ onReady, onChange, scroll = false }: { onReady?:
   // In scroll mode the canvas lives in a fixed-height window you scroll through;
   // in paged mode it scales to fit. Both toggle touchAction so writing mode
   // doesn't scroll and scroll mode does.
-  const winMax = expanded ? '86vh' : (scroll ? '50vh' : '68vh');
+  const winMax = expanded ? '86vh' : (scrollMode ? '50vh' : (padSize === 'medium' ? '46vh' : '72vh'));
   const canvas = (
     <canvas ref={canvasRef} width={W} height={padH} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
       style={{ width: '100%', maxWidth: expanded ? '100%' : W, aspectRatio: `${W} / ${padH}`, border: `2px ${drawOn ? 'solid' : 'dashed'} var(--ink)`, borderRadius: 8, background: '#fff', touchAction: drawOn ? 'none' : 'pan-y', cursor: drawOn ? 'crosshair' : 'default', display: 'block', margin: '0 auto' }} />
@@ -106,7 +111,7 @@ export function AnnotationPad({ onReady, onChange, scroll = false }: { onReady?:
         </div>
       )}
 
-      {scroll
+      {scrollMode
         ? <div style={{ maxHeight: winMax, overflowY: 'auto', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, padding: 2 }}>{canvas}</div>
         : <div style={{ maxHeight: winMax, display: 'flex' }}>{canvas}</div>}
 
@@ -114,8 +119,8 @@ export function AnnotationPad({ onReady, onChange, scroll = false }: { onReady?:
         {drawOn ? '✍️ Writing mode — it won’t scroll while you draw. Tap 🖐️ Scroll to move.' : '🖐️ Scroll mode — swipe to move. Tap ✏️ Pen (or ✍️ Writing) to draw.'}
       </div>
 
-      {scroll ? (
-        /* SCROLL: grow the surface downward instead of turning pages. */
+      {scrollMode ? (
+        /* ADAPTIVE/SCROLL: grow the surface downward instead of turning pages. */
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
           <button className="btn small" onClick={addSpace}>＋ Add space ↓</button>
           <button className="btn small ghost" onClick={clearPage}>Clear</button>

@@ -42,6 +42,7 @@ export interface LessonPage {
   paragraphsPerSlide?: number;
   paragraphLength?: 'brief' | 'medium' | 'detailed';
   style?: string;          // compiled per-page "how to use these components"
+  padSize?: 'large' | 'medium' | 'adaptive';   // annotation pad size for this slide
 }
 
 export interface LessonSpec {
@@ -159,6 +160,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       paragraphsPerSlide: Math.max(1, Math.min(4, parseInt(pg?.paragraphsPerSlide, 10) || 1)),
       paragraphLength: ['brief', 'medium', 'detailed'].includes(pg?.paragraphLength) ? pg.paragraphLength : 'medium',
       style: String(pg?.style || '').slice(0, 400) || undefined,
+      padSize: ['large', 'medium', 'adaptive'].includes(pg?.padSize) ? pg.padSize : undefined,
     }));
     lesson = {
       subject,
