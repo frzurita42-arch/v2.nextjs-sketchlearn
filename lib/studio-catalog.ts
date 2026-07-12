@@ -18,6 +18,15 @@ export interface StudioItem {
   language?: boolean;                // marks the lesson as a language lesson
   field?: { id: string; label: string; type: string; options?: string[] };  // repository entry field
   sizes?: boolean;                   // component offers a size choice (annotation pad)
+  note?: boolean;                    // pure custom instruction (a comment for the AI)
+  linkField?: boolean;              // shows a reference image/link input (e.g. image gen)
+  requires?: string;                // capability path in /api/config caps (e.g. 'music', 'providers.grok')
+}
+
+// Read a dotted capability path from the /api/config caps object.
+export function capAvailable(caps: any, path?: string): boolean {
+  if (!path) return true;
+  return String(path).split('.').reduce((o, k) => (o == null ? undefined : o[k]), caps) === true;
 }
 
 export interface StudioCategory { id: string; label: string; for: ArtifactKind | 'both'; items: StudioItem[]; }
@@ -37,11 +46,28 @@ export const STUDIO_CATEGORIES: StudioCategory[] = [
   },
   {
     id: 'media', label: '🧮 Math & media (what the slide shows)', for: 'presentation', items: [
-      { id: 'image', emoji: '🖼️', name: 'AI image / diagram', desc: 'A generated picture or labelled diagram (triangle, free-body sketch…).', support: 'images' },
+      { id: 'image', emoji: '🖼️', name: 'AI image / diagram', desc: 'A generated picture or labelled diagram (triangle, free-body sketch…).', support: 'images', linkField: true },
       { id: 'table', emoji: '📊', name: 'Table', desc: 'A table of data, steps, or comparisons.', support: 'tables' },
-      { id: 'wolfram', emoji: '⚡', name: 'Wolfram step-by-step', desc: 'Solve equations with worked steps (uses the Wolfram key).', support: 'formulas' },
+      { id: 'wolfram', emoji: '⚡', name: 'Wolfram step-by-step', desc: 'Solve equations with worked steps (uses the Wolfram key).', support: 'formulas', requires: 'wolfram' },
       { id: 'latex', emoji: '∑', name: 'LaTeX formula', desc: 'A cleanly typeset formula.', support: 'formulas' },
       { id: 'codeblock', emoji: '🧾', name: 'Code snippet', desc: 'A code / pseudocode block (great for math working).', support: 'code' },
+      { id: 'music', emoji: '🎵', name: 'Music / sound (ElevenLabs)', desc: 'Generate background music or a sound clip. Needs the music integration.', requires: 'music' },
+      { id: 'news', emoji: '📰', name: 'Latest news', desc: 'Pull recent headlines into the slide. Needs a news API key.', requires: 'news' },
+    ],
+  },
+  {
+    id: 'ai', label: '🤖 AI endpoint (which model writes it)', for: 'both', items: [
+      { id: 'ai-grok', emoji: '🐦', name: 'Grok (xAI)', desc: 'Use Grok to generate. Enabled via OpenRouter or an xAI key.', requires: 'providers.grok' },
+      { id: 'ai-gemini', emoji: '✨', name: 'Gemini (Google)', desc: 'Use Gemini to generate.', requires: 'providers.gemini' },
+      { id: 'ai-anthropic', emoji: '📚', name: 'Claude (Anthropic)', desc: 'Use Claude to generate.', requires: 'providers.anthropic' },
+      { id: 'ai-openai', emoji: '🟢', name: 'GPT (OpenAI)', desc: 'Use GPT to generate.', requires: 'providers.openai' },
+      { id: 'ai-deepseek', emoji: '🐋', name: 'DeepSeek', desc: 'Use DeepSeek to generate.', requires: 'providers.deepseek' },
+      { id: 'ai-kimi', emoji: '🌙', name: 'Kimi (Moonshot)', desc: 'Use Kimi to generate.', requires: 'providers.kimi' },
+    ],
+  },
+  {
+    id: 'extras', label: '💬 Extras', for: 'both', items: [
+      { id: 'note', emoji: '💬', name: 'Custom instruction (comment)', desc: 'A free note telling the AI exactly what to do on this slide.', note: true },
     ],
   },
   {
@@ -69,7 +95,7 @@ export function studioItem(id: string): StudioItem | undefined {
   return undefined;
 }
 
-export interface StudioComponent { id: string; instr?: string; opt?: string; }
+export interface StudioComponent { id: string; instr?: string; opt?: string; link?: string; }
 // A presentation is a list of PAGES; each page = one slide with its own
 // components and text density.
 export interface StudioPage { components: StudioComponent[]; length?: 'brief' | 'medium' | 'detailed'; paragraphs?: number; }
@@ -90,15 +116,21 @@ function compilePage(comps: StudioComponent[]) {
   const support: any = { images: false, code: false, tables: false, formulas: false, audio: false };
   let language = false;
   const lines: string[] = [];
+  const providers: string[] = [];
   for (const c of comps) {
     const it = studioItem(c.id); if (!it) continue;
     if (it.activity) activities.push(it.activity);
     if (it.support) support[it.support] = true;
     if (it.language) language = true;
-    const size = it.sizes && c.opt ? ` [${c.opt}]` : '';
     const how = String(c.instr || '').trim();
-    lines.push(`• ${it.name}${size}${how ? `: ${how}` : ''}`);
+    if (it.note) { if (how) lines.push(`• Note: ${how}`); continue; }
+    if (it.id.startsWith('ai-')) { providers.push(it.name); continue; }
+    const size = it.sizes && c.opt ? ` [${c.opt}]` : '';
+    const link = String(c.link || '').trim();
+    const ref = it.linkField && link ? ` (reference: ${link})` : '';
+    lines.push(`• ${it.name}${size}${ref}${how ? `: ${how}` : ''}`);
   }
+  if (providers.length) lines.push(`• Preferred AI model: ${providers.join(', ')}`);
   return { activities: Array.from(new Set(activities)), support, language, lines };
 }
 
@@ -150,7 +182,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
   });
   const subject = String(cfg.subject || title);
   const subjectKind = inferKind(subject, anyLang);
-  const totalSlides = Math.max(1, Math.min(15, pages.length));
+  const totalSlides = Math.max(1, Math.min(75, pages.length));
   const style = [
     context ? `Extra context: ${context}` : '',
     allLines.length ? `Per-slide component plan:\n${allLines.join('\n')}` : '',

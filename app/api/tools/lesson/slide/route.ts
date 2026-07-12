@@ -1,14 +1,12 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
-import { generateStructured, generateImage } from '@/src/ai/providers';
+import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fallbackImageDataUrl } = require('@/src/slides/visual-policy');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { wolframAvailable, wolframShortAnswer, wolframFull } = require('@/src/connectors/wolfram');
+const { wolframAvailable } = require('@/src/connectors/wolfram');
 
 // The menu of activities/displays proven out by the Language Learning tool. Fed
 // to the generator so it knows the full space and is FREE to mix formats.
@@ -111,28 +109,21 @@ function cleanQuestion(q: any) {
   };
 }
 
-async function makeImage(prompt: string): Promise<string> {
-  if (imageEnabled) { try { const u = await generateImage(prompt); if (u) return u; } catch { /* fall through */ } }
-  return fallbackImageDataUrl(prompt, '');
-}
-
 // ---- deterministic fallback (demo / no AI) ----
-function fbSlide(subject: string, n: number, kinds: string[], mathish = false) {
-  const kind = rand(kinds);
-  let question: any;
+function fbQuestion(kind: string, subject: string) {
   if (kind === 'mcq') {
     const want = Math.random() < 0.5 ? 2 : 4;
     const opts = [{ text: 'The correct answer', correct: true }, { text: 'A distractor' }, { text: 'Another option' }, { text: 'A wrong option' }].slice(0, want);
-    question = { kind: 'mcq', prompt: `Which is correct about ${subject}?`, options: cleanOptions(opts, want) };
-  } else if (kind === 'writing') {
-    question = { kind: 'writing', prompt: 'Write this by hand:', target: 'A' };
-  } else if (kind === 'annotation') {
-    question = { kind: 'annotation', prompt: `Work out and write the full answer for this ${subject} problem on the pad.`, answer: '' };
-  } else if (kind === 'code') {
-    question = { kind: 'code', prompt: `Write the answer/solution for this ${subject} problem in the code box.`, answer: '', language: '', starter: '' };
-  } else {
-    question = { kind, prompt: kind === 'fill-blank' ? `${subject} has ____ key idea per slide.` : `Type a key term from this ${subject} slide.`, answer: 'one', accept: ['one', '1'] };
+    return { kind: 'mcq', prompt: `Which is correct about ${subject}?`, options: cleanOptions(opts, want) };
   }
+  if (kind === 'writing') return { kind: 'writing', prompt: 'Write this by hand:', target: 'A' };
+  if (kind === 'annotation') return { kind: 'annotation', prompt: `Work out and write the full answer for this ${subject} problem on the pad.`, answer: '' };
+  if (kind === 'code') return { kind: 'code', prompt: `Write the answer/solution for this ${subject} problem in the code box.`, answer: '', language: '', starter: '' };
+  return { kind, prompt: kind === 'fill-blank' ? `${subject} has ____ key idea per slide.` : `Type a key term from this ${subject} slide.`, answer: 'one', accept: ['one', '1'] };
+}
+function fbSlide(subject: string, n: number, kinds: string[], mathish = false) {
+  // One question per designed activity (so multi-component pages show them all).
+  const questions = (kinds.length ? kinds : ['mcq']).slice(0, 4).map((k) => fbQuestion(k, subject));
   // Math/science demo slides show a real typeset formula so the KaTeX rendering
   // is visible even without an AI key.
   const support = mathish ? { type: 'formula', latex: 'c = \\sqrt{a^2 + b^2}', caption: 'Example formula (Pythagoras)' } : null;
@@ -142,7 +133,7 @@ function fbSlide(subject: string, n: number, kinds: string[], mathish = false) {
   return {
     title: `${subject} — slide ${n}`,
     content,
-    translation: '', support, questions: [question], fallback: true,
+    translation: '', support, questions, fallback: true,
   };
 }
 
@@ -158,7 +149,7 @@ export async function POST(req: Request) {
   const translateTo = String(lesson.translateTo || 'English').slice(0, 40);
   const kind = lesson.subjectKind || inferKind(subject, language);
   const n = Math.max(1, parseInt(b.slideNumber, 10) || 1);
-  const total = Math.max(1, Math.min(15, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
+  const total = Math.max(1, Math.min(75, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const priorSummary = String(b.priorSummary || '').slice(0, 600);
   // A designed page for THIS slide (from the Studio) steers its components + density.
   const pageSpec = (Array.isArray(lesson.pages) && lesson.pages[n - 1]) ? lesson.pages[n - 1] : null;
@@ -186,32 +177,33 @@ export async function POST(req: Request) {
   // A pure handwriting/worked-answer/code drill needs no support clutter.
   const onlyDrills = activityTypes.every((t) => t === 'writing' || t === 'annotation' || t === 'code');
   const pureWriting = onlyDrills;
-  // Exactly ONE question per slide — keeps the player's Back / Next / Check / Finish
-  // navigation unambiguous, and lets a lesson MIX types slide to slide.
-  const qKinds = [rand(activityTypes)];
+  // A designed page asks ONE question per activity component it lists (in order,
+  // all about this slide's content). Otherwise, one question for the slide.
+  const qKinds = (pageSpec && Array.isArray(pageSpec.activityTypes) && pageSpec.activityTypes.length)
+    ? pageSpec.activityTypes.slice(0, 10)
+    : [rand(activityTypes)];
   const wolfram = wolframAvailable();
-  const allowedSupport: string[] = [];
-  if (support.images) allowedSupport.push('image');
-  // Code snippets: for programming, AND for language grammar (show syntax logic as code).
-  if (support.code || kind === 'programming' || kind === 'language') allowedSupport.push('code');
-  if (support.tables) allowedSupport.push('table');
-  if (support.formulas || mathish) {
-    // Prefer a real Wolfram computation when the API key is present — it can show
-    // the STEP-BY-STEP solution. Weight it heavily for quantitative subjects.
-    // When it is NOT available, lean on a worked code snippet (the computation /
-    // a proof with comments) — that reads better than a bare formula.
-    if (wolfram) { allowedSupport.push('wolfram'); if (mathish) allowedSupport.push('wolfram'); }
-    allowedSupport.push('formula');
-    if (mathish) {
-      allowedSupport.push('code');
-      allowedSupport.push('table');                 // 3-column "steps" table
-      allowedSupport.push('image');                 // a labelled diagram (triangle, free-body…)
-      if (!wolfram) allowedSupport.push('code');     // extra weight: bias to code when no Wolfram
+  // Every ENABLED support category becomes its own component on the slide. Each
+  // is generated by a SEPARATE /api/tools/lesson/support request and streamed in
+  // with its own spinner — so a slide can carry several pieces of material
+  // without one big generation truncating ("it only built half of it").
+  const supportPlan: string[] = [];
+  if (!pureWriting) {
+    if (support.images) supportPlan.push('image');
+    // Code snippets: for programming, AND for language grammar (show syntax logic as code).
+    if (support.code || kind === 'programming' || kind === 'language') supportPlan.push('code');
+    if (support.tables) supportPlan.push('table');
+    if (support.formulas || mathish) {
+      // Prefer a real Wolfram step-by-step computation when the key is present.
+      if (wolfram && mathish) supportPlan.push('wolfram');
+      supportPlan.push('formula');
+      if (mathish) { supportPlan.push('image'); supportPlan.push('table'); }  // diagram + steps table
     }
   }
-  const supportType = (!pureWriting && allowedSupport.length && Math.random() < 0.7) ? rand(allowedSupport) : null;
+  // Distinct types, capped so a slide stays readable.
+  const supportTypes = Array.from(new Set(supportPlan)).slice(0, 4);
 
-  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, activityTypes, mathish));
+  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
 
   const langLine = language
     ? `This is a ${language} lesson: write "content" in ${language} and put the ${translateTo} meaning in "translation".`
@@ -222,7 +214,7 @@ export async function POST(req: Request) {
         : 'Use a "code" support block (the working / a proof with #comments) or a 3-column steps "table" for the worked solution.'} AVOID hand-writing long LaTeX derivations. Keep LaTeX to at most ONE clean key formula in a "formula" block; for inline symbols in the prose you may use simple $...$ (e.g. $a^2+b^2=c^2$) but do not force everything into LaTeX. Use a diagram "image" for shapes/physics situations.`
     : kind === 'programming' ? 'Prefer concrete code and tables over prose.'
     : '';
-  const qSpec = qKinds.map((k, i) => {
+  const qSpec = qKinds.map((k: string, i: number) => {
     if (k === 'mcq') { const c = Math.random() < 0.5 ? 2 : 4; return `Q${i + 1}: kind "mcq" with EXACTLY ${c} options (one correct).`; }
     if (k === 'fill-blank') return `Q${i + 1}: kind "fill-blank" — a sentence with "____" and the missing "answer" (+ "accept" variants).`;
     if (k === 'writing') return `Q${i + 1}: kind "writing" — a handwriting drill: give "target" = the exact ${language || subject} character/word to hand-write, and a short "prompt" (e.g. "Write this hiragana"). No options, no answer. The learner will draw it and it will be AI-checked.`;
@@ -230,22 +222,6 @@ export async function POST(req: Request) {
     if (k === 'code') return `Q${i + 1}: kind "code" — a worked-answer drill answered in a CODE/TEXT box for a REAL ${subject} problem at ${level} level about ${topic || subject}. Give a full "prompt" stating the specific problem/task, "answer" = the complete expected solution, optionally "language" (e.g. "python", or "" for math/plain text) and a short "starter" (optional scaffold). No options. The learner types the full solution and the AI grades it.`;
     return `Q${i + 1}: kind "input" — a short-answer question with an "answer" (+ "accept" variants).`;
   }).join('\n');
-  const codeHint = kind === 'language'
-    ? 'a short snippet showing the SYNTAX/grammar logic (e.g. "subject + verb(conjugated) + object", or a conjugation pattern)'
-    : kind === 'math'
-      ? 'a short worked computation or proof shown as code/pseudocode, using COMMENTS to explain each step (e.g. "# derivative of x^2\\nf = x**2\\n# power rule: 2*x**(2-1)\\nf_prime = 2*x") — no Wolfram needed'
-      : 'a short, correct code snippet';
-  const supSpec = supportType === 'image' ? (mathish
-      ? 'Also include support = { "type": "image", "prompt": "a CLEAN, LABELLED reference diagram to help solve the problem — e.g. a right triangle with the base, height, hypotenuse and angle labelled; a physics free-body/situation sketch with forces and values; a geometry figure with measurements. Describe it precisely so it reads like a textbook diagram.", "caption": "what the diagram shows" }.'
-      : 'Also include support = { "type": "image", "prompt": "a vivid image description", "caption": "..." }.')
-    : supportType === 'code' ? `Also include support = { "type": "code", "language": "...", "code": ${JSON.stringify(codeHint)} }.`
-    : supportType === 'table' ? (mathish
-      ? 'Also include support = { "type": "table", "headers": ["Step", "Equation", "What we did"], "rows": [["1", "the equation for this step (plain math text)", "short reason"], ...] } — a 3-column step-by-step working table.'
-      : 'Also include support = { "type": "table", "headers": [...], "rows": [[...]] }.')
-    : supportType === 'wolfram' ? 'Also include support = { "type": "wolfram", "query": "a precise, self-contained Wolfram Alpha query that SOLVES or COMPUTES this concept so it can show the STEP-BY-STEP working (e.g. \\"solve x^2-5x+6=0\\", \\"derivative of sin(x)*x^2\\", \\"integrate 1/(1+x^2)\\", \\"simplify (x^2-1)/(x-1)\\")", "latex": "the key formula in LaTeX", "caption": "what it shows" }. Wolfram will compute the answer AND return the step-by-step solution — so make the query something Wolfram can work out (an equation to solve, a derivative/integral/simplification), not an open-ended question.'
-    : supportType === 'formula' ? 'Also include support = { "type": "formula", "latex": "a valid LaTeX formula (e.g. \\"c = \\\\sqrt{a^2+b^2}\\", \\"\\\\frac{d}{dx}x^n = n x^{n-1}\\") — NOT plain ASCII", "caption": "what it means" }.'
-    : 'Set support to null.';
-
   const system = [
     `Generate slide ${n} of ${total} for a ${subject} lesson at ${level} level.`,
     language ? `Level objective: ${levelGuidance(level)}` : '',
@@ -256,12 +232,13 @@ export async function POST(req: Request) {
     `CRITICAL: The teaching and the question MUST genuinely be about "${topic || subject}" and pitched at "${level}" level. If the subject is ${subject}, do NOT drift to unrelated easier material (e.g. for Trigonometry ask about sine/cosine/tangent, angles, identities or triangles — NOT plain arithmetic like "2+2"). Match the true difficulty of ${level}.`,
     ACTIVITY_MENU,
     langLine, subjectLine,
-    'For THIS slide, teach one idea, then produce these specific questions (still applying the freedom above to vary content):', qSpec, supSpec,
-    'OUTPUT RULES (critical): return ONE JSON object with EXACTLY these top-level keys: title, content, translation, support, questions.',
-    '"content" MUST be plain, human-readable teaching text (a sentence or short paragraph) — NEVER JSON, never a nested object, never quoted JSON, never code. Put questions ONLY in the "questions" array, and support material ONLY in "support". Do not wrap the whole object in a string or another object.',
+    'For THIS slide, teach one idea, then produce these specific questions (still applying the freedom above to vary content):', qSpec,
+    'Do NOT include any support/diagram/table/formula material — that is generated separately. Just write the teaching text and the questions.',
+    'OUTPUT RULES (critical): return ONE JSON object with EXACTLY these top-level keys: title, content, translation, questions.',
+    '"content" MUST be plain, human-readable teaching text (a sentence or short paragraph) — NEVER JSON, never a nested object, never quoted JSON, never code. Put questions ONLY in the "questions" array. Do not wrap the whole object in a string or another object.',
     'Return STRICT JSON only — no markdown fences, no commentary.',
   ].filter(Boolean).join('\n');
-  const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "support": {...} or null, "questions": [ { "kind": "mcq|fill-blank|input|writing|annotation|code", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "the expected answer/solution", "accept": ["..."], "target": "for writing", "language": "for code, e.g. python or empty", "starter": "optional code/text scaffold" } ] }. Only include the fields the chosen kind needs.`;
+  const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "questions": [ { "kind": "mcq|fill-blank|input|writing|annotation|code", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "the expected answer/solution", "accept": ["..."], "target": "for writing", "language": "for code, e.g. python or empty", "starter": "optional code/text scaffold" } ] }. Only include the fields the chosen kind needs.`;
 
   try {
     const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 1800 });
@@ -269,29 +246,15 @@ export async function POST(req: Request) {
     const questions = (Array.isArray(r?.questions) ? r.questions : []).map(cleanQuestion).filter(Boolean);
     // If content came back empty or as a JSON blob we couldn't salvage, or there
     // are no valid questions, use the deterministic fallback instead of showing junk.
-    if (!content || !questions.length) return NextResponse.json(fbSlide(subject, n, activityTypes, mathish));
-    let sup: any = null;
-    const s = r.support;
-    if (s?.type === 'image') sup = { type: 'image', url: await makeImage(String(s.prompt || subject)), caption: String(s.caption || '') };
-    else if (s?.type === 'code') sup = { type: 'code', language: String(s.language || '').slice(0, 20), code: String(s.code || '').slice(0, 1200) };
-    else if (s?.type === 'table' && Array.isArray(s.headers)) sup = { type: 'table', headers: s.headers.map((h: any) => String(h).slice(0, 40)).slice(0, 6), rows: (Array.isArray(s.rows) ? s.rows : []).slice(0, 12).map((row: any) => (Array.isArray(row) ? row.map((c: any) => String(c).slice(0, 80)).slice(0, 6) : [])) };
-    else if (s?.type === 'wolfram') {
-      // Compute the answer AND fetch the step-by-step working via Wolfram; degrade
-      // to a formula when Wolfram can't interpret the query.
-      const [result, steps] = await Promise.all([wolframShortAnswer(s.query), wolframFull(s.query)]);
-      const base = { query: String(s.query || '').slice(0, 300), latex: String(s.latex || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
-      sup = (result || (steps && steps.length))
-        ? { type: 'wolfram', ...base, result: result ? String(result).slice(0, 400) : '', steps: Array.isArray(steps) ? steps : [] }
-        : (base.latex ? { type: 'formula', latex: base.latex, caption: base.caption } : null);
-    }
-    else if (s?.type === 'formula') sup = { type: 'formula', latex: String(s.latex || s.formula || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
+    if (!content || !questions.length) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
     return NextResponse.json({
       title: String(r.title || `${subject} — slide ${n}`).slice(0, 100),
       content: content.slice(0, 2000),
       translation: cleanContent(r.translation).slice(0, 800),
-      support: sup, questions, fallback: false,
+      // The support materials are streamed in separately, one request each.
+      supportPlan: supportTypes, support: null, questions, fallback: false,
     });
   } catch {
-    return NextResponse.json(fbSlide(subject, n, activityTypes, mathish));
+    return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
   }
 }

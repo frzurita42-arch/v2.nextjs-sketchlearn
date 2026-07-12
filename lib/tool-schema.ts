@@ -92,7 +92,7 @@ const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'select', 'selec
 
 export function slugify(s: string): string {
   return String(s || '').toLowerCase().trim()
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'tool';
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 75) || 'tool';
 }
 
 // Fill {{fieldId}} placeholders in a prompt template from the collected values.
@@ -153,7 +153,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const mode: LessonMode = ['slides', 'conversation', 'journal'].includes(l.mode) ? l.mode : 'slides';
     const cleanSup = (s: any): LessonSupport => ({ images: s?.images !== false, code: !!s?.code, tables: !!s?.tables, formulas: !!s?.formulas, audio: !!s?.audio });
     // Per-page designs (from the Studio). Each becomes one slide.
-    const pages: LessonPage[] = (Array.isArray(l.pages) ? l.pages : []).slice(0, 15).map((pg: any) => ({
+    const pages: LessonPage[] = (Array.isArray(l.pages) ? l.pages : []).slice(0, 75).map((pg: any) => ({
       activityTypes: (Array.isArray(pg?.activityTypes) ? pg.activityTypes : []).filter((x: any) => ACTS.includes(x)),
       support: pg?.support && typeof pg.support === 'object' ? cleanSup(pg.support) : undefined,
       paragraphsPerSlide: Math.max(1, Math.min(4, parseInt(pg?.paragraphsPerSlide, 10) || 1)),
@@ -165,7 +165,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       level: String(l.level || '').slice(0, 40) || undefined,
       mode,
       // When pages are designed, they define the slide count (unless overridden higher).
-      totalSlides: Math.max(1, Math.min(15, parseInt(l.totalSlides, 10) || pages.length || 5)),
+      totalSlides: Math.max(1, Math.min(75, parseInt(l.totalSlides, 10) || pages.length || 5)),
       language: String(l.language || '').slice(0, 40) || undefined,
       translateTo: String(l.translateTo || 'English').slice(0, 40),
       style: String(l.style || '').slice(0, 500) || undefined,

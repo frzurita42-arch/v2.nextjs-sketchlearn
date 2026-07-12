@@ -11,7 +11,7 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import {
-  STUDIO_CATEGORIES, ANNOTATION_SIZES, studioItem, assembleDefinition,
+  STUDIO_CATEGORIES, ANNOTATION_SIZES, studioItem, assembleDefinition, capAvailable,
   type StudioConfig, type StudioComponent, type StudioPage, type ArtifactKind,
 } from '@/lib/studio-catalog';
 
@@ -21,6 +21,8 @@ const newPage = (): StudioPage => ({ components: [], length: 'medium', paragraph
 export function BuilderStudioView() {
   const app = useApp();
   const [tab, setTab] = useState<'studio' | 'chat'>('studio');
+  const [caps, setCaps] = useState<any>(null);   // which integrations/keys are configured
+  useEffect(() => { API.get('/api/config').then((c) => setCaps(c?.caps || {})).catch(() => setCaps({})); }, []);
 
   // ---- Studio config ----
   const [artifact, setArtifact] = useState<ArtifactKind>('presentation');
@@ -90,19 +92,23 @@ export function BuilderStudioView() {
   const sendChat = (text: string) => { const t = text.trim(); if (!t || chatBusy) return; setInput(''); askNext([...messages, { role: 'user', content: t }]); };
   useEffect(() => { if (tab === 'chat' && messages.length === 0 && !chatBusy) askNext([]); /* eslint-disable-next-line */ }, [tab]);
 
-  // A grouped component picker <select>.
+  // A grouped component picker <select>. Gated items (no key/integration) are
+  // shown but disabled with a hint. Kept narrow so it shares a row with delete.
   const picker = (cats: typeof presCats, disabledIds: string[], onPick: (id: string) => void, label: string) => (
-    <select value="" onChange={(e) => { onPick(e.target.value); e.currentTarget.selectedIndex = 0; }} style={{ maxWidth: 280 }}>
+    <select value="" onChange={(e) => { onPick(e.target.value); e.currentTarget.selectedIndex = 0; }} style={{ flex: '1 1 auto', minWidth: 0 }}>
       <option value="">{label}</option>
       {cats.map((cat) => (
         <optgroup key={cat.id} label={cat.label}>
-          {cat.items.map((it) => <option key={it.id} value={it.id} disabled={disabledIds.includes(it.id)}>{it.emoji} {it.name}</option>)}
+          {cat.items.map((it) => {
+            const off = !capAvailable(caps || {}, it.requires);
+            return <option key={it.id} value={it.id} disabled={disabledIds.includes(it.id) || off}>{it.emoji} {it.name}{off ? ' — unavailable' : ''}</option>;
+          })}
         </optgroup>
       ))}
     </select>
   );
 
-  const componentBar = (c: StudioComponent, onInstr: (v: string) => void, onOpt: (v: string) => void, onRemove: () => void) => {
+  const componentBar = (c: StudioComponent, patch: (p: Partial<StudioComponent>) => void, onRemove: () => void) => {
     const it = studioItem(c.id); if (!it) return null;
     return (
       <div key={c.id} className="card alt" style={{ padding: '8px 10px', display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'start' }}>
@@ -111,11 +117,12 @@ export function BuilderStudioView() {
           <div style={{ fontSize: 12, opacity: 0.72 }}>{it.desc}</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
             {it.sizes && (
-              <select value={c.opt || ANNOTATION_SIZES[1]} onChange={(e) => onOpt(e.target.value)} style={{ fontSize: 12 }}>
+              <select value={c.opt || ANNOTATION_SIZES[1]} onChange={(e) => patch({ opt: e.target.value })} style={{ fontSize: 12 }}>
                 {ANNOTATION_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             )}
-            <input value={c.instr || ''} placeholder="How should the AI use this? (optional)" onChange={(e) => onInstr(e.target.value)} style={{ flex: '1 1 180px', fontSize: 13 }} />
+            <input value={c.instr || ''} placeholder={it.note ? 'Your instruction for this slide…' : 'How should the AI use this? (optional)'} onChange={(e) => patch({ instr: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />
+            {it.linkField && <input value={c.link || ''} placeholder="Reference image URL / Drive link (optional)" onChange={(e) => patch({ link: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />}
           </div>
         </div>
         <button className="btn small ghost" title="Remove" onClick={onRemove}>✕</button>
@@ -172,16 +179,18 @@ export function BuilderStudioView() {
               <div style={{ display: 'grid', gap: 12 }}>
                 {pages.map((pg, i) => (
                   <div key={i} className="card" style={{ padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <strong>📄 Slide {i + 1}</strong>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {picker(presCats, pg.components.map((c) => c.id), (id) => addComp(i, id), '＋ Add component…')}
-                        <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)}>🗑</button>
-                      </div>
+                      <span style={{ fontSize: 12, opacity: 0.55 }}>{pg.components.length} component{pg.components.length === 1 ? '' : 's'}</span>
+                    </div>
+                    {/* picker + delete always share one row (no overflow on 9:16) */}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', marginBottom: 8 }}>
+                      {picker(presCats, pg.components.map((c) => c.id), (id) => addComp(i, id), '＋ Add component…')}
+                      <button className="btn small ghost" style={{ flex: '0 0 auto' }} disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)}>🗑</button>
                     </div>
                     {pg.components.length === 0
                       ? <p style={{ fontSize: 13, opacity: 0.6, margin: '0 0 8px' }}>Add one or more components for this slide.</p>
-                      : <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>{pg.components.map((c) => componentBar(c, (v) => setComp(i, c.id, { instr: v }), (v) => setComp(i, c.id, { opt: v }), () => rmComp(i, c.id)))}</div>}
+                      : <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>{pg.components.map((c) => componentBar(c, (p) => setComp(i, c.id, p), () => rmComp(i, c.id)))}</div>}
                     {/* per-page density */}
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Paragraph length</span>
