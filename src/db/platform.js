@@ -174,27 +174,32 @@ async function setToolLikeDelta(slug, delta) {
   }
 }
 
-// Public gallery: visible tools, newest first. Owner sees their own private ones too.
-async function listTools({ viewer = null, includePrivateFor = null, limit = 50 } = {}) {
+// Gallery listing. A viewer sees: public tools, their OWN tools (any visibility),
+// and tools authored by an ADMIN. An admin viewer sees everything. Others' private
+// AND unlisted tools never appear here.
+async function listTools({ viewer = null, includePrivateFor = null, adminOwners = [], viewerIsAdmin = false, limit = 50 } = {}) {
   const lim = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
+  const me = includePrivateFor || viewer;
+  const admins = Array.isArray(adminOwners) ? adminOwners : [];
+  const fileFilter = (t) => viewerIsAdmin || t.visibility === 'public' || (me && t.owner === me) || admins.includes(t.owner);
   if (!db.pool) {
     return readJSON('tools.json', [])
-      .filter(t => t.visibility === 'public' || (includePrivateFor && t.owner === includePrivateFor))
+      .filter(fileFilter)
       .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
       .slice(0, lim).map(stripSecret);
   }
   try {
     const { rows } = await withDbTimeout(dbQuery(
       `SELECT * FROM tools
-       WHERE visibility = 'public' OR ($1::text IS NOT NULL AND owner = $1)
-       ORDER BY updated_at DESC LIMIT $2`,
-      [includePrivateFor, lim]
+       WHERE $1 OR visibility = 'public' OR ($2::text IS NOT NULL AND owner = $2) OR owner = ANY($3::text[])
+       ORDER BY updated_at DESC LIMIT $4`,
+      [!!viewerIsAdmin, me, admins, lim]
     ), 8000, 'List tools');
     return rows.map(mapToolRow);
   } catch (e) {
     console.error('DB list tools failed; falling back to file:', e.message);
     return readJSON('tools.json', [])
-      .filter(t => t.visibility === 'public' || (includePrivateFor && t.owner === includePrivateFor))
+      .filter(fileFilter)
       .slice(0, lim).map(stripSecret);
   }
 }

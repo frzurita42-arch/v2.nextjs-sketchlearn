@@ -7,6 +7,8 @@ import { validateToolDefinition, slugify } from '@/lib/tool-schema';
 const { insertTool, getToolBySlug, listTools, deleteTool } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { EXAMPLE_TOOLS, exampleBySlug } = require('@/src/tools/examples');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { userState } = require('@/src/db/users');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,13 +25,16 @@ export async function GET(req: Request) {
     if (example) return NextResponse.json({ tool: example }, { headers: { 'Cache-Control': 'no-cache' } });
     const tool = await getToolBySlug(slug);
     if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    // Private tools are visible only to their owner.
-    if (tool.visibility === 'private' && tool.owner !== a.user.username) {
+    // Private tools are visible only to their owner (or an admin). Unlisted tools
+    // stay reachable by link (that's the point of the share button).
+    if (tool.visibility === 'private' && tool.owner !== a.user.username && a.user.role !== 'admin') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ tool }, { headers: { 'Cache-Control': 'no-cache' } });
   }
-  const tools = await listTools({ includePrivateFor: a.user.username, limit: 60 });
+  const viewerIsAdmin = a.user.role === 'admin';
+  const adminOwners = (userState.users || []).filter((u: any) => u.role === 'admin').map((u: any) => u.username);
+  const tools = await listTools({ includePrivateFor: a.user.username, adminOwners, viewerIsAdmin, limit: 60 });
   // Prepend the built-in examples so the gallery always has a working lesson to try.
   return NextResponse.json({ tools: [...EXAMPLE_TOOLS, ...tools] }, { headers: { 'Cache-Control': 'no-cache' } });
 }
