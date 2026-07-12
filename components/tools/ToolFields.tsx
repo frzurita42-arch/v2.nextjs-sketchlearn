@@ -9,7 +9,9 @@ import { ImageField } from '@/components/tools/ImageField';
 
 function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v: any) => void }) {
   const inList = f.options?.includes(value);
-  const [custom, setCustom] = useState<boolean>(f.type === 'select-or-custom' && value != null && value !== '' && !inList);
+  // Every dropdown (select AND select-or-custom) supports typing a custom value.
+  const selectish = f.type === 'select' || f.type === 'select-or-custom';
+  const [custom, setCustom] = useState<boolean>(selectish && value != null && value !== '' && !inList);
 
   if (f.type === 'textarea') {
     return (
@@ -40,16 +42,7 @@ function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v:
     );
   }
   if (f.type === 'image') return <ImageField label={f.label} value={value} onChange={onChange} />;
-  if (f.type === 'select') {
-    return (
-      <label className="field"><span>{f.label}</span>
-        <select value={value ?? ''} onChange={e => onChange(e.target.value)}>
-          {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </label>
-    );
-  }
-  if (f.type === 'select-or-custom') {
+  if (selectish) {
     return (
       <label className="field"><span>{f.label}
         <button type="button" title={custom ? 'Pick from list' : 'Type a custom value'} onClick={() => setCustom(c => !c)}

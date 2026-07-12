@@ -463,6 +463,8 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const [activities, setActivities] = useState<any[]>([]);
   const [example, setExample] = useState<any>(null);
   const [exBusy, setExBusy] = useState(false);
+  const [topicIdeas, setTopicIdeas] = useState<string[]>([]);   // 5 suggested topics for the create form
+  const [topicsBusy, setTopicsBusy] = useState(false);
 
   const [cfg, setCfg] = useState<Cfg>({});
   const total = () => Math.max(1, Math.min(75, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
@@ -502,7 +504,18 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     try { const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, avoid: example?.topic || '' }); setExample(r); } catch { /* ignore */ }
     setExBusy(false);
   };
-  useEffect(() => { loadActivities(); refreshExample(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug]);
+  // Fetch 5 suggested topics for this course (the create form's topic dropdown).
+  const loadTopics = async () => {
+    setTopicsBusy(true);
+    try {
+      const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, count: 5 });
+      const ideas = Array.isArray(r?.topics) ? r.topics.map(String).filter(Boolean) : [];
+      setTopicIdeas(ideas);
+      if (ideas.length) setForm(s => (s.topic ? s : { ...s, topic: ideas[0] }));   // default to the first idea
+    } catch { /* ignore */ }
+    setTopicsBusy(false);
+  };
+  useEffect(() => { loadActivities(); refreshExample(); loadTopics(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug]);
 
   // Fetch slide `idx` (0-based) into the cache. Returns true on success.
   const fetchInto = async (idx: number, useCfg: Cfg, prior: string[]): Promise<boolean> => {
@@ -557,11 +570,19 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
 
   // ---------------- HUB ----------------
   if (phase === 'hub') {
+    // Turn the free-text "topic" field into a dropdown of 5 suggested topics
+    // (still editable — every dropdown has the ✎ pencil for a custom value).
+    const formFields = topicIdeas.length
+      ? settings.map((f: any) => (f.id === 'topic' ? { ...f, type: 'select-or-custom', options: topicIdeas } : f))
+      : settings;
     return (
       <div>
         <div className="card alt" style={{ padding: '14px 16px' }}>
-          <h4 style={{ margin: '0 0 8px' }}>Create a {lesson.subject || 'lesson'} activity</h4>
-          {settings.length > 0 && <ToolFields fields={settings} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} />}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <h4 style={{ margin: '0 0 8px' }}>Create a {lesson.subject || 'lesson'} activity</h4>
+            <button className="btn small ghost" onClick={loadTopics} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
+          </div>
+          {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} />}
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
             <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
           </div>

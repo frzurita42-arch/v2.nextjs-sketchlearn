@@ -24,6 +24,23 @@ export async function POST(req: Request) {
   const subject = String(lesson.subject || 'the subject').slice(0, 80);
   const levels: string[] = Array.isArray(b.levels) && b.levels.length ? b.levels.map(String) : ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1'];
   const avoid = String(b.avoid || '').slice(0, 200);
+  const count = Math.max(1, Math.min(8, parseInt(b.count, 10) || 1));
+
+  // count > 1 -> just a list of suggested topic strings (for the create form's
+  // "suggested topics" dropdown). Falls back to a shuffled pool without AI.
+  if (count > 1) {
+    const pool = () => [...TOPIC_POOL].sort(() => Math.random() - 0.5).slice(0, count);
+    if (!geminiEnabled && !deepseekEnabled) return NextResponse.json({ topics: pool() });
+    try {
+      const r: any = await generateStructured(
+        [{ role: 'system', content: `List ${count} fresh, specific, engaging topics a learner could study with a "${subject}" lesson/presentation. Make them concrete (not one-word), varied, and genuinely about ${subject}. ${avoid ? `Avoid: ${avoid}.` : ''} Return STRICT JSON.` },
+         { role: 'user', content: `{ "topics": [${count} short specific topic strings] }` }],
+        { temperature: 0.9, maxTokens: 300 }
+      );
+      const topics = (Array.isArray(r?.topics) ? r.topics : []).map((t: any) => String(t).slice(0, 90)).filter(Boolean).slice(0, count);
+      return NextResponse.json({ topics: topics.length ? topics : pool() });
+    } catch { return NextResponse.json({ topics: pool() }); }
+  }
 
   const fallback = () => ({
     level: levels[Math.floor(Math.random() * levels.length)],
