@@ -570,6 +570,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const slidesRef = useRef<(Slide | null)[]>([]);
   const cfgRef = useRef<Cfg>({});
   const prefetching = useRef<Record<number, Promise<void> | undefined>>({});
+  const startedAt = useRef(0);   // when the current play began, for the end-slide time
   useEffect(() => { slidesRef.current = slides; }, [slides]);
 
   // Quietly load slide `idx` in the BACKGROUND (no spinner), so Next is instant
@@ -623,7 +624,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   };
 
   const play = (c: Cfg) => {
-    cfgRef.current = c; slidesRef.current = []; prefetching.current = {};
+    cfgRef.current = c; slidesRef.current = []; prefetching.current = {}; startedAt.current = Date.now();
     setCfg(c); setSlides([]); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
     fetchInto(0, c, []);
   };
@@ -757,14 +758,50 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     const answeredCount = allDetails.length;
     const scoreCount = allDetails.filter(d => d.correct).length;
     const pct = answeredCount ? Math.round((scoreCount / answeredCount) * 100) : 0;
+    const secs = startedAt.current ? Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)) : 0;
+    const timeStr = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
+    const doneSlides = Object.keys(results).map(Number).sort((a, b) => a - b);
+    // Jump back into the deck at a given slide to review it (answers are kept).
+    const reviewSlide = (i: number) => { setCur(i); setPhase('play'); window.scrollTo(0, 0); };
+    const shareResult = async () => {
+      const link = slug ? `${window.location.origin}/?tool=${encodeURIComponent(slug)}` : window.location.href;
+      const text = `I scored ${scoreCount}/${answeredCount} (${pct}%) in ${timeStr} on ${label(cfg)} — SketchLearn`;
+      try {
+        if ((navigator as any).share) { await (navigator as any).share({ title: 'My SketchLearn result', text, url: link }); return; }
+        await navigator.clipboard.writeText(`${text}\n${link}`);
+        alert('Result copied to clipboard!');
+      } catch { window.prompt('Copy your result:', `${text}\n${link}`); }
+    };
     return (
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
         <div className="card" style={{ padding: '18px 20px', textAlign: 'center' }}>
           <h2 style={{ marginTop: 0 }}>Lesson complete 🎉</h2>
           <p style={{ fontSize: 14, opacity: 0.7 }}>{label(cfg)}</p>
-          <p style={{ fontSize: 20 }}>You scored <b>{scoreCount}/{answeredCount}</b> ({pct}%)</p>
-          <button className="btn small ghost" onClick={() => setShowReview(v => !v)}>{showReview ? 'Hide review' : '🔎 Review your answers'}</button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', margin: '10px 0' }}>
+            <div><div style={{ fontSize: 24, fontWeight: 800 }}>{scoreCount}/{answeredCount}</div><div style={{ fontSize: 12, opacity: 0.6 }}>score ({pct}%)</div></div>
+            <div><div style={{ fontSize: 24, fontWeight: 800 }}>⏱ {timeStr}</div><div style={{ fontSize: 12, opacity: 0.6 }}>time</div></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn small blue" onClick={shareResult}>🔗 Share result</button>
+            <button className="btn small ghost" onClick={() => setShowReview(v => !v)}>{showReview ? 'Hide review' : '🔎 Review answers'}</button>
+          </div>
         </div>
+
+        {/* Jump to any section of the finished lesson to review it. */}
+        {doneSlides.length > 0 && (
+          <div className="card alt" style={{ padding: '12px 14px', marginTop: 12 }}>
+            <h4 style={{ margin: '0 0 8px' }}>Go to a section</h4>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {doneSlides.map((i) => {
+                const r = results[i];
+                const c = Object.values(r.answers).filter((x: any) => x.correct).length;
+                const t = Object.keys(r.answers).length;
+                return <button key={i} className="btn small" onClick={() => reviewSlide(i)} title={slidesRef.current[i]?.title || ''}>Slide {i + 1}{t ? ` · ${c}/${t}` : ''}</button>;
+              })}
+            </div>
+          </div>
+        )}
+
         {showReview && (
           <div className="card alt" style={{ padding: '14px 16px', marginTop: 12 }}>
             <h4 style={{ margin: '0 0 8px' }}>Your answers</h4>
