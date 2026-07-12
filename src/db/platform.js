@@ -106,6 +106,7 @@ async function updateTool(slug, patch) {
     const t = tools.find(x => x.slug === slug);
     if (!t) return false;
     if (patch.definition !== undefined) { t.definition = patch.definition; t.title = patch.definition.title || t.title; t.description = patch.definition.description || t.description; t.archetype = patch.definition.archetype || t.archetype; t.tags = patch.definition.tags || t.tags; }
+    if (patch.title !== undefined) { t.title = patch.title; if (t.definition) t.definition.title = patch.title; }
     if (patch.visibility !== undefined) t.visibility = patch.visibility;
     if (patch.apiKeys !== undefined) t.apiKeys = patch.apiKeys;
     t.updatedAt = new Date().toISOString();
@@ -118,6 +119,7 @@ async function updateTool(slug, patch) {
       sets.push(`definition = $${i++}::jsonb`, `title = $${i++}`, `description = $${i++}`, `archetype = $${i++}`, `tags = $${i++}::jsonb`);
       vals.push(JSON.stringify(patch.definition), patch.definition.title || '', patch.definition.description || '', patch.definition.archetype || 'app', JSON.stringify(patch.definition.tags || []));
     }
+    if (patch.title !== undefined) { sets.push(`title = $${i++}`); vals.push(patch.title); }
     if (patch.visibility !== undefined) { sets.push(`visibility = $${i++}`); vals.push(patch.visibility); }
     if (patch.apiKeys !== undefined) { sets.push(`api_keys = $${i++}::jsonb`); vals.push(JSON.stringify(patch.apiKeys)); }
     if (!sets.length) return true;

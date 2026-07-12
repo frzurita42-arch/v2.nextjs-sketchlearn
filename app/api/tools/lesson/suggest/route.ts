@@ -24,6 +24,7 @@ export async function POST(req: Request) {
   const subject = String(lesson.subject || 'the subject').slice(0, 80);
   const levels: string[] = Array.isArray(b.levels) && b.levels.length ? b.levels.map(String) : ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1'];
   const avoid = String(b.avoid || '').slice(0, 200);
+  const hint = String(b.hint || '').slice(0, 200);
   const count = Math.max(1, Math.min(8, parseInt(b.count, 10) || 1));
 
   // count > 1 -> just a list of suggested topic strings (for the create form's
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
   if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fallback());
   try {
     const r: any = await generateStructured(
-      [{ role: 'system', content: `Recommend ONE fresh, engaging example run for a "${subject}" lesson tool. Pick a level from: ${levels.join(', ')}. ${avoid ? `Avoid something like: ${avoid}.` : ''} Return STRICT JSON.` },
+      [{ role: 'system', content: `Recommend ONE fresh, engaging example run for a "${subject}" lesson tool. Pick a level from: ${levels.join(', ')}. ${hint ? `Focus the topic on: ${hint}.` : ''} ${avoid ? `Avoid something like: ${avoid}.` : ''} Return STRICT JSON.` },
        { role: 'user', content: `{ "level": "one of the levels", "topic": "a specific, interesting topic", "why": "one short reason it's worth trying" }` }],
       { temperature: 0.9, maxTokens: 300 }
     );

@@ -162,6 +162,8 @@ export function ToolRunnerView() {
   const [entries, setEntries] = useState<any[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [detail, setDetail] = useState<any>(null);   // entry opened as a post
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
 
   // Like state (platform chrome): count from the tool, per-user liked flag in localStorage.
   const [likes, setLikes] = useState<number>(tool?.likeCount || 0);
@@ -220,11 +222,35 @@ export function ToolRunnerView() {
   };
 
   const authorAv = avatarFor(tool.owner);
-  const created = tool.createdAt ? new Date(tool.createdAt).toLocaleDateString() : '';
+  const created = tool.createdAt ? new Date(tool.createdAt).toLocaleString() : '';
+  const canEdit = !(tool.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === tool.owner);
+
+  const saveTitle = async () => {
+    const t = titleDraft.trim();
+    setEditingTitle(false);
+    if (!t || t === tool.title) return;
+    tool.title = t;                                        // optimistic (shared singleton)
+    try { await API.post('/api/tools/rename', { slug: tool.slug, title: t }); } catch { /* ignore */ }
+  };
+  const dashRule = { maxWidth: 820, margin: '10px auto', borderTop: '2px dashed var(--ink)', opacity: 0.45 } as const;
 
   return (
     <>
-      <h1 className="view-title">{tool.title}</h1>
+      {editingTitle ? (
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 820, margin: '0 auto' }}>
+          <input value={titleDraft} onChange={e => setTitleDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }} autoFocus
+            style={{ fontSize: 24, fontWeight: 700, padding: '4px 8px', borderRadius: 8, border: '2px solid var(--ink)', width: '100%', maxWidth: 560 }} />
+          <button className="btn small green" onClick={saveTitle}>Save</button>
+          <button className="btn small ghost" onClick={() => setEditingTitle(false)}>✕</button>
+        </div>
+      ) : (
+        <h1 className="view-title">{tool.title}
+          {canEdit && <button title="Rename" onClick={() => { setTitleDraft(tool.title); setEditingTitle(true); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
+        </h1>
+      )}
+
+      {/* ┄ divider: title ┄ author/stats card ┄ */}
+      <div style={dashRule} />
 
       {/* Social chrome: author + stats + like + share, provided by the platform
           (so tools never build their own author/like/comment components). */}
@@ -316,6 +342,9 @@ export function ToolRunnerView() {
           </div>
         </div>
       )}
+
+      {/* ┄ divider: activities/feed ┄ comments ┄ */}
+      <div style={dashRule} />
 
       {/* Platform-provided comment section on every tool. */}
       <CommentSection targetType="tool" targetId={tool.slug} />

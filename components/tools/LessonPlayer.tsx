@@ -18,6 +18,9 @@ import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad'
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 
+// Subject categories every generation is filed under (feed filter + create form).
+const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
+
 // Inline text that typesets any $...$ LaTeX segments (math/science prompts).
 function MathText({ text }: { text: string }) {
   return <span dangerouslySetInnerHTML={{ __html: renderInlineMath(String(text || '')) }} />;
@@ -465,6 +468,14 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const [exBusy, setExBusy] = useState(false);
   const [topicIdeas, setTopicIdeas] = useState<string[]>([]);   // 5 suggested topics for the create form
   const [topicsBusy, setTopicsBusy] = useState(false);
+  const [exHint, setExHint] = useState('');                     // steer the AI example
+  // Activities-feed controls.
+  const [feedTab, setFeedTab] = useState<'all' | 'mine' | 'fav'>('all');
+  const [feedCat, setFeedCat] = useState('all');
+  const [feedUser, setFeedUser] = useState('');
+  const [favs, setFavs] = useState<Record<string, boolean>>({});
+  useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_gen_favs') || '{}')); } catch { /* ignore */ } }, []);
+  const toggleFav = (id: string) => setFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_gen_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
 
   const [cfg, setCfg] = useState<Cfg>({});
   const total = () => Math.max(1, Math.min(75, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
@@ -501,7 +512,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   };
   const refreshExample = async () => {
     setExBusy(true);
-    try { const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, avoid: example?.topic || '' }); setExample(r); } catch { /* ignore */ }
+    try { const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, avoid: example?.topic || '', hint: exHint.trim() }); setExample(r); } catch { /* ignore */ }
     setExBusy(false);
   };
   // Fetch 5 suggested topics for this course (the create form's topic dropdown).
@@ -536,8 +547,9 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     fetchInto(0, c, []);
   };
 
+  const defaultCat = () => lesson.subjectKind === 'math' ? 'Mathematics' : lesson.subjectKind === 'programming' ? 'Technology' : lesson.subjectKind === 'language' ? 'Language Learning' : 'Science';
   const createAndPlay = async () => {
-    const c: Cfg = { ...form, level: form.level || form.difficulty || levels[0], topic: form.topic || '' };
+    const c: Cfg = { ...form, level: form.level || form.difficulty || levels[0], topic: form.topic || '', category: form.category || defaultCat() };
     try { await API.post('/api/tools/entries', { slug, data: c }); } catch { /* ignore */ }
     loadActivities();
     play(c);
@@ -572,9 +584,19 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   if (phase === 'hub') {
     // Turn the free-text "topic" field into a dropdown of 5 suggested topics
     // (still editable — every dropdown has the ✎ pencil for a custom value).
-    const formFields = topicIdeas.length
-      ? settings.map((f: any) => (f.id === 'topic' ? { ...f, type: 'select-or-custom', options: topicIdeas } : f))
-      : settings;
+    const formFields = [
+      ...settings.map((f: any) => (f.id === 'topic' && topicIdeas.length ? { ...f, type: 'select-or-custom', options: topicIdeas } : f)),
+      { id: 'category', label: 'Category', type: 'select-or-custom', options: GEN_CATEGORIES },
+    ];
+    const me = API.user?.username;
+    const feed = activities.filter((e: any) => {
+      if (feedTab === 'mine' && e.username !== me) return false;
+      if (feedTab === 'fav' && !favs[e.id]) return false;
+      if (feedCat !== 'all' && (e.data?.category || '') !== feedCat) return false;
+      if (feedUser.trim() && !String(e.username || '').toLowerCase().includes(feedUser.trim().toLowerCase())) return false;
+      return true;
+    });
+    const dashRule = { borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '14px 0' } as const;
     return (
       <div>
         <div className="card alt" style={{ padding: '14px 16px' }}>
@@ -588,10 +610,17 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
           </div>
         </div>
 
-        <div className="card" style={{ padding: '12px 14px', marginTop: 14, borderStyle: 'dashed' }}>
+        {/* ┄ divider: settings ┄ AI example ┄ */}
+        <div style={dashRule} />
+
+        <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
-            <button className="btn small ghost" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄 Refresh'}</button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about… (optional)" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
+                style={{ fontSize: 12, width: 160, padding: '4px 7px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
+              <button className="btn small ghost" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄 Suggest'}</button>
+            </div>
           </div>
           {example ? (
             <div style={{ marginTop: 6 }}>
@@ -602,16 +631,36 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
           ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
         </div>
 
-        <h4 style={{ margin: '18px 0 8px' }}>Activities feed</h4>
-        {activities.length === 0 ? <p style={{ opacity: 0.6, fontSize: 14 }}>No activities yet — generate the first one above.</p> : (
+        {/* ┄ divider: AI example ┄ activities feed ┄ */}
+        <div style={dashRule} />
+
+        <h4 style={{ margin: '0 0 8px' }}>Activities feed</h4>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(['all', 'mine', 'fav'] as const).map(t => (
+              <button key={t} className={`btn small ${feedTab === t ? 'blue' : 'ghost'}`} onClick={() => setFeedTab(t)}>{t === 'all' ? 'All' : t === 'mine' ? 'Mine' : '★ Favorites'}</button>
+            ))}
+          </div>
+          <select value={feedCat} onChange={e => setFeedCat(e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }}>
+            <option value="all">All categories</option>
+            {GEN_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input value={feedUser} onChange={e => setFeedUser(e.target.value)} placeholder="🔍 by user" style={{ fontSize: 12, width: 120, padding: '4px 7px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
+        </div>
+        {feed.length === 0 ? (
+          <p style={{ opacity: 0.6, fontSize: 14 }}>{activities.length === 0 ? 'No activities yet — generate the first one above.' : 'No activities match these filters.'}</p>
+        ) : (
           <div style={{ display: 'grid', gap: 10 }}>
-            {activities.map((e: any) => (
+            {feed.map((e: any) => (
               <div key={e.id} className="card" style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontWeight: 600 }}>{label(e.data || {})}</div>
-                  <div style={{ fontSize: 12, opacity: 0.6 }}>@{e.username || 'anon'}</div>
+                  <div style={{ fontSize: 12, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ''}</div>
                 </div>
-                <button className="btn small green" onClick={() => play(e.data || {})}>▶ Play</button>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button className="btn small ghost" title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
+                  <button className="btn small green" onClick={() => play(e.data || {})}>▶ Play</button>
+                </div>
               </div>
             ))}
           </div>
