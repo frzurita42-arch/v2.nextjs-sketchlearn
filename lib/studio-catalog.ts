@@ -70,17 +70,36 @@ export function studioItem(id: string): StudioItem | undefined {
 }
 
 export interface StudioComponent { id: string; instr?: string; opt?: string; }
+// A presentation is a list of PAGES; each page = one slide with its own
+// components and text density.
+export interface StudioPage { components: StudioComponent[]; length?: 'brief' | 'medium' | 'detailed'; paragraphs?: number; }
 export interface StudioConfig {
   artifact: ArtifactKind;
   title?: string;
   subject?: string;
-  slides?: number;
-  paragraphs?: number;
-  length?: 'brief' | 'medium' | 'detailed';
   tone?: string;
-  components: StudioComponent[];
+  pages?: StudioPage[];              // presentation: one entry per slide
+  components?: StudioComponent[];    // repository: the item fields
   context?: string;
   display?: 'cards' | 'list' | 'table';
+}
+
+// Compile a page's components into { activityTypes, support, language, styleLines }.
+function compilePage(comps: StudioComponent[]) {
+  const activities: string[] = [];
+  const support: any = { images: false, code: false, tables: false, formulas: false, audio: false };
+  let language = false;
+  const lines: string[] = [];
+  for (const c of comps) {
+    const it = studioItem(c.id); if (!it) continue;
+    if (it.activity) activities.push(it.activity);
+    if (it.support) support[it.support] = true;
+    if (it.language) language = true;
+    const size = it.sizes && c.opt ? ` [${c.opt}]` : '';
+    const how = String(c.instr || '').trim();
+    lines.push(`• ${it.name}${size}${how ? `: ${how}` : ''}`);
+  }
+  return { activities: Array.from(new Set(activities)), support, language, lines };
 }
 
 function inferKind(subject: string, language: boolean): string {
@@ -97,7 +116,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
   const context = String(cfg.context || '').trim();
 
   if (cfg.artifact === 'repository') {
-    const fields = cfg.components.map((c) => studioItem(c.id)?.field).filter(Boolean) as any[];
+    const fields = (cfg.components || []).map((c) => studioItem(c.id)?.field).filter(Boolean) as any[];
     if (!fields.length) fields.push({ id: 'title', label: 'Title', type: 'text' }, { id: 'description', label: 'Description', type: 'textarea' });
     return {
       version: 1, archetype: 'app', title: `Repository — ${title}`.slice(0, 70),
@@ -107,29 +126,34 @@ export function assembleDefinition(cfg: StudioConfig): any {
     };
   }
 
-  // presentation -> lesson
-  const activities: string[] = [];
-  const support: any = { images: false, code: false, tables: false, formulas: false, audio: false };
-  let language = false;
-  const lines: string[] = [];
-  for (const c of cfg.components) {
-    const it = studioItem(c.id); if (!it) continue;
-    if (it.activity) activities.push(it.activity);
-    if (it.support) support[it.support] = true;
-    if (it.language) language = true;
-    const size = it.sizes && c.opt ? ` [${c.opt}]` : '';
-    const how = String(c.instr || '').trim();
-    lines.push(`• ${it.name}${size}${how ? `: ${how}` : ''}`);
-  }
-  const acts = Array.from(new Set(activities.length ? activities : ['mcq']));
+  // presentation -> lesson, one slide per page.
+  const rawPages = cfg.pages && cfg.pages.length ? cfg.pages : [{ components: [], length: 'medium' as const, paragraphs: 1 }];
+  const clamp = (n: any, lo: number, hi: number, d: number) => Math.max(lo, Math.min(hi, parseInt(n, 10) || d));
+  let anyLang = false;
+  const unionActs = new Set<string>();
+  const unionSupport: any = { images: false, code: false, tables: false, formulas: false, audio: false };
+  const allLines: string[] = [];
+  const pages = rawPages.map((pg, i) => {
+    const c = compilePage(pg.components || []);
+    if (c.language) anyLang = true;
+    const acts = c.activities.length ? c.activities : ['mcq'];
+    acts.forEach((a) => unionActs.add(a));
+    for (const k of Object.keys(unionSupport)) if (c.support[k]) unionSupport[k] = true;
+    if (c.lines.length) allLines.push(`Slide ${i + 1}: ${c.lines.join('; ')}`);
+    return {
+      activityTypes: acts,
+      support: c.support,
+      paragraphsPerSlide: clamp(pg.paragraphs, 1, 4, 1),
+      paragraphLength: (pg.length || 'medium') as 'brief' | 'medium' | 'detailed',
+      style: c.lines.length ? c.lines.join('\n').slice(0, 400) : undefined,
+    };
+  });
   const subject = String(cfg.subject || title);
-  const subjectKind = inferKind(subject, language);
-  const slides = Math.max(1, Math.min(15, cfg.slides || 5));
-  const paragraphs = Math.max(1, Math.min(4, cfg.paragraphs || 1));
-  const length = cfg.length || 'medium';
+  const subjectKind = inferKind(subject, anyLang);
+  const totalSlides = Math.max(1, Math.min(15, pages.length));
   const style = [
     context ? `Extra context: ${context}` : '',
-    lines.length ? `Use these components as the maker specified:\n${lines.join('\n')}` : '',
+    allLines.length ? `Per-slide component plan:\n${allLines.join('\n')}` : '',
   ].filter(Boolean).join('\n').slice(0, 500);
 
   return {
@@ -140,15 +164,14 @@ export function assembleDefinition(cfg: StudioConfig): any {
       { id: 'topic', label: 'Topic', type: 'text', default: cfg.subject || '' },
       { id: 'difficulty', label: 'Level', type: 'select-or-custom', options: ['Beginner', 'Intermediate', 'Advanced'] },
       { id: 'tone', label: 'Tone', type: 'select-or-custom', options: ['Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling'], default: cfg.tone || 'Friendly' },
-      { id: 'slides', label: 'Slides', type: 'number', default: slides },
-      { id: 'length', label: 'Paragraph length', type: 'select', options: ['brief', 'medium', 'detailed'], default: length },
-      { id: 'paragraphs', label: 'Paragraphs / slide', type: 'number', default: paragraphs },
+      { id: 'slides', label: 'Slides', type: 'number', default: totalSlides },
     ],
     lesson: {
-      subject, subjectKind, mode: 'slides', totalSlides: slides,
-      paragraphsPerSlide: paragraphs, paragraphLength: length,
-      language: language ? subject : undefined, translateTo: 'English',
-      support, activityTypes: acts, style,
+      subject, subjectKind, mode: 'slides', totalSlides,
+      paragraphsPerSlide: pages[0]?.paragraphsPerSlide || 1, paragraphLength: pages[0]?.paragraphLength || 'medium',
+      language: anyLang ? subject : undefined, translateTo: 'English',
+      support: unionSupport, activityTypes: Array.from(unionActs.size ? unionActs : new Set(['mcq'])), style,
+      pages,
     },
   };
 }

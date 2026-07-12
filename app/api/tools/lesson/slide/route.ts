@@ -160,11 +160,13 @@ export async function POST(req: Request) {
   const n = Math.max(1, parseInt(b.slideNumber, 10) || 1);
   const total = Math.max(1, Math.min(15, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const priorSummary = String(b.priorSummary || '').slice(0, 600);
-  const paras = Math.max(1, Math.min(4, parseInt(b.values?.paragraphs, 10) || parseInt(lesson.paragraphsPerSlide, 10) || 1));
-  const pLen = ['brief', 'medium', 'detailed'].includes(b.values?.length) ? b.values.length : (lesson.paragraphLength || 'medium');
+  // A designed page for THIS slide (from the Studio) steers its components + density.
+  const pageSpec = (Array.isArray(lesson.pages) && lesson.pages[n - 1]) ? lesson.pages[n - 1] : null;
+  const paras = Math.max(1, Math.min(4, parseInt(b.values?.paragraphs, 10) || parseInt(pageSpec?.paragraphsPerSlide, 10) || parseInt(lesson.paragraphsPerSlide, 10) || 1));
+  const pLen = ['brief', 'medium', 'detailed'].includes(b.values?.length) ? b.values.length : (pageSpec?.paragraphLength || lesson.paragraphLength || 'medium');
   const tone = String(b.values?.tone || lesson.tone || '').slice(0, 40);
-  // Learner-chosen support toggles (sup_*) override the tool's defaults.
-  const baseSup = lesson.support || { images: true };
+  // Learner-chosen support toggles (sup_*) override the page/tool defaults.
+  const baseSup = pageSpec?.support || lesson.support || { images: true };
   const pickBool = (v: any, d: any) => (typeof v === 'boolean' ? v : d);
   const support = {
     images: pickBool(b.values?.sup_images, baseSup.images),
@@ -173,7 +175,10 @@ export async function POST(req: Request) {
     tables: pickBool(b.values?.sup_tables, baseSup.tables),
     formulas: pickBool(b.values?.sup_formulas, baseSup.formulas),
   };
-  const activityTypes: string[] = (Array.isArray(lesson.activityTypes) && lesson.activityTypes.length) ? lesson.activityTypes : ['mcq', 'fill-blank', 'input'];
+  // This slide's activity set: the designed page wins, else the lesson-wide set.
+  const activityTypes: string[] = (Array.isArray(pageSpec?.activityTypes) && pageSpec.activityTypes.length)
+    ? pageSpec.activityTypes
+    : ((Array.isArray(lesson.activityTypes) && lesson.activityTypes.length) ? lesson.activityTypes : ['mcq', 'fill-blank', 'input']);
   // Quantitative subjects (math + physics/chemistry/etc.) get LaTeX formulas,
   // diagrams and step-by-step working — not plain-ASCII math.
   const mathish = kind === 'math' || /\b(physics|chemistry|chemical|biolog|trigonometry|geometry|calculus|algebra|equation|mechanics|thermodynamic|kinematic|electromag|stoichiom|\bmole\b|reaction|force|velocity|acceleration|vector|momentum|circuit|optics|astronom|statistic|probability)\b/.test(`${subject} ${topic}`.toLowerCase());
@@ -245,6 +250,7 @@ export async function POST(req: Request) {
     `Generate slide ${n} of ${total} for a ${subject} lesson at ${level} level.`,
     language ? `Level objective: ${levelGuidance(level)}` : '',
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
+    pageSpec?.style ? `This slide was designed to use: ${pageSpec.style}` : '',
     priorSummary ? `Avoid repeating: ${priorSummary}.` : '',
     // Content/level fidelity — the #1 correctness rule.
     `CRITICAL: The teaching and the question MUST genuinely be about "${topic || subject}" and pitched at "${level}" level. If the subject is ${subject}, do NOT drift to unrelated easier material (e.g. for Trigonometry ask about sine/cosine/tangent, angles, identities or triangles — NOT plain arithmetic like "2+2"). Match the true difficulty of ${level}.`,

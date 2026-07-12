@@ -33,6 +33,17 @@ export interface LessonSupport {
 
 export type LessonMode = 'slides' | 'conversation' | 'journal';
 
+// One designed slide/page: which components appear and its text density. When a
+// lesson carries `pages`, each slide is generated from its page spec (instead of
+// a random draw from the lesson-wide activity/support sets).
+export interface LessonPage {
+  activityTypes?: string[];
+  support?: LessonSupport;
+  paragraphsPerSlide?: number;
+  paragraphLength?: 'brief' | 'medium' | 'detailed';
+  style?: string;          // compiled per-page "how to use these components"
+}
+
 export interface LessonSpec {
   subject: string;         // "French", "Algebra", "World History"...
   level?: string;          // default level label
@@ -50,6 +61,7 @@ export interface LessonSpec {
   paragraphLength?: 'brief' | 'medium' | 'detailed';
   support?: LessonSupport;          // which support materials may appear
   activityTypes?: string[];         // subset of ['mcq','fill-blank','input','writing','annotation','code'] to shuffle
+  pages?: LessonPage[];             // when set, each slide is composed from its page spec
 }
 
 export interface GeneratorSpec {
@@ -136,23 +148,33 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     if (!subject) errors.push('lesson.subject is required');
     const sk = ['general', 'language', 'math', 'programming'].includes(l.subjectKind) ? l.subjectKind : undefined;
     const sup = l.support && typeof l.support === 'object' ? l.support : {};
-    const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ['mcq', 'fill-blank', 'input', 'writing', 'annotation', 'code'].includes(x));
+    const ACTS = ['mcq', 'fill-blank', 'input', 'writing', 'annotation', 'code'];
+    const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ACTS.includes(x));
     const mode: LessonMode = ['slides', 'conversation', 'journal'].includes(l.mode) ? l.mode : 'slides';
+    const cleanSup = (s: any): LessonSupport => ({ images: s?.images !== false, code: !!s?.code, tables: !!s?.tables, formulas: !!s?.formulas, audio: !!s?.audio });
+    // Per-page designs (from the Studio). Each becomes one slide.
+    const pages: LessonPage[] = (Array.isArray(l.pages) ? l.pages : []).slice(0, 15).map((pg: any) => ({
+      activityTypes: (Array.isArray(pg?.activityTypes) ? pg.activityTypes : []).filter((x: any) => ACTS.includes(x)),
+      support: pg?.support && typeof pg.support === 'object' ? cleanSup(pg.support) : undefined,
+      paragraphsPerSlide: Math.max(1, Math.min(4, parseInt(pg?.paragraphsPerSlide, 10) || 1)),
+      paragraphLength: ['brief', 'medium', 'detailed'].includes(pg?.paragraphLength) ? pg.paragraphLength : 'medium',
+      style: String(pg?.style || '').slice(0, 400) || undefined,
+    }));
     lesson = {
       subject,
       level: String(l.level || '').slice(0, 40) || undefined,
       mode,
-      totalSlides: Math.max(1, Math.min(15, parseInt(l.totalSlides, 10) || 5)),
+      // When pages are designed, they define the slide count (unless overridden higher).
+      totalSlides: Math.max(1, Math.min(15, parseInt(l.totalSlides, 10) || pages.length || 5)),
       language: String(l.language || '').slice(0, 40) || undefined,
       translateTo: String(l.translateTo || 'English').slice(0, 40),
       style: String(l.style || '').slice(0, 500) || undefined,
       subjectKind: sk,
       paragraphsPerSlide: Math.max(1, Math.min(4, parseInt(l.paragraphsPerSlide, 10) || 1)),
       paragraphLength: ['brief', 'medium', 'detailed'].includes(l.paragraphLength) ? l.paragraphLength : 'medium',
-      support: {
-        images: sup.images !== false, code: !!sup.code, tables: !!sup.tables, formulas: !!sup.formulas, audio: !!sup.audio,
-      },
+      support: cleanSup(sup),
       activityTypes: acts.length ? acts : ['mcq', 'fill-blank', 'input'],
+      pages: pages.length ? pages : undefined,
     };
   } else if (archetype === 'generator') {
     const g = d.generator || {};
