@@ -258,32 +258,84 @@ function WritingCollector({ q, translateTo, onAnswer }: { q: Q; translateTo: str
   );
 }
 
-function AnnotationCollector({ q, onAnswer, size }: { q: Q; onAnswer: (p: any) => void; size?: 'large' | 'medium' | 'adaptive' }) {
+// The annotation activity: a full sketch pad (pen/colours/text/pages, sized
+// large / medium / adaptive) that does DOUBLE duty — press "Talk with AI" to have
+// the tutor read your page and reply right here, or "Grade answer" to submit it
+// for scoring. Once graded, it reports the verdict up via onDone.
+function AnnotationQuestion({ q, subject, size, onDone }: { q: Q; subject: string; size?: 'large' | 'medium' | 'adaptive'; onDone: (correct: boolean, detail: any) => void }) {
   const getPagesRef = useRef<null | (() => string[])>(null);
-  const [ready, setReady] = useState(false);
   const [text, setText] = useState('');
-  const emit = (rdy: boolean, txt: string) => onAnswer({ kind: 'annotation', prompt: q.prompt || 'Worked answer', answer: q.answer || '', getPages: getPagesRef.current, text: txt, ready: rdy || !!txt.trim() });
-  useEffect(() => { emit(ready, text); /* eslint-disable-next-line */ }, [ready, text]);
+  const [talkBusy, setTalkBusy] = useState(false);
+  const [gradeBusy, setGradeBusy] = useState(false);
+  const [chat, setChat] = useState<{ role: 'assistant' | 'learner'; text: string }[]>([]);
 
-  // Open every page in a print window (learner can Save-as-PDF / print).
-  const download = () => {
+  const collect = async () => {
+    const pages = (getPagesRef.current ? getPagesRef.current() : []).filter(Boolean);
+    const image = await compositePages(pages);
+    return { pages, image };
+  };
+
+  // Talk: the AI reads the page + typed note and replies inline (does NOT submit).
+  const talk = async () => {
+    if (talkBusy) return;
+    setTalkBusy(true);
+    const msg = text.trim() || '📝 (please read my written page)';
+    const history = [...chat, { role: 'learner' as const, text: msg }];
+    setChat(history);
+    try {
+      const { image } = await collect();
+      const r = await API.post('/api/tools/lesson/canvas-chat', {
+        subject: `${subject}${q.prompt ? ` — ${q.prompt}` : ''}`,
+        history: history.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: m.text })),
+        image,
+      });
+      setChat([...history, { role: 'assistant', text: r?.reply || '…' }]);
+    } catch { setChat(c => [...c, { role: 'assistant', text: '(Could not reach the tutor this time.)' }]); }
+    setTalkBusy(false);
+  };
+
+  // Grade: submit the page (+ typed answer) to be scored against the activity.
+  const grade = async () => {
+    if (gradeBusy) return;
+    setGradeBusy(true);
+    try {
+      const { pages, image } = await collect();
+      const r = await API.post('/api/tools/lesson/check-annotation', { prompt: q.prompt, answer: q.answer, image, text: text.trim() });
+      onDone(!!r.correct, { prompt: q.prompt, your: text.trim() || '📝 your written pages', answer: q.answer || '', correct: !!r.correct, image: image || undefined, pages, feedback: r.feedback });
+    } catch { onDone(true, { prompt: q.prompt, your: '(saved)', answer: '', correct: true, feedback: 'Saved.' }); }
+    setGradeBusy(false);
+  };
+
+  const download = async () => {
     const pages = (getPagesRef.current ? getPagesRef.current() : []).filter(Boolean);
     if (!pages.length) { alert('Nothing written yet.'); return; }
     printPages(q.prompt || 'My work', pages);
   };
+
   return (
     <div style={{ textAlign: 'center' }}>
-      <p style={{ fontWeight: 600, margin: '0 0 10px' }}>📝 <MathText text={q.prompt || 'Work out the full answer on the pad:'} /></p>
-      <AnnotationPad padSize={size} onReady={(fn) => { getPagesRef.current = fn; emit(ready, text); }} onChange={() => setReady(true)} />
-      {/* Optional: type the answer instead of / alongside drawing. The keyboard's
-          mic 🎤 dictates into this box, so answers can be spoken too. */}
+      <p style={{ fontWeight: 600, margin: '0 0 10px' }}>📝 <MathText text={q.prompt || 'Work it out on the pad — ask the AI, or submit for grading:'} /></p>
+      <AnnotationPad padSize={size} onReady={(fn) => { getPagesRef.current = fn; }} />
+      {/* Type a question / answer too — the keyboard's 🎤 lets you speak it. */}
       <div style={{ maxWidth: 520, margin: '10px auto 0' }}>
-        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="…or type your answer here (use your keyboard's 🎤 to speak it)"
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="…or type a question for the AI / your answer here (🎤 to speak)"
           style={{ width: '100%', minHeight: 54, resize: 'vertical', fontSize: 14, padding: 8, borderRadius: 8, border: '1.5px solid var(--ink)', boxSizing: 'border-box' }} />
       </div>
-      <div style={{ marginTop: 10 }}>
-        <button className="btn small ghost" onClick={download}>📄 Download pages (PDF)</button>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+        <button className="btn small blue" disabled={talkBusy} onClick={talk}>{talkBusy ? <><Spinner />Reading…</> : '💬 Talk with AI'}</button>
+        <button className="btn small green" disabled={gradeBusy} onClick={grade}>{gradeBusy ? <><Spinner />Grading…</> : '✅ Grade answer'}</button>
+        <button className="btn small ghost" onClick={download}>📄 Download (PDF)</button>
       </div>
+      {chat.length > 0 && (
+        <div style={{ maxWidth: 560, margin: '12px auto 0', textAlign: 'left', display: 'grid', gap: 6 }}>
+          {chat.map((m, i) => (
+            <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: m.role === 'assistant' ? 'rgba(92,128,188,0.14)' : 'rgba(0,0,0,0.05)', fontSize: 14 }}>
+              <b>{m.role === 'assistant' ? '🤖 AI' : '🧑 You'}:</b> {m.text}
+            </div>
+          ))}
+        </div>
+      )}
+      <p style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}><b>Talk with AI</b> reads your page and replies here; <b>Grade answer</b> submits it for scoring.</p>
     </div>
   );
 }
@@ -325,10 +377,10 @@ function ReviewRow({ d }: { d: any }) {
   );
 }
 
-// Wraps an AI-checked collector (writing / annotation / code) with its OWN
-// "Check with AI" button, so several can sit stacked on one slide and each be
-// graded independently. Reports its verdict up via onDone.
-function AIQuestionCard({ q, translateTo, size, onDone }: { q: Q; translateTo: string; size?: 'large' | 'medium' | 'adaptive'; onDone: (correct: boolean, detail: any) => void }) {
+// Wraps an AI-checked collector (writing / code) with its OWN "Check with AI"
+// button, so several can sit stacked on one slide and each be graded
+// independently. (Annotation has its own richer component.)
+function AIQuestionCard({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean, detail: any) => void }) {
   const [payload, setPayload] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const check = async () => {
@@ -336,12 +388,7 @@ function AIQuestionCard({ q, translateTo, size, onDone }: { q: Q; translateTo: s
     setBusy(true);
     try {
       let r: any, detail: any;
-      if (q.kind === 'annotation') {
-        const pages = (payload.getPages ? payload.getPages() : []).filter(Boolean);
-        const image = await compositePages(pages);
-        r = await API.post('/api/tools/lesson/check-annotation', { prompt: payload.prompt, answer: payload.answer, image, text: payload.text || '' });
-        detail = { prompt: payload.prompt, your: payload.text ? payload.text : '📝 your written pages', answer: payload.answer || '', correct: !!r.correct, image: image || undefined, pages, feedback: r.feedback };
-      } else if (q.kind === 'code') {
+      if (q.kind === 'code') {
         r = await API.post('/api/tools/lesson/check-code', { prompt: payload.prompt, answer: payload.answer, code: payload.code, language: payload.language });
         detail = { prompt: payload.prompt, your: payload.code, answer: payload.answer || '', correct: !!r.correct, code: payload.code, feedback: r.feedback };
       } else {
@@ -357,8 +404,7 @@ function AIQuestionCard({ q, translateTo, size, onDone }: { q: Q; translateTo: s
   return (
     <div>
       {q.kind === 'writing' ? <WritingCollector q={q} translateTo={translateTo} onAnswer={setPayload} />
-        : q.kind === 'annotation' ? <AnnotationCollector q={q} onAnswer={setPayload} size={size} />
-          : <CodeCollector q={q} onAnswer={setPayload} />}
+        : <CodeCollector q={q} onAnswer={setPayload} />}
       <div style={{ textAlign: 'center', marginTop: 8 }}>
         <button className="btn green" disabled={busy || !payload?.ready} onClick={check}>{busy ? <><Spinner />Checking…</> : '✅ Check with AI'}</button>
       </div>
@@ -603,9 +649,11 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
               <div key={`${cur}-${i}`} style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
                 {qList.length > 1 && <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5, marginBottom: 6 }}>Question {i + 1} / {qList.length}</div>}
                 {ans ? <ReviewRow d={ans} />
-                  : ['writing', 'annotation', 'code'].includes(q.kind)
-                    ? <AIQuestionCard q={q} translateTo={lesson.translateTo || 'English'} size={padSize} onDone={(c, d) => recordQ(i, c, d)} />
-                    : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />}
+                  : q.kind === 'annotation'
+                    ? <AnnotationQuestion q={q} subject={lesson.subject || ''} size={padSize} onDone={(c, d) => recordQ(i, c, d)} />
+                    : ['writing', 'code'].includes(q.kind)
+                      ? <AIQuestionCard q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />
+                      : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />}
               </div>
             );
           })}

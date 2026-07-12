@@ -72,8 +72,9 @@ export function AnnotationPad({ onReady, onChange, scroll = false, padSize = 'la
   const goto = (i: number) => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); setPageIdx(i); paintBlank(pagesRef.current[i] || ''); };
   const addPage = () => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); pagesRef.current.push(''); const i = pagesRef.current.length - 1; setPageCount(pagesRef.current.length); setPageIdx(i); paintBlank(''); onChange?.(); };
   const clearPage = () => { if (!confirm(scrollMode ? 'Clear everything written here?' : 'Clear this page?')) return; pagesRef.current[pageIdx] = ''; if (scrollMode) setPadH(900); paintBlank('', scrollMode ? 900 : padH); };
-  // SCROLL mode: extend the writing surface downward (keeps what you already wrote).
+  // ADAPTIVE mode: make the surface taller or shorter on the fly (width unchanged).
   const addSpace = () => { growFrom.current = canvasRef.current!.toDataURL('image/png'); setPadH(h => Math.min(h + 700, 6000)); };
+  const removeSpace = () => { growFrom.current = canvasRef.current!.toDataURL('image/png'); setPadH(h => Math.max(500, h - 700)); };
 
   const swatch = (c: string) => <button key={c} type="button" onClick={() => { setColor(c); setTool('pen'); }} title={c}
     style={{ width: 24, height: 24, borderRadius: '50%', background: c, border: color === c ? '3px solid var(--ink)' : '2px solid rgba(0,0,0,0.3)', cursor: 'pointer' }} />;
@@ -120,9 +121,10 @@ export function AnnotationPad({ onReady, onChange, scroll = false, padSize = 'la
       </div>
 
       {scrollMode ? (
-        /* ADAPTIVE/SCROLL: grow the surface downward instead of turning pages. */
+        /* ADAPTIVE: make the surface taller or shorter (width stays the same). */
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-          <button className="btn small" onClick={addSpace}>＋ Add space ↓</button>
+          <button className="btn small" onClick={addSpace}>＋ Taller ↓</button>
+          <button className="btn small ghost" onClick={removeSpace}>－ Shorter ↑</button>
           <button className="btn small ghost" onClick={clearPage}>Clear</button>
         </div>
       ) : (

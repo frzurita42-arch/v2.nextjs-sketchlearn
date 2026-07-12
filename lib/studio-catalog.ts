@@ -36,7 +36,7 @@ export interface StudioCategory { id: string; label: string; for: ArtifactKind |
 // The three annotation-pad sizes, each a full pad with pen/colours/text.
 // (The old cramped "Small (quarter)" option was dropped — it had no room for the
 // colour + text toolbar.) The label's leading keyword maps to a pad size below.
-export const ANNOTATION_SIZES = ['Large (full page)', 'Medium (half screen)', 'Adaptive (grows by height)'];
+export const ANNOTATION_SIZES = ['Large (full page)', 'Medium (half height)', 'Adaptive (taller / shorter)'];
 
 // Map an ANNOTATION_SIZES label to the AnnotationPad size key.
 export function annotationSizeKey(label?: string): 'large' | 'medium' | 'adaptive' {
