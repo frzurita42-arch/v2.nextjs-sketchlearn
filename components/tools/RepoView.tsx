@@ -58,6 +58,18 @@ function addChildTo(cards: RepoCard[], parentId: string, child: RepoCard): RepoC
     return c;
   });
 }
+// Move a card among its siblings by `delta` (-1 up/left, +1 down/right). Finds
+// whichever level the id lives on and swaps it with its neighbour there.
+function moveInTree(cards: RepoCard[], id: string, delta: number): RepoCard[] {
+  const idx = cards.findIndex((c) => c.id === id);
+  if (idx !== -1) {
+    const j = idx + delta;
+    if (j < 0 || j >= cards.length) return cards;   // already at an edge
+    const n = [...cards]; [n[idx], n[j]] = [n[j], n[idx]]; return n;
+  }
+  return cards.map((c) => (c.children?.length ? { ...c, children: moveInTree(c.children, id, delta) } : c));
+}
+
 // Insert a sibling right after the given id (same level).
 function addSiblingAfter(cards: RepoCard[], id: string, sib: RepoCard): RepoCard[] {
   const out: RepoCard[] = [];
@@ -271,10 +283,12 @@ function EditField({ label, field, value, multiline, slug, context, onChange }: 
 }
 
 // ---- editable card -------------------------------------------------------
-function CardEdit({ card, depth, slug, context, patch, addChild, addSection, remove }: {
+function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch, addChild, addSection, remove, move }: {
   card: RepoCard; depth: number; slug: string; context: string;
+  siblingLayout: 'bars' | 'grid'; idx: number; count: number;
   patch: (id: string, p: Partial<RepoCard>) => void;
   addChild: (id: string) => void; addSection: (id: string) => void; remove: (id: string) => void;
+  move: (id: string, delta: number) => void;
 }) {
   const [imgBusy, setImgBusy] = useState(false);
   const links = card.links || [];
@@ -296,7 +310,16 @@ function CardEdit({ card, depth, slug, context, patch, addChild, addSection, rem
     <div className="card" style={{ padding: '10px 12px', borderStyle: card.kind === 'section' ? 'dashed' : 'solid' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55 }}>{card.kind === 'section' ? '▤ SECTION' : '▢ CARD'}{depth > 0 ? ` · L${depth + 1}` : ''}</span>
-        <button className="btn small ghost" title="Delete" onClick={() => remove(card.id)}>🗑</button>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {/* Reorder among siblings — arrows follow the layout (bars ↑↓, grid ←→). */}
+          {count > 1 && (
+            <>
+              <button className="btn small ghost" title="Move earlier" disabled={idx === 0} onClick={() => move(card.id, -1)}>{siblingLayout === 'grid' ? '←' : '↑'}</button>
+              <button className="btn small ghost" title="Move later" disabled={idx === count - 1} onClick={() => move(card.id, 1)}>{siblingLayout === 'grid' ? '→' : '↓'}</button>
+            </>
+          )}
+          <button className="btn small ghost" title="Delete" onClick={() => remove(card.id)}>🗑</button>
+        </div>
       </div>
 
       <EditField label="TITLE" field="title" value={card.title || ''} slug={slug} context={context} onChange={(v) => patch(card.id, { title: v })} />
@@ -358,8 +381,10 @@ function CardEdit({ card, depth, slug, context, patch, addChild, addSection, rem
       {/* Nested children (recursive edit) */}
       {!!card.children?.length && (
         <div style={{ display: 'grid', gap: 8, marginTop: 8, marginLeft: 10, borderLeft: '2px dotted var(--ink)', paddingLeft: 8 }}>
-          {card.children.map((k) => (
-            <CardEdit key={k.id} card={k} depth={depth + 1} slug={slug} context={context} patch={patch} addChild={addChild} addSection={addSection} remove={remove} />
+          {card.children.map((k, ci) => (
+            <CardEdit key={k.id} card={k} depth={depth + 1} slug={slug} context={context}
+              siblingLayout={card.layout || siblingLayout} idx={ci} count={card.children!.length}
+              patch={patch} addChild={addChild} addSection={addSection} remove={remove} move={move} />
           ))}
         </div>
       )}
@@ -423,6 +448,7 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
   const addChild = (id: string) => { dirty.current = true; setCards((cs) => addChildTo(cs, id, blankCard('card'))); };
   const addSection = (id: string) => { dirty.current = true; setCards((cs) => addSiblingAfter(cs, id, blankCard('section'))); };
   const remove = (id: string) => { if (!confirm('Delete this card and everything inside it?')) return; dirty.current = true; setCards((cs) => removeFromTree(cs, id)); };
+  const move = (id: string, delta: number) => { dirty.current = true; setCards((cs) => moveInTree(cs, id, delta)); };
   const addTop = (kind: 'card' | 'section') => { dirty.current = true; setCards((cs) => [...cs, blankCard(kind)]); };
 
   const save = async () => {
@@ -480,8 +506,10 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
       {/* Body */}
       {editing ? (
         <div style={{ display: 'grid', gap: 10 }}>
-          {cards.map((c) => (
-            <CardEdit key={c.id} card={c} depth={0} slug={slug} context={context} patch={patch} addChild={addChild} addSection={addSection} remove={remove} />
+          {cards.map((c, ci) => (
+            <CardEdit key={c.id} card={c} depth={0} slug={slug} context={context}
+              siblingLayout={display} idx={ci} count={cards.length}
+              patch={patch} addChild={addChild} addSection={addSection} remove={remove} move={move} />
           ))}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
             <button className="btn blue" onClick={() => addTop('card')}>＋ Add card</button>
