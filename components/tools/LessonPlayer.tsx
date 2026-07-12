@@ -164,7 +164,7 @@ function Decorations({ items }: { items: any[] }) {
 
 // ---- Self-resolving questions (mcq / fill-blank / input) — no AI check. ----
 // Report the outcome via onDone(correct, detail).
-function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean, detail: any) => void }) {
+function ChoiceQuestion({ q, translateTo, subject, onDone }: { q: Q; translateTo: string; subject: string; onDone: (correct: boolean, detail: any) => void }) {
   const [opts] = useState<any[]>(() => q.kind === 'mcq' ? shuffle(q.options || []) : []);
   const [picked, setPicked] = useState<number | null>(null);
   const [val, setVal] = useState('');
@@ -189,6 +189,7 @@ function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string;
           })}
         </div>
         {answered && opts[picked!]?.explanation && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 10, textAlign: 'center' }}>{opts[picked!].explanation}</p>}
+        {!answered && <GuidePanel subject={subject} prompt={q.prompt} kind="mcq" getAttempt={() => ''} />}
       </div>
     );
   }
@@ -226,6 +227,7 @@ function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string;
       {state === 'open' && tries > 0 && <p style={{ fontSize: 13, color: 'var(--danger,#e4572e)' }}>Not quite — {3 - tries} {3 - tries === 1 ? 'try' : 'tries'} left.</p>}
       {state === 'right' && <p style={{ fontSize: 14, color: 'var(--accent,#5c80bc)' }}>✓ Correct!</p>}
       {state === 'wrong' && <p style={{ fontSize: 14 }}>Answer: <b>{q.answer}</b> <RichText text={String(q.answer || '')} translateTo={translateTo} /></p>}
+      {state === 'open' && <GuidePanel subject={subject} prompt={q.prompt} kind={q.kind} getAttempt={() => val} />}
     </div>
   );
 }
@@ -343,9 +345,57 @@ function AnnotationQuestion({ q, subject, size, onDone }: { q: Q; subject: strin
   );
 }
 
-function CodeCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void }) {
+// A reusable "ask the AI for a hint" panel: guiding replies (code + $$math$$
+// rendered), never the direct answer. Used by code / multiple-choice / input.
+function GuidePanel({ subject, prompt, kind, getAttempt }: { subject: string; prompt: string; kind: string; getAttempt: () => string }) {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [chat, setChat] = useState<{ role: 'assistant' | 'learner'; text: string }[]>([]);
+  const ask = async () => {
+    if (busy) return;
+    setBusy(true);
+    const msg = note.trim() || '(a hint for the next step, please)';
+    const history = [...chat, { role: 'learner' as const, text: msg }];
+    setChat(history); setNote('');
+    try {
+      const r = await API.post('/api/tools/lesson/guide', { subject, prompt, attempt: getAttempt(), note: note.trim(), kind, history: history.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: m.text })) });
+      setChat([...history, { role: 'assistant', text: r?.reply || '…' }]);
+    } catch { setChat(c => [...c, { role: 'assistant', text: '(Could not reach the tutor this time.)' }]); }
+    setBusy(false);
+  };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="chat-input-row" style={{ maxWidth: 520, margin: '0 auto' }}>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Ask the AI for a hint… (🎤 to speak)" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ask(); } }} />
+        <button className="btn small blue" disabled={busy} onClick={ask}>{busy ? <><Spinner />…</> : '💬 Ask'}</button>
+      </div>
+      {chat.length > 0 && (
+        <div style={{ maxWidth: 560, margin: '10px auto 0', textAlign: 'left', display: 'grid', gap: 6 }}>
+          {chat.map((m, i) => (
+            <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: m.role === 'assistant' ? 'rgba(92,128,188,0.14)' : 'rgba(0,0,0,0.05)', fontSize: 14 }}>
+              <b>{m.role === 'assistant' ? '🤖 AI' : '🧑 You'}:</b> {m.role === 'assistant' ? <AIReply text={m.text} /> : m.text}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The code / worked-answer activity: write code (or working), ASK the AI for
+// guidance (hints + snippets, never the full answer), and SUBMIT to be graded.
+function CodeQuestion({ q, subject, onDone }: { q: Q; subject: string; onDone: (correct: boolean, detail: any) => void }) {
   const [code, setCode] = useState(String(q.starter || ''));
-  useEffect(() => { onAnswer({ kind: 'code', prompt: q.prompt || '', answer: q.answer || '', code, language: q.language || '', ready: code.trim().length > 0 }); /* eslint-disable-next-line */ }, [code]);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (busy || !code.trim()) return;
+    setBusy(true);
+    try {
+      const r = await API.post('/api/tools/lesson/check-code', { prompt: q.prompt, answer: q.answer, code, language: q.language });
+      onDone(!!r.correct, { prompt: q.prompt, your: code, answer: q.answer || '', correct: !!r.correct, code, feedback: r.feedback, fix: r.fix || '' });
+    } catch { onDone(true, { prompt: q.prompt, your: code, answer: '', correct: true, feedback: 'Saved.', code }); }
+    setBusy(false);
+  };
   return (
     <div>
       <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 8px' }}>⌨️ <MathText text={q.prompt || 'Write your answer'} /></p>
@@ -353,6 +403,11 @@ function CodeCollector({ q, onAnswer }: { q: Q; onAnswer: (p: any) => void }) {
         placeholder={q.language ? `Write your ${q.language} here…` : 'Write your working / answer here… (you can include proofs with comments)'}
         style={{ width: '100%', minHeight: 200, resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 14, lineHeight: 1.5, padding: 12, borderRadius: 8, border: '2px solid var(--ink)', background: '#2d2a26', color: '#f7f3e9', boxSizing: 'border-box' }} />
       {q.language && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>Language: {q.language}</div>}
+      <GuidePanel subject={subject} prompt={q.prompt || ''} kind="code" getAttempt={() => code} />
+      <div style={{ textAlign: 'center', marginTop: 10 }}>
+        <button className="btn green" disabled={busy || !code.trim()} onClick={submit}>{busy ? <><Spinner />Submitting…</> : '✅ Submit answer'}</button>
+      </div>
+      <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}><b>Ask</b> for hints (guiding, not the answer); <b>Submit</b> when you&apos;re sure.</p>
     </div>
   );
 }
@@ -416,25 +471,16 @@ function ReviewRow({ d }: { d: any }) {
   );
 }
 
-// Wraps an AI-checked collector (writing / code) with its OWN "Check with AI"
-// button, so several can sit stacked on one slide and each be graded
-// independently. (Annotation has its own richer component.)
-function AIQuestionCard({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean, detail: any) => void }) {
+// The handwriting activity: draw a character, then have the AI check it.
+function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string; onDone: (correct: boolean, detail: any) => void }) {
   const [payload, setPayload] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const check = async () => {
     if (busy || !payload?.ready) return;
     setBusy(true);
     try {
-      let r: any, detail: any;
-      if (q.kind === 'code') {
-        r = await API.post('/api/tools/lesson/check-code', { prompt: payload.prompt, answer: payload.answer, code: payload.code, language: payload.language });
-        detail = { prompt: payload.prompt, your: payload.code, answer: payload.answer || '', correct: !!r.correct, code: payload.code, feedback: r.feedback, fix: r.fix || '' };
-      } else {
-        r = await API.post('/api/tools/lesson/check-writing', { target: payload.target, image: payload.image });
-        detail = { prompt: payload.prompt, your: '✍️ your drawing', answer: payload.target || '', correct: !!r.correct, image: payload.image, feedback: r.feedback };
-      }
-      onDone(!!r.correct, detail);
+      const r: any = await API.post('/api/tools/lesson/check-writing', { target: payload.target, image: payload.image });
+      onDone(!!r.correct, { prompt: payload.prompt, your: '✍️ your drawing', answer: payload.target || '', correct: !!r.correct, image: payload.image, feedback: r.feedback });
     } catch {
       onDone(true, { prompt: q.prompt, your: '(saved)', answer: '', correct: true, feedback: 'Saved.' });
     }
@@ -442,8 +488,7 @@ function AIQuestionCard({ q, translateTo, onDone }: { q: Q; translateTo: string;
   };
   return (
     <div>
-      {q.kind === 'writing' ? <WritingCollector q={q} translateTo={translateTo} onAnswer={setPayload} />
-        : <CodeCollector q={q} onAnswer={setPayload} />}
+      <WritingCollector q={q} translateTo={translateTo} onAnswer={setPayload} />
       <div style={{ textAlign: 'center', marginTop: 8 }}>
         <button className="btn green" disabled={busy || !payload?.ready} onClick={check}>{busy ? <><Spinner />Checking…</> : '✅ Check with AI'}</button>
       </div>
@@ -757,9 +802,11 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
                 {ans ? <ReviewRow d={ans} />
                   : q.kind === 'annotation'
                     ? <AnnotationQuestion q={q} subject={lesson.subject || ''} size={padSize} onDone={(c, d) => recordQ(i, c, d)} />
-                    : ['writing', 'code'].includes(q.kind)
-                      ? <AIQuestionCard q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />
-                      : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />}
+                    : q.kind === 'code'
+                      ? <CodeQuestion q={q} subject={lesson.subject || ''} onDone={(c, d) => recordQ(i, c, d)} />
+                      : q.kind === 'writing'
+                        ? <WritingQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />
+                        : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} subject={lesson.subject || ''} onDone={(c, d) => recordQ(i, c, d)} />}
               </div>
             );
           })}
