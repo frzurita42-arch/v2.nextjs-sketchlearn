@@ -11,7 +11,7 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import {
-  STUDIO_CATEGORIES, ANNOTATION_SIZES, studioItem, assembleDefinition, capAvailable,
+  STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, studioItem, assembleDefinition, capAvailable,
   type StudioConfig, type StudioComponent, type StudioPage, type ArtifactKind,
 } from '@/lib/studio-catalog';
 
@@ -199,6 +199,10 @@ export function BuilderStudioView() {
                         <select value={pg.length} onChange={(e) => setPage(i, { length: e.target.value as any })}><option value="brief">brief</option><option value="medium">medium</option><option value="detailed">detailed</option></select></label>
                       <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Paragraphs</span>
                         <input type="number" min={1} max={4} value={pg.paragraphs} onChange={(e) => setPage(i, { paragraphs: Number(e.target.value) })} style={{ width: 70 }} /></label>
+                      <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Layout (rows×cols)</span>
+                        <select value={pg.template || 'auto'} onChange={(e) => setPage(i, { template: e.target.value })}>
+                          {LAYOUT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                        </select></label>
                     </div>
                   </div>
                 ))}

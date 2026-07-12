@@ -122,7 +122,29 @@ export function studioItem(id: string): StudioItem | undefined {
 export interface StudioComponent { id: string; instr?: string; opt?: string; link?: string; }
 // A presentation is a list of PAGES; each page = one slide with its own
 // components and text density.
-export interface StudioPage { components: StudioComponent[]; length?: 'brief' | 'medium' | 'detailed'; paragraphs?: number; }
+export interface StudioPage { components: StudioComponent[]; length?: 'brief' | 'medium' | 'detailed'; paragraphs?: number; template?: string; }
+
+// Suggested rows×columns layouts for a slide/section. It's only a SUGGESTION —
+// the generator arranges for best readability on the activity screen.
+export const LAYOUT_TEMPLATES: { key: string; label: string }[] = [
+  { key: 'auto', label: 'Auto (AI decides)' },
+  { key: '1x1', label: '1×1 — single block' },
+  { key: '2x1', label: '2×1 — two rows (stacked)' },
+  { key: '1x2', label: '1×2 — two columns (side by side)' },
+  { key: '2x2', label: '2×2 — grid' },
+  { key: '3x1', label: '3×1 — three rows' },
+];
+export function layoutHint(key?: string): string {
+  const map: Record<string, string> = {
+    '1x1': 'Suggested layout: 1×1 — one component filling the section.',
+    '2x1': 'Suggested layout: 2×1 — two components stacked in one column (e.g. text above, annotation below).',
+    '1x2': 'Suggested layout: 1×2 — two components side by side in one row (e.g. an image next to text).',
+    '2x2': 'Suggested layout: 2×2 — a grid of four components.',
+    '3x1': 'Suggested layout: 3×1 — three components stacked in one column.',
+  };
+  const h = map[String(key || '')];
+  return h ? `${h} This is only a suggestion — arrange the section for the clearest, most usable display on the activity screen, adding more sections below if needed.` : '';
+}
 export interface StudioConfig {
   artifact: ArtifactKind;
   title?: string;
@@ -212,7 +234,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       reading: c.reading || undefined,
       paragraphsPerSlide: clamp(pg.paragraphs, 1, 4, 1),
       paragraphLength: (pg.length || 'medium') as 'brief' | 'medium' | 'detailed',
-      style: c.lines.length ? c.lines.join('\n').slice(0, 400) : undefined,
+      style: (() => { const ls = [layoutHint(pg.template), ...c.lines].filter(Boolean); return ls.length ? ls.join('\n').slice(0, 480) : undefined; })(),
       padSize: c.padSize,   // annotation pad size for this slide, if it has one
       decorations: c.decorations.length ? c.decorations : undefined,
     };
