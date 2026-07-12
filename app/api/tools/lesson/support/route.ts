@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth-guard';
 const { fallbackImageDataUrl } = require('@/src/slides/visual-policy');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { wolframShortAnswer, wolframFull } = require('@/src/connectors/wolfram');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { levelDepthGuidance } = require('@/src/ai/level-depth');
 
 // Generates ONE support material for a slide (image / code / table / formula /
 // wolfram). The slide route returns a `supportPlan` of types; the player calls
@@ -101,6 +103,7 @@ export async function POST(req: Request) {
 
   const system = [
     `Produce ONE piece of support material for a ${subject} slide at ${level} level${topic ? ` about ${topic}` : ''}.`,
+    `LEVEL DEPTH (${level}): ${levelDepthGuidance(level)}`,
     title ? `Slide title: ${title}.` : '',
     content ? `The slide teaches: ${content}` : '',
     supSpecFor(type, mathish, kind),

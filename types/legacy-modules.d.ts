@@ -16,6 +16,7 @@ declare module '@/src/db/users';
 declare module '@/src/db/games';
 declare module '@/src/db/caches';
 declare module '@/src/ai/providers';
+declare module '@/src/ai/level-depth';
 declare module '@/src/ai/prompts/coach';
 declare module '@/src/ai/prompts/learning-path';
 declare module '@/src/ai/prompts/home-topics';

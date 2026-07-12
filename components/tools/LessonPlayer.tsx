@@ -21,6 +21,11 @@ import { buildLessonZip } from '@/lib/lesson-export';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
+// The text-difficulty scale, from extra-easy (Zero) to expert (C2). Zero/Beginner
+// stay to a few words / short sentences; higher levels get DEEPER and more
+// TECHNICAL, not just longer. Used by the create-form default and the per-slide
+// level gear that re-explains the slide text on the fly.
+const TEXT_LEVELS = ['Zero', 'Beginner', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 // Inline text that typesets any $...$ LaTeX segments (math/science prompts).
 function MathText({ text }: { text: string }) {
@@ -571,7 +576,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   }
   const settings = Array.isArray(def?.settings) ? def.settings : [];
   const levelField = settings.find((f: any) => f.id === 'level' || f.id === 'difficulty');
-  const levels: string[] = levelField?.options?.length ? levelField.options : ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1'];
+  const levels: string[] = levelField?.options?.length ? levelField.options : TEXT_LEVELS;
 
   const [phase, setPhase] = useState<'hub' | 'play' | 'done' | 'history'>('hub');
   const [form, setForm] = useState<Cfg>(() => defaultsFor(settings));
@@ -618,6 +623,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [genBusy, setGenBusy] = useState(false);                // fetching a slide
   const [err, setErr] = useState('');
   const [showReview, setShowReview] = useState(false);
+  // Per-slide text level (the gear on the slide) + re-leveling spinner.
+  const [slideLevel, setSlideLevel] = useState<Record<number, string>>({});
+  const [relevelBusy, setRelevelBusy] = useState(false);
+  const [levelOpen, setLevelOpen] = useState(false);
   // Refs let the background prefetch read the latest state without stale closures.
   const slidesRef = useRef<(Slide | null)[]>([]);
   const cfgRef = useRef<Cfg>({});
@@ -702,6 +711,25 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       const answers = { ...prev.answers, [qi]: { ...detail, correct } };
       return { ...r, [cur]: { answers, done: Object.keys(answers).length >= qs } };
     });
+  };
+
+  // Re-explain THIS slide's teaching text at a chosen level (the gear on the
+  // slide). Deeper/more technical as the level rises; questions/support untouched.
+  const relevel = async (lvl: string) => {
+    const s = slidesRef.current[cur]; if (!s) return;
+    setRelevelBusy(true); setLevelOpen(false); setSlideLevel((m) => ({ ...m, [cur]: lvl }));
+    try {
+      const r = await API.post('/api/tools/lesson/relevel', {
+        subject: lesson.subject, topic: cfg.topic || '', title: s.title, content: s.content, translation: s.translation,
+        level: lvl, language: lesson.language, translateTo: lesson.translateTo, paragraphs: cfg.paragraphs, length: cfg.length,
+      });
+      if (r?.content) setSlides((sc) => {
+        const n = [...sc];
+        if (n[cur]) n[cur] = { ...(n[cur] as Slide), content: r.content, translation: r.translation || (n[cur] as Slide).translation };
+        slidesRef.current = n; return n;
+      });
+    } catch { /* keep the current text */ }
+    setRelevelBusy(false);
   };
 
   const goBack = () => { if (cur > 0) { setCur(cur - 1); prefetch(cur); } };
@@ -992,7 +1020,22 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       {curSlide && (
         <div className="card" style={{ padding: '16px 18px', maxWidth: hasAnnotation ? 900 : 640, margin: '0 auto' }}>
           {curSlide.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7, textAlign: 'center' }}>Demo slide (no AI connected).</p>}
-          <h3 style={{ marginTop: 0, textAlign: 'center' }}>{curSlide.title}</h3>
+          {/* Title row with a ⚙ gear to change the TEXT LEVEL of this slide. */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, position: 'relative' }}>
+            <h3 style={{ margin: 0, textAlign: 'center' }}>{curSlide.title}</h3>
+            <button className="btn small ghost" title="Change the reading level of this slide" onClick={() => setLevelOpen((o) => !o)} style={{ padding: '0 6px' }}>{relevelBusy ? <Spinner /> : '⚙'}</button>
+            {levelOpen && (
+              <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 170, textAlign: 'left' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>READING LEVEL</div>
+                {TEXT_LEVELS.map((lvl) => {
+                  const active = (slideLevel[cur] || cfg.level || cfg.difficulty) === lvl;
+                  return <button key={lvl} className={`btn small ${active ? 'green' : 'ghost'}`} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 3 }} onClick={() => relevel(lvl)}>{lvl}</button>;
+                })}
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>Higher = deeper &amp; more technical, not just longer.</div>
+              </div>
+            )}
+          </div>
+          {slideLevel[cur] && <div style={{ textAlign: 'center', fontSize: 11, opacity: 0.6, marginTop: 2 }}>Level: {slideLevel[cur]}</div>}
           {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} /> : null}
           {/* Reading passage (its own "paper"). */}
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>}

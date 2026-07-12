@@ -6,6 +6,8 @@ import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
+const { levelDepthGuidance } = require('@/src/ai/level-depth');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { wolframAvailable } = require('@/src/connectors/wolfram');
 
 // The menu of activities/displays proven out by the Language Learning tool. Fed
@@ -232,6 +234,7 @@ export async function POST(req: Request) {
   const system = [
     `Generate slide ${n} of ${total} for a ${subject} lesson at ${level} level.`,
     language ? `Level objective: ${levelGuidance(level)}` : '',
+    `LEVEL DEPTH (${level}): ${levelDepthGuidance(level)}`,
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
     pageSpec?.style ? `This slide was designed to use: ${pageSpec.style}` : '',
     priorSummary ? `The learner has already seen (build on these — connect this slide to them and do NOT repeat): ${priorSummary}.` : '',
