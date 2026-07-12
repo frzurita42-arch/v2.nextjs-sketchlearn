@@ -203,13 +203,24 @@ export function assembleDefinition(cfg: StudioConfig): any {
   const context = String(cfg.context || '').trim();
 
   if (cfg.artifact === 'repository') {
-    const fields = (cfg.components || []).map((c) => studioItem(c.id)?.field).filter(Boolean) as any[];
-    if (!fields.length) fields.push({ id: 'title', label: 'Title', type: 'text' }, { id: 'description', label: 'Description', type: 'textarea' });
+    // A repository is a NESTED tree of cards ("layers"), not a gallery of posts.
+    // We seed one starter card so the owner has something to expand with the
+    // in-place editor (add card / add section / links / completion toggles).
+    const post = cfg.display === 'list';   // reuse the display picker as course/post
+    const layout: 'course' | 'post' = post ? 'post' : 'course';
+    const now = Date.now().toString(36);
+    const starter = layout === 'course'
+      ? [{
+          id: `c${now}`, kind: 'card', title: cfg.subject || title || 'Section 1',
+          subtitle: 'Add units and activities inside — use ✎ Edit to build the layers.',
+          children: [{ id: `c${now}u`, kind: 'card', title: 'Unit 1', text: 'Describe this unit.', completable: true, links: [] }],
+        }]
+      : [{ id: `c${now}`, kind: 'card', title: cfg.subject || title || 'First entry', text: context || 'Write your post here, and add link buttons.', links: [] }];
     return {
-      version: 1, archetype: 'app', title: `Repository — ${title}`.slice(0, 70),
-      description: context || `A collection: ${cfg.subject || title}`,
+      version: 1, archetype: 'repo', title: `Repository — ${title}`.slice(0, 70),
+      description: context || `A ${layout} repository: ${cfg.subject || title}`,
       tags: ['repository', 'studio'], settings: [],
-      app: { entryFields: fields, display: cfg.display || 'cards', review: false },
+      repo: { layout, cards: starter },
     };
   }
 

@@ -78,6 +78,16 @@ export function ToolSettingsView() {
 
   const fields = tool?.definition?.archetype === 'app' ? (tool.definition.app?.entryFields || []) : (tool?.definition?.settings || []);
 
+  // Repository default display (owner/admin) — how the top-level cards are arranged.
+  const isRepo = tool?.definition?.archetype === 'repo';
+  const saveDisplay = async (display: 'bars' | 'grid') => {
+    if (!tool?.definition?.repo) return;
+    const nextDef = { ...tool.definition, repo: { ...tool.definition.repo, display } };
+    setTool({ ...tool, definition: nextDef }); appState.activeTool = { ...appState.activeTool, definition: nextDef };
+    try { await API.put('/api/tools/settings', { slug, definition: nextDef }); setSaved('Saved ✓'); setTimeout(() => setSaved(''), 2500); }
+    catch (e: any) { setErr(e?.message || 'Save failed'); }
+  };
+
   return (
     <>
       <h1 className="view-title">Settings — <span className="scribble-underline">{tool?.title || 'tool'}</span></h1>
@@ -106,6 +116,21 @@ export function ToolSettingsView() {
             {saved && <span style={{ color: 'var(--accent,#5c80bc)', fontSize: 13 }}>{saved}</span>}
           </div>
         </div>
+
+        {/* Repository default display */}
+        {isRepo && (
+          <div className="card alt" style={{ padding: '14px 16px', marginTop: 16 }}>
+            <h4 style={{ margin: '0 0 4px' }}>🗂️ Default display</h4>
+            <p style={{ fontSize: 12, opacity: 0.7, marginTop: 0 }}>How the top-level cards are arranged. (Each card also has its own “Children as” setting that cascades to everything inside it.)</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['bars', 'grid'] as const).map((d) => (
+                <button key={d} className={`btn small ${(tool.definition.repo?.display || 'bars') === d ? 'green' : 'ghost'}`} onClick={() => saveDisplay(d)}>
+                  {d === 'bars' ? 'Horizontal bars' : 'Grid of cards'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* AI edit chat */}
         <div className="card alt" style={{ padding: '14px 16px', marginTop: 16 }}>

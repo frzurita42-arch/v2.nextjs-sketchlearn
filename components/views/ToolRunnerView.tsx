@@ -13,6 +13,8 @@ import { ToolFields } from '@/components/tools/ToolFields';
 import { CommentSection } from '@/components/social/CommentSection';
 import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
+import { RepoView } from '@/components/tools/RepoView';
+import { SharePanel } from '@/components/tools/SharePanel';
 import { isRenderableImage } from '@/lib/img';
 
 // Deterministic emoji+color avatar from a username (matches the feed's style).
@@ -174,6 +176,7 @@ export function ToolRunnerView() {
 
   const isApp = def?.archetype === 'app';
   const isLesson = def?.archetype === 'lesson';
+  const isRepo = def?.archetype === 'repo';
   const loadEntries = useMemo(() => async () => {
     if (!isApp || !tool?.slug) return;
     try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(tool.slug)}`); setEntries(asArray(r?.entries)); setIsOwner(!!r?.isOwner); } catch { /* ignore */ }
@@ -200,14 +203,6 @@ export function ToolRunnerView() {
 
   const setStatus = async (entryId: string, status: string) => {
     try { await API.put('/api/tools/entries', { slug: tool.slug, entryId, status }); await loadEntries(); } catch { /* ignore */ }
-  };
-
-  const share = () => {
-    const url = `${window.location.origin}/?tool=${encodeURIComponent(tool.slug)}`;
-    navigator.clipboard?.writeText(url).then(
-      () => alert(`Share link copied:\n${url}`),
-      () => window.prompt('Copy this share link:', url)
-    );
   };
 
   const toggleLike = async () => {
@@ -261,7 +256,7 @@ export function ToolRunnerView() {
           <div style={{ fontSize: 12, opacity: 0.65 }}>{created}{created ? ' · ' : ''}{tool.archetype} · {tool.visibility}{tool.aiGenerated ? ' · ✦AI-built' : ''}</div>
         </div>
         <button className="btn small ghost" onClick={toggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
-        {tool.visibility !== 'private' && <button className="btn small blue" onClick={share}>🔗 Share</button>}
+        {tool.visibility !== 'private' && <SharePanel slug={tool.slug} title={tool.title} />}
         {!(tool.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === tool.owner) && (
           <button className="btn small ghost" onClick={() => app.nav('toolsettings')}>⚙️ Settings</button>
         )}
@@ -270,7 +265,9 @@ export function ToolRunnerView() {
       {def.description && <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>{def.description}</p>}
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
-        {isLesson ? (
+        {isRepo ? (
+          <RepoView def={def} slug={tool.slug} canEdit={canEdit} />
+        ) : isLesson ? (
           <LessonPlayer def={def} slug={tool.slug} />
         ) : !isApp ? (
           !def.generator ? (

@@ -17,7 +17,7 @@ export interface ToolField {
   required?: boolean;
 }
 
-export type Archetype = 'generator' | 'app' | 'lesson';
+export type Archetype = 'generator' | 'app' | 'lesson' | 'repo';
 export type GeneratorOutput = 'text' | 'cards' | 'table';
 export type AppDisplay = 'cards' | 'list' | 'table';
 
@@ -80,6 +80,44 @@ export interface AppSpec {
   review?: boolean;          // if true, new entries start 'pending' for owner approval
 }
 
+// ---- Repository archetype -------------------------------------------------
+// A repository is a nested tree of cards ("layers of different levels" — no
+// pages, unlike a lesson). A card can hold a title/subtitle/text, a set of
+// link buttons, an optional per-user completion toggle, and nested child cards.
+// This supports both course-like repos (Week 1 ▸ Unit 1 ▸ activities with links
+// + done toggles) and post-like repos (a card with text and links).
+export interface RepoLink {
+  label: string;
+  url: string;
+}
+
+export interface RepoCard {
+  id: string;
+  // 'card'    -> a nested card (a box inside its parent box)
+  // 'section' -> a sibling grouping div placed below (its own template area)
+  kind?: 'card' | 'section';
+  title?: string;
+  subtitle?: string;
+  text?: string;
+  image?: string;            // icon/cover image: an uploaded data URL or an https URL
+  links?: RepoLink[];        // each rendered as a button that opens its url
+  completable?: boolean;     // when true, shows a per-user completion toggle
+  collect?: boolean;         // when true, ANY user can add their own entry inside
+                             // (e.g. upload payment proof for their month). Each
+                             // user sees their own submissions; the owner sees all.
+  collectPrompt?: string;    // hint shown on the "add your entry" form
+  statuses?: string[];       // when set, owner/admin can move each submission
+                             // between these labels (e.g. ["pending","paid"]).
+  layout?: 'bars' | 'grid';  // how THIS card's children are arranged (overrides repo default)
+  children?: RepoCard[];     // nested cards / sections one level deeper
+}
+
+export interface RepoSpec {
+  layout?: 'course' | 'post';   // a hint for default styling
+  display?: 'bars' | 'grid';    // default arrangement of cards (horizontal bars or a grid)
+  cards: RepoCard[];
+}
+
 export interface ToolDefinition {
   version: number;
   archetype: Archetype;
@@ -90,6 +128,7 @@ export interface ToolDefinition {
   generator?: GeneratorSpec;
   app?: AppSpec;
   lesson?: LessonSpec;
+  repo?: RepoSpec;
 }
 
 const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'select', 'select-or-custom', 'toggle', 'date', 'image', 'audio', 'drawing'];
@@ -131,12 +170,49 @@ function cleanField(f: any): ToolField | null {
   return field;
 }
 
+let _repoIdSeq = 0;
+function cleanRepoCard(c: any, depth: number): RepoCard | null {
+  if (!c || typeof c !== 'object' || depth > 4) return null;
+  const kind: 'card' | 'section' = c.kind === 'section' ? 'section' : 'card';
+  const title = String(c.title || '').slice(0, 160);
+  const subtitle = String(c.subtitle || '').slice(0, 200);
+  const text = String(c.text || '').slice(0, 4000);
+  const links: RepoLink[] = (Array.isArray(c.links) ? c.links : []).slice(0, 12).map((l: any) => ({
+    label: String(l?.label || l?.text || 'Open link').slice(0, 80),
+    url: String(l?.url || l?.href || '').slice(0, 800),
+  })).filter((l: RepoLink) => /^https?:\/\//i.test(l.url) || l.url.startsWith('/'));
+  const children: RepoCard[] = (Array.isArray(c.children) ? c.children : [])
+    .slice(0, 40).map((k: any) => cleanRepoCard(k, depth + 1)).filter(Boolean) as RepoCard[];
+  // Keep a stable id so per-user completion toggles survive re-saves.
+  const id = String(c.id || '').slice(0, 40).replace(/[^a-zA-Z0-9_-]/g, '') || `c${Date.now().toString(36)}${(_repoIdSeq++).toString(36)}`;
+  // Icon/cover image: a data URL (uploaded / AI-generated) or an https URL.
+  const rawImg = String(c.image || '').slice(0, 1_500_000);
+  const image = (/^data:image\//i.test(rawImg) || /^https?:\/\//i.test(rawImg)) ? rawImg : '';
+  const card: RepoCard = { id, kind };
+  if (title) card.title = title;
+  if (subtitle) card.subtitle = subtitle;
+  if (text) card.text = text;
+  if (image) card.image = image;
+  if (links.length) card.links = links;
+  if (c.completable) card.completable = true;
+  if (c.collect) card.collect = true;
+  const collectPrompt = String(c.collectPrompt || '').slice(0, 200);
+  if (collectPrompt) card.collectPrompt = collectPrompt;
+  const statuses = (Array.isArray(c.statuses) ? c.statuses : []).map((s: any) => String(s).slice(0, 24).trim()).filter(Boolean).slice(0, 8);
+  if (statuses.length) card.statuses = statuses;
+  if (c.layout === 'bars' || c.layout === 'grid') card.layout = c.layout;
+  if (children.length) card.children = children;
+  // A card with no content at all is dropped.
+  if (!title && !subtitle && !text && !image && !links.length && !children.length && !card.completable && !card.collect) return null;
+  return card;
+}
+
 // Validate + normalize an untrusted definition (from the AI or an API caller).
 // Returns a safe, shaped ToolDefinition or a list of errors.
 export function validateToolDefinition(input: any): { ok: boolean; errors: string[]; def?: ToolDefinition } {
   const errors: string[] = [];
   const d = input || {};
-  const archetype: Archetype = d.archetype === 'app' ? 'app' : d.archetype === 'lesson' ? 'lesson' : d.archetype === 'generator' ? 'generator' : (errors.push('archetype must be "generator", "app", or "lesson"'), 'generator');
+  const archetype: Archetype = d.archetype === 'app' ? 'app' : d.archetype === 'lesson' ? 'lesson' : d.archetype === 'repo' ? 'repo' : d.archetype === 'generator' ? 'generator' : (errors.push('archetype must be "generator", "app", "lesson", or "repo"'), 'generator');
   const title = String(d.title || '').trim().slice(0, 100);
   if (!title) errors.push('title is required');
 
@@ -145,8 +221,16 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
   let generator: GeneratorSpec | undefined;
   let app: AppSpec | undefined;
   let lesson: LessonSpec | undefined;
+  let repo: RepoSpec | undefined;
 
-  if (archetype === 'lesson') {
+  if (archetype === 'repo') {
+    const r = d.repo || {};
+    const layout: 'course' | 'post' = r.layout === 'post' ? 'post' : 'course';
+    const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
+    const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
+      .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
+    repo = { layout, display, cards };
+  } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);
     if (!subject) errors.push('lesson.subject is required');
@@ -215,6 +299,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       generator,
       app,
       lesson,
+      repo,
     },
   };
 }

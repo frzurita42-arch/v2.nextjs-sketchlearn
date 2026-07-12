@@ -31,7 +31,6 @@ export function BuilderStudioView() {
   const [tone, setTone] = useState('Friendly');
   const [display, setDisplay] = useState<'cards' | 'list' | 'table'>('cards');
   const [pages, setPages] = useState<StudioPage[]>([newPage()]);
-  const [repoFields, setRepoFields] = useState<StudioComponent[]>([]);
   const [context, setContext] = useState('');
   const [visibility, setVisibility] = useState('unlisted');
   const [busy, setBusy] = useState(false);
@@ -46,7 +45,6 @@ export function BuilderStudioView() {
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, chatBusy]);
 
   const presCats = STUDIO_CATEGORIES.filter((c) => c.for === 'presentation' || c.for === 'both');
-  const repoCats = STUDIO_CATEGORIES.filter((c) => c.for === 'repository' || c.for === 'both');
 
   // ---- per-page component editing ----
   const setPage = (i: number, patch: Partial<StudioPage>) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)));
@@ -56,13 +54,9 @@ export function BuilderStudioView() {
   const setComp = (i: number, id: string, patch: Partial<StudioComponent>) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, components: p.components.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : p)));
   const rmComp = (i: number, id: string) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, components: p.components.filter((c) => c.id !== id) } : p)));
 
-  // ---- repository fields ----
-  const addField = (id: string) => { if (id && !repoFields.some((c) => c.id === id)) setRepoFields((f) => [...f, { id }]); };
-  const rmField = (id: string) => setRepoFields((f) => f.filter((c) => c.id !== id));
-
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, context, display, components: repoFields };
+    : { artifact, title, subject, context, display };
 
   const generate = async () => {
     if (busy) return;
@@ -168,7 +162,7 @@ export function BuilderStudioView() {
               <label className="field"><span>{artifact === 'presentation' ? 'Subject / topic' : 'Collection name'}</span><input value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. My sketchbook'} onChange={(e) => setSubject(e.target.value)} /></label>
               {artifact === 'presentation'
                 ? <label className="field"><span>Tone</span><input value={tone} onChange={(e) => setTone(e.target.value)} /></label>
-                : <label className="field"><span>Show items as</span><select value={display} onChange={(e) => setDisplay(e.target.value as any)}><option value="cards">Cards</option><option value="list">List</option><option value="table">Table</option></select></label>}
+                : <label className="field"><span>Repository type</span><select value={display} onChange={(e) => setDisplay(e.target.value as any)}><option value="cards">Course (nested weeks / units)</option><option value="list">Post (entries with links)</option></select></label>}
             </div>
           </div>
 
@@ -212,14 +206,16 @@ export function BuilderStudioView() {
               </div>
             </>
           ) : (
-            /* REPOSITORY fields */
+            /* REPOSITORY — nested layers */
             <div className="card" style={{ padding: '12px 14px', marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>FIELDS ON EACH ITEM</div>
-                {picker(repoCats, repoFields.map((c) => c.id), addField, '＋ Add a field…')}
-              </div>
-              {repoFields.length === 0 ? <p style={{ fontSize: 13, opacity: 0.6, margin: 0 }}>Add the fields each posted item should have.</p>
-                : <div style={{ display: 'grid', gap: 8 }}>{repoFields.map((c) => { const it = studioItem(c.id); return it ? <div key={c.id} className="card alt" style={{ padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span><b>{it.emoji} {it.name}</b> <span style={{ fontSize: 12, opacity: 0.7 }}>— {it.desc}</span></span><button className="btn small ghost" onClick={() => rmField(c.id)}>✕</button></div> : null; })}</div>}
+              <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6 }}>🗂️ LAYERED REPOSITORY</div>
+              <p style={{ fontSize: 13, opacity: 0.75, margin: 0 }}>
+                A repository is a tree of <b>cards inside cards</b> — no slides, just layers.
+                We&apos;ll create a starter card; then open the repository and use <b>✎ Edit</b> to
+                add cards (nested inside), add sections (new layers below), attach <b>link buttons</b>,
+                and turn on <b>✓ completion toggles</b>. You (and admins) can also ask the AI to
+                lay it out for you. Great for a course (Week ▸ Unit ▸ activities) or post-style notes.
+              </p>
             </div>
           )}
 

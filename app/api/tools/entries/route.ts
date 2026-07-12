@@ -15,10 +15,17 @@ export async function GET(req: Request) {
   if (!a.ok) return a.response;
   const slug = new URL(req.url).searchParams.get('slug') || '';
   const tool = await getToolBySlug(slug);
-  if (!tool || !['app', 'lesson'].includes(tool.archetype)) return NextResponse.json({ entries: [] });
+  if (!tool || !['app', 'lesson', 'repo'].includes(tool.archetype)) return NextResponse.json({ entries: [] });
   const all = await listEntries(tool.id, { limit: 300 });
-  const isOwner = tool.owner === a.user.username;
-  const entries = isOwner ? all : all.filter((e: any) => e.status === 'active' || e.status === 'approved');
+  const isOwner = tool.owner === a.user.username || a.user.role === 'admin';
+  // Repository contributions (e.g. payment proofs) are private-by-default: each
+  // user sees only their own submissions; the owner/admin sees everyone's.
+  let entries;
+  if (tool.archetype === 'repo') {
+    entries = isOwner ? all : all.filter((e: any) => e.username === a.user.username);
+  } else {
+    entries = isOwner ? all : all.filter((e: any) => e.status === 'active' || e.status === 'approved');
+  }
   return NextResponse.json({ entries, isOwner, review: !!tool.definition?.app?.review }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
@@ -28,7 +35,7 @@ export async function POST(req: Request) {
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const tool = await getToolBySlug(String(b.slug || ''));
-  if (!tool || !['app', 'lesson'].includes(tool.archetype)) return NextResponse.json({ error: 'Not an app or lesson tool' }, { status: 400 });
+  if (!tool || !['app', 'lesson', 'repo'].includes(tool.archetype)) return NextResponse.json({ error: 'Not an app, lesson, or repo tool' }, { status: 400 });
   const data = (b.data && typeof b.data === 'object') ? b.data : {};
   // Guard against oversized payloads (e.g. a huge embedded image data URL).
   if (JSON.stringify(data).length > 2_200_000) {
@@ -53,8 +60,12 @@ export async function PUT(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const tool = await getToolBySlug(String(b.slug || ''));
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (tool.owner !== a.user.username) return NextResponse.json({ error: 'Only the owner can moderate entries' }, { status: 403 });
-  const status = ['active', 'approved', 'rejected', 'pending'].includes(b.status) ? b.status : 'approved';
+  if (tool.owner !== a.user.username && a.user.role !== 'admin') return NextResponse.json({ error: 'Only the owner or an admin can moderate entries' }, { status: 403 });
+  // Repositories carry custom, per-card status labels (e.g. pending → paid /
+  // graded), so accept any short label there. App/lesson tools keep the fixed set.
+  const status = tool.archetype === 'repo'
+    ? String(b.status || '').slice(0, 24).trim() || 'pending'
+    : (['active', 'approved', 'rejected', 'pending'].includes(b.status) ? b.status : 'approved');
   const okUpd = await setEntryStatus(String(b.entryId || ''), status);
   return NextResponse.json({ ok: okUpd });
 }

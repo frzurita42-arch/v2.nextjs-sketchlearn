@@ -27,3 +27,10 @@ declare module '@/src/ai/prompts/slide';
 declare module '@/src/slides/sanitize';
 declare module '@/src/slides/fallback';
 declare module '@/src/slides/visual-policy';
+
+// qrcode ships no bundled types; we only use toDataURL in the browser.
+declare module 'qrcode' {
+  interface QROpts { width?: number; margin?: number; errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H' }
+  const QRCode: { toDataURL(text: string, opts?: QROpts): Promise<string> };
+  export default QRCode;
+}
