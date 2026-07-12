@@ -22,6 +22,7 @@ export interface StudioItem {
   linkField?: boolean;              // shows a reference image/link input (e.g. image gen)
   requires?: string;                // capability path in /api/config caps (e.g. 'music', 'providers.grok')
   deco?: boolean;                   // a decoration (link / personalized message), not an activity
+  reading?: boolean;                // a reading passage (its length follows the slide's paragraph settings)
 }
 
 // Read a dotted capability path from the /api/config caps object.
@@ -48,7 +49,9 @@ export function annotationSizeKey(label?: string): 'large' | 'medium' | 'adaptiv
 export const STUDIO_CATEGORIES: StudioCategory[] = [
   {
     id: 'activities', label: '🎯 Activities (how the learner answers)', for: 'presentation', items: [
-      { id: 'mcq', emoji: '📖', name: 'Reading + multiple choice', desc: 'A short read, then 2- or 4-option questions.', activity: 'mcq' },
+      { id: 'reading', emoji: '📖', name: 'Reading passage', desc: 'A passage to read; its length follows this slide’s paragraph settings.', reading: true },
+      { id: 'mcq4', emoji: '🔘', name: 'Multiple choice — 4 options', desc: 'One question with 4 options (one correct). Add several for several questions.', activity: 'mcq4' },
+      { id: 'mcq2', emoji: '⚖️', name: 'Multiple choice — 2 options', desc: 'One question with 2 options (e.g. true/false). Add several for several questions.', activity: 'mcq2' },
       { id: 'fill-blank', emoji: '✏️', name: 'Fill in the blank', desc: 'A sentence with a missing word to type.', activity: 'fill-blank' },
       { id: 'input', emoji: '⌨️', name: 'Typed answer (AI-checked)', desc: 'The learner types their own answer; the AI judges it.', activity: 'input' },
       { id: 'annotation', emoji: '📝', name: 'Annotation / worked answers', desc: 'Write the full answer by hand on a paper pad; the AI grades it.', activity: 'annotation', sizes: true },
@@ -136,13 +139,17 @@ function compilePage(comps: StudioComponent[]) {
   const activities: string[] = [];
   const support: any = { images: false, code: false, tables: false, formulas: false, audio: false };
   let language = false;
+  let reading = false;
   let padSize: 'large' | 'medium' | 'adaptive' | undefined;
   const decorations: { kind: string; message: string; link: string }[] = [];
   const lines: string[] = [];
   const providers: string[] = [];
   for (const c of comps) {
     const it = studioItem(c.id); if (!it) continue;
+    // NOTE: activities are kept in order WITH duplicates — each placed question
+    // component becomes its own question on the slide (two MCQ-4 → two questions).
     if (it.activity) activities.push(it.activity);
+    if (it.reading) reading = true;
     if (it.support) support[it.support] = true;
     if (it.language) language = true;
     const how = String(c.instr || '').trim();
@@ -156,7 +163,7 @@ function compilePage(comps: StudioComponent[]) {
     lines.push(`• ${it.name}${size}${ref}${how ? `: ${how}` : ''}`);
   }
   if (providers.length) lines.push(`• Preferred AI model: ${providers.join(', ')}`);
-  return { activities: Array.from(new Set(activities)), support, language, lines, padSize, decorations };
+  return { activities, support, language, reading, lines, padSize, decorations };
 }
 
 function inferKind(subject: string, language: boolean): string {
@@ -193,13 +200,16 @@ export function assembleDefinition(cfg: StudioConfig): any {
   const pages = rawPages.map((pg, i) => {
     const c = compilePage(pg.components || []);
     if (c.language) anyLang = true;
-    const acts = c.activities.length ? c.activities : ['mcq'];
+    // Ordered activities WITH duplicates — one question per placed component.
+    // May be empty (e.g. a reading-only page); the player then shows no question.
+    const acts = c.activities;
     acts.forEach((a) => unionActs.add(a));
     for (const k of Object.keys(unionSupport)) if (c.support[k]) unionSupport[k] = true;
     if (c.lines.length) allLines.push(`Slide ${i + 1}: ${c.lines.join('; ')}`);
     return {
       activityTypes: acts,
       support: c.support,
+      reading: c.reading || undefined,
       paragraphsPerSlide: clamp(pg.paragraphs, 1, 4, 1),
       paragraphLength: (pg.length || 'medium') as 'brief' | 'medium' | 'detailed',
       style: c.lines.length ? c.lines.join('\n').slice(0, 400) : undefined,

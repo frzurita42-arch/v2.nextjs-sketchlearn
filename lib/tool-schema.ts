@@ -44,6 +44,7 @@ export interface LessonPage {
   style?: string;          // compiled per-page "how to use these components"
   padSize?: 'large' | 'medium' | 'adaptive';   // annotation pad size for this slide
   decorations?: { kind: string; message?: string; link?: string }[];   // links / messages on the slide
+  reading?: boolean;       // include a reading passage on this slide
 }
 
 export interface LessonSpec {
@@ -150,7 +151,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     if (!subject) errors.push('lesson.subject is required');
     const sk = ['general', 'language', 'math', 'programming'].includes(l.subjectKind) ? l.subjectKind : undefined;
     const sup = l.support && typeof l.support === 'object' ? l.support : {};
-    const ACTS = ['mcq', 'fill-blank', 'input', 'writing', 'annotation', 'code'];
+    const ACTS = ['mcq', 'mcq2', 'mcq4', 'fill-blank', 'input', 'writing', 'annotation', 'code'];
     const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ACTS.includes(x));
     const mode: LessonMode = ['slides', 'conversation', 'journal'].includes(l.mode) ? l.mode : 'slides';
     const cleanSup = (s: any): LessonSupport => ({ images: s?.images !== false, code: !!s?.code, tables: !!s?.tables, formulas: !!s?.formulas, audio: !!s?.audio });
@@ -162,6 +163,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       paragraphLength: ['brief', 'medium', 'detailed'].includes(pg?.paragraphLength) ? pg.paragraphLength : 'medium',
       style: String(pg?.style || '').slice(0, 400) || undefined,
       padSize: ['large', 'medium', 'adaptive'].includes(pg?.padSize) ? pg.padSize : undefined,
+      reading: pg?.reading ? true : undefined,
       decorations: (Array.isArray(pg?.decorations) ? pg.decorations : []).slice(0, 6).map((d: any) => ({
         kind: ['coffee', 'note', 'banner', 'hint', 'tv'].includes(d?.kind) ? d.kind : 'note',
         message: String(d?.message || '').slice(0, 300),

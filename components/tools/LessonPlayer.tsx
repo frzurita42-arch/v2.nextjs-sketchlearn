@@ -29,10 +29,10 @@ type Q = { kind: string; prompt: string; options?: any[]; answer?: string; accep
 // streamed in with its own spinner and cached on `_supports`.
 type Slide = { title: string; content: string; translation?: string; support?: any; supportPlan?: string[]; _supports?: any[]; questions: Q[]; fallback?: boolean };
 type Cfg = Record<string, any>;
-// Per-slide result recorded once the slide's question reaches a terminal state.
-// A slide can hold several questions; we record each question's detail and mark
-// the slide `done` once every question has been answered.
-type SlideRes = { correct: number; total: number; details: any[]; done: boolean };
+// A slide can hold several questions shown stacked at once; we store each
+// answered question's detail keyed by its index and mark the slide `done` once
+// every question has been answered.
+type SlideRes = { answers: Record<number, any>; done: boolean };
 
 function shuffle<T>(a: T[]): T[] { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
@@ -182,7 +182,7 @@ function ChoiceQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string;
             const isP = picked === i;
             const bg = !answered ? undefined : o.correct ? 'rgba(127,176,105,0.25)' : (isP ? 'rgba(228,87,46,0.2)' : undefined);
             return <button key={i} className="btn" style={{ textAlign: 'left', width: '100%', background: bg, borderColor: answered && o.correct ? 'var(--ink)' : undefined }} disabled={answered}
-              onClick={() => { setPicked(i); finish(!!o.correct, { prompt: q.prompt, your: o.text, answer: correctText, correct: !!o.correct }); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}<MathText text={o.text} /></button>;
+              onClick={() => { setPicked(i); finish(!!o.correct, { prompt: q.prompt, your: o.text, answer: correctText, correct: !!o.correct, feedback: o.explanation || '' }); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}<MathText text={o.text} /></button>;
           })}
         </div>
         {answered && opts[picked!]?.explanation && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 10, textAlign: 'center' }}>{opts[picked!].explanation}</p>}
@@ -325,12 +325,43 @@ function ReviewRow({ d }: { d: any }) {
   );
 }
 
-// Read-only summary of an already-answered slide (all its questions).
-function SlideReviewCard({ res }: { res: SlideRes }) {
+// Wraps an AI-checked collector (writing / annotation / code) with its OWN
+// "Check with AI" button, so several can sit stacked on one slide and each be
+// graded independently. Reports its verdict up via onDone.
+function AIQuestionCard({ q, translateTo, size, onDone }: { q: Q; translateTo: string; size?: 'large' | 'medium' | 'adaptive'; onDone: (correct: boolean, detail: any) => void }) {
+  const [payload, setPayload] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const check = async () => {
+    if (busy || !payload?.ready) return;
+    setBusy(true);
+    try {
+      let r: any, detail: any;
+      if (q.kind === 'annotation') {
+        const pages = (payload.getPages ? payload.getPages() : []).filter(Boolean);
+        const image = await compositePages(pages);
+        r = await API.post('/api/tools/lesson/check-annotation', { prompt: payload.prompt, answer: payload.answer, image, text: payload.text || '' });
+        detail = { prompt: payload.prompt, your: payload.text ? payload.text : '📝 your written pages', answer: payload.answer || '', correct: !!r.correct, image: image || undefined, pages, feedback: r.feedback };
+      } else if (q.kind === 'code') {
+        r = await API.post('/api/tools/lesson/check-code', { prompt: payload.prompt, answer: payload.answer, code: payload.code, language: payload.language });
+        detail = { prompt: payload.prompt, your: payload.code, answer: payload.answer || '', correct: !!r.correct, code: payload.code, feedback: r.feedback };
+      } else {
+        r = await API.post('/api/tools/lesson/check-writing', { target: payload.target, image: payload.image });
+        detail = { prompt: payload.prompt, your: '✍️ your drawing', answer: payload.target || '', correct: !!r.correct, image: payload.image, feedback: r.feedback };
+      }
+      onDone(!!r.correct, detail);
+    } catch {
+      onDone(true, { prompt: q.prompt, your: '(saved)', answer: '', correct: true, feedback: 'Saved.' });
+    }
+    setBusy(false);
+  };
   return (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.55, marginBottom: 6 }}>✓ COMPLETED — {res.correct}/{res.total} correct</div>
-      {res.details.map((d, i) => <div key={i} style={{ borderTop: i ? '1px dashed var(--ink)' : 'none', padding: '8px 0' }}><ReviewRow d={d} /></div>)}
+    <div>
+      {q.kind === 'writing' ? <WritingCollector q={q} translateTo={translateTo} onAnswer={setPayload} />
+        : q.kind === 'annotation' ? <AnnotationCollector q={q} onAnswer={setPayload} size={size} />
+          : <CodeCollector q={q} onAnswer={setPayload} />}
+      <div style={{ textAlign: 'center', marginTop: 8 }}>
+        <button className="btn green" disabled={busy || !payload?.ready} onClick={check}>{busy ? <><Spinner />Checking…</> : '✅ Check with AI'}</button>
+      </div>
     </div>
   );
 }
@@ -356,11 +387,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const [slides, setSlides] = useState<(Slide | null)[]>([]);   // cached by 0-based index
   const [cur, setCur] = useState(0);
   const [results, setResults] = useState<Record<number, SlideRes>>({});
-  const [qIdx, setQIdx] = useState(0);            // current question within the slide
-  const [answeredThisQ, setAnsweredThisQ] = useState(false);
-  const [pending, setPending] = useState<any>(null);            // current AI answer payload
   const [genBusy, setGenBusy] = useState(false);                // fetching a slide
-  const [checking, setChecking] = useState(false);              // AI grading in progress
   const [err, setErr] = useState('');
   const [showReview, setShowReview] = useState(false);
   // Refs let the background prefetch read the latest state without stale closures.
@@ -410,7 +437,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
 
   const play = (c: Cfg) => {
     cfgRef.current = c; slidesRef.current = []; prefetching.current = {};
-    setCfg(c); setSlides([]); setResults({}); setCur(0); setQIdx(0); setAnsweredThisQ(false); setPending(null); setShowReview(false); setErr(''); setPhase('play');
+    setCfg(c); setSlides([]); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
     fetchInto(0, c, []);
   };
 
@@ -421,50 +448,16 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     play(c);
   };
 
-  // Record one answered question on the current slide; mark the slide `done` once
-  // every question has been answered.
-  const recordQ = (correct: boolean, detail: any) => {
-    const qs = slidesRef.current[cur]?.questions?.length || 1;
+  // Record one answered question (by index) on the current slide; mark the slide
+  // `done` once every question has been answered.
+  const recordQ = (qi: number, correct: boolean, detail: any) => {
+    const qs = slidesRef.current[cur]?.questions?.length || 0;
     setResults(r => {
-      const prev = r[cur] || { correct: 0, total: 0, details: [], done: false };
-      const total = prev.total + 1;
-      return { ...r, [cur]: { correct: prev.correct + (correct ? 1 : 0), total, details: [...prev.details, detail], done: total >= qs } };
+      const prev = r[cur] || { answers: {}, done: false };
+      const answers = { ...prev.answers, [qi]: { ...detail, correct } };
+      return { ...r, [cur]: { answers, done: Object.keys(answers).length >= qs } };
     });
-    setAnsweredThisQ(true);
-    setPending(null);
   };
-
-  // mcq / fill-blank / input resolve themselves here.
-  const onChoiceDone = (correct: boolean, detail: any) => recordQ(correct, detail);
-
-  // The nav "Check with AI" grades the current AI answer payload.
-  const checkCurrent = async () => {
-    const p = pending; if (!p) return;
-    setChecking(true);
-    try {
-      let r: any, detail: any;
-      if (p.kind === 'annotation') {
-        const pages = (p.getPages ? p.getPages() : []).filter(Boolean);
-        const image = await compositePages(pages);
-        r = await API.post('/api/tools/lesson/check-annotation', { prompt: p.prompt, answer: p.answer, image, text: p.text || '' });
-        detail = { prompt: p.prompt, your: p.text ? p.text : '📝 your written pages', answer: p.answer || '', correct: !!r.correct, image: image || undefined, pages, feedback: r.feedback };
-      } else if (p.kind === 'code') {
-        r = await API.post('/api/tools/lesson/check-code', { prompt: p.prompt, answer: p.answer, code: p.code, language: p.language });
-        detail = { prompt: p.prompt, your: p.code, answer: p.answer || '', correct: !!r.correct, code: p.code, feedback: r.feedback };
-      } else {
-        r = await API.post('/api/tools/lesson/check-writing', { target: p.target, image: p.image });
-        detail = { prompt: p.prompt, your: '✍️ your drawing', answer: p.target || '', correct: !!r.correct, image: p.image, feedback: r.feedback };
-      }
-      recordQ(!!r.correct, { ...detail, feedback: r.feedback });
-    } catch {
-      recordQ(true, { prompt: p.prompt, your: '(saved)', answer: '', correct: true, feedback: 'Saved.' });
-    }
-    setChecking(false);
-  };
-
-  // Entering a slide resets the per-question cursor. An already-done slide shows
-  // its review; a fresh slide starts at question 0.
-  useEffect(() => { setQIdx(0); setAnsweredThisQ(false); setPending(null); /* eslint-disable-next-line */ }, [cur]);
 
   const goBack = () => { if (cur > 0) { setCur(cur - 1); prefetch(cur); } };
   const goToSlide = async (nxt: number) => {
@@ -476,12 +469,6 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
     setGenBusy(false);
     if (slidesRef.current[nxt]) { setCur(nxt); prefetch(nxt + 1); }
     else setErr('Could not load the next slide. Tap Next to retry.');
-  };
-  // "Next" advances to the next QUESTION on this slide, else to the next slide.
-  const goNextUnit = async () => {
-    const qs = slidesRef.current[cur]?.questions?.length || 1;
-    if (qIdx < qs - 1) { setQIdx(qIdx + 1); setAnsweredThisQ(false); setPending(null); return; }
-    await goToSlide(cur + 1);
   };
 
   const label = (c: Cfg) => [lesson.subject, c.level || c.difficulty, c.topic].filter(Boolean).join(' · ');
@@ -533,9 +520,9 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   // ---------------- DONE ----------------
   if (phase === 'done') {
     const list = Object.keys(results).map(k => Number(k)).sort((a, b) => a - b).map(k => results[k]);
-    const allDetails = list.flatMap(r => r.details);
-    const answeredCount = list.reduce((a, r) => a + r.total, 0);
-    const scoreCount = list.reduce((a, r) => a + r.correct, 0);
+    const allDetails = list.flatMap(r => Object.keys(r.answers).map(Number).sort((a, b) => a - b).map(k => r.answers[k]));
+    const answeredCount = allDetails.length;
+    const scoreCount = allDetails.filter(d => d.correct).length;
     const pct = answeredCount ? Math.round((scoreCount / answeredCount) * 100) : 0;
     return (
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
@@ -569,22 +556,17 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const curSlide = slides[cur];
   const qList = curSlide?.questions || [];
   const res = results[cur];
-  // Show a read-only review when we've navigated back to a finished slide.
-  const reviewing = !!res?.done && !answeredThisQ;
-  const safeQ = Math.min(qIdx, Math.max(0, qList.length - 1));
-  const curQ = qList[safeQ];
-  const isAI = !!curQ && ['writing', 'annotation', 'code'].includes(curQ.kind);
-  const isLastQ = safeQ >= qList.length - 1;
+  const answeredCount = res ? Object.keys(res.answers).length : 0;
+  // Every question is shown at once (a scrollable "feed"); the slide is complete
+  // when they're all answered (a slide with no questions is complete on arrival).
+  const allAnswered = qList.length === 0 || answeredCount >= qList.length;
   const isLast = cur >= tot - 1;
-  const anyBusy = genBusy || checking;
-  const canBack = cur > 0 && !anyBusy;
-  const canCheck = isAI && !reviewing && !answeredThisQ && !!(pending && pending.ready) && !anyBusy;
-  // Next advances to the next question, or (on the last question) the next slide.
-  const canNext = (reviewing || answeredThisQ) && !anyBusy && !(isLast && isLastQ);
-  const canFinish = (reviewing || answeredThisQ) && isLast && isLastQ && !anyBusy;
-  const isAnnotation = curQ?.kind === 'annotation';
-  const isWritingSlide = !!curQ && ['writing', 'annotation'].includes(curQ.kind);
-  const scoreSoFar = Object.values(results).reduce((a, r) => a + r.correct, 0);
+  const canBack = cur > 0 && !genBusy;
+  const canNext = allAnswered && !isLast && !genBusy;
+  const canFinish = allAnswered && isLast && !genBusy;
+  const padSize = (Array.isArray(lesson.pages) && lesson.pages[cur]?.padSize) || 'large';
+  const hasAnnotation = qList.some((q: Q) => q.kind === 'annotation');
+  const scoreSoFar = Object.values(results).reduce((a, r) => a + Object.values(r.answers).filter((x: any) => x.correct).length, 0);
 
   return (
     <div>
@@ -594,7 +576,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
         <span style={{ fontSize: 13, opacity: 0.7 }}>{label(cfg)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 13, opacity: 0.7 }}>Slide {cur + 1} / {tot}{qList.length > 1 ? ` · Q ${safeQ + 1}/${qList.length}` : ''}</span>
+        <span style={{ fontSize: 13, opacity: 0.7 }}>Slide {cur + 1} / {tot}{qList.length > 1 ? ` · ${answeredCount}/${qList.length} answered` : ''}</span>
         <span style={{ fontSize: 13, opacity: 0.7 }}>Score: {scoreSoFar}</span>
       </div>
       <div style={{ height: 8, background: 'rgba(0,0,0,0.08)', borderRadius: 999, overflow: 'hidden', border: '1.5px solid var(--ink)', marginBottom: 12 }}>
@@ -605,34 +587,36 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
       {err && !curSlide && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchInto(cur, cfg, slides.filter(Boolean).map(s => (s as Slide).title))}>Retry</button></p>}
 
       {curSlide && (
-        <div className="card" style={{ padding: '16px 18px', maxWidth: isAnnotation ? 900 : 560, margin: '0 auto' }}>
+        <div className="card" style={{ padding: '16px 18px', maxWidth: hasAnnotation ? 900 : 640, margin: '0 auto' }}>
           {curSlide.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7, textAlign: 'center' }}>Demo slide (no AI connected).</p>}
           <h3 style={{ marginTop: 0, textAlign: 'center' }}>{curSlide.title}</h3>
           {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} /> : null}
-          {curSlide.content && (isWritingSlide
-            ? <p style={{ fontSize: 15, lineHeight: 1.6, textAlign: 'center', opacity: 0.9 }}>{curSlide.content}</p>
-            : <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>)}
+          {/* Reading passage (its own "paper"). */}
+          {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>}
+          {/* Support materials — each streams into its own card below. */}
           <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg }} />
 
-          <div style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
-            {reviewing ? <SlideReviewCard res={res!} />
-              : curQ ? (
-                curQ.kind === 'writing' ? <WritingCollector key={`${cur}-${safeQ}`} q={curQ} onAnswer={setPending} translateTo={lesson.translateTo || 'English'} />
-                  : curQ.kind === 'annotation' ? <AnnotationCollector key={`${cur}-${safeQ}`} q={curQ} onAnswer={setPending} size={(Array.isArray(lesson.pages) && lesson.pages[cur]?.padSize) || 'large'} />
-                    : curQ.kind === 'code' ? <CodeCollector key={`${cur}-${safeQ}`} q={curQ} onAnswer={setPending} />
-                      : <ChoiceQuestion key={`${cur}-${safeQ}`} q={curQ} translateTo={lesson.translateTo || 'English'} onDone={onChoiceDone} />
-              ) : <p style={{ opacity: 0.6, textAlign: 'center' }}>No question on this slide.</p>}
-          </div>
+          {/* Every question, stacked as its own "paper"; scroll down to reach them. */}
+          {qList.map((q: Q, i: number) => {
+            const ans = res?.answers?.[i];
+            return (
+              <div key={`${cur}-${i}`} style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
+                {qList.length > 1 && <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5, marginBottom: 6 }}>Question {i + 1} / {qList.length}</div>}
+                {ans ? <ReviewRow d={ans} />
+                  : ['writing', 'annotation', 'code'].includes(q.kind)
+                    ? <AIQuestionCard q={q} translateTo={lesson.translateTo || 'English'} size={padSize} onDone={(c, d) => recordQ(i, c, d)} />
+                    : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />}
+              </div>
+            );
+          })}
 
           {/* The single, clear navigation bar — one place, always the same order. */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, borderTop: '1.5px solid rgba(0,0,0,0.12)', paddingTop: 14 }}>
             <button className="btn" disabled={!canBack} onClick={goBack}>← Back</button>
-            {isAI && !reviewing && <button className="btn green" disabled={!canCheck} onClick={checkCurrent}>{checking ? <><Spinner />Checking…</> : '✅ Check with AI'}</button>}
-            <button className="btn blue" disabled={!canNext} onClick={goNextUnit}>{genBusy && curSlide ? <><Spinner />Loading…</> : (!isLastQ && (reviewing || answeredThisQ) ? 'Next question →' : 'Next →')}</button>
+            <button className="btn blue" disabled={!canNext} onClick={() => goToSlide(cur + 1)}>{genBusy && curSlide ? <><Spinner />Loading…</> : 'Next →'}</button>
             <button className="btn green" disabled={!canFinish} onClick={() => setPhase('done')}>🏁 Finish</button>
           </div>
-          {!reviewing && !answeredThisQ && isAI && <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}>Write your answer, then press <b>Check with AI</b>.</p>}
-          {!reviewing && !answeredThisQ && !isAI && curQ && <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}>Answer to unlock {isLastQ ? (isLast ? 'Finish' : 'Next') : 'the next question'}.</p>}
+          {!allAnswered && <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}>Answer {qList.length > 1 ? 'every question' : 'the question'} above to unlock {isLast ? 'Finish' : 'Next'}.</p>}
         </div>
       )}
     </div>

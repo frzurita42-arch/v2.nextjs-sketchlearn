@@ -62,7 +62,7 @@ function cleanOptions(opts: any, want: number) {
   return arr;
 }
 function cleanQuestion(q: any) {
-  const kind = ['mcq', 'fill-blank', 'input', 'writing', 'annotation', 'code'].includes(q?.kind) ? q.kind : 'mcq';
+  const kind = ['mcq', 'mcq2', 'mcq4', 'fill-blank', 'input', 'writing', 'annotation', 'code'].includes(q?.kind) ? q.kind : 'mcq';
   if (kind === 'writing') {
     // Handwriting drill: draw the target; the AI checks the drawing. No options/answer.
     const target = String(q?.target || q?.answer || '').trim();
@@ -93,8 +93,9 @@ function cleanQuestion(q: any) {
       starter: String(q?.starter || '').slice(0, 400),
     };
   }
-  if (kind === 'mcq') {
-    const want = q?.options?.length >= 4 ? 4 : 2;
+  if (kind === 'mcq' || kind === 'mcq2' || kind === 'mcq4') {
+    // mcq2/mcq4 force the option count; plain mcq follows what the model returned.
+    const want = kind === 'mcq2' ? 2 : kind === 'mcq4' ? 4 : (q?.options?.length >= 4 ? 4 : 2);
     const options = cleanOptions(q?.options, want);
     if (options.length < 2) return null;
     return { kind: 'mcq', prompt: String(q?.prompt || 'Choose the correct answer.').slice(0, 300), options };
@@ -111,8 +112,8 @@ function cleanQuestion(q: any) {
 
 // ---- deterministic fallback (demo / no AI) ----
 function fbQuestion(kind: string, subject: string) {
-  if (kind === 'mcq') {
-    const want = Math.random() < 0.5 ? 2 : 4;
+  if (kind === 'mcq' || kind === 'mcq2' || kind === 'mcq4') {
+    const want = kind === 'mcq2' ? 2 : kind === 'mcq4' ? 4 : (Math.random() < 0.5 ? 2 : 4);
     const opts = [{ text: 'The correct answer', correct: true }, { text: 'A distractor' }, { text: 'Another option' }, { text: 'A wrong option' }].slice(0, want);
     return { kind: 'mcq', prompt: `Which is correct about ${subject}?`, options: cleanOptions(opts, want) };
   }
@@ -178,9 +179,11 @@ export async function POST(req: Request) {
   const onlyDrills = activityTypes.every((t) => t === 'writing' || t === 'annotation' || t === 'code');
   const pureWriting = onlyDrills;
   // A designed page asks ONE question per activity component it lists (in order,
-  // all about this slide's content). Otherwise, one question for the slide.
-  const qKinds = (pageSpec && Array.isArray(pageSpec.activityTypes) && pageSpec.activityTypes.length)
-    ? pageSpec.activityTypes.slice(0, 10)
+  // duplicates kept — two "mcq4" → two 4-option questions). A designed page may
+  // legitimately have NO questions (e.g. reading + media only). Only when there
+  // is no designed page do we fall back to one random question for the slide.
+  const qKinds: string[] = pageSpec
+    ? (Array.isArray(pageSpec.activityTypes) ? pageSpec.activityTypes.slice(0, 12) : [])
     : [rand(activityTypes)];
   const wolfram = wolframAvailable();
   // Every ENABLED support category becomes its own component on the slide. Each
@@ -215,6 +218,8 @@ export async function POST(req: Request) {
     : kind === 'programming' ? 'Prefer concrete code and tables over prose.'
     : '';
   const qSpec = qKinds.map((k: string, i: number) => {
+    if (k === 'mcq2') return `Q${i + 1}: kind "mcq" with EXACTLY 2 options (one correct) — e.g. true/false.`;
+    if (k === 'mcq4') return `Q${i + 1}: kind "mcq" with EXACTLY 4 options (one correct).`;
     if (k === 'mcq') { const c = Math.random() < 0.5 ? 2 : 4; return `Q${i + 1}: kind "mcq" with EXACTLY ${c} options (one correct).`; }
     if (k === 'fill-blank') return `Q${i + 1}: kind "fill-blank" — a sentence with "____" and the missing "answer" (+ "accept" variants).`;
     if (k === 'writing') return `Q${i + 1}: kind "writing" — a handwriting drill: give "target" = the exact ${language || subject} character/word to hand-write, and a short "prompt" (e.g. "Write this hiragana"). No options, no answer. The learner will draw it and it will be AI-checked.`;
@@ -232,7 +237,11 @@ export async function POST(req: Request) {
     `CRITICAL: The teaching and the question MUST genuinely be about "${topic || subject}" and pitched at "${level}" level. If the subject is ${subject}, do NOT drift to unrelated easier material (e.g. for Trigonometry ask about sine/cosine/tangent, angles, identities or triangles — NOT plain arithmetic like "2+2"). Match the true difficulty of ${level}.`,
     ACTIVITY_MENU,
     langLine, subjectLine,
-    'For THIS slide, teach one idea, then produce these specific questions (still applying the freedom above to vary content):', qSpec,
+    pageSpec?.reading ? 'Include a substantial READING PASSAGE as the "content" (follow the paragraph length/count above).' : '',
+    qKinds.length
+      ? 'For THIS slide, teach one idea, then produce these specific questions IN THIS ORDER (still applying the freedom above to vary content):'
+      : 'This slide has NO questions — just teach with clear "content". Return "questions": [].',
+    qSpec,
     'Do NOT include any support/diagram/table/formula material — that is generated separately. Just write the teaching text and the questions.',
     'OUTPUT RULES (critical): return ONE JSON object with EXACTLY these top-level keys: title, content, translation, questions.',
     '"content" MUST be plain, human-readable teaching text (a sentence or short paragraph) — NEVER JSON, never a nested object, never quoted JSON, never code. Put questions ONLY in the "questions" array. Do not wrap the whole object in a string or another object.',
@@ -241,12 +250,13 @@ export async function POST(req: Request) {
   const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "questions": [ { "kind": "mcq|fill-blank|input|writing|annotation|code", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "the expected answer/solution", "accept": ["..."], "target": "for writing", "language": "for code, e.g. python or empty", "starter": "optional code/text scaffold" } ] }. Only include the fields the chosen kind needs.`;
 
   try {
-    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 1800 });
+    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 2600 });
     const content = cleanContent(r?.content);
     const questions = (Array.isArray(r?.questions) ? r.questions : []).map(cleanQuestion).filter(Boolean);
-    // If content came back empty or as a JSON blob we couldn't salvage, or there
-    // are no valid questions, use the deterministic fallback instead of showing junk.
-    if (!content || !questions.length) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
+    // Fall back only when content is unusable, or when questions WERE requested
+    // but none came back. A designed reading-only page (qKinds empty) legitimately
+    // has no questions, so an empty array is fine there.
+    if (!content || (qKinds.length > 0 && !questions.length)) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
     return NextResponse.json({
       title: String(r.title || `${subject} — slide ${n}`).slice(0, 100),
       content: content.slice(0, 2000),
