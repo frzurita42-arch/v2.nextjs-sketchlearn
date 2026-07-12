@@ -16,7 +16,7 @@ import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad';
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
-import { renderMath, renderInlineMath } from '@/components/ui/shared';
+import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 
 // Inline text that typesets any $...$ LaTeX segments (math/science prompts).
 function MathText({ text }: { text: string }) {
@@ -391,7 +391,7 @@ function AIReply({ text }: { text: string }) {
     <>
       {parts.map((p, i) => p.code
         ? <CodeBox key={i} code={p.body} />
-        : (p.body.trim() ? <span key={i} style={{ whiteSpace: 'pre-wrap' }}><MathText text={p.body} /></span> : null))}
+        : (p.body.trim() ? <span key={i} dangerouslySetInnerHTML={{ __html: renderMathProse(p.body) }} /> : null))}
     </>
   );
 }

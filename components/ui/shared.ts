@@ -28,6 +28,19 @@ export function renderInlineMath(str: any): string {
   ).join('');
 }
 
+// Render prose that may carry BOTH inline $...$ math and DISPLAY equations
+// ($$...$$ or \[ ... \]). Display equations become centred, typeset KaTeX blocks
+// (Wolfram-style step-by-step), inline stays inline, and newlines are kept.
+export function renderMathProse(str: any): string {
+  const s = String(str ?? '');
+  const parts = s.split(/(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\])/g);
+  return parts.map(p => {
+    if (p.startsWith('$$') && p.endsWith('$$')) return `<div style="text-align:center;overflow-x:auto;margin:6px 0">${renderMath(p.slice(2, -2).trim(), true)}</div>`;
+    if (p.startsWith('\\[') && p.endsWith('\\]')) return `<div style="text-align:center;overflow-x:auto;margin:6px 0">${renderMath(p.slice(2, -2).trim(), true)}</div>`;
+    return renderInlineMath(p).replace(/\n/g, '<br>');
+  }).join('');
+}
+
 // Only allow images from safe schemes (server returns data: URLs or https).
 export function safeImageUrl(url: any): string {
   const u = String(url || '').trim();

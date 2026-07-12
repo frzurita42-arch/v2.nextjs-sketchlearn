@@ -35,8 +35,9 @@ export async function POST(req: Request) {
     '- First, briefly ACKNOWLEDGE what they said or showed (e.g. "Yes, I can see your work.").',
     '- Then GUIDE them to the NEXT step only — a hint or a question that nudges them forward. Do NOT give the full solution or the final answer; lead them to it step by step.',
     '- Stay focused on solving the current problem; if they drift off-topic, gently steer them back.',
-    '- If a hint needs code or an equation/step, put just that part inside a triple-backtick ``` code block ``` (prose stays outside it).',
-    'Return STRICT JSON: { "reply": "your short guiding reply" }.',
+    '- For MATH, write equations and any step-by-step working as LaTeX, Wolfram-style: put each key equation/step on its own line inside $$ ... $$ (display math), and use $...$ for inline symbols. Do NOT put math in a code block.',
+    '- Use a ``` code block ``` ONLY for actual programming code (a real snippet), never for math or prose.',
+    'Return STRICT JSON: { "reply": "your short guiding reply (math as $$LaTeX$$, code only in ``` blocks ```)" }.',
   ].join('\n');
 
   try {
