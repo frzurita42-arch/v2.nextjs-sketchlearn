@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   const messages: any[] = Array.isArray(b.messages) ? b.messages.slice(-14) : [];
   const asked = messages.filter((m) => m.role === 'assistant').length;
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ kind: 'question', ...FALLBACK[Math.min(asked, FALLBACK.length - 1)] });
   }
 

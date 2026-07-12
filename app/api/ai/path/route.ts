@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { readJSON, saveGeneration } from '@/src/db/persistence';
 import { generateStructured } from '@/src/ai/providers';
 import { buildLearningPathPrompt } from '@/src/ai/prompts/learning-path';
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    if (!geminiEnabled && !deepseekEnabled) {
+    if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
       const fallback = makeFallbackLearningPath(topic, wanted);
       return NextResponse.json({ ...fallback, fallback: true });
     }

@@ -29,6 +29,7 @@ export interface LessonSupport {
   tables?: boolean;
   formulas?: boolean;   // math / Wolfram-style formulas (rendered as a formula block)
   audio?: boolean;
+  geogebra?: boolean;   // an interactive GeoGebra graph / math visual
 }
 
 export type LessonMode = 'slides' | 'conversation' | 'journal';
@@ -154,7 +155,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const ACTS = ['mcq', 'mcq2', 'mcq4', 'fill-blank', 'input', 'writing', 'annotation', 'code'];
     const acts = (Array.isArray(l.activityTypes) ? l.activityTypes : []).filter((x: any) => ACTS.includes(x));
     const mode: LessonMode = ['slides', 'conversation', 'journal'].includes(l.mode) ? l.mode : 'slides';
-    const cleanSup = (s: any): LessonSupport => ({ images: s?.images !== false, code: !!s?.code, tables: !!s?.tables, formulas: !!s?.formulas, audio: !!s?.audio });
+    const cleanSup = (s: any): LessonSupport => ({ images: s?.images !== false, code: !!s?.code, tables: !!s?.tables, formulas: !!s?.formulas, audio: !!s?.audio, geogebra: !!s?.geogebra });
     // Per-page designs (from the Studio). Each becomes one slide.
     const pages: LessonPage[] = (Array.isArray(l.pages) ? l.pages : []).slice(0, 75).map((pg: any) => ({
       activityTypes: (Array.isArray(pg?.activityTypes) ? pg.activityTypes : []).filter((x: any) => ACTS.includes(x)),

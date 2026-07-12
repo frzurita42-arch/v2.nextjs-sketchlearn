@@ -3,6 +3,7 @@
 const {
   DEEPSEEK_API_KEY, DEEPSEEK_URL, deepseekEnabled,
   GEMINI_API_KEY, GEMINI_API_BASE, GEMINI_TEXT_MODEL, GEMINI_IMAGE_MODEL, geminiEnabled,
+  OPENROUTER_API_KEY, OPENROUTER_URL, OPENROUTER_MODEL, OPENROUTER_MODEL_REASON, OPENROUTER_MODEL_VISION, openrouterEnabled,
   IMAGE_API_KEY, IMAGE_API_URL, IMAGE_API_MODEL,
   ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
   ELEVENLABS_API_KEY, ELEVENLABS_API_URL, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled
@@ -173,9 +174,19 @@ async function gemini(messages, { json = true, temperature = 0.8, maxTokens = 40
 // Used to CHECK a learner's handwriting drawing against a target character.
 // Returns null when Gemini isn't configured (caller falls back to self-check).
 async function generateVisionJSON(prompt, imageDataUrl) {
-  if (!geminiEnabled) return null;
   const m = String(imageDataUrl || '').match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
   if (!m) return null;
+  // Prefer OpenRouter (a vision model reads the handwriting); fall back to Gemini.
+  if (openrouterEnabled) {
+    try {
+      const messages = [{ role: 'user', content: [{ type: 'text', text: String(prompt) }, { type: 'image_url', image_url: { url: imageDataUrl } }] }];
+      return await openrouter(messages, { json: true, temperature: 0.2, maxTokens: 700, task: 'vision' });
+    } catch (e) {
+      if (!geminiEnabled) return null;
+      console.warn('OpenRouter vision failed; falling back to Gemini vision:', String(e && e.message || '').slice(0, 120));
+    }
+  }
+  if (!geminiEnabled) return null;
   const body = {
     contents: [{ role: 'user', parts: [{ text: String(prompt) }, { inlineData: { mimeType: m[1], data: m[2] } }] }],
     generationConfig: { temperature: 0.2, maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' },
@@ -190,8 +201,54 @@ async function generateVisionJSON(prompt, imageDataUrl) {
   try { return parseModelJson(content); } catch { return null; }
 }
 
-// Text-provider dispatcher with failover: Gemini first, then DeepSeek on quota/outage.
+// Pick the OpenRouter model: an explicit per-request model wins; otherwise "auto"
+// chooses the best-fit configured model for the task (vision reads images,
+// reason/math uses the reasoning model), else the general default.
+function pickOpenRouterModel(opts = {}) {
+  if (opts.model) return String(opts.model);
+  if (opts.task === 'vision') return OPENROUTER_MODEL_VISION;
+  if (opts.task === 'reason' || opts.task === 'math') return OPENROUTER_MODEL_REASON;
+  return OPENROUTER_MODEL;
+}
+
+// OpenRouter — one key, many models via an OpenAI-compatible endpoint. Retries
+// once on the safe default model if a chosen model slug is rejected.
+async function openrouter(messages, { json = true, temperature = 0.8, maxTokens = 4096, model, task } = {}) {
+  const chosen = pickOpenRouterModel({ model, task });
+  const call = async (mdl, useJson) => {
+    const body = { model: mdl, messages, temperature, max_tokens: maxTokens };
+    if (useJson) body.response_format = { type: 'json_object' };
+    const res = await fetchWithTimeout(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENROUTER_API_KEY}`, 'HTTP-Referer': 'https://sketchlearn.app', 'X-Title': 'SketchLearn' },
+      body: JSON.stringify(body),
+    }, 45000, 'OpenRouter request');
+    if (!res.ok) { const t = await res.text().catch(() => ''); const err = new Error(`OpenRouter API error ${res.status}: ${t.slice(0, 250)}`); err.status = res.status; throw err; }
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from OpenRouter');
+    return json ? parseModelJson(content) : content;
+  };
+  try { return await call(chosen, json); }
+  catch (e) {
+    const msg = String(e && e.message || '');
+    // Bad/unknown model slug OR a model that rejects json_object -> retry safely.
+    if (chosen !== OPENROUTER_MODEL && /400|404|model|not.*found/i.test(msg)) return call(OPENROUTER_MODEL, json);
+    if (json && /response_format|json/i.test(msg)) return call(chosen, false);
+    throw e;
+  }
+}
+
+// Text-provider dispatcher with failover: OpenRouter → Gemini → DeepSeek.
 async function generateText(messages, opts) {
+  if (openrouterEnabled) {
+    try {
+      return await openrouter(messages, opts);
+    } catch (e) {
+      if (!geminiEnabled && !deepseekEnabled) throw e;
+      console.warn('OpenRouter unavailable; falling back to Gemini/DeepSeek:', String(e && e.message || '').slice(0, 120));
+    }
+  }
   if (geminiEnabled) {
     try {
       return await gemini(messages, opts);
@@ -206,7 +263,7 @@ async function generateText(messages, opts) {
     }
   }
   if (!deepseekEnabled) {
-    throw new Error('No AI provider key is configured. Set GEMINI_API_KEY or DEEPSEEK_API_KEY in environment variables.');
+    throw new Error('No AI provider key is configured. Set OPENROUTER_API_KEY, GEMINI_API_KEY or DEEPSEEK_API_KEY in environment variables.');
   }
   return deepseek(messages, opts);
 }

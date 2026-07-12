@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { geminiEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
 import { saveGeneration } from '@/src/db/persistence';
 import { generateStructured, generateImage } from '@/src/ai/providers';
 import { buildLangSlidePrompt } from '@/src/ai/prompts/language';
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
   const { language = 'Spanish', level = 'A1', topic = 'everyday life', grammarTopic = '', slideNumber = 1, totalSlides = 1, priorSummary = '' } = b;
 
   const fb = (ty: string) => ty === 'grammar' ? fbGrammar(topic) : ty === 'vocabulary' ? fbVocab(topic) : ty === 'listening' ? fbListening(topic) : ty === 'spelling' ? fbSpelling(topic) : ty === 'writing' ? fbWriting(topic) : fbReading(topic);
-  const useFallback = !geminiEnabled && !deepseekEnabled;
+  const useFallback = !openrouterEnabled && !geminiEnabled && !deepseekEnabled;
   let slide: any;
 
   if (useFallback) {

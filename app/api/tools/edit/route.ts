@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition } from '@/lib/tool-schema';
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const request = String(b.request || '').slice(0, 800).trim();
   if (!request) return NextResponse.json({ error: 'Describe the change you want.' }, { status: 400 });
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ error: 'Editing with AI needs an AI key (GEMINI_API_KEY). You can still edit fields manually.' }, { status: 503 });
   }
   try {

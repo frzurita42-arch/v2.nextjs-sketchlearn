@@ -44,8 +44,40 @@ function Spinner() {
   return <span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sl-spin 0.7s linear infinite', verticalAlign: '-1px', marginRight: 6 }} />;
 }
 
+// An interactive GeoGebra graph. Loads GeoGebra's deployggb.js once, then injects
+// an applet and runs the AI-provided commands (functions, points, circles…).
+function GeoGebra({ commands, caption }: { commands: string[]; caption?: string }) {
+  const holderId = useRef('ggb-' + Math.random().toString(36).slice(2));
+  useEffect(() => {
+    let cancelled = false;
+    const boot = () => {
+      const W = window as any;
+      if (cancelled || !W.GGBApplet || !document.getElementById(holderId.current)) return;
+      const applet = new W.GGBApplet({
+        appName: 'graphing', width: 600, height: 380, showToolBar: false, showAlgebraInput: false, showMenuBar: false, showResetIcon: true,
+        appletOnLoad: (api: any) => { (Array.isArray(commands) ? commands : []).forEach((c) => { try { api.evalCommand(String(c)); } catch { /* skip bad command */ } }); },
+      }, true);
+      applet.inject(holderId.current);
+    };
+    const W = window as any;
+    if (W.GGBApplet) { boot(); return () => { cancelled = true; }; }
+    let sc = document.getElementById('deployggb') as HTMLScriptElement | null;
+    if (!sc) { sc = document.createElement('script'); sc.id = 'deployggb'; sc.src = 'https://www.geogebra.org/apps/deployggb.js'; sc.onload = boot; document.body.appendChild(sc); }
+    else sc.addEventListener('load', boot);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div style={{ margin: '8px 0', border: '1.5px solid var(--ink)', borderRadius: 8, overflow: 'hidden', maxWidth: 600 }}>
+      <div id={holderId.current} style={{ width: '100%', minHeight: 300 }} />
+      {caption && <div style={{ fontSize: 12, opacity: 0.7, padding: '4px 8px' }}>📐 {caption}</div>}
+    </div>
+  );
+}
+
 function Support({ s }: { s: any }) {
   if (!s) return null;
+  if (s.type === 'geogebra' && Array.isArray(s.commands)) return <GeoGebra commands={s.commands} caption={s.caption} />;
   if (s.type === 'image' && s.url) return <img src={s.url} alt={s.caption || ''} style={{ width: '100%', maxWidth: 360, borderRadius: 8, border: '2px solid var(--ink)', margin: '8px auto', display: 'block' }} />;
   if (s.type === 'code') return <pre style={{ background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', overflowY: 'auto', maxHeight: 320, fontSize: 13, margin: '8px 0' }}><code>{s.code}</code></pre>;
   if (s.type === 'table') return (
@@ -90,7 +122,7 @@ function Support({ s }: { s: any }) {
 
 // A dashed placeholder shown while one support material is being generated.
 function SupportSkeleton({ type }: { type: string }) {
-  const label = ({ image: 'illustration', code: 'code snippet', table: 'table', formula: 'formula', wolfram: 'step-by-step solution' } as Record<string, string>)[type] || 'material';
+  const label = ({ image: 'illustration', code: 'code snippet', table: 'table', formula: 'formula', wolfram: 'step-by-step solution', geogebra: 'interactive graph' } as Record<string, string>)[type] || 'material';
   return (
     <div style={{ margin: '8px 0', padding: '14px 16px', border: '1.5px dashed var(--ink)', borderRadius: 8, textAlign: 'center', opacity: 0.7, fontSize: 13 }}>
       <Spinner />Sketching {label}…
@@ -130,13 +162,17 @@ function SupportsLoader({ slide, ctx }: { slide: Slide; ctx: any }) {
 
   // Fallback / legacy: a single pre-built support and no plan.
   if (!plan.length) return <Support s={slide.support} />;
+  // Each support is its own "section", separated by a dotted rule so it's clear
+  // where one piece of material ends and the next begins.
+  let shown = -1;
   return (
     <>
       {plan.map((type, i) => {
         const it = items[i];
-        if (it === undefined) return <SupportSkeleton key={i} type={type} />;
-        if (!it) return null; // failed or empty — drop the card
-        return <Support key={i} s={it} />;
+        const body = it === undefined ? <SupportSkeleton type={type} /> : (it ? <Support s={it} /> : null);
+        if (body === null) return null;
+        shown += 1;
+        return <div key={i} style={shown > 0 ? { borderTop: '1.5px dashed var(--ink)', paddingTop: 12, marginTop: 4 } : undefined}>{body}</div>;
       })}
     </>
   );
@@ -790,7 +826,8 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
           {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} /> : null}
           {/* Reading passage (its own "paper"). */}
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>}
-          {/* Support materials — each streams into its own card below. */}
+          {/* Support materials — each streams into its own card, dotted-separated. */}
+          {(curSlide.supportPlan?.length || curSlide.support) && curSlide.content ? <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12 }} /> : null}
           <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg }} />
 
           {/* Every question, stacked as its own "paper"; scroll down to reach them. */}

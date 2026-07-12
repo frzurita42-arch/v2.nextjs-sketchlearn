@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition } from '@/lib/tool-schema';
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const userChat = messages.filter((m) => m.role === 'user').map((m) => String(m.content || '').trim()).filter(Boolean).join('\n');
 
   // No chat, or no AI -> the visually-assembled definition is the answer.
-  if (!userChat || (!geminiEnabled && !deepseekEnabled)) {
+  if (!userChat || (!openrouterEnabled && !geminiEnabled && !deepseekEnabled)) {
     return NextResponse.json({ definition: base.def });
   }
 

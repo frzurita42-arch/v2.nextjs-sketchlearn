@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -166,6 +166,7 @@ export async function POST(req: Request) {
     code: pickBool(b.values?.sup_code, baseSup.code),
     tables: pickBool(b.values?.sup_tables, baseSup.tables),
     formulas: pickBool(b.values?.sup_formulas, baseSup.formulas),
+    geogebra: pickBool(b.values?.sup_geogebra, baseSup.geogebra),
   };
   // This slide's activity set: the designed page wins, else the lesson-wide set.
   const activityTypes: string[] = (Array.isArray(pageSpec?.activityTypes) && pageSpec.activityTypes.length)
@@ -202,11 +203,12 @@ export async function POST(req: Request) {
       supportPlan.push('formula');
       if (mathish) { supportPlan.push('image'); supportPlan.push('table'); }  // diagram + steps table
     }
+    if (support.geogebra) supportPlan.push('geogebra');   // interactive math graph
   }
   // Distinct types, capped so a slide stays readable.
-  const supportTypes = Array.from(new Set(supportPlan)).slice(0, 4);
+  const supportTypes = Array.from(new Set(supportPlan)).slice(0, 5);
 
-  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
 
   const langLine = language
     ? `This is a ${language} lesson: write "content" in ${language} and put the ${translateTo} meaning in "translation".`
@@ -232,7 +234,8 @@ export async function POST(req: Request) {
     language ? `Level objective: ${levelGuidance(level)}` : '',
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
     pageSpec?.style ? `This slide was designed to use: ${pageSpec.style}` : '',
-    priorSummary ? `Avoid repeating: ${priorSummary}.` : '',
+    priorSummary ? `The learner has already seen (build on these — connect this slide to them and do NOT repeat): ${priorSummary}.` : '',
+    'COHESION: Every component on THIS slide — the reading, each visual, and every question — must revolve around ONE coherent concept and clearly relate to each other; do not mix unrelated ideas on the same slide. Across the whole presentation the slides should build on one another into a connected lesson.',
     // Content/level fidelity — the #1 correctness rule.
     `CRITICAL: The teaching and the question MUST genuinely be about "${topic || subject}" and pitched at "${level}" level. If the subject is ${subject}, do NOT drift to unrelated easier material (e.g. for Trigonometry ask about sine/cosine/tangent, angles, identities or triangles — NOT plain arithmetic like "2+2"). Match the true difficulty of ${level}.`,
     ACTIVITY_MENU,

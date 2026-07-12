@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
   // Text-only answer -> grade as text (no vision needed).
   if (!hasImage) {
-    if (!geminiEnabled && !deepseekEnabled) return NextResponse.json({ correct: true, score: null, feedback: 'Answer saved. (Connect an AI key to grade it.)', checked: false });
+    if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json({ correct: true, score: null, feedback: 'Answer saved. (Connect an AI key to grade it.)', checked: false });
     const system = [
       'You are grading a student\'s TYPED answer. Be fair, precise and encouraging.',
       `The task was: "${prompt || 'Solve/answer.'}"`,

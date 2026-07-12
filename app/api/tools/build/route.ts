@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition } from '@/lib/tool-schema';
@@ -345,7 +345,7 @@ export async function POST(req: Request) {
   const userTurns = messages.filter((m) => m.role === 'user').length;
   const inGate = userTurns <= 3;
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     if (inGate) return NextResponse.json({ kind: 'question', ...gateQuestion(userTurns, ideaText) });
     const raw = heuristicProposal(ideaText);
     const { def } = validateToolDefinition(raw);

@@ -123,6 +123,18 @@ const forceFallback = /^(1|true|yes)$/i.test(String(process.env.SKETCHLEARN_FORC
 const geminiEnabled = !forceFallback && hasConfiguredKey(GEMINI_API_KEY);
 const deepseekEnabled = !forceFallback && hasConfiguredKey(DEEPSEEK_API_KEY);
 
+// Optional: OpenRouter — ONE key routes to many chat LLMs (GPT, Claude, Gemini,
+// Grok, DeepSeek, Kimi, Llama…) via an OpenAI-compatible endpoint, plus vision
+// (image understanding) on multimodal models. When set it becomes the preferred
+// text + vision provider. Per-domain overrides let "auto" pick a stronger model
+// for the task (reasoning/math, vision); otherwise OPENROUTER_MODEL is used.
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_URL = process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';          // general + vision, cheap default
+const OPENROUTER_MODEL_REASON = process.env.OPENROUTER_MODEL_REASON || OPENROUTER_MODEL; // math / science / reasoning
+const OPENROUTER_MODEL_VISION = process.env.OPENROUTER_MODEL_VISION || OPENROUTER_MODEL; // reads images / handwriting
+const openrouterEnabled = !forceFallback && hasConfiguredKey(OPENROUTER_API_KEY);
+
 // Optional image-generation backend (see .env.example). Priority: an explicit
 // OpenAI-compatible image provider, else Gemini's image model, else no images.
 const IMAGE_API_KEY = process.env.IMAGE_API_KEY;
@@ -191,6 +203,12 @@ module.exports = {
   forceFallback,
   geminiEnabled,
   deepseekEnabled,
+  OPENROUTER_API_KEY,
+  OPENROUTER_URL,
+  OPENROUTER_MODEL,
+  OPENROUTER_MODEL_REASON,
+  OPENROUTER_MODEL_VISION,
+  openrouterEnabled,
   IMAGE_API_KEY,
   IMAGE_API_URL,
   IMAGE_API_MODEL,

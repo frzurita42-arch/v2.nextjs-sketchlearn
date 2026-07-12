@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { recentUserGames } from '@/src/db/games';
 import { generateStructured } from '@/src/ai/providers';
 import { buildLevelRefreshPrompt } from '@/src/ai/prompts/level-refresh';
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const recent = games.map((g: any) => `- ${g.topic} / ${g.concept} (${g.level}): ${g.correct}/${g.total}`).join('\n');
   const avoid = (Array.isArray(avoidConcepts) ? avoidConcepts : []).map(String).filter(Boolean).slice(0, 40);
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json(makeFallbackLevelConcepts(topic, level, wanted, avoid));
   }
 

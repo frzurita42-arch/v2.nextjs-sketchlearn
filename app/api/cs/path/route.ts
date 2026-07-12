@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   const currentCourses: string[] = Array.isArray(b.currentCourses) ? b.currentCourses.map(String).slice(0, 10) : [];
   const recentSignals: string[] = Array.isArray(b.recentSignals) ? b.recentSignals.map(String).slice(0, 10) : [];
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json(fallbackPath(goalRole, currentCourses));
   }
   try {

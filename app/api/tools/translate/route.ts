@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateText } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const text = String(b.text || '').slice(0, 2000).trim();
   const to = String(b.to || 'English').slice(0, 40);
   if (!text) return NextResponse.json({ translation: '' });
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ translation: `(Translation needs an AI key.) ${text}`, fallback: true });
   }
   try {

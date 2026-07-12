@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     .join('\n');
 
   const gentle = 'Good question — try breaking the problem into the smallest first step. What do you already know that applies here?';
-  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json({ reply: gentle, checked: false });
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json({ reply: gentle, checked: false });
 
   const system = [
     `You are a patient, encouraging tutor for ${subject}.`,

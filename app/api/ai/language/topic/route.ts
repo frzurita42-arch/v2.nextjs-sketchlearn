@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { buildLanguageTopicPrompt } from '@/src/ai/prompts/language';
 import { requireAuth } from '@/lib/auth-guard';
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const { language = 'Spanish', level = 'A1', avoid = [] } = (await req.json().catch(() => ({}))) || {};
   const pick = () => FALLBACK_THEMES[Math.floor(Math.random() * FALLBACK_THEMES.length)];
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ topic: pick() });
   }
   try {

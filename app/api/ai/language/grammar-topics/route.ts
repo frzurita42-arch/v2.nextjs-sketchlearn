@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { buildGrammarTopicsPrompt } from '@/src/ai/prompts/language';
 import { requireAuth } from '@/lib/auth-guard';
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   if (!a.ok) return a.response;
   const { language = 'Spanish', level = 'A1' } = (await req.json().catch(() => ({}))) || {};
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ topics: fallbackTopics(level) });
   }
   try {

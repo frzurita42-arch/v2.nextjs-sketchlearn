@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateText } from '@/src/ai/providers';
 import { buildAnswerNotePrompt } from '@/src/ai/prompts/coach';
 import { requireAuth } from '@/lib/auth-guard';
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     ? `Answered "${String(question).slice(0, 60)}" correctly — shows a solid grasp of ${concept || topic}.`
     : `Missed "${String(question).slice(0, 60)}"${misconception ? ` — watch for: ${misconception}` : ''}; review this part of ${concept || topic}.`;
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ note: fallback });
   }
   try {

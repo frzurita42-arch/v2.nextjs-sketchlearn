@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateText, generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 import { fillTemplate, validateToolDefinition } from '@/lib/tool-schema';
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const filled = fillTemplate(def.generator.promptTemplate, values);
   const system = def.generator.systemPrompt || 'You are a helpful generator inside a tool-building platform. Follow the instructions precisely and keep output focused and useful.';
 
-  const noAI = !geminiEnabled && !deepseekEnabled;
+  const noAI = !openrouterEnabled && !geminiEnabled && !deepseekEnabled;
   if (noAI) {
     if (output === 'cards') {
       return NextResponse.json({ output: 'cards', cards: [

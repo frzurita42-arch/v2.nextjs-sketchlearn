@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { readJSON } from '@/src/db/persistence';
 import { generateText } from '@/src/ai/providers';
 import { buildCoachChatSystem } from '@/src/ai/prompts/coach';
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     date: g.finishedAt, topic: g.topic, concept: g.concept, level: g.level,
     score: `${g.correct}/${g.total}`, durationSec: g.durationSec,
   }));
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ reply: makeFallbackCoachReply(progress) });
   }
   try {

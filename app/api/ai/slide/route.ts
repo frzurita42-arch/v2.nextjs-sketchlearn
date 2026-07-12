@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { geminiEnabled, deepseekEnabled, imageEnabled, claudeSvgEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled, imageEnabled, claudeSvgEnabled } from '@/src/config';
 import { saveGeneration } from '@/src/db/persistence';
 import { recentUserGames } from '@/src/db/games';
 import { generateStructured, fillImages } from '@/src/ai/providers';
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
   const historyText = buildSlideHistoryText(history);
   const branchText = buildSlideBranchText(branch);
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     const slide = makeFallbackSlide({ topic, concept, level, settings, slideNumber, totalSlides, branch });
     slide.components = sanitizeComponents(slide.components);
     enforceLatexNarrativeCadence(slide, { topic, concept, slideNumber, proofMode: effectiveProof, stemFocus: allowLatex, history, branch });

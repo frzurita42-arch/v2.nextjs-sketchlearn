@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const language = String(b.language || '').slice(0, 30);
   if (!code.trim()) return NextResponse.json({ error: 'Nothing to check — write your answer first.' }, { status: 400 });
 
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ correct: true, score: null, feedback: 'Answer saved. (Connect an AI key to grade it.)', checked: false });
   }
 

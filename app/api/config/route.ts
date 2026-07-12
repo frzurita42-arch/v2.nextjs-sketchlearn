@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey } from '@/src/config';
+import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled } from '@/src/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,8 +11,8 @@ export async function GET() {
   const openrouter = hasConfiguredKey(process.env.OPENROUTER_API_KEY);
   return NextResponse.json(
     {
-      aiEnabled: !!(geminiEnabled || deepseekEnabled),
-      provider: geminiEnabled ? 'gemini' : (deepseekEnabled ? 'deepseek' : null),
+      aiEnabled: !!(openrouterEnabled || geminiEnabled || deepseekEnabled),
+      provider: openrouterEnabled ? 'openrouter' : (geminiEnabled ? 'gemini' : (deepseekEnabled ? 'deepseek' : null)),
       imagesEnabled: !!imageEnabled,
       voiceEnabled: !!elevenlabsEnabled,
       dbEnabled: !!dbEnabled,

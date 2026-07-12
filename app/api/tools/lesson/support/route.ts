@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
 import { generateStructured, generateImage } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -46,6 +46,7 @@ function supSpecFor(type: string, mathish: boolean, kind: string): string {
     ? 'Return support = { "type": "table", "headers": ["Step", "Equation", "What we did"], "rows": [["1", "the equation for this step (plain math text)", "short reason"], ...] } — a 3-column step-by-step working table.'
     : 'Return support = { "type": "table", "headers": [...], "rows": [[...]] } summarising this slide.';
   if (type === 'wolfram') return 'Return support = { "type": "wolfram", "query": "a precise, self-contained Wolfram Alpha query that SOLVES or COMPUTES this concept so it shows the STEP-BY-STEP working (e.g. \\"solve x^2-5x+6=0\\", \\"derivative of sin(x)*x^2\\", \\"integrate 1/(1+x^2)\\", \\"simplify (x^2-1)/(x-1)\\")", "latex": "the key formula in LaTeX", "caption": "what it shows" }. Make the query something Wolfram can work out (an equation to solve, a derivative/integral/simplification), not an open-ended question.';
+  if (type === 'geogebra') return 'Return support = { "type": "geogebra", "commands": ["valid GeoGebra input commands that plot/build the visual for THIS slide, e.g. \\"f(x)=x^2\\", \\"g(x)=2x+1\\", \\"A=(1,2)\\", \\"Circle((0,0),3)\\""], "caption": "what the graph shows" }. Use 1–4 correct GeoGebra commands that visualise the concept (functions, points, lines, circles, vectors…).';
   return 'Return support = { "type": "formula", "latex": "a valid LaTeX formula (e.g. \\"c = \\\\sqrt{a^2+b^2}\\", \\"\\\\frac{d}{dx}x^n = n x^{n-1}\\") — NOT plain ASCII", "caption": "what it means" }.';
 }
 
@@ -66,6 +67,11 @@ async function parseSupport(type: string, s: any, subject: string): Promise<any>
       ? { type: 'wolfram', ...base, result: result ? String(result).slice(0, 400) : '', steps: Array.isArray(steps) ? steps : [] }
       : (base.latex ? { type: 'formula', latex: base.latex, caption: base.caption } : null);
   }
+  if (type === 'geogebra') {
+    const commands = (Array.isArray(s.commands) ? s.commands : (s.command ? [s.command] : []))
+      .map((c: any) => String(c).slice(0, 200)).filter(Boolean).slice(0, 6);
+    return commands.length ? { type: 'geogebra', commands, caption: String(s.caption || '').slice(0, 200) } : null;
+  }
   if (type === 'formula') return { type: 'formula', latex: String(s.latex || s.formula || '').slice(0, 300), caption: String(s.caption || '').slice(0, 200) };
   return null;
 }
@@ -75,7 +81,7 @@ export async function POST(req: Request) {
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const lesson = b.lesson || {};
-  const type = ['image', 'code', 'table', 'formula', 'wolfram'].includes(b.type) ? b.type : '';
+  const type = ['image', 'code', 'table', 'formula', 'wolfram', 'geogebra'].includes(b.type) ? b.type : '';
   if (!type) return NextResponse.json({ support: null });
   const subject = String(lesson.subject || 'the topic').slice(0, 80);
   const level = String(b.values?.difficulty || b.values?.level || lesson.level || 'Beginner').slice(0, 40);
@@ -87,11 +93,11 @@ export async function POST(req: Request) {
   const mathish = kind === 'math' || /\b(physics|chemistry|chemical|biolog|trigonometry|geometry|calculus|algebra|equation|mechanics|thermodynamic|kinematic|electromag|stoichiom|\bmole\b|reaction|force|velocity|acceleration|vector|momentum|circuit|optics|astronom|statistic|probability)\b/.test(`${subject} ${topic}`.toLowerCase());
 
   // Image needs no text model — build it directly from the slide context.
-  if (type === 'image' && !geminiEnabled && !deepseekEnabled) {
+  if (type === 'image' && !openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     const prompt = mathish ? `a clean, labelled reference diagram for: ${content || title || subject}` : (content || title || subject);
     return NextResponse.json({ support: { type: 'image', url: await makeImage(prompt), caption: '' } });
   }
-  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json({ support: null });
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json({ support: null });
 
   const system = [
     `Produce ONE piece of support material for a ${subject} slide at ${level} level${topic ? ` about ${topic}` : ''}.`,

@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { saveGeneration } from '@/src/db/persistence';
 import { recentUserGames } from '@/src/db/games';
 import { generateStructured } from '@/src/ai/providers';
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   if (!a.ok) return a.response;
   const { topic, concept, level, correct, total, durationSec, slides = [] } = (await req.json().catch(() => ({}))) || {};
   const history = await recentUserGames(a.user.username, 12);
-  if (!geminiEnabled && !deepseekEnabled) {
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     const fallback = makeFallbackRecommendation({ topic, concept, level, correct, total, slides });
     fallback.areaCompetency = fallbackAreaCompetency(topic, concept, correct, total);
     saveGeneration('recommendations', crypto.randomUUID(), { username: a.user.username, topic, concept, result: fallback, fallback: true, createdAt: new Date().toISOString() });

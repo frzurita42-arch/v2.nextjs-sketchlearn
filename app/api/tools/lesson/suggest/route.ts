@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   // "suggested topics" dropdown). Falls back to a shuffled pool without AI.
   if (count > 1) {
     const pool = () => [...TOPIC_POOL].sort(() => Math.random() - 0.5).slice(0, count);
-    if (!geminiEnabled && !deepseekEnabled) return NextResponse.json({ topics: pool() });
+    if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json({ topics: pool() });
     try {
       const r: any = await generateStructured(
         [{ role: 'system', content: `List ${count} fresh, specific, engaging topics a learner could study with a "${subject}" lesson/presentation. Make them concrete (not one-word), varied, and genuinely about ${subject}. ${avoid ? `Avoid: ${avoid}.` : ''} Return STRICT JSON.` },
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     fallback: true,
   });
 
-  if (!geminiEnabled && !deepseekEnabled) return NextResponse.json(fallback());
+  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json(fallback());
   try {
     const r: any = await generateStructured(
       [{ role: 'system', content: `Recommend ONE fresh, engaging example run for a "${subject}" lesson tool. Pick a level from: ${levels.join(', ')}. ${hint ? `Focus the topic on: ${hint}.` : ''} ${avoid ? `Avoid something like: ${avoid}.` : ''} Return STRICT JSON.` },

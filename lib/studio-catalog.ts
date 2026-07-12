@@ -14,7 +14,7 @@ export interface StudioItem {
   name: string;
   desc: string;
   activity?: string;                 // -> lesson.activityTypes
-  support?: 'images' | 'code' | 'tables' | 'formulas' | 'audio';   // -> lesson.support
+  support?: 'images' | 'code' | 'tables' | 'formulas' | 'audio' | 'geogebra';   // -> lesson.support
   language?: boolean;                // marks the lesson as a language lesson
   field?: { id: string; label: string; type: string; options?: string[] };  // repository entry field
   sizes?: boolean;                   // component offers a size choice (annotation pad)
@@ -65,6 +65,7 @@ export const STUDIO_CATEGORIES: StudioCategory[] = [
       { id: 'table', emoji: '📊', name: 'Table', desc: 'A table of data, steps, or comparisons.', support: 'tables' },
       { id: 'wolfram', emoji: '⚡', name: 'Wolfram step-by-step', desc: 'Solve equations with worked steps (uses the Wolfram key).', support: 'formulas', requires: 'wolfram' },
       { id: 'latex', emoji: '∑', name: 'LaTeX formula', desc: 'A cleanly typeset formula.', support: 'formulas' },
+      { id: 'geogebra', emoji: '📐', name: 'GeoGebra graph', desc: 'An interactive GeoGebra plot / math visual (functions, geometry, vectors…).', support: 'geogebra' },
       { id: 'codeblock', emoji: '🧾', name: 'Code snippet', desc: 'A code / pseudocode block (great for math working).', support: 'code' },
       { id: 'music', emoji: '🎵', name: 'Music / sound (ElevenLabs)', desc: 'Generate background music or a sound clip. Needs the music integration.', requires: 'music' },
       { id: 'news', emoji: '📰', name: 'Latest news', desc: 'Pull recent headlines into the slide. Needs a news API key.', requires: 'news' },
