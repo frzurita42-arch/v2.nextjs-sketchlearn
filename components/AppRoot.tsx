@@ -25,6 +25,12 @@ import { ToolRunnerView } from '@/components/views/ToolRunnerView';
 import { BuilderStudioView } from '@/components/views/BuilderStudioView';
 import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 
+// Views that can be restored from the URL on refresh (they fetch their own data
+// or, for 'tool', reload from the ?tool=<slug>). Transient flow views (path,
+// settings, activity, language, toolsettings) depend on in-memory state, so a
+// refresh on those returns home instead of showing a broken screen.
+const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 'feed', 'tools', 'tool', 'toolbuilder'];
+
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -51,12 +57,32 @@ export default function AppRoot() {
     if (next !== 'activity') appState.game = null;
     setView(next);
     window.scrollTo(0, 0);
+    // Persist the view to the URL so a refresh lands back on the same page.
+    try {
+      const url = new URL(window.location.href);
+      if (RESTORABLE.includes(next)) {
+        url.searchParams.set('view', next);
+        if (next === 'tool' && appState.activeTool?.slug) url.searchParams.set('tool', appState.activeTool.slug);
+        else url.searchParams.delete('tool');
+      } else {
+        url.searchParams.delete('view');
+        url.searchParams.delete('tool');
+      }
+      window.history.replaceState(null, '', url.toString());
+    } catch { /* ignore */ }
   }, []);
 
   const login = useCallback((token: string, u: SessionUser) => {
     API.setSession(token, u);
     setUser(u);
     setView('home');
+    // Fresh sign-in starts at home; drop any restored view/tool from the URL.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('view');
+      url.searchParams.delete('tool');
+      window.history.replaceState(null, '', url.toString());
+    } catch { /* ignore */ }
   }, []);
 
   const logout = useCallback(async () => {
@@ -65,16 +91,21 @@ export default function AppRoot() {
     if (typeof window !== 'undefined') window.location.reload();
   }, []);
 
-  // Deep-link: /?tool=<slug> opens a shared tool directly once signed in.
+  // On load (once signed in) restore the view from the URL, so a refresh stays on
+  // the same page. /?tool=<slug> (or ?view=tool) reloads that shared tool.
   useEffect(() => {
     if (!user || typeof window === 'undefined') return;
-    const slug = new URLSearchParams(window.location.search).get('tool');
-    if (!slug) return;
-    let cancelled = false;
-    API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
-      if (!cancelled && r?.tool) { appState.activeTool = r.tool; setView('tool'); }
-    }).catch(() => { /* ignore */ });
-    return () => { cancelled = true; };
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('tool');
+    const v = params.get('view') as ViewName | null;
+    if (slug) {
+      let cancelled = false;
+      API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
+        if (!cancelled && r?.tool) { appState.activeTool = r.tool; setView('tool'); }
+      }).catch(() => { /* ignore */ });
+      return () => { cancelled = true; };
+    }
+    if (v && v !== 'tool' && RESTORABLE.includes(v)) setView(v);
   }, [user]);
 
   // Demo-mode banner: show when the server has no AI provider connected.
