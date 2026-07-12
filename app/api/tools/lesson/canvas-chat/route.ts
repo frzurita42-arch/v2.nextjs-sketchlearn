@@ -28,7 +28,8 @@ export async function POST(req: Request) {
     'This is a hand-written conversation. The IMAGE contains the learner\'s newest message — read their handwriting/drawing carefully (it may span a tall page).',
     history ? `Conversation so far:\n${history}` : 'This is the first message.',
     'Reply with a clear, concise, helpful answer to what they wrote/drew. If they asked a question, answer it; if they showed work, respond to it. Keep it to a short paragraph.',
-    'Return STRICT JSON: { "reply": "your answer as plain text" }.',
+    'If your reply contains any code, an equation derivation, or step-by-step working, put that part inside a triple-backtick ``` code block ``` so it renders in a code box; keep ordinary explanation as plain prose outside the block.',
+    'Return STRICT JSON: { "reply": "your answer (may contain a ``` code block ```)" }.',
   ].join('\n');
 
   try {

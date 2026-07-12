@@ -30,17 +30,18 @@ export async function POST(req: Request) {
     answer ? `The expected/correct solution is: "${answer}".` : 'Judge whether the answer is correct and complete on its own merits.',
     language ? `The answer is written as ${language}.` : '',
     'Judge on correctness and completeness — accept any equivalent-but-correct solution, not only an exact string match.',
-    'Return STRICT JSON: { "correct": true|false, "score": 0-100, "feedback": "one or two short, specific, encouraging sentences about what was right or what to fix" }. No markdown fences.',
+    'Return STRICT JSON: { "correct": true|false, "score": 0-100, "feedback": "one or two short, specific, encouraging sentences about what was right or what to fix", "fix": "a short model/corrected solution as code or worked steps (plain, no backticks) — empty string if the answer was already fully correct" }.',
   ].filter(Boolean).join('\n');
   const user = `Student's answer:\n${code}`;
 
   try {
-    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.2, maxTokens: 500 });
+    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.2, maxTokens: 700 });
     if (!r) return NextResponse.json({ correct: true, score: null, feedback: 'Answer saved.', checked: false });
     return NextResponse.json({
       correct: !!r.correct,
       score: typeof r.score === 'number' ? Math.max(0, Math.min(100, r.score)) : null,
       feedback: String(r.feedback || (r.correct ? 'Correct — nice work!' : 'Not quite — review the solution.')).slice(0, 300),
+      fix: String(r.fix || '').slice(0, 1200),
       checked: true,
     });
   } catch {

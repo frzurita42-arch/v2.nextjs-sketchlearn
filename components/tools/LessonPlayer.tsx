@@ -330,7 +330,7 @@ function AnnotationQuestion({ q, subject, size, onDone }: { q: Q; subject: strin
         <div style={{ maxWidth: 560, margin: '12px auto 0', textAlign: 'left', display: 'grid', gap: 6 }}>
           {chat.map((m, i) => (
             <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: m.role === 'assistant' ? 'rgba(92,128,188,0.14)' : 'rgba(0,0,0,0.05)', fontSize: 14 }}>
-              <b>{m.role === 'assistant' ? '🤖 AI' : '🧑 You'}:</b> {m.text}
+              <b>{m.role === 'assistant' ? '🤖 AI' : '🧑 You'}:</b> {m.role === 'assistant' ? <AIReply text={m.text} /> : m.text}
             </div>
           ))}
         </div>
@@ -362,14 +362,50 @@ function printPages(title: string, pages: string[]) {
   w.document.close();
 }
 
+// A styled code box (dark, monospace) — the same look used for code support.
+function CodeBox({ code, label }: { code: string; label?: string }) {
+  return (
+    <div style={{ margin: '6px 0' }}>
+      {label && <div style={{ fontSize: 12, opacity: 0.6, fontWeight: 700, textAlign: 'left' }}>{label}</div>}
+      <pre style={{ textAlign: 'left', background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', overflowY: 'auto', maxHeight: 320, fontSize: 13, margin: '2px 0', whiteSpace: 'pre' }}><code>{code}</code></pre>
+    </div>
+  );
+}
+
+// Render an AI reply: any ```fenced``` code / working shows in a code box, the
+// rest as prose (with inline $…$ math). So answers with code or step-by-step
+// working display in a real code space instead of a plain chat line.
+function AIReply({ text }: { text: string }) {
+  const s = String(text || '');
+  const parts: { code: boolean; body: string }[] = [];
+  const re = /```[\w-]*\n?([\s\S]*?)```/g;
+  let last = 0, m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    if (m.index > last) parts.push({ code: false, body: s.slice(last, m.index) });
+    parts.push({ code: true, body: m[1].replace(/\n$/, '') });
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) parts.push({ code: false, body: s.slice(last) });
+  if (!parts.length) parts.push({ code: false, body: s });
+  return (
+    <>
+      {parts.map((p, i) => p.code
+        ? <CodeBox key={i} code={p.body} />
+        : (p.body.trim() ? <span key={i} style={{ whiteSpace: 'pre-wrap' }}><MathText text={p.body} /></span> : null))}
+    </>
+  );
+}
+
 // One answered question's summary row.
 function ReviewRow({ d }: { d: any }) {
   return (
     <div>
       {d.prompt && <p style={{ fontWeight: 600, margin: '0 0 4px' }}><MathText text={d.prompt} /></p>}
-      <p style={{ fontSize: 14, margin: '2px 0' }}>{d.correct ? '✓ ' : '✗ '}{d.feedback || (d.correct ? 'Correct.' : 'Reviewed.')}</p>
+      <div style={{ fontSize: 14, margin: '2px 0' }}>{d.correct ? '✓ ' : '✗ '}<AIReply text={d.feedback || (d.correct ? 'Correct.' : 'Reviewed.')} /></div>
+      {/* The AI's model/corrected solution, shown in a code box. */}
+      {d.fix && <CodeBox code={d.fix} label="Model answer" />}
       {d.image && <img src={d.image} alt="your work" style={{ width: '100%', maxWidth: 300, border: '2px solid var(--ink)', borderRadius: 8, margin: '6px auto', display: 'block' }} />}
-      {d.code && <pre style={{ textAlign: 'left', background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', overflowY: 'auto', maxHeight: 260, fontSize: 13 }}><code>{d.code}</code></pre>}
+      {d.code && <CodeBox code={d.code} label="Your answer" />}
       {!d.image && !d.code && d.your && <p style={{ fontSize: 13 }}>Your answer: <b>{d.your}</b></p>}
       {!d.correct && d.answer && <p style={{ fontSize: 13, color: 'var(--accent,#5c80bc)' }}>Expected: <b>{d.answer}</b></p>}
       {Array.isArray(d.pages) && d.pages.length > 0 && <button className="btn small ghost" style={{ marginTop: 4 }} onClick={() => printPages(d.prompt || 'My work', d.pages)}>📄 Download pages (PDF)</button>}
@@ -390,7 +426,7 @@ function AIQuestionCard({ q, translateTo, onDone }: { q: Q; translateTo: string;
       let r: any, detail: any;
       if (q.kind === 'code') {
         r = await API.post('/api/tools/lesson/check-code', { prompt: payload.prompt, answer: payload.answer, code: payload.code, language: payload.language });
-        detail = { prompt: payload.prompt, your: payload.code, answer: payload.answer || '', correct: !!r.correct, code: payload.code, feedback: r.feedback };
+        detail = { prompt: payload.prompt, your: payload.code, answer: payload.answer || '', correct: !!r.correct, code: payload.code, feedback: r.feedback, fix: r.fix || '' };
       } else {
         r = await API.post('/api/tools/lesson/check-writing', { target: payload.target, image: payload.image });
         detail = { prompt: payload.prompt, your: '✍️ your drawing', answer: payload.target || '', correct: !!r.correct, image: payload.image, feedback: r.feedback };
