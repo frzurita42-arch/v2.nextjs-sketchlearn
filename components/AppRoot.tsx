@@ -22,7 +22,7 @@ import { CsPathView } from '@/components/views/CsPathView';
 import { FeedView } from '@/components/views/FeedView';
 import { ToolsView } from '@/components/views/ToolsView';
 import { ToolRunnerView } from '@/components/views/ToolRunnerView';
-import { ToolBuilderView } from '@/components/views/ToolBuilderView';
+import { BuilderStudioView } from '@/components/views/BuilderStudioView';
 import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 
 export default function AppRoot() {
@@ -111,7 +111,7 @@ export default function AppRoot() {
     feed: <FeedView />,
     tools: <ToolsView />,
     tool: <ToolRunnerView />,
-    toolbuilder: <ToolBuilderView />,
+    toolbuilder: <BuilderStudioView />,
     toolsettings: <ToolSettingsView />,
   };
 
