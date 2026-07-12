@@ -16,20 +16,27 @@ export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const subject = String(b.subject || '').slice(0, 120);
+  const subject = String(b.subject || '').slice(0, 160);
   const image = String(b.image || '');
+  const note = String(b.note || '').slice(0, 800);
+  const pageCount = Math.max(1, parseInt(b.pageCount, 10) || 1);
   const history = (Array.isArray(b.history) ? b.history : []).slice(-10)
-    .map((m: any) => `${m.role === 'assistant' ? 'You (assistant)' : 'Learner'}: ${String(m.text || '').slice(0, 500)}`)
+    .map((m: any) => `${m.role === 'assistant' ? 'You (tutor)' : 'Student'}: ${String(m.text || '').slice(0, 500)}`)
     .join('\n');
   if (!image.startsWith('data:image')) return NextResponse.json({ error: 'Write or draw your message first.' }, { status: 400 });
 
   const prompt = [
-    subject ? `You are a helpful, encouraging tutor for: ${subject}.` : 'You are a helpful, encouraging tutor.',
-    'This is a hand-written conversation. The IMAGE contains the learner\'s newest message — read their handwriting/drawing carefully (it may span a tall page).',
+    subject ? `You are a patient, encouraging tutor helping a student with: ${subject}.` : 'You are a patient, encouraging tutor.',
+    `The IMAGE is the student's ENTIRE notebook — ALL ${pageCount} page(s) stacked vertically, top to bottom${pageCount > 1 ? ', each preceded by a "— Page N of ' + pageCount + ' —" label' : ''}. You CAN see every page; read the whole tall image from top to bottom. If the student refers to a specific page, look at that labelled section. NEVER say you don't have access to earlier/other pages — they are all here in this one image.`,
+    note ? `The student also TYPED: "${note}". Use it to understand exactly what they're asking, their sentiment, and their goal, and answer that.` : 'The student did not type a note; respond to what they wrote/drew.',
     history ? `Conversation so far:\n${history}` : 'This is the first message.',
-    'Reply with a clear, concise, helpful answer to what they wrote/drew. If they asked a question, answer it; if they showed work, respond to it. Keep it to a short paragraph.',
-    'If your reply contains any code, an equation derivation, or step-by-step working, put that part inside a triple-backtick ``` code block ``` so it renders in a code box; keep ordinary explanation as plain prose outside the block.',
-    'Return STRICT JSON: { "reply": "your answer (may contain a ``` code block ```)" }.',
+    'HOW TO REPLY — follow ALL of these:',
+    '- Keep it SHORT and concise (usually 1–3 sentences). No walls of text.',
+    '- First, briefly ACKNOWLEDGE what they said or showed (e.g. "Yes, I can see your work.").',
+    '- Then GUIDE them to the NEXT step only — a hint or a question that nudges them forward. Do NOT give the full solution or the final answer; lead them to it step by step.',
+    '- Stay focused on solving the current problem; if they drift off-topic, gently steer them back.',
+    '- If a hint needs code or an equation/step, put just that part inside a triple-backtick ``` code block ``` (prose stays outside it).',
+    'Return STRICT JSON: { "reply": "your short guiding reply" }.',
   ].join('\n');
 
   try {

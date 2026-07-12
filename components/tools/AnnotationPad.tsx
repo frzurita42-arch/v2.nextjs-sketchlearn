@@ -22,6 +22,10 @@ export function AnnotationPad({ onReady, onChange, scroll = false, padSize = 'la
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pagesRef = useRef<string[]>(['']);      // saved page images ('' = blank)
   const [pageIdx, setPageIdx] = useState(0);
+  // Live mirror of pageIdx so the getPages() handed to the parent on mount never
+  // reads a stale page index (which previously made it collect only one page).
+  const pageIdxRef = useRef(0);
+  useEffect(() => { pageIdxRef.current = pageIdx; }, [pageIdx]);
   const [pageCount, setPageCount] = useState(1);
   const [padH, setPadH] = useState(scrollMode ? 900 : H);   // adaptive/scroll grows this
   const [tool, setTool] = useState<'pen' | 'eraser' | 'text'>('pen');
@@ -46,7 +50,7 @@ export function AnnotationPad({ onReady, onChange, scroll = false, padSize = 'la
     for (let gy = 44; gy < h; gy += 44) { x.beginPath(); x.moveTo(0, gy); x.lineTo(W, gy); x.stroke(); }
     if (dataUrl) { const img = new Image(); img.onload = () => x.drawImage(img, 0, 0); img.src = dataUrl; } // natural size, top-aligned
   };
-  const getPages = () => { pagesRef.current[pageIdx] = canvasRef.current!.toDataURL('image/png'); return [...pagesRef.current]; };
+  const getPages = () => { pagesRef.current[pageIdxRef.current] = canvasRef.current!.toDataURL('image/png'); return [...pagesRef.current]; };
 
   useEffect(() => { paintBlank(pagesRef.current[0]); onReady?.(getPages); /* eslint-disable-next-line */ }, []);
   // After a grow, the canvas element was recreated blank — restore prior ink on top.
@@ -151,14 +155,29 @@ export function AnnotationPad({ onReady, onChange, scroll = false, padSize = 'la
   return inner;
 }
 
-// Stack page images into one tall PNG (for AI grading) — returns a data URL.
+// Stack ALL page images into one tall PNG (for the AI to read/grade). When there
+// is more than one page, each is preceded by a labelled band ("Page N of M") and
+// a divider so the AI can see — and refer to — every page. Returns a data URL.
 export async function compositePages(pages: string[]): Promise<string> {
   const imgs = await Promise.all(pages.filter(Boolean).map(src => new Promise<HTMLImageElement>(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(i); i.src = src; })));
   if (!imgs.length) return '';
+  const multi = imgs.length > 1;
+  const band = multi ? 34 : 0;
   const w = Math.max(...imgs.map(i => i.width || W));
-  const h = imgs.reduce((a, i) => a + (i.height || H), 0);
+  const h = imgs.reduce((a, i) => a + (i.height || H) + band, 0);
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const x = c.getContext('2d')!; x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
-  let y = 0; for (const i of imgs) { x.drawImage(i, 0, y, i.width || W, i.height || H); y += (i.height || H); }
+  let y = 0;
+  imgs.forEach((img, idx) => {
+    if (multi) {
+      x.fillStyle = '#e9e4d6'; x.fillRect(0, y, w, band);
+      x.fillStyle = '#2d2a26'; x.font = 'bold 20px sans-serif'; x.textBaseline = 'middle';
+      x.fillText(`— Page ${idx + 1} of ${imgs.length} —`, 12, y + band / 2);
+      x.strokeStyle = '#2d2a26'; x.lineWidth = 2; x.beginPath(); x.moveTo(0, y + band); x.lineTo(w, y + band); x.stroke();
+      y += band;
+    }
+    x.drawImage(img, 0, y, img.width || W, img.height || H);
+    y += (img.height || H);
+  });
   return c.toDataURL('image/jpeg', 0.85);
 }

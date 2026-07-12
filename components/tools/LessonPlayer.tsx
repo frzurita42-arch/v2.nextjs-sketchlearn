@@ -283,11 +283,11 @@ function AnnotationQuestion({ q, subject, size, onDone }: { q: Q; subject: strin
     const history = [...chat, { role: 'learner' as const, text: msg }];
     setChat(history);
     try {
-      const { image } = await collect();
+      const { pages, image } = await collect();
       const r = await API.post('/api/tools/lesson/canvas-chat', {
         subject: `${subject}${q.prompt ? ` — ${q.prompt}` : ''}`,
         history: history.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: m.text })),
-        image,
+        image, note: text.trim(), pageCount: pages.length,
       });
       setChat([...history, { role: 'assistant', text: r?.reply || '…' }]);
     } catch { setChat(c => [...c, { role: 'assistant', text: '(Could not reach the tutor this time.)' }]); }
