@@ -66,6 +66,15 @@ export interface LessonSpec {
   support?: LessonSupport;          // which support materials may appear
   activityTypes?: string[];         // subset of ['mcq','fill-blank','input','writing','annotation','code'] to shuffle
   pages?: LessonPage[];             // when set, each slide is composed from its page spec
+  // Viewing options (owner/admin choose in the tool Settings):
+  //   'both'    -> viewers may open the saved original deck OR generate a fresh replica
+  //   'history' -> only the saved original deck (no new generation) if one exists
+  //   'replica' -> only generate a fresh AI replica (no history offered)  [default]
+  viewMode?: 'both' | 'history' | 'replica';
+  // The original generated deck (slides + the config used), saved by the owner
+  // so viewers can replay the exact same slides with their answers/answer key.
+  savedDeck?: { config?: Record<string, any>; slides?: any[]; savedAt?: string; savedBy?: string };
+  offlineExport?: boolean;   // show the "download offline copy (.zip)" button (default on)
 }
 
 export interface GeneratorSpec {
@@ -115,6 +124,7 @@ export interface RepoCard {
 export interface RepoSpec {
   layout?: 'course' | 'post';   // a hint for default styling
   display?: 'bars' | 'grid';    // default arrangement of cards (horizontal bars or a grid)
+  offlineExport?: boolean;      // show the "download offline copy (.zip)" button (default on)
   cards: RepoCard[];
 }
 
@@ -229,7 +239,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
     const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
-    repo = { layout, display, cards };
+    repo = { layout, display, offlineExport: r.offlineExport !== false, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);
@@ -270,6 +280,16 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       support: cleanSup(sup),
       activityTypes: acts.length ? acts : ['mcq', 'fill-blank', 'input'],
       pages: pages.length ? pages : undefined,
+      viewMode: ['both', 'history', 'replica'].includes(l.viewMode) ? l.viewMode : 'replica',
+      offlineExport: l.offlineExport !== false,
+      // Pass the saved deck through, lightly capped. It's opaque generated content
+      // (slides + their questions/answers); we only bound its size, not its shape.
+      savedDeck: (l.savedDeck && typeof l.savedDeck === 'object' && Array.isArray(l.savedDeck.slides) && l.savedDeck.slides.length)
+        ? { config: l.savedDeck.config && typeof l.savedDeck.config === 'object' ? l.savedDeck.config : {},
+            slides: l.savedDeck.slides.slice(0, 75),
+            savedAt: String(l.savedDeck.savedAt || '').slice(0, 40) || undefined,
+            savedBy: String(l.savedDeck.savedBy || '').slice(0, 60) || undefined }
+        : undefined,
     };
   } else if (archetype === 'generator') {
     const g = d.generator || {};

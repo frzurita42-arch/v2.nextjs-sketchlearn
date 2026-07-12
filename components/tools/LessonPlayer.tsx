@@ -17,6 +17,7 @@ import { AudioButton } from '@/components/ui/AudioButton';
 import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad';
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
+import { buildLessonZip } from '@/lib/lesson-export';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -532,7 +533,37 @@ function WritingQuestion({ q, translateTo, onDone }: { q: Q; translateTo: string
   );
 }
 
-export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
+// Static answer-key for a saved question (shown in the "original deck" history
+// view): the prompt, the correct answer / marked options, and any explanation.
+function AnswerKey({ q }: { q: Q }) {
+  const opts = Array.isArray(q.options) ? q.options : [];
+  const correct = String(q.answer ?? '');
+  return (
+    <div>
+      {q.prompt && <p style={{ fontWeight: 600, margin: '0 0 6px' }}><MathText text={q.prompt} /></p>}
+      {opts.length > 0 ? (
+        <div style={{ display: 'grid', gap: 4 }}>
+          {opts.map((o: any, i: number) => {
+            const val = String(typeof o === 'object' ? (o.text ?? o.label ?? o.value ?? '') : o);
+            const isRight = val === correct || (o && typeof o === 'object' && (o.correct === true));
+            return (
+              <div key={i} style={{ fontSize: 14, padding: '4px 8px', borderRadius: 6, border: '1.5px solid var(--ink)', background: isRight ? 'rgba(127,176,105,0.25)' : 'transparent' }}>
+                {isRight ? '✓ ' : ''}<MathText text={val} />
+              </div>
+            );
+          })}
+        </div>
+      ) : correct ? (
+        <p style={{ fontSize: 14, margin: 0 }}>Answer: <b><MathText text={correct} /></b></p>
+      ) : (
+        <p style={{ fontSize: 13, opacity: 0.6, margin: 0 }}>(Open-ended — no fixed answer.)</p>
+      )}
+      {q.explanation && <p style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}><AIReply text={q.explanation} /></p>}
+    </div>
+  );
+}
+
+export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: string; canEdit?: boolean }) {
   const lesson = def?.lesson || {};
   // Conversation / journal modes are a growing canvas thread, not a slide deck.
   if (lesson.mode === 'conversation' || lesson.mode === 'journal') {
@@ -542,8 +573,29 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   const levelField = settings.find((f: any) => f.id === 'level' || f.id === 'difficulty');
   const levels: string[] = levelField?.options?.length ? levelField.options : ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1'];
 
-  const [phase, setPhase] = useState<'hub' | 'play' | 'done'>('hub');
+  const [phase, setPhase] = useState<'hub' | 'play' | 'done' | 'history'>('hub');
   const [form, setForm] = useState<Cfg>(() => defaultsFor(settings));
+  // Viewing options (owner/admin-configured): 'both' | 'history' | 'replica'.
+  const viewMode: 'both' | 'history' | 'replica' = ['both', 'history', 'replica'].includes(lesson.viewMode) ? lesson.viewMode : 'replica';
+  const [savedDeck, setSavedDeck] = useState<any>(lesson.savedDeck || null);
+  const hasSaved = !!(savedDeck?.slides?.length);
+  const [deckMsg, setDeckMsg] = useState('');
+  const offlineOn = lesson.offlineExport !== false;   // owner/admin can turn it off
+  const [zipBusy, setZipBusy] = useState(false);
+  // Save the current run's generated slides as the original deck (owner/admin).
+  const saveDeck = async () => {
+    const gen = slidesRef.current.filter(Boolean);
+    if (!gen.length) { setDeckMsg('Play through the deck first, then save.'); return; }
+    setDeckMsg('Saving…');
+    try {
+      const r = await API.post('/api/tools/lesson/save-deck', { slug, config: cfgRef.current, slides: gen });
+      if (r?.ok) {
+        const deck = { config: cfgRef.current, slides: gen, savedBy: API.user?.username, savedAt: new Date().toISOString() };
+        setSavedDeck(deck); if (def?.lesson) def.lesson.savedDeck = deck;
+        setDeckMsg(`Saved ✓ (${r.slideCount} slides)`);
+      } else setDeckMsg(r?.error || 'Could not save.');
+    } catch (e: any) { setDeckMsg(e?.message || 'Could not save.'); }
+  };
   const [activities, setActivities] = useState<any[]>([]);
   const [example, setExample] = useState<any>(null);
   const [exBusy, setExBusy] = useState(false);
@@ -630,12 +682,16 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
   };
 
   const defaultCat = () => lesson.subjectKind === 'math' ? 'Mathematics' : lesson.subjectKind === 'programming' ? 'Technology' : lesson.subjectKind === 'language' ? 'Language Learning' : 'Science';
-  const createAndPlay = async () => {
-    const c: Cfg = { ...form, level: form.level || form.difficulty || levels[0], topic: form.topic || '', category: form.category || defaultCat() };
-    try { await API.post('/api/tools/entries', { slug, data: c }); } catch { /* ignore */ }
+  // Record a play in the lesson history (activities feed), then play it. Every
+  // route into a deck — the create form, an AI-suggested topic, or a replica —
+  // goes through here so it shows up as an option in the history.
+  const recordAndPlay = async (c: Cfg, extra?: Record<string, any>) => {
+    const cc: Cfg = { ...c, level: c.level || c.difficulty || levels[0], topic: c.topic || '', category: c.category || defaultCat(), ...extra };
+    try { await API.post('/api/tools/entries', { slug, data: cc }); } catch { /* ignore */ }
     loadActivities();
-    play(c);
+    play(cc);
   };
+  const createAndPlay = () => recordAndPlay(form);
 
   // Record one answered question (by index) on the current slide; mark the slide
   // `done` once every question has been answered.
@@ -662,6 +718,40 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
 
   const label = (c: Cfg) => [lesson.subject, c.level || c.difficulty, c.topic].filter(Boolean).join(' · ');
 
+  // ---------------- ORIGINAL DECK (history, with answers) ----------------
+  if (phase === 'history') {
+    const hslides: Slide[] = Array.isArray(savedDeck?.slides) ? savedDeck.slides : [];
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
+          <span style={{ fontSize: 13, opacity: 0.7 }}>📖 Original deck{savedDeck?.savedBy ? ` · by @${savedDeck.savedBy}` : ''}{savedDeck?.config ? ` · ${label(savedDeck.config)}` : ''}</span>
+          {viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Generate a fresh replica</button>}
+        </div>
+        <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginBottom: 10 }}>The exact slides the author generated, shown with the answer key.</p>
+        {hslides.map((s, si) => (
+          <div key={si} className="card" style={{ padding: '16px 18px', maxWidth: 720, margin: '0 auto 14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5 }}>Slide {si + 1} / {hslides.length}</div>
+            <h3 style={{ marginTop: 4, textAlign: 'center' }}>{s.title}</h3>
+            {s.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={s.content} translateTo={lesson.translateTo || 'English'} /></p>}
+            {(Array.isArray(s._supports) ? s._supports : (s.support ? [s.support] : [])).map((sup: any, k: number) => <Support key={k} s={sup} />)}
+            {(Array.isArray(s.questions) ? s.questions : []).map((q, qi) => (
+              <div key={qi} style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
+                {s.questions.length > 1 && <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5, marginBottom: 6 }}>Question {qi + 1} / {s.questions.length}</div>}
+                <AnswerKey q={q} />
+              </div>
+            ))}
+          </div>
+        ))}
+        {canEdit && (
+          <div style={{ textAlign: 'center', marginTop: 6 }}>
+            <button className="btn small ghost" onClick={async () => { if (!confirm('Remove the saved original deck?')) return; try { await API.post('/api/tools/lesson/save-deck', { slug, clear: true }); setSavedDeck(null); if (def?.lesson) delete def.lesson.savedDeck; setPhase('hub'); } catch { /* ignore */ } }}>🗑 Remove saved deck</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ---------------- HUB ----------------
   if (phase === 'hub') {
     // Turn the free-text "topic" field into a dropdown of 5 suggested topics
@@ -679,8 +769,24 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
       return true;
     });
     const dashRule = { borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '14px 0' } as const;
+    // View options: offer the saved original deck and/or a fresh AI replica.
+    const showGenerate = viewMode !== 'history' || !hasSaved;
     return (
       <div>
+        {hasSaved && viewMode !== 'replica' && (
+          <div className="card" style={{ padding: '14px 16px', marginBottom: 12, borderStyle: 'dashed' }}>
+            <h4 style={{ margin: '0 0 4px' }}>📖 This presentation has a saved original</h4>
+            <p style={{ fontSize: 13, opacity: 0.75, margin: '0 0 10px' }}>
+              View the exact slides the author made (with the answer key){showGenerate ? ', or generate a fresh AI replica of the same lesson' : ''}.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn blue" onClick={() => { setPhase('history'); window.scrollTo(0, 0); }}>📖 View original (with answers)</button>
+              {showGenerate && <button className="btn green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Generate a fresh replica →</button>}
+            </div>
+          </div>
+        )}
+
+        {showGenerate && (
         <div className="card alt" style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <h4 style={{ margin: '0 0 8px' }}>Create a {lesson.subject || 'lesson'} activity</h4>
@@ -691,6 +797,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
             <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
           </div>
         </div>
+        )}
 
         {/* ┄ divider: settings ┄ AI example ┄ */}
         <div style={dashRule} />
@@ -708,7 +815,7 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
             <div style={{ marginTop: 6 }}>
               <strong>{label({ level: example.level, topic: example.topic })}</strong>
               {example.why && <p style={{ margin: '4px 0', fontSize: 13, opacity: 0.8 }}>{example.why}</p>}
-              <button className="btn small green" onClick={() => play({ ...form, level: example.level, topic: example.topic })}>▶ Play</button>
+              <button className="btn small green" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
             </div>
           ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
         </div>
@@ -736,7 +843,10 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
             {feed.map((e: any) => (
               <div key={e.id} className="card" style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ fontWeight: 600 }}>{label(e.data || {})}</div>
+                  <div style={{ fontWeight: 600 }}>{label(e.data || {})}
+                    {e.data?.suggested && <span title="AI-suggested topic" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>✦ AI pick</span>}
+                    {e.data?.replica && <span title="A fresh AI replica" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>♻ replica</span>}
+                  </div>
                   <div style={{ fontSize: 12, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ''}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -784,6 +894,23 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn small blue" onClick={shareResult}>🔗 Share result</button>
             <button className="btn small ghost" onClick={() => setShowReview(v => !v)}>{showReview ? 'Hide review' : '🔎 Review answers'}</button>
+            {offlineOn && (
+              <button className="btn small ghost" disabled={zipBusy} onClick={async () => {
+                setZipBusy(true);
+                try {
+                  const blob = await buildLessonZip({
+                    title: def?.title || lesson.subject || 'Lesson', subtitle: label(cfg),
+                    slides: slidesRef.current.filter(Boolean) as Slide[], results,
+                    score: scoreCount, answered: answeredCount, pct, timeStr,
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `${(slug || 'lesson')}-offline.zip`; document.body.appendChild(a); a.click(); a.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 4000);
+                } catch (e: any) { alert(e?.message || 'Could not build the offline copy.'); }
+                setZipBusy(false);
+              }}>{zipBusy ? <><Spinner />Zipping…</> : '⬇ Offline copy (.zip)'}</button>
+            )}
           </div>
         </div>
 
@@ -817,6 +944,12 @@ export function LessonPlayer({ def, slug }: { def: any; slug: string }) {
           <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>
           <button className="btn" onClick={() => { setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
         </div>
+        {canEdit && (
+          <div className="card alt" style={{ padding: '10px 14px', marginTop: 12, textAlign: 'center' }}>
+            <button className="btn small blue" onClick={saveDeck}>💾 Save this as the original deck</button>
+            <p style={{ fontSize: 11, opacity: 0.65, margin: '6px 0 0' }}>Viewers can then open these exact slides (with the answer key). {deckMsg}</p>
+          </div>
+        )}
       </div>
     );
   }

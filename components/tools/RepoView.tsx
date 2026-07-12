@@ -19,6 +19,7 @@ import { useApp } from '@/components/AppContext';
 import { RichText } from '@/components/tools/RichText';
 import { ImageField } from '@/components/tools/ImageField';
 import { isRenderableImage } from '@/lib/img';
+import { buildRepoZip } from '@/lib/lesson-export';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -403,6 +404,21 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
   }, [entries]);
   const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries };
 
+  // Offline export (owner/admin can toggle it off in Settings).
+  const offlineOn = repo.offlineExport !== false;
+  const [zipBusy, setZipBusy] = useState(false);
+  const downloadZip = async () => {
+    setZipBusy(true);
+    try {
+      const blob = await buildRepoZip({ title: def?.title || 'Repository', subtitle: def?.description || '', cards, display });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${slug || 'repository'}-offline.zip`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e: any) { alert(e?.message || 'Could not build the offline copy.'); }
+    setZipBusy(false);
+  };
+
   const patch = (id: string, p: Partial<RepoCard>) => { dirty.current = true; setCards((cs) => mapTree(cs, id, (c) => ({ ...c, ...p }))); };
   const addChild = (id: string) => { dirty.current = true; setCards((cs) => addChildTo(cs, id, blankCard('card'))); };
   const addSection = (id: string) => { dirty.current = true; setCards((cs) => addSiblingAfter(cs, id, blankCard('section'))); };
@@ -432,6 +448,13 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
 
   return (
     <div>
+      {/* Offline export — available to every viewer unless the owner turned it off. */}
+      {offlineOn && !editing && cards.length > 0 && (
+        <div style={{ textAlign: 'right', marginBottom: 8 }}>
+          <button className="btn small ghost" disabled={zipBusy} onClick={downloadZip}>{zipBusy ? 'Zipping…' : '⬇ Offline copy (.zip)'}</button>
+        </div>
+      )}
+
       {/* Owner/admin edit bar */}
       {canEdit && (
         <div className="card alt" style={{ padding: '8px 12px', marginBottom: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

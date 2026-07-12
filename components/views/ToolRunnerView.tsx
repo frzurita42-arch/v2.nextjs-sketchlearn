@@ -268,7 +268,7 @@ export function ToolRunnerView() {
         {isRepo ? (
           <RepoView def={def} slug={tool.slug} canEdit={canEdit} />
         ) : isLesson ? (
-          <LessonPlayer def={def} slug={tool.slug} />
+          <LessonPlayer def={def} slug={tool.slug} canEdit={canEdit} />
         ) : !isApp ? (
           !def.generator ? (
             <div className="card alt" style={{ padding: '14px 16px' }}><p style={{ margin: 0 }}>This tool&apos;s definition is incomplete and can&apos;t run. Try rebuilding it from the Builder.</p></div>

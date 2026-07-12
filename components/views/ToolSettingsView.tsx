@@ -78,6 +78,31 @@ export function ToolSettingsView() {
 
   const fields = tool?.definition?.archetype === 'app' ? (tool.definition.app?.entryFields || []) : (tool?.definition?.settings || []);
 
+  // Presentation viewing mode (owner/admin): history vs replica vs both.
+  const isLesson = tool?.definition?.archetype === 'lesson';
+  const savedDeckCount = tool?.definition?.lesson?.savedDeck?.slides?.length || 0;
+  const saveViewMode = async (viewMode: 'both' | 'history' | 'replica') => {
+    if (!tool?.definition?.lesson) return;
+    const nextDef = { ...tool.definition, lesson: { ...tool.definition.lesson, viewMode } };
+    setTool({ ...tool, definition: nextDef }); appState.activeTool = { ...appState.activeTool, definition: nextDef };
+    try { await API.put('/api/tools/settings', { slug, definition: nextDef }); setSaved('Saved ✓'); setTimeout(() => setSaved(''), 2500); }
+    catch (e: any) { setErr(e?.message || 'Save failed'); }
+  };
+
+  // Offline export toggle (owner/admin) — applies to lessons and repositories.
+  const saveOffline = async (on: boolean) => {
+    const d = tool?.definition; if (!d) return;
+    const nextDef = d.archetype === 'lesson'
+      ? { ...d, lesson: { ...d.lesson, offlineExport: on } }
+      : { ...d, repo: { ...d.repo, offlineExport: on } };
+    setTool({ ...tool, definition: nextDef }); appState.activeTool = { ...appState.activeTool, definition: nextDef };
+    try { await API.put('/api/tools/settings', { slug, definition: nextDef }); setSaved('Saved ✓'); setTimeout(() => setSaved(''), 2500); }
+    catch (e: any) { setErr(e?.message || 'Save failed'); }
+  };
+  const offlineOn = tool?.definition?.archetype === 'lesson'
+    ? tool?.definition?.lesson?.offlineExport !== false
+    : tool?.definition?.repo?.offlineExport !== false;
+
   // Repository default display (owner/admin) — how the top-level cards are arranged.
   const isRepo = tool?.definition?.archetype === 'repo';
   const saveDisplay = async (display: 'bars' | 'grid') => {
@@ -116,6 +141,35 @@ export function ToolSettingsView() {
             {saved && <span style={{ color: 'var(--accent,#5c80bc)', fontSize: 13 }}>{saved}</span>}
           </div>
         </div>
+
+        {/* Presentation viewing mode */}
+        {isLesson && (
+          <div className="card alt" style={{ padding: '14px 16px', marginTop: 16 }}>
+            <h4 style={{ margin: '0 0 4px' }}>🎬 How viewers open this presentation</h4>
+            <p style={{ fontSize: 12, opacity: 0.7, marginTop: 0 }}>
+              {savedDeckCount ? `A saved original deck (${savedDeckCount} slides) exists.` : 'No original deck saved yet — play through a deck and tap “Save this as the original deck” on the results screen.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {([['both', 'Both', 'View the saved original OR generate a replica'],
+                 ['history', 'Original only', 'Only the saved slides (with answers) — no new generation'],
+                 ['replica', 'Replica only', 'Always generate a fresh AI version (no history)']] as const).map(([v, lbl, d]) => (
+                <button key={v} className={`btn small ${(tool.definition.lesson?.viewMode || 'replica') === v ? 'green' : 'ghost'}`} title={d} onClick={() => saveViewMode(v)}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Offline export toggle (lessons + repositories) */}
+        {(isLesson || isRepo) && (
+          <div className="card alt" style={{ padding: '14px 16px', marginTop: 16 }}>
+            <h4 style={{ margin: '0 0 4px' }}>📦 Offline copy (.zip)</h4>
+            <p style={{ fontSize: 12, opacity: 0.7, marginTop: 0 }}>A downloadable ZIP with a self-contained HTML page and all images ({isLesson ? 'the finished class history with answers' : 'the whole repository'}).</p>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
+              <input type="checkbox" checked={offlineOn} onChange={(e) => saveOffline(e.target.checked)} />
+              Let viewers download an offline copy
+            </label>
+          </div>
+        )}
 
         {/* Repository default display */}
         {isRepo && (
