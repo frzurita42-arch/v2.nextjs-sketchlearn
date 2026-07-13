@@ -56,9 +56,12 @@ export function BuilderStudioView() {
   const addLayout = (i: number) => mapLayouts(i, (ls) => [...ls, newLayout()]);
   const removeLayout = (i: number, li: number) => mapLayouts(i, (ls) => (ls.length > 1 ? ls.filter((_, k) => k !== li) : ls));
   const setLayout = (i: number, li: number, patch: Partial<StudioLayout>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, ...patch } : l)));
-  const addComp = (i: number, li: number, id: string) => { if (!id) return; mapLayouts(i, (ls) => ls.map((l, k) => (k === li && !l.components.some((c) => c.id === id)) ? { ...l, components: [...l.components, { id, instr: '', opt: studioItem(id)?.sizes ? ANNOTATION_SIZES[1] : undefined }] } : l)); };
-  const setComp = (i: number, li: number, id: string, patch: Partial<StudioComponent>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : l)));
-  const rmComp = (i: number, li: number, id: string) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.filter((c) => c.id !== id) } : l)));
+  // The SAME component type can be added many times (two text blocks, etc.), so
+  // each placement gets a unique uid and we never dedupe by catalog id.
+  const mkUid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const addComp = (i: number, li: number, id: string) => { if (!id) return; mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: [...l.components, { id, uid: mkUid(), instr: '', opt: studioItem(id)?.sizes ? ANNOTATION_SIZES[1] : undefined }] } : l))); };
+  const setComp = (i: number, li: number, uid: string, patch: Partial<StudioComponent>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.map((c) => ((c.uid || c.id) === uid ? { ...c, ...patch } : c)) } : l)));
+  const rmComp = (i: number, li: number, uid: string) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.filter((c) => (c.uid || c.id) !== uid) } : l)));
 
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
@@ -113,7 +116,7 @@ export function BuilderStudioView() {
   const componentBar = (c: StudioComponent, patch: (p: Partial<StudioComponent>) => void, onRemove: () => void) => {
     const it = studioItem(c.id); if (!it) return null;
     return (
-      <div key={c.id} className="card alt" style={{ padding: '8px 10px', display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'start' }}>
+      <div key={c.uid || c.id} className="card alt" style={{ padding: '8px 10px', display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'start' }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 14 }}>{it.emoji} {it.name}</div>
           <div style={{ fontSize: 12, opacity: 0.72 }}>{it.desc}</div>
@@ -202,12 +205,12 @@ export function BuilderStudioView() {
                             <select value={ly.template || 'auto'} onChange={(e) => setLayout(i, li, { template: e.target.value })} style={{ fontSize: 12, flex: '1 1 120px', minWidth: 0 }}>
                               {LAYOUT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
                             </select>
-                            {picker(presCats, ly.components.map((c) => c.id), (id) => addComp(i, li, id), '＋ Add component…')}
+                            {picker(presCats, [], (id) => addComp(i, li, id), '＋ Add component…')}
                             <button className="btn small ghost" style={{ flex: '0 0 auto' }} disabled={layouts.length <= 1} title="Remove layout" onClick={() => removeLayout(i, li)}>✕</button>
                           </div>
                           {ly.components.length === 0
-                            ? <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>Pick a layout above, then add the components that go in this section.</p>
-                            : <div style={{ display: 'grid', gap: 8 }}>{ly.components.map((c) => componentBar(c, (p) => setComp(i, li, c.id, p), () => rmComp(i, li, c.id)))}</div>}
+                            ? <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>Pick a layout above, then add the components that go in this section (you can add the same type more than once).</p>
+                            : <div style={{ display: 'grid', gap: 8 }}>{ly.components.map((c) => componentBar(c, (p) => setComp(i, li, c.uid || c.id, p), () => rmComp(i, li, c.uid || c.id)))}</div>}
                         </div>
                       ))}
                     </div>

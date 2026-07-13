@@ -120,7 +120,9 @@ export function studioItem(id: string): StudioItem | undefined {
   return undefined;
 }
 
-export interface StudioComponent { id: string; instr?: string; opt?: string; link?: string; }
+// `id` is the catalog item id (e.g. "reading"); `uid` is a unique per-placement
+// instance id so the SAME component can be added multiple times to a section.
+export interface StudioComponent { id: string; uid?: string; instr?: string; opt?: string; link?: string; }
 // A LAYOUT block is a templated area (a suggested rows×cols arrangement) that
 // holds one or more components. A slide is built from a STACK of layout blocks,
 // so the user can scroll down a slide through several templated sections.
