@@ -121,9 +121,14 @@ export function studioItem(id: string): StudioItem | undefined {
 }
 
 export interface StudioComponent { id: string; instr?: string; opt?: string; link?: string; }
-// A presentation is a list of PAGES; each page = one slide with its own
-// components and text density.
-export interface StudioPage { components: StudioComponent[]; length?: 'brief' | 'medium' | 'detailed'; paragraphs?: number; template?: string; }
+// A LAYOUT block is a templated area (a suggested rows×cols arrangement) that
+// holds one or more components. A slide is built from a STACK of layout blocks,
+// so the user can scroll down a slide through several templated sections.
+export interface StudioLayout { template?: string; components: StudioComponent[]; }
+// A presentation is a list of PAGES; each page = one slide made of stacked
+// layout blocks plus its text density. (Legacy pages may carry a flat
+// `components` list + single `template`; the assembler still reads those.)
+export interface StudioPage { layouts?: StudioLayout[]; components?: StudioComponent[]; length?: 'brief' | 'medium' | 'detailed'; paragraphs?: number; template?: string; }
 
 // Suggested rows×columns layouts for a slide/section. It's only a SUGGESTION —
 // the generator arranges for best readability on the activity screen.
@@ -229,26 +234,45 @@ export function assembleDefinition(cfg: StudioConfig): any {
   const clamp = (n: any, lo: number, hi: number, d: number) => Math.max(lo, Math.min(hi, parseInt(n, 10) || d));
   let anyLang = false;
   const unionActs = new Set<string>();
-  const unionSupport: any = { images: false, code: false, tables: false, formulas: false, audio: false };
+  const unionSupport: any = { images: false, code: false, tables: false, formulas: false, audio: false, geogebra: false };
   const allLines: string[] = [];
   const pages = rawPages.map((pg, i) => {
-    const c = compilePage(pg.components || []);
-    if (c.language) anyLang = true;
-    // Ordered activities WITH duplicates — one question per placed component.
-    // May be empty (e.g. a reading-only page); the player then shows no question.
-    const acts = c.activities;
-    acts.forEach((a) => unionActs.add(a));
-    for (const k of Object.keys(unionSupport)) if (c.support[k]) unionSupport[k] = true;
-    if (c.lines.length) allLines.push(`Slide ${i + 1}: ${c.lines.join('; ')}`);
+    // A page is a STACK of layout blocks; legacy pages carry a flat component
+    // list, which we treat as a single block using the page's old template.
+    const blocks: StudioLayout[] = (Array.isArray(pg.layouts) && pg.layouts.length)
+      ? pg.layouts
+      : [{ template: pg.template, components: pg.components || [] }];
+    const pageActs: string[] = [];
+    const pageSupport: any = { images: false, code: false, tables: false, formulas: false, audio: false, geogebra: false };
+    let pageReading = false;
+    let pagePad: 'large' | 'medium' | 'adaptive' | undefined;
+    const pageDecos: { kind: string; message: string; link: string }[] = [];
+    const sections: string[] = [];
+    blocks.forEach((ly, li) => {
+      const c = compilePage(ly.components || []);
+      if (c.language) anyLang = true;
+      pageActs.push(...c.activities);   // ordered, duplicates kept, ACROSS blocks
+      for (const k of Object.keys(c.support)) if (c.support[k]) pageSupport[k] = true;
+      if (c.reading) pageReading = true;
+      if (c.padSize) pagePad = c.padSize;
+      pageDecos.push(...c.decorations);
+      const sec = [layoutHint(ly.template), ...c.lines].filter(Boolean).join('\n');
+      if (sec) sections.push(`Section ${li + 1}: ${sec}`);
+    });
+    pageActs.forEach((a) => unionActs.add(a));
+    for (const k of Object.keys(unionSupport)) if (pageSupport[k]) unionSupport[k] = true;
+    if (sections.length) allLines.push(`Slide ${i + 1}:\n${sections.join('\n')}`);
     return {
-      activityTypes: acts,
-      support: c.support,
-      reading: c.reading || undefined,
+      activityTypes: pageActs,
+      support: pageSupport,
+      reading: pageReading || undefined,
       paragraphsPerSlide: clamp(pg.paragraphs, 1, 4, 1),
       paragraphLength: (pg.length || 'medium') as 'brief' | 'medium' | 'detailed',
-      style: (() => { const ls = [layoutHint(pg.template), ...c.lines].filter(Boolean); return ls.length ? ls.join('\n').slice(0, 480) : undefined; })(),
-      padSize: c.padSize,   // annotation pad size for this slide, if it has one
-      decorations: c.decorations.length ? c.decorations : undefined,
+      // Each templated section is described in order, dotted-line separated, so the
+      // generator lays the slide out top-to-bottom the way the user stacked them.
+      style: sections.length ? sections.join('\n┄┄┄\n').slice(0, 700) : undefined,
+      padSize: pagePad,
+      decorations: pageDecos.length ? pageDecos : undefined,
     };
   });
   const subject = String(cfg.subject || title);

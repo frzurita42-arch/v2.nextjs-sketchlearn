@@ -12,11 +12,12 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import {
   STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, studioItem, assembleDefinition, capAvailable,
-  type StudioConfig, type StudioComponent, type StudioPage, type ArtifactKind,
+  type StudioConfig, type StudioComponent, type StudioLayout, type StudioPage, type ArtifactKind,
 } from '@/lib/studio-catalog';
 
 type Msg = { role: 'assistant' | 'user'; content: string };
-const newPage = (): StudioPage => ({ components: [], length: 'medium', paragraphs: 1 });
+const newLayout = (): StudioLayout => ({ template: 'auto', components: [] });
+const newPage = (): StudioPage => ({ layouts: [newLayout()], length: 'medium', paragraphs: 1 });
 
 export function BuilderStudioView() {
   const app = useApp();
@@ -46,13 +47,18 @@ export function BuilderStudioView() {
 
   const presCats = STUDIO_CATEGORIES.filter((c) => c.for === 'presentation' || c.for === 'both');
 
-  // ---- per-page component editing ----
+  // ---- per-page / per-layout editing ----
   const setPage = (i: number, patch: Partial<StudioPage>) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   const addPage = () => setPages((ps) => [...ps, newPage()]);
   const removePage = (i: number) => setPages((ps) => ps.length > 1 ? ps.filter((_, j) => j !== i) : ps);
-  const addComp = (i: number, id: string) => { if (!id) return; setPages((ps) => ps.map((p, j) => (j === i && !p.components.some((c) => c.id === id)) ? { ...p, components: [...p.components, { id, instr: '', opt: studioItem(id)?.sizes ? ANNOTATION_SIZES[1] : undefined }] } : p)); };
-  const setComp = (i: number, id: string, patch: Partial<StudioComponent>) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, components: p.components.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : p)));
-  const rmComp = (i: number, id: string) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, components: p.components.filter((c) => c.id !== id) } : p)));
+  const layoutsOf = (p: StudioPage): StudioLayout[] => (p.layouts && p.layouts.length ? p.layouts : [{ template: p.template || 'auto', components: p.components || [] }]);
+  const mapLayouts = (i: number, fn: (ls: StudioLayout[]) => StudioLayout[]) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, layouts: fn(layoutsOf(p)), components: undefined, template: undefined } : p)));
+  const addLayout = (i: number) => mapLayouts(i, (ls) => [...ls, newLayout()]);
+  const removeLayout = (i: number, li: number) => mapLayouts(i, (ls) => (ls.length > 1 ? ls.filter((_, k) => k !== li) : ls));
+  const setLayout = (i: number, li: number, patch: Partial<StudioLayout>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, ...patch } : l)));
+  const addComp = (i: number, li: number, id: string) => { if (!id) return; mapLayouts(i, (ls) => ls.map((l, k) => (k === li && !l.components.some((c) => c.id === id)) ? { ...l, components: [...l.components, { id, instr: '', opt: studioItem(id)?.sizes ? ANNOTATION_SIZES[1] : undefined }] } : l)); };
+  const setComp = (i: number, li: number, id: string, patch: Partial<StudioComponent>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : l)));
+  const rmComp = (i: number, li: number, id: string) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.filter((c) => c.id !== id) } : l)));
 
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
@@ -168,38 +174,58 @@ export function BuilderStudioView() {
 
           {artifact === 'presentation' ? (
             <>
-              {/* PAGES — one slide each, multiple components per page */}
+              {/* PAGES — one slide each; a slide is a STACK of layout sections,
+                  and each layout section holds one or more components. */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — add components to each</div>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — stack layouts, fill each with components</div>
               </div>
               <div style={{ display: 'grid', gap: 12 }}>
-                {pages.map((pg, i) => (
+                {pages.map((pg, i) => {
+                  const layouts = layoutsOf(pg);
+                  return (
                   <div key={i} className="card" style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <strong>📄 Slide {i + 1}</strong>
-                      <span style={{ fontSize: 12, opacity: 0.55 }}>{pg.components.length} component{pg.components.length === 1 ? '' : 's'}</span>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 12, opacity: 0.55 }}>{layouts.length} layout{layouts.length === 1 ? '' : 's'}</span>
+                        <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)}>🗑</button>
+                      </div>
                     </div>
-                    {/* picker + delete always share one row (no overflow on 9:16) */}
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', marginBottom: 8 }}>
-                      {picker(presCats, pg.components.map((c) => c.id), (id) => addComp(i, id), '＋ Add component…')}
-                      <button className="btn small ghost" style={{ flex: '0 0 auto' }} disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)}>🗑</button>
+
+                    {/* Stacked layout sections (scroll down the slide). */}
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      {layouts.map((ly, li) => (
+                        <div key={li} className="card alt" style={{ padding: '10px 12px', borderStyle: 'dashed' }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55 }}>▦ LAYOUT {li + 1}</span>
+                            <select value={ly.template || 'auto'} onChange={(e) => setLayout(i, li, { template: e.target.value })} style={{ fontSize: 12, flex: '1 1 auto' }}>
+                              {LAYOUT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                            </select>
+                            <button className="btn small ghost" style={{ flex: '0 0 auto' }} disabled={layouts.length <= 1} title="Remove layout" onClick={() => removeLayout(i, li)}>✕</button>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                            {picker(presCats, ly.components.map((c) => c.id), (id) => addComp(i, li, id), '＋ Add component…')}
+                          </div>
+                          {ly.components.length === 0
+                            ? <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>Pick a layout above, then add the components that go in this section.</p>
+                            : <div style={{ display: 'grid', gap: 8 }}>{ly.components.map((c) => componentBar(c, (p) => setComp(i, li, c.id, p), () => rmComp(i, li, c.id)))}</div>}
+                        </div>
+                      ))}
                     </div>
-                    {pg.components.length === 0
-                      ? <p style={{ fontSize: 13, opacity: 0.6, margin: '0 0 8px' }}>Add one or more components for this slide.</p>
-                      : <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>{pg.components.map((c) => componentBar(c, (p) => setComp(i, c.id, p), () => rmComp(i, c.id)))}</div>}
+                    <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                      <button className="btn small" onClick={() => addLayout(i)}>＋ Add layout (another section below)</button>
+                    </div>
+
                     {/* per-page density */}
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', borderTop: '1.5px dashed var(--ink)', paddingTop: 10 }}>
                       <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Paragraph length</span>
                         <select value={pg.length} onChange={(e) => setPage(i, { length: e.target.value as any })}><option value="brief">brief</option><option value="medium">medium</option><option value="detailed">detailed</option></select></label>
                       <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Paragraphs</span>
                         <input type="number" min={1} max={4} value={pg.paragraphs} onChange={(e) => setPage(i, { paragraphs: Number(e.target.value) })} style={{ width: 70 }} /></label>
-                      <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Layout (rows×cols)</span>
-                        <select value={pg.template || 'auto'} onChange={(e) => setPage(i, { template: e.target.value })}>
-                          {LAYOUT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-                        </select></label>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               <div style={{ textAlign: 'center', margin: '12px 0' }}>
                 <button className="btn" onClick={addPage}>＋ Add page (slide {pages.length + 1})</button>
