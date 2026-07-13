@@ -98,10 +98,11 @@ function printPost(title: string, entry: any, fields: any[], author: string) {
   w.document.write(html); w.document.close();
 }
 
-function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn, onOpen }: { entries: any[]; display: string; fields: any[]; onOpen: (e: any) => void }) {
+function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn, onOpen, favs = {}, onFav }: { entries: any[]; display: string; fields: any[]; onOpen: (e: any) => void; favs?: Record<string, boolean>; onFav?: (id: string) => void }) {
   const entries = asArray(entriesIn);
   const fields = asArray(fieldsIn);
-  if (!entries.length) return <p style={{ opacity: 0.6 }}>No entries yet — add the first one above.</p>;
+  const favBtn = (e: any) => onFav ? <button className="btn small ghost" title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => onFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button> : null;
+  if (!entries.length) return <p style={{ opacity: 0.6 }}>No entries match these filters.</p>;
   const imageFields = fields.filter((f: any) => f.type === 'image');
   const textFields = fields.filter((f: any) => f.type !== 'image');
 
@@ -124,7 +125,7 @@ function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn, onOpen }:
       <div key={e.id} style={{ borderBottom: '2px dashed var(--ink)', padding: '8px 0' }}>
         {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id} style={{ maxWidth: 320, marginBottom: 6 }}>{fieldValue(f, e)}</div>)}
         {textFields.map((f: any) => <span key={f.id} style={{ marginRight: 10 }}><b>{f.label}:</b> {fieldValue(f, e)}</span>)}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><span style={{ display: 'flex', gap: 6 }}>{favBtn(e)}<button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></span></div>
       </div>
     ))}</div>
   );
@@ -136,7 +137,7 @@ function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn, onOpen }:
           {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id}>{fieldValue(f, e)}</div>)}
           <div style={{ padding: '10px 12px' }}>
             {textFields.map((f: any) => <div key={f.id} style={{ fontSize: 14, marginBottom: 3 }}>{f.type === 'textarea' ? fieldValue(f, e) : <><b>{f.label}:</b> {fieldValue(f, e)}</>}</div>)}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><span style={{ display: 'flex', gap: 6 }}>{favBtn(e)}<button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></span></div>
           </div>
         </div>
       ))}
@@ -210,6 +211,32 @@ export function ToolRunnerView() {
   const [entryVals, setEntryVals] = useState<Record<string, any>>(() => defaultsFor(entryFields));
   const [entries, setEntries] = useState<any[]>([]);
   const [isOwner, setIsOwner] = useState(false);
+  // Entries feed controls (grid/rows, search, favorites, sort) — mirrors the gallery.
+  const [entryView, setEntryView] = useState<'cards' | 'list'>('cards');
+  const [entryQ, setEntryQ] = useState('');
+  const [entryFavOnly, setEntryFavOnly] = useState(false);
+  const [entrySort, setEntrySort] = useState<'recent' | 'oldest'>('recent');
+  const [entryFavs, setEntryFavs] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try { setEntryFavs(JSON.parse(localStorage.getItem('sl_entry_favs') || '{}')); } catch { /* ignore */ }
+    try { const v = localStorage.getItem('sl_entry_view'); if (v === 'cards' || v === 'list') setEntryView(v); } catch { /* ignore */ }
+  }, []);
+  const setEntryViewP = (v: 'cards' | 'list') => { setEntryView(v); try { localStorage.setItem('sl_entry_view', v); } catch { /* ignore */ } };
+  const toggleEntryFav = (id: string) => setEntryFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_entry_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  const visibleEntries = useMemo(() => {
+    const nq = entryQ.trim().toLowerCase();
+    const arr = asArray(entries).filter((e: any) => {
+      if (entryFavOnly && !entryFavs[e.id]) return false;
+      if (!nq) return true;
+      if (String(e.username || '').toLowerCase().includes(nq)) return true;
+      return Object.values(e.data || {}).some((v: any) => String(v ?? '').toLowerCase().includes(nq));
+    });
+    arr.sort((a: any, b: any) => {
+      const ta = new Date(a.createdAt || 0).getTime(), tb = new Date(b.createdAt || 0).getTime();
+      return entrySort === 'recent' ? tb - ta : ta - tb;
+    });
+    return arr;
+  }, [entries, entryQ, entryFavOnly, entrySort, entryFavs]);
   const [detail, setDetail] = useState<any>(null);   // entry opened as a post
   const [editField, setEditField] = useState<null | 'title' | 'description'>(null);
   const [descDraft, setDescDraft] = useState<string>(def?.description || '');
@@ -353,7 +380,18 @@ export function ToolRunnerView() {
               {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
             </div>
             <div style={{ marginTop: 16 }}>
-              <EntryDisplay entries={entries} display={def.app?.display || 'cards'} fields={entryFields} onOpen={setDetail} />
+              {asArray(entries).length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <input value={entryQ} onChange={e => setEntryQ(e.target.value)} placeholder="🔍 search by text or @user" style={{ fontSize: 13, flex: '1 1 180px', maxWidth: 260, padding: '5px 9px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
+                  <button className={`btn small ${entryFavOnly ? 'blue' : 'ghost'}`} onClick={() => setEntryFavOnly(v => !v)} title="Show only your favorites">★ Favorites</button>
+                  <button className="btn small" onClick={() => setEntrySort(s => s === 'recent' ? 'oldest' : 'recent')} title="Toggle sort order">{entrySort === 'recent' ? '↓ Newest' : '↑ Oldest'}</button>
+                  <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
+                    <button className={`btn small ${entryView === 'cards' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setEntryViewP('cards')}>▦</button>
+                    <button className={`btn small ${entryView === 'list' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setEntryViewP('list')}>☰</button>
+                  </div>
+                </div>
+              )}
+              <EntryDisplay entries={visibleEntries} display={entryView} fields={entryFields} onOpen={setDetail} favs={entryFavs} onFav={toggleEntryFav} />
               {isOwner && def.app?.review && asArray(entries).some((e: any) => e.status === 'pending') && (
                 <div className="card" style={{ padding: '12px 14px', marginTop: 12 }}>
                   <h4 style={{ margin: '0 0 8px' }}>Review queue (owner)</h4>
