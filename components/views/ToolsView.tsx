@@ -221,6 +221,7 @@ export function ToolsView() {
               time={(t: any) => new Date(t.createdAt || 0).getTime()}
               favs={favs}
               likedByAdmin={(t: any) => !!t.likedByAdmin}
+              likedByOwner={(t: any) => !!t.likedByOwner}
               perPage={9}
               storageKey="sl_tools_view"
               emptyFiltered="No tools match these filters."

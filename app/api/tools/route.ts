@@ -39,9 +39,11 @@ export async function GET(req: Request) {
   // drop the raw liker list from the public payload.
   const adminSet = new Set(adminOwners);
   const decorated = tools.map((t: any) => {
-    const likedByAdmin = Array.isArray(t.likedBy) && t.likedBy.some((u: string) => adminSet.has(u));
+    const likers: string[] = Array.isArray(t.likedBy) ? t.likedBy : [];
+    const likedByAdmin = likers.some((u: string) => adminSet.has(u));
+    const likedByOwner = likers.includes(t.owner);   // the creator (OP) favorited their own tool
     const { likedBy, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
-    return { ...rest, likedByAdmin };
+    return { ...rest, likedByAdmin, likedByOwner };
   });
   // Prepend the built-in examples so the gallery always has a working lesson to try.
   return NextResponse.json({ tools: [...EXAMPLE_TOOLS, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });

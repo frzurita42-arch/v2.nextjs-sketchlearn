@@ -17,6 +17,7 @@ export interface CollectionProps<T> {
   renderRow: (t: T) => ReactNode;          // one card in rows mode
   favs?: Record<string, boolean>;          // provide to show the ★ favorites filter
   likedByAdmin?: (t: T) => boolean;        // provide to show the 🛡️ liked-by-admin filter
+  likedByOwner?: (t: T) => boolean;        // provide to show the 💛 OP-favorited filter
   perPage?: number;                        // provide to paginate
   storageKey?: string;                     // localStorage key to persist the view mode
   defaultView?: 'grid' | 'row';
@@ -28,16 +29,34 @@ export interface CollectionProps<T> {
   maxWidth?: number;
 }
 
+// "Algorithm" order: split the list into three thirds and round-robin one from
+// each (first, middle, last, repeat) so the deck is evenly interleaved.
+function interleaveThirds<T>(arr: T[]): T[] {
+  const n = arr.length;
+  if (n < 3) return arr;
+  const t = Math.ceil(n / 3);
+  const a = arr.slice(0, t), b = arr.slice(t, 2 * t), c = arr.slice(2 * t);
+  const out: T[] = [];
+  const max = Math.max(a.length, b.length, c.length);
+  for (let i = 0; i < max; i++) {
+    if (i < a.length) out.push(a[i]);
+    if (i < b.length) out.push(b[i]);
+    if (i < c.length) out.push(c[i]);
+  }
+  return out;
+}
+
 export function Collection<T>({
   items, id, searchText, time, renderGrid, renderRow,
-  favs, likedByAdmin, perPage, storageKey, defaultView = 'grid', gridMinPx = 240,
+  favs, likedByAdmin, likedByOwner, perPage, storageKey, defaultView = 'grid', gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900,
 }: CollectionProps<T>) {
   const [q, setQ] = useState('');
   const [favOnly, setFavOnly] = useState(false);
   const [adminOnly, setAdminOnly] = useState(false);
-  const [newestFirst, setNewestFirst] = useState(true);
+  const [ownerOnly, setOwnerOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'algorithm'>('newest');
   const [view, setView] = useState<'grid' | 'row'>(defaultView);
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -48,20 +67,28 @@ export function Collection<T>({
 
   const filtered = useMemo(() => {
     const nq = q.trim().toLowerCase();
-    const arr = items.filter((t) => {
+    // Favorites / liked-by-admin / OP-favorited are all just extra filters,
+    // combinable with each other and with the search + sort.
+    let arr = items.filter((t) => {
       if (favOnly && favs && !favs[id(t)]) return false;
       if (adminOnly && likedByAdmin && !likedByAdmin(t)) return false;
+      if (ownerOnly && likedByOwner && !likedByOwner(t)) return false;
       if (nq && !searchText(t).toLowerCase().includes(nq)) return false;
       return true;
     });
-    if (time) arr.sort((a, b) => (newestFirst ? time(b) - time(a) : time(a) - time(b)));
+    if (sortMode === 'algorithm') {
+      if (time) arr = [...arr].sort((a, b) => time(b) - time(a));   // base: newest-first
+      arr = interleaveThirds(arr);
+    } else if (time) {
+      arr = [...arr].sort((a, b) => (sortMode === 'newest' ? time(b) - time(a) : time(a) - time(b)));
+    }
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, q, favOnly, adminOnly, newestFirst, favs]);
+  }, [items, q, favOnly, adminOnly, ownerOnly, sortMode, favs]);
 
   const pageCount = perPage ? Math.max(1, Math.ceil(filtered.length / perPage)) : 1;
   useEffect(() => { setPage((p) => Math.min(p, pageCount - 1)); }, [pageCount]);
-  useEffect(() => { setPage(0); }, [q, favOnly, adminOnly, newestFirst]);
+  useEffect(() => { setPage(0); }, [q, favOnly, adminOnly, ownerOnly, sortMode]);
   const shown = perPage ? filtered.slice(page * perPage, page * perPage + perPage) : filtered;
 
   // On a page change, jump back up to the toolbar so the next page starts at the
@@ -95,7 +122,8 @@ export function Collection<T>({
         {extra}
         {favs && <button className={`btn small ${favOnly ? 'blue' : 'ghost'}`} onClick={() => setFavOnly((v) => !v)} title="Only your favorites">★ My favorites</button>}
         {likedByAdmin && <button className={`btn small ${adminOnly ? 'blue' : 'ghost'}`} onClick={() => setAdminOnly((v) => !v)} title="Only tools an admin liked">🛡️ Liked by admin</button>}
-        {time && <button className="btn small" onClick={() => setNewestFirst((v) => !v)} title="Toggle sort order">{newestFirst ? '↓ Newest' : '↑ Oldest'}</button>}
+        {likedByOwner && <button className={`btn small ${ownerOnly ? 'blue' : 'ghost'}`} onClick={() => setOwnerOnly((v) => !v)} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
+        {time && <button className="btn small" onClick={() => setSortMode((m) => m === 'newest' ? 'oldest' : m === 'oldest' ? 'algorithm' : 'newest')} title="Sort: newest → oldest → algorithm (interleaved thirds)">{sortMode === 'newest' ? '↓ Newest' : sortMode === 'oldest' ? '↑ Oldest' : '🔀 Algorithm'}</button>}
         <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
           <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setViewP('grid')}>▦</button>
           <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setViewP('row')}>☰</button>
