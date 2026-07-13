@@ -27,13 +27,21 @@ export function PostsCarousel({ title = '📰 Posts from the tools', limit = 20,
   }, [limit]);
   useEffect(() => { load(); }, [load]);
 
-  const open = async (slug: string) => {
-    try { const r = await API.get(`/api/tools?slug=${encodeURIComponent(slug)}`); if (r?.tool) { appState.activeTool = r.tool; app.nav('tool'); } }
-    catch { /* ignore */ }
+  // Open the tool this post came from, with an intent: 'results' jumps to the
+  // saved results/report (navigable source material); 'replay' generates a fresh
+  // run of this same rendition.
+  const open = async (slug: string, intent: { action: 'results' | 'replay'; config?: any }) => {
+    try {
+      const r = await API.get(`/api/tools?slug=${encodeURIComponent(slug)}`);
+      if (r?.tool) { appState.activeTool = r.tool; appState.openIntent = intent; app.nav('tool'); }
+    } catch { /* ignore */ }
   };
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
+  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', padding: 2, fontSize: 15, lineHeight: 1 } as const;
 
   const card = (p: any) => (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', cursor: 'pointer' }} onClick={() => open(p.toolSlug)}>
+    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', cursor: 'pointer' }}
+      title="Open the saved results" onClick={() => open(p.toolSlug, { action: 'results' })}>
       {isRenderableImage(p.thumbnail)
         ? <img src={p.thumbnail} alt="" loading="lazy" style={{ width: '100%', height: 110, objectFit: 'cover', borderBottom: '2px solid var(--ink)' }} />
         : <div style={{ height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', fontSize: 12, opacity: 0.55 }}>🖼️ No photo</div>}
@@ -46,7 +54,11 @@ export function PostsCarousel({ title = '📰 Posts from the tools', limit = 20,
         <div style={{ fontSize: 11, opacity: 0.65, flex: 1 }}>
           from <b>{p.toolTitle}</b> · @{p.username}{p.byAdmin ? ' 🛡️' : ''}{typeof p.score === 'number' ? ` · ${p.score >= 80 ? '🌟' : p.score >= 50 ? '📈' : '🌱'} ${p.score}%` : ''}
         </div>
-        <span style={{ fontSize: 10, opacity: 0.5 }}>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ''}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 10, opacity: 0.5 }}>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ''}</span>
+          {/* Small icon: generate a fresh run of this same rendition. */}
+          <button style={iconBtn} title="Play a fresh generation of this" onClick={stop(() => open(p.toolSlug, { action: 'replay', config: p.data || {} }))}>♻️</button>
+        </div>
       </div>
     </div>
   );

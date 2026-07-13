@@ -38,6 +38,9 @@ export interface AppState {
   languageLesson?: any;
   csAcademy?: any;
   activeTool?: any;
+  // How to open the next tool: jump straight to its saved results, or replay a
+  // specific rendition config. Consumed once by the LessonPlayer on mount.
+  openIntent?: { action: 'results' | 'replay'; config?: any } | null;
   builderDraft?: any;
   suggestedSettings: any;
   suggestedGuidance: string;

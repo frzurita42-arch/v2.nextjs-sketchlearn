@@ -9,6 +9,7 @@
  * enabled only when it applies and showing a spinner while it works. */
 import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
+import { appState } from '@/lib/app-state';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
@@ -874,6 +875,20 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     play(cc);
   };
   const createAndPlay = () => recordAndPlay(form);
+
+  // Consume an "open intent" from a Posts-carousel card (once): jump to the saved
+  // results/report, or generate a fresh run of that rendition.
+  const intentDone = useRef(false);
+  useEffect(() => {
+    if (intentDone.current) return;
+    const intent = appState.openIntent;
+    if (!intent) return;
+    intentDone.current = true; appState.openIntent = null;
+    if (intent.action === 'results') { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } }
+    else if (intent.action === 'replay') { recordAndPlay(intent.config || {}, { replica: true }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Add a preset lesson to the history WITHOUT playing it (and with no image). It
   // shows up as a fresh card in the feed whose no-photo spot carries the usual
   // 🎨/✎/📎 buttons, so an image can be added later.

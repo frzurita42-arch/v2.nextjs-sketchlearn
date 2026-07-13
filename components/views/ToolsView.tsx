@@ -10,7 +10,6 @@ import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { PostsCarousel } from '@/components/tools/PostsCarousel';
-import { RecommendButton } from '@/components/tools/RecommendButton';
 import { Carousel } from '@/components/ui/Carousel';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
@@ -51,7 +50,6 @@ function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void
 export function ToolsView() {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
-  const [toolRecs, setToolRecs] = useState<any[] | null>(null);   // AI-recommended tools for the Tools shelf
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');            // category chip (section-specific)
   const [favs, setFavs] = useState<Record<string, boolean>>({});
@@ -286,14 +284,11 @@ export function ToolsView() {
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
             onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || '📰 Posts from the tools')} remixingTitle={!!headMix.picksShelfTitle} />
           <div style={{ height: 8 }} />
+          {/* The tool SYSTEM itself — each card links to that tool's generator page. */}
           <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
-            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}
-            headerExtra={<>
-              <RecommendButton limit={10} label="✨ Recommend 10" onResults={setToolRecs} />
-              {toolRecs && <button className="btn small ghost" onClick={() => setToolRecs(null)} title="Show all tools again">↩︎ All</button>}
-            </>}>
-            {(toolRecs || catItems).map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
+            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}>
+            {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
           </Carousel>
         </>
       )}

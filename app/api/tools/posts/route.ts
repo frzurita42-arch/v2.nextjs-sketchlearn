@@ -39,6 +39,7 @@ export async function GET(req: Request) {
       label, subtitle: String(e.data?.subtitle || e.data?.why || '').slice(0, 120),
       thumbnail: e.data?.thumbnail || '', category: e.data?.category || '',
       score: typeof e.data?.score === 'number' ? e.data.score : undefined,
+      data: e.data || {},                                  // the rendition config (for a fresh replay)
       createdAt: e.createdAt || null,
     };
   }).filter(Boolean).slice(0, limit);

@@ -153,6 +153,11 @@ export function ToolRunnerView() {
   const tool = appState.activeTool;
   const def = tool?.definition;
 
+  // Clear any leftover Posts-carousel open-intent once this tool page is up. Child
+  // effects run first, so the LessonPlayer consumes it before this fires; for
+  // non-lesson tools this drops an unconsumed intent so it can't leak later.
+  useEffect(() => { const id = setTimeout(() => { appState.openIntent = null; }, 0); return () => clearTimeout(id); }, []);
+
   // Coerced field arrays used everywhere below (never throw on a bad shape).
   const settingsFields = asArray(def?.settings);
   const entryFields = asArray(def?.app?.entryFields);
