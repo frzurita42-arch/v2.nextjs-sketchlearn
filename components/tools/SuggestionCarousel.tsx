@@ -114,6 +114,7 @@ export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', 
   return (
     <Carousel title={title} onRefresh={refresh} refreshing={busy} cardWidth={230} cardHeight={360}
       canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
+      showCollapse
       headerExtra={<RecommendButton likeSlug={likeSlug} limit={limit} label="✨ Recommend 10" onResults={setPicks} />}
       empty={busy ? 'Finding picks…' : 'No suggestions yet — favorite a few tools and check back.'}>
       {picks.map((p) => <div key={p.slug} style={{ height: '100%' }}>{card(p)}</div>)}

@@ -106,7 +106,7 @@ export function ToolsView() {
   const isAdmin = app.user?.role === 'admin';
   // The gallery's section header (editable + AI-distort), persisted for everyone.
   const galleryHdr = useShelfTitle('galleryShelfTitle', '🖼️ Gallery');
-  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string }>({});
+  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string }>({});
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
   useEffect(() => { API.get('/api/site-settings').then((r: any) => setSite(r?.settings || {})).catch(() => { /* ignore */ }); }, []);
@@ -141,6 +141,18 @@ export function ToolsView() {
       if (r?.text) await saveShelf(key, r.text); else if (r?.error) alert(r.error);
     } catch { alert('Could not remix.'); }
     setHeadMix(m => { const n = { ...m }; delete n[key]; return n; });
+  };
+
+  // Home-page section visibility. The admin's 👁 toggle hides a section from every
+  // regular user (the admin still sees it, collapsed, so it can be brought back) —
+  // giving a different home layout per admin choice. Persisted in site settings.
+  const galleryCollapsed = site.galleryCollapsed === '1';
+  const toolsCollapsed = site.toolsCollapsed === '1';
+  const adminToolsCollapsed = site.adminToolsCollapsed === '1';
+  const toggleCollapse = async (key: 'galleryCollapsed' | 'toolsCollapsed' | 'adminToolsCollapsed', cur: boolean) => {
+    const next = cur ? '' : '1';
+    setSite(s => ({ ...s, [key]: next }));
+    try { await API.put('/api/site-settings', { key, value: next }); } catch { /* ignore */ }
   };
 
   const HIDDEN_KEY = 'sl_hidden_examples';
@@ -263,13 +275,15 @@ export function ToolsView() {
             <p style={{ margin: '0 0 10px' }}>No tools yet. Be the first — describe a tool and the AI will assemble it.</p>
             <button className="btn green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
           </div>
-        ) : (
+        ) : (galleryCollapsed && !isAdmin) ? null : (
           <>
-            <InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />
-            <CategoryFilter value={filter} onChange={setFilter} counts={counts} />
-            <Divider />
+            {!galleryCollapsed && <InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />}
+            {!galleryCollapsed && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
+            {!galleryCollapsed && <Divider />}
             <Collection
               {...galleryHdr} onRefresh={reloadTools}
+              showCollapse collapsed={galleryCollapsed}
+              onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
               items={catItems}
               id={(t: any) => t.id}
               searchText={(t: any) => `${t.title || ''} ${t.owner || ''}`}
@@ -296,19 +310,27 @@ export function ToolsView() {
           Each carousel draws its own dashed rule underneath. */}
       {!loading && tools.length > 0 && (
         <>
-          <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
-            onRefresh={reloadTools} refreshing={refreshingTools}
-            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
-            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}
-            banner={<InstructionPlank settingKey="toolsBanner" defaultText="🧰 Tools — every tool on the platform. Tap a card's picture or title to open its generator and create a new lesson. Owners & admins can edit the title, description and picture, or remove it. Use the slider buttons, or Refresh for a random order." />}>
-            {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
-          </Carousel>
+          {(toolsCollapsed && !isAdmin) ? null : (
+            <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
+              onRefresh={reloadTools} refreshing={refreshingTools}
+              canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
+              onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}
+              showCollapse collapsed={toolsCollapsed}
+              onToggleCollapse={isAdmin ? () => toggleCollapse('toolsCollapsed', toolsCollapsed) : undefined}
+              banner={<InstructionPlank settingKey="toolsBanner" defaultText="🧰 Tools — every tool on the platform. Tap a card's picture or title to open its generator and create a new lesson. Owners & admins can edit the title, description and picture, or remove it. Use the slider buttons, or Refresh for a random order." />}>
+              {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
+            </Carousel>
+          )}
           <div style={{ height: 8 }} />
-          <AdminToolsCarousel max={10}
-            title={site.picksShelfTitle || "🛠️ Admin's Made Tools"}
-            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
-            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || "🛠️ Admin's Made Tools")} remixingTitle={!!headMix.picksShelfTitle}
-            banner={<InstructionPlank settingKey="adminToolsBanner" defaultText="🛠️ Admin's Made Tools — the platform's built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the ♻️ icon starts a fresh generation, 📖 opens the original saved results, and 🗑 hides it. Slide or Refresh to reshuffle." />} />
+          {(adminToolsCollapsed && !isAdmin) ? null : (
+            <AdminToolsCarousel max={10}
+              title={site.picksShelfTitle || "🛠️ Admin's Made Tools"}
+              canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
+              onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || "🛠️ Admin's Made Tools")} remixingTitle={!!headMix.picksShelfTitle}
+              showCollapse collapsed={adminToolsCollapsed}
+              onToggleCollapse={isAdmin ? () => toggleCollapse('adminToolsCollapsed', adminToolsCollapsed) : undefined}
+              banner={<InstructionPlank settingKey="adminToolsBanner" defaultText="🛠️ Admin's Made Tools — the platform's built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the ♻️ icon starts a fresh generation, 📖 opens the original saved results, and 🗑 hides it. Slide or Refresh to reshuffle." />} />
+          )}
         </>
       )}
     </>

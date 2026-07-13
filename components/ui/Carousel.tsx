@@ -6,7 +6,8 @@
 import { useRef, useState, type ReactNode } from 'react';
 
 export function Carousel({ title, onRefresh, refreshing, children, empty, cardWidth = 240, cardHeight,
-  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, headerExtra, banner }: {
+  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, headerExtra, banner,
+  showCollapse, collapsed, onToggleCollapse }: {
   title: string;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -20,6 +21,9 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
   remixingTitle?: boolean;
   headerExtra?: ReactNode;                    // extra control in the header (e.g. a Recommend button)
   banner?: ReactNode;                         // a how-to banner shown BELOW the title, above the cards
+  showCollapse?: boolean;                     // show the 👁 hide/show toggle in the header
+  collapsed?: boolean;                        // when true the body is hidden (header stays for admins)
+  onToggleCollapse?: () => void;              // provide to make the 👁 clickable (else it's shown disabled)
 }) {
   const rail = useRef<HTMLDivElement>(null);
   const slide = (dir: number) => { try { rail.current?.scrollBy({ left: dir * (cardWidth + 14) * 2, behavior: 'smooth' }); } catch { /* ignore */ } };
@@ -48,16 +52,28 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
             {onRemixTitle && <button title="AI tap-mixer — reword the title" style={iconBtn} disabled={!!remixingTitle} onClick={onRemixTitle}>{remixingTitle ? '…' : '🎨'}</button>}
           </>
         )}
-        {onRefresh && <button className="btn small ghost" disabled={!!refreshing} onClick={onRefresh} title="Refresh suggestions">{refreshing ? '…' : '🔄 Refresh'}</button>}
-        {headerExtra}
+        {/* 👁 visibility toggle — clickable only where a handler is given (admin, home
+            page); shown disabled elsewhere. Collapsed = hidden from regular users. */}
+        {showCollapse && (
+          <button title={onToggleCollapse ? (collapsed ? 'Hidden from other users — click to show this section' : 'Hide this section from other users') : 'Section visibility (admin only, home page)'}
+            style={{ ...iconBtn, cursor: onToggleCollapse ? 'pointer' : 'default', opacity: collapsed ? 0.4 : 1 }}
+            disabled={!onToggleCollapse} onClick={onToggleCollapse}>{'👁︎'}</button>
+        )}
+        {!collapsed && onRefresh && <button className="btn small ghost" disabled={!!refreshing} onClick={onRefresh} title="Refresh suggestions">{refreshing ? '…' : '🔄 Refresh'}</button>}
+        {!collapsed && headerExtra}
         {/* Slider buttons to move the cards left / right. */}
-        {count > 1 && (
+        {!collapsed && count > 1 && (
           <span style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
             <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide left" onClick={() => slide(-1)}>‹</button>
             <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide right" onClick={() => slide(1)}>›</button>
           </span>
         )}
       </div>
+      {/* When collapsed, only the admin reaches this (regular users don't render the
+          section at all) — show a compact "hidden" note beside the header. */}
+      {collapsed ? (
+        <div style={{ opacity: 0.55, fontSize: 12, fontStyle: 'italic', padding: '2px 0 6px' }}>Hidden from other users · click 👁 to show</div>
+      ) : (<>
       {/* How-to banner sits below the title, above the cards. */}
       {banner}
       {count === 0 ? (
@@ -69,6 +85,7 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
           ))}
         </div>
       )}
+      </>)}
       {/* A dashed rule under every carousel. */}
       <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '14px 0 0' }} />
     </div>

@@ -1174,6 +1174,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         <InstructionPlank settingKey="historyBanner" defaultText="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order." />
         <Collection
           {...historyHdr} onRefresh={loadActivities}
+          showCollapse
           items={feedItems}
           id={(e: any) => e.id}
           searchText={(e: any) => `${label(e.data || {})} ${e.username || ''} ${e.data?.topic || ''}`}

@@ -11,7 +11,10 @@ export const runtime = 'nodejs';
 // free-form store). Values are short strings.
 const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle',
   // Section how-to banners (longer text).
-  'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner'];
+  'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner',
+  // Home-page section visibility ('1' = collapsed/hidden for regular users). The
+  // admin's 👁 toggle writes these, so the home layout differs per admin choice.
+  'galleryCollapsed', 'toolsCollapsed', 'adminToolsCollapsed'];
 const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner']);
 
 // GET /api/site-settings -> the editable page copy (any signed-in viewer reads it).

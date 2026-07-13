@@ -13,9 +13,11 @@ import { ToolCard } from '@/components/tools/ToolCard';
 import { Carousel } from '@/components/ui/Carousel';
 
 export function AdminToolsCarousel({ title = '🛠️ Admin\'s Made Tools', max = 10, banner,
-  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle }: {
+  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle,
+  showCollapse, collapsed, onToggleCollapse }: {
   title?: string; max?: number; banner?: React.ReactNode;
   canEditTitle?: boolean; onRenameTitle?: (t: string) => void; onRemixTitle?: () => void; remixingTitle?: boolean;
+  showCollapse?: boolean; collapsed?: boolean; onToggleCollapse?: () => void;
 }) {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
@@ -88,6 +90,7 @@ export function AdminToolsCarousel({ title = '🛠️ Admin\'s Made Tools', max 
   return (
     <Carousel title={title} onRefresh={load} refreshing={busy} cardWidth={230} cardHeight={360} banner={banner}
       canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
+      showCollapse={showCollapse} collapsed={collapsed} onToggleCollapse={onToggleCollapse}
       empty={busy ? 'Loading…' : 'No admin tools.'}>
       {tools.map((t) => <div key={t.slug} style={{ height: '100%' }}>{card(t)}</div>)}
     </Carousel>

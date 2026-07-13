@@ -50,6 +50,12 @@ export interface CollectionProps<T> {
   remixingTitle?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
+  // 👁 hide/show toggle in the header. `showCollapse` renders it; it's clickable only
+  // when `onToggleCollapse` is given (admin, home page), disabled otherwise. When
+  // `collapsed`, the toolbar + items are hidden (only the admin ever renders it then).
+  showCollapse?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 // A deterministic shuffle keyed by a seed, so Refresh gives a fresh random order
@@ -72,6 +78,7 @@ export function Collection<T>({
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
+  showCollapse, collapsed, onToggleCollapse,
 }: CollectionProps<T>) {
   const [q, setQ] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -186,9 +193,18 @@ export function Collection<T>({
               {onRemixTitle && <button title="AI tap-mixer — reword the title" style={hdrIcon} disabled={!!remixingTitle} onClick={onRemixTitle}>{remixingTitle ? '…' : '🎨'}</button>}
             </>
           )}
-          <button className="btn small ghost" disabled={!!refreshing} onClick={doRefresh} title="Shuffle into a fresh random order">{refreshing ? '…' : '🔄 Refresh'}</button>
+          {!collapsed && <button className="btn small ghost" disabled={!!refreshing} onClick={doRefresh} title="Shuffle into a fresh random order">{refreshing ? '…' : '🔄 Refresh'}</button>}
+          {/* 👁 visibility toggle — clickable only where a handler is given (admin,
+              home page); disabled elsewhere. Collapsed = hidden from regular users. */}
+          {showCollapse && (
+            <button title={onToggleCollapse ? (collapsed ? 'Hidden from other users — click to show this section' : 'Hide this section from other users') : 'Section visibility (admin only, home page)'}
+              style={{ ...hdrIcon, cursor: onToggleCollapse ? 'pointer' : 'default', opacity: collapsed ? 0.4 : 1 }}
+              disabled={!onToggleCollapse} onClick={onToggleCollapse}>{'👁︎'}</button>
+          )}
+          {collapsed && <span style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.55 }}>Hidden from other users · click 👁 to show</span>}
         </div>
       )}
+      {collapsed ? null : (<>
       {/* Toolbar */}
       <div style={{ ...wrap, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
@@ -227,6 +243,7 @@ export function Collection<T>({
 
       {/* Bottom pager — scrolls back up to the toolbar on Prev/Next */}
       {pagerBlock && <div style={{ marginTop: 14 }}>{pagerBlock}</div>}
+      </>)}
     </div>
   );
 }
