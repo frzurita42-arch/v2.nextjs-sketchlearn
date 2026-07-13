@@ -29,7 +29,16 @@ async function run() {
   const all = await listTools({ viewerIsAdmin: true, limit: 200 });
   const pool = (all || []).filter((t: any) => !(t.tags || []).includes('example') && t.slug);
   if (!pool.length) return { skipped: 'no tools' };
-  const t = pool[Math.floor(Math.random() * pool.length)];
+  // Vercel's Hobby plan runs crons at most once/day, so do 1-2 DISTINCT tools per
+  // run to preserve the "1-2 gentle remixes a day" content-diversity cadence.
+  const want = Math.min(pool.length, 1 + (Math.random() < 0.5 ? 1 : 0));
+  const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, want);
+  const done = [];
+  for (const t of shuffled) done.push(await refreshOne(t));
+  return { refreshed: done };
+}
+
+async function refreshOne(t: any) {
   const d = t.definition || {};
 
   // 1) Reword title + description (meaning preserved, platform voice).
