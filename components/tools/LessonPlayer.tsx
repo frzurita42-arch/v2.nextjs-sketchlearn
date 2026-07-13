@@ -714,6 +714,23 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [topicIdeas, setTopicIdeas] = useState<string[]>([]);   // 5 suggested topics for the create form
   const [topicsBusy, setTopicsBusy] = useState(false);
   const [exHint, setExHint] = useState('');                     // steer the AI example
+  // The donation cup is per-tool: its Bitcoin wallet and its 👁 collapse state are
+  // editable by the tool's owner (OP) or an admin. When collapsed, regular users
+  // just see the example centered; a manager sees a small "show" control.
+  const isAdmin = API.user?.role === 'admin';
+  const canManageDonation = canEdit || isAdmin;   // owner (canEdit) or admin
+  const [donation, setDonation] = useState<{ address: string; collapsed: boolean }>({ address: '', collapsed: false });
+  useEffect(() => { API.get(`/api/tools/donation?slug=${encodeURIComponent(slug)}`).then((r: any) => setDonation({ address: r?.address || '', collapsed: !!r?.collapsed })).catch(() => { /* ignore */ }); }, [slug]);
+  const donateCollapsed = donation.collapsed;
+  const toggleDonate = async () => {
+    const next = !donateCollapsed;
+    setDonation(d => ({ ...d, collapsed: next }));
+    try { await API.put('/api/tools/donation', { slug, collapsed: next }); } catch { /* ignore */ }
+  };
+  const saveDonateAddress = async (address: string) => {
+    setDonation(d => ({ ...d, address }));
+    try { await API.put('/api/tools/donation', { slug, address }); } catch { /* ignore */ }
+  };
   // Activities-feed controls.
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_gen_favs') || '{}')); } catch { /* ignore */ } }, []);
@@ -1135,45 +1152,58 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         {/* ┄ divider: settings ┄ AI example ┄ */}
         <div style={dashRule} />
 
-        {/* Two columns: the dashed AI-example card (its header + the generated
-            example) on the LEFT, and the coffee-mug donation image — just the
-            graphic on the page background, no card — on the RIGHT. Wraps to one
-            column when narrow. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'center' }}>
-          <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed', minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about… (optional)" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
-                  style={{ fontSize: 12, width: 160, padding: '4px 7px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
-                <button className="btn small ghost" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄 Suggest'}</button>
+        {/* The dashed AI-example card (header + the generated example). The
+            "Suggest about…" box uses the standard Sketchart input design. */}
+        {(() => {
+          const aiExampleCard = (
+            <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed', minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input type="text" value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about… (optional)" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
+                    style={{ width: 220 }} />
+                  <button className="btn small ghost" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄 Suggest'}</button>
+                </div>
               </div>
+              {example ? (
+                <div style={{ marginTop: 8 }}>
+                  {/* The AI example uses the SAME card component — image spot (empty →
+                      no-photo placeholder), title, subtitle — with Play + Generate. */}
+                  <CardShell
+                    view="grid"
+                    title={label({ level: example.level, topic: example.topic })}
+                    subtitle={example.why || undefined}
+                    thumbnail={null}
+                    onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}
+                    actions={
+                      <>
+                        <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
+                        <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
+                      </>
+                    }
+                  />
+                  {addMsg && <p style={{ fontSize: 12, color: 'var(--accent,#5c80bc)', margin: '6px 0 0' }}>{addMsg}</p>}
+                </div>
+              ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
             </div>
-            {example ? (
-              <div style={{ marginTop: 8 }}>
-                {/* The AI example uses the SAME card component — image spot (empty →
-                    no-photo placeholder), title, subtitle — with Play + Generate. */}
-                <CardShell
-                  view="grid"
-                  title={label({ level: example.level, topic: example.topic })}
-                  subtitle={example.why || undefined}
-                  thumbnail={null}
-                  onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}
-                  actions={
-                    <>
-                      <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
-                      <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
-                    </>
-                  }
-                />
-                {addMsg && <p style={{ fontSize: 12, color: 'var(--accent,#5c80bc)', margin: '6px 0 0' }}>{addMsg}</p>}
-              </div>
-            ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
-          </div>
-          {/* Coffee mug donation prompt — the graphic (no card) + an editable nudge;
-              clicking it opens the Bitcoin donation popup. */}
-          <DonationPrompt mugWidth={220} mugHeight={183} />
-        </div>
+          );
+          // When the donation prompt is hidden (admin's 👁), the example is centered.
+          return donateCollapsed ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: '100%', maxWidth: 460 }}>{aiExampleCard}</div>
+              {canManageDonation && <button className="btn small ghost" onClick={toggleDonate} title="Show the donation prompt to everyone">{'👁︎'} Donation hidden — click to show</button>}
+            </div>
+          ) : (
+            // Two columns: the example on the left, the coffee-mug donation prompt on
+            // the right. Wraps to one column when narrow.
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'center' }}>
+              {aiExampleCard}
+              <DonationPrompt mugWidth={220} mugHeight={183}
+                address={donation.address} canManage={canManageDonation} onSaveAddress={saveDonateAddress}
+                canCollapse={canManageDonation} onCollapse={toggleDonate} />
+            </div>
+          );
+        })()}
 
         {/* ┄ divider: AI example ┄ activities feed ┄ */}
         <div style={dashRule} />

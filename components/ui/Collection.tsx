@@ -213,8 +213,8 @@ export function Collection<T>({
       {banner}
       {/* Toolbar */}
       <div style={{ ...wrap, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
-          style={{ fontSize: 13, flex: '1 1 120px', maxWidth: 170, minWidth: 90, padding: '5px 9px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
+        <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
+          style={{ flex: '1 1 180px', maxWidth: 240, minWidth: 120 }} />
         {extra}
         {(favs || likedByAdmin || likedByOwner) && <button className={`btn small ${activeFilter === 'all' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('all')} title="Show everything">All</button>}
         {favs && <button className={`btn small ${activeFilter === 'fav' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('fav')} title="Only your favorites">★ My favorites</button>}

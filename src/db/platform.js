@@ -545,6 +545,22 @@ async function setExampleOverride(slug, patch) {
   return all[slug];
 }
 
+// Per-tool donation config (Bitcoin wallet + whether the cup is collapsed),
+// editable by the tool's owner (OP) or an admin. Keyed by slug so it works for
+// both real and virtual (example) tools.
+async function getDonation(slug) {
+  const s = await getSiteSettings();
+  const d = s && s[`donation:${slug}`];
+  return (d && typeof d === 'object') ? d : {};
+}
+async function setDonation(slug, patch) {
+  slug = String(slug || '');
+  const cur = await getDonation(slug);
+  const next = { ...cur, ...(patch || {}) };
+  await setSiteSetting(`donation:${slug}`, next);
+  return next;
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, listRecentEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
@@ -553,4 +569,5 @@ module.exports = {
   getSiteSettings, setSiteSetting,
   getUserPrefs, setUserPref,
   getExampleOverrides, setExampleOverride,
+  getDonation, setDonation,
 };

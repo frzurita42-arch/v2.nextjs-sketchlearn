@@ -8,7 +8,11 @@ import { useState, type CSSProperties } from 'react';
 import { DonationMug } from '@/components/ui/DonationMug';
 import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
-// A random-looking bech32 Bitcoin address (demo wallet).
+// The platform's default Binance BTC deposit wallet, shown when a creator hasn't
+// set their own.
+const DEFAULT_ADDRESS = '122gSqZ1FKWxzkPDcmTVguXxzWcU9qo57y';
+
+// A random-looking bech32 Bitcoin address (offered to managers as a quick fill).
 const BECH32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 function randomBtcAddress() {
   let s = 'bc1q';
@@ -52,12 +56,22 @@ function EditableLine({ settingKey, fallback, textStyle }: { settingKey: string;
   );
 }
 
-export function DonationPrompt({ mugWidth = 220, mugHeight = 183 }: { mugWidth?: number; mugHeight?: number }) {
+export function DonationPrompt({ mugWidth = 220, mugHeight = 183, canCollapse, onCollapse, address = '', canManage, onSaveAddress }: {
+  mugWidth?: number; mugHeight?: number;
+  canCollapse?: boolean;              // owner/admin: show the 👁 hide toggle
+  onCollapse?: () => void;            // hide the whole donation prompt
+  address?: string;                   // the tool's stored Bitcoin wallet
+  canManage?: boolean;                // owner/admin: may edit the wallet address
+  onSaveAddress?: (a: string) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [addr, setAddr] = useState('');
   const [copied, setCopied] = useState(false);
-  const show = () => { setAddr(randomBtcAddress()); setCopied(false); setOpen(true); };
-  const copy = async () => { try { await navigator.clipboard.writeText(addr); setCopied(true); } catch { /* ignore */ } };
+  const [editingAddr, setEditingAddr] = useState(false);
+  const [addrDraft, setAddrDraft] = useState('');
+  const shownAddr = address || DEFAULT_ADDRESS;   // fall back to the Binance default
+  const show = () => { setCopied(false); setEditingAddr(false); setOpen(true); };
+  const copy = async () => { try { await navigator.clipboard.writeText(shownAddr); setCopied(true); } catch { /* ignore */ } };
+  const saveAddr = () => { onSaveAddress?.(addrDraft.trim()); setEditingAddr(false); };
   return (
     <>
       <div style={{ justifySelf: 'center', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -66,6 +80,10 @@ export function DonationPrompt({ mugWidth = 220, mugHeight = 183 }: { mugWidth?:
         </button>
         <div style={{ textAlign: 'center' }}>
           <EditableLine settingKey="donateNudge" fallback="Please donate for more similar content" textStyle={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem' }} />
+          {/* 👁 admin-only: hide the donation prompt (regular users then see the
+              example centered). */}
+          {canCollapse && <button title="Hide the donation prompt from other users" onClick={onCollapse}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 8, fontSize: 14, lineHeight: 1 }}>{'👁︎'}</button>}
         </div>
       </div>
       {open && (
@@ -79,9 +97,26 @@ export function DonationPrompt({ mugWidth = 220, mugHeight = 183 }: { mugWidth?:
             <div style={{ fontSize: 13, lineHeight: 1.4, margin: '0 0 12px' }}>
               <EditableLine settingKey="donateNote" fallback="Send Bitcoin to this wallet to support our continued efforts in building the platform." />
             </div>
-            <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>BITCOIN WALLET ADDRESS</div>
-            <code style={{ display: 'block', wordBreak: 'break-all', fontFamily: '"JetBrains Mono", monospace', fontSize: 13, background: '#f7f3e9', border: '1.5px solid var(--ink)', borderRadius: 6, padding: '8px 10px' }}>{addr}</code>
-            <button className="btn small blue" style={{ marginTop: 12 }} onClick={copy}>{copied ? '✓ Copied' : '📋 Copy address'}</button>
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+              BINANCE · BITCOIN (BTC) WALLET ADDRESS
+              {canManage && !editingAddr && <button title="Edit the wallet (owner / admin)" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }} onClick={() => { setAddrDraft(address); setEditingAddr(true); }}>✎</button>}
+            </div>
+            {editingAddr ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="text" autoFocus value={addrDraft} onChange={e => setAddrDraft(e.target.value)} placeholder="Binance BTC address"
+                  onKeyDown={e => { if (e.key === 'Enter') saveAddr(); if (e.key === 'Escape') setEditingAddr(false); }}
+                  style={{ flex: 1, fontSize: 13, fontFamily: '"JetBrains Mono", monospace' }} />
+                <button className="btn small blue" onClick={() => setAddrDraft(randomBtcAddress())} title="Fill a random address">🎲</button>
+                <button className="btn small green" onClick={saveAddr}>Save</button>
+              </div>
+            ) : (
+              <code style={{ display: 'block', wordBreak: 'break-all', fontFamily: '"JetBrains Mono", monospace', fontSize: 13, background: '#f7f3e9', border: '1.5px solid var(--ink)', borderRadius: 6, padding: '8px 10px' }}>{shownAddr}</code>
+            )}
+            {/* Binance deposit requirement (highlighted). */}
+            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: '#c0392b', background: 'rgba(240,185,11,0.16)', border: '1.5px solid #f0b90b', borderRadius: 6, padding: '6px 8px' }}>
+              ⚠ Binance supports deposits from all BTC addresses (starting with &quot;1&quot;, &quot;3&quot;, &quot;bc1p&quot; and &quot;bc1q&quot;).
+            </div>
+            {!editingAddr && <button className="btn small blue" style={{ marginTop: 12 }} onClick={copy}>{copied ? '✓ Copied' : '📋 Copy address'}</button>}
           </div>
         </div>
       )}

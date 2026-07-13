@@ -15,7 +15,8 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   // Home-page section visibility ('1' = collapsed/hidden for regular users). The
   // admin's 👁 toggle writes these, so the home layout differs per admin choice.
   'galleryCollapsed', 'toolsCollapsed', 'adminToolsCollapsed',
-  // Donation prompt copy (admin-editable, like the section titles).
+  // Donation prompt copy (admin-editable, like the section titles). The wallet
+  // address + 👁 collapse are per-tool (owner/admin) via /api/tools/donation.
   'donateNudge', 'donateNote'];
 const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner']);
 
