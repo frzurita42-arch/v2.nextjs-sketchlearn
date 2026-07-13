@@ -2,7 +2,7 @@
 /* Client SPA shell. Ported from public/js/main.js + core/router.js.
  * Holds the current view + session, mirrors the legacy in-memory navigation
  * (confirm-on-leave-activity, scroll-to-top), and shows the demo-mode banner. */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API, type SessionUser } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { AppContext, type ViewName } from '@/components/AppContext';
@@ -31,12 +31,30 @@ import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 // refresh on those returns home instead of showing a broken screen.
 const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 'feed', 'tools', 'tool', 'toolbuilder'];
 
+// Friendly names for the "← Back to X" fallback button (the previous page in the
+// series, e.g. Tools → Tool → Activity).
+const VIEW_LABELS: Record<ViewName, string> = {
+  home: 'Home', tools: 'Tools', tool: 'the tool', toolbuilder: 'the Studio',
+  stats: 'My Stats', dashboard: 'Dashboard', chat: 'the Coach', feed: 'the Feed',
+  cspath: 'the CS Path', path: 'the lesson', settings: 'Settings',
+  activity: 'the activity', language: 'the activity', toolsettings: 'Tool Settings',
+};
+
+type NavEntry = { view: ViewName; tool: string | null };
+
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [view, setView] = useState<ViewName>('tools');   // Tools is the home page
+  const [view, setViewState] = useState<ViewName>('tools');   // Tools is the home page
   const [tick, setTick] = useState(0);
   const [demo, setDemo] = useState(false);
+
+  // The in-app navigation trail — the reliable fallback for "Back" that does not
+  // depend on the browser's history (which Next.js also manages). Each `nav`
+  // pushes the page you're leaving; `back()` pops and returns to it.
+  const viewRef = useRef<ViewName>('tools');
+  const navStack = useRef<NavEntry[]>([]);
+  const setView = useCallback((v: ViewName) => { viewRef.current = v; setViewState(v); }, []);
 
   const rerender = useCallback(() => setTick(t => t + 1), []);
 
@@ -65,49 +83,79 @@ export default function AppRoot() {
     return url.toString();
   };
 
+  // Land on an entry (view, and reload its tool if it was a tool page). Does NOT
+  // touch the nav stack — shared by back() and the browser popstate handler.
+  const restore = useCallback((entry: NavEntry) => {
+    appState.game = null;
+    if (entry.tool) {
+      API.get(`/api/tools?slug=${encodeURIComponent(entry.tool)}`).then((r: any) => {
+        if (r?.tool) { appState.activeTool = r.tool; setView('tool'); }
+      }).catch(() => { /* ignore */ });
+    } else {
+      setView(RESTORABLE.includes(entry.view) ? entry.view : 'tools');
+    }
+    window.scrollTo(0, 0);
+    try { window.history.pushState(entry, '', urlFor(entry.view)); } catch { /* ignore */ }
+  }, [setView]);
+
   const nav = useCallback((next: ViewName) => {
     if (appState.game && !appState.game.finished && next !== 'activity' &&
         !window.confirm('Leave the current activity? Your progress will be lost.')) return;
+    const cur = viewRef.current;
+    // Remember the page we're leaving so Back can return to it (the previous page
+    // in the series). Only stack restorable pages (a refresh/return can rebuild
+    // them) — transient in-memory screens (activity, settings…) are never targets.
+    if (next !== cur && RESTORABLE.includes(cur)) {
+      navStack.current.push({ view: cur, tool: cur === 'tool' ? (appState.activeTool?.slug || null) : null });
+      if (navStack.current.length > 50) navStack.current.shift();
+    }
     if (next !== 'activity') appState.game = null;
     setView(next);
     window.scrollTo(0, 0);
-    // PUSH a new history entry so the browser's Back button walks back through
-    // the in-app views. (replaceState would leave nothing to go back to.)
+    // PUSH a browser history entry too so the native Back button also walks back.
     try {
-      const state = { view: next, tool: next === 'tool' ? (appState.activeTool?.slug || null) : null };
+      const state: NavEntry = { view: next, tool: next === 'tool' ? (appState.activeTool?.slug || null) : null };
       window.history.pushState(state, '', urlFor(next));
     } catch { /* ignore */ }
-  }, []);
+  }, [setView]);
 
-  // Browser Back/Forward: restore the view the history entry points at, WITHOUT
-  // pushing a new entry (that would fight the browser). No activity-guard confirm
-  // here — Back leaving an unfinished activity is expected browser behavior.
+  // The Back button: go to the previous page in the series via the in-app stack
+  // (reliable regardless of the browser). Falls back to Tools when the trail is empty.
+  const back = useCallback(() => {
+    if (appState.game && !appState.game.finished &&
+        !window.confirm('Leave the current activity? Your progress will be lost.')) return;
+    const prev = navStack.current.pop() || { view: 'tools' as ViewName, tool: null };
+    restore(prev);
+  }, [restore]);
+
+  // Browser Back/Forward: restore the view the history entry points at. Also pop
+  // our in-app stack so the two stay roughly in sync.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPop = (e: PopStateEvent) => {
-      const st = (e.state || {}) as { view?: ViewName; tool?: string | null };
+      const st = (e.state || {}) as Partial<NavEntry>;
       const params = new URLSearchParams(window.location.search);
       const slug = st.tool || params.get('tool');
-      const v = (st.view || (params.get('view') as ViewName | null));
+      const v = (st.view || (params.get('view') as ViewName | null)) || 'tools';
+      if (navStack.current.length) navStack.current.pop();
       appState.game = null;
       if (slug) {
         API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
           if (r?.tool) { appState.activeTool = r.tool; setView('tool'); }
         }).catch(() => { /* ignore */ });
-      } else if (v && RESTORABLE.includes(v)) {
-        setView(v);
       } else {
-        setView('tools');
+        setView(RESTORABLE.includes(v) ? v : 'tools');
       }
       window.scrollTo(0, 0);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [setView]);
 
   const login = useCallback((token: string, u: SessionUser) => {
     API.setSession(token, u);
     setUser(u);
+    navStack.current = [];
     setView('tools');
     // Fresh sign-in starts on the home (Tools) page; drop any restored view/tool from the URL.
     try {
@@ -168,6 +216,10 @@ export default function AppRoot() {
   }
 
   const backBtnStyle = { background: '#f9a03f', color: 'var(--ink)', borderColor: 'var(--ink)', fontWeight: 700 } as const;
+  // "← Back to <previous page in the series>" — read live from the stack. (Stack
+  // mutations are paired with a setView, so this recomputes each render.)
+  const peek = navStack.current[navStack.current.length - 1];
+  const backLabel = `← Back to ${peek ? VIEW_LABELS[peek.view] : 'Tools'}`;
 
   const views: Record<ViewName, React.ReactNode> = {
     home: <HomeView />,
@@ -199,11 +251,12 @@ export default function AppRoot() {
           >×</button>
         </div>
       )}
-      {/* Global back bar — on every page, a centered orange Back button
-          (→ home = Tools) under a full-width dashed rule, right under the header. */}
+      {/* Global back bar — on every page, a centered orange Back button that
+          returns to the PREVIOUS page in the series (falls back to Tools) under a
+          full-width dashed rule, right under the header. */}
       <div style={{ margin: '6px 0 8px', textAlign: 'center' }}>
         <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
-        <button className="btn small" style={backBtnStyle} onClick={() => nav('tools')}>← Back</button>
+        <button className="btn small" style={backBtnStyle} onClick={back}>{backLabel}</button>
       </div>
       {/* key={view} remounts only on a view switch (fresh state per view, like
           the legacy SPA); in-view rerender() updates in place. */}
@@ -213,7 +266,7 @@ export default function AppRoot() {
       {/* A second Back button at the very bottom, above the footer. */}
       <div style={{ margin: '10px 0 4px', textAlign: 'center' }}>
         <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
-        <button className="btn small" style={backBtnStyle} onClick={() => { nav('tools'); window.scrollTo(0, 0); }}>← Back</button>
+        <button className="btn small" style={backBtnStyle} onClick={back}>{backLabel}</button>
       </div>
       <Footer />
     </AppContext.Provider>
