@@ -36,31 +36,40 @@ export async function POST(req: Request) {
   const desc = String(tool.description || '').slice(0, 180);
   const theme = [tool.title, subject, desc].filter(Boolean).join(' — ');
 
-  // A wide set of everyday-life settings so thumbnails vary. One is picked at random.
+  // A wide set of settings — everyday life, nature, interiors and city sights — so
+  // thumbnails vary. One backdrop is picked at random.
   const SCENES = [
     'a cozy cafe', 'a grocery store', 'a farmers market', 'a sunny beach', 'a school hallway',
     'a university campus lawn', 'a public library', 'an airport / travel', 'a train ride',
-    'a lush jungle', 'a mountain summit', 'a hiking trail', 'a country road (cycling)',
-    'a gym / fitness studio', 'a road trip in a car', 'a tech expo', 'a home kitchen',
-    'a park', 'a city rooftop at sunset', 'a co-working space', 'a bookstore', 'a museum',
-    'a hotel lobby', 'a garden', 'a lakeside', 'a ski slope', 'a street market', 'a rooftop garden',
+    'a lush jungle', 'a mountain summit', 'a hiking trail', 'a country road', 'a gym',
+    'a road trip in a car', 'a park', 'a bookstore', 'a museum', 'a hotel lobby', 'a garden',
+    'a lakeside', 'a ski slope', 'a street market', 'a rooftop garden at sunset',
+    // nature
+    'a quiet forest', 'a desert at dawn', 'a waterfall', 'a flower field', 'a starry night sky',
+    // interiors / rooms (any building type)
+    'a sleek corporate office interior', 'a cozy home living room', 'a warm kitchen',
+    'a modern hotel room', 'an artist studio', 'a classroom', 'a workshop',
+    // city sights
+    'a lively downtown street', 'a city skyline at dusk', 'a rainy neon city street', 'a historic town square',
   ];
   const scene = SCENES[Math.floor(Math.random() * SCENES.length)];
-  // At most two people — sometimes none. Balanced combinations.
+  // Number of people varies — often none. At most two.
   const PEOPLE = [
-    'no people — an evocative everyday still-life',
-    'no people — just meaningful everyday objects in the setting',
+    'no people at all', 'no people at all', 'no people at all',
     'exactly one man', 'exactly one woman',
-    'exactly one man and one woman together', 'exactly two men', 'exactly two women',
+    'exactly one man and one woman', 'exactly two men', 'exactly two women',
   ];
   const people = PEOPLE[Math.floor(Math.random() * PEOPLE.length)];
+  const hasPeople = people !== 'no people at all';
 
   const prompt = [
     `A polished, advertising-style photorealistic thumbnail that REPRESENTS a tool — like a tasteful magazine ad or brand photo, NOT a screenshot of someone operating software.`,
     `The tool is about: "${theme}".`,
-    `Setting / backdrop: ${scene}. People in the image: ${people}.`,
-    `Never show more than two people. If a person is present, show them doing a natural everyday activity in this setting with an expression or gesture that hints at the tool's PURPOSE — do NOT show anyone literally studying, typing on a laptop, or using an app in an implausible place (no laptops on mountaintops).`,
-    `Represent the tool's idea through everyday objects, gentle visual metaphors, and mood — in the person's hands, their surroundings, or implied by their thought/emotion. For example: an assignment-grading tool → a relaxed teacher on a morning jog, thoughtful smile as if mentally grading; a collaborative math tool → two students chatting warmly on a sunny campus lawn.`,
+    `Setting / backdrop: ${scene}. People in the image: ${people} (never more than two).`,
+    hasPeople
+      ? `Show the ${people === 'no people at all' ? '' : people} TALKING or interacting freely and warmly — emphasize expressive BODY LANGUAGE and FACIAL EXPRESSIONS to convey the tool's feeling and message. Absolutely NO computers, laptops, phones, tablets, screens or devices — no one is "using an app". Their gestures and mood should hint at the tool's purpose.`
+      : `With no people, let the setting, nature, interior or city view and a few meaningful everyday objects tell the story and evoke the tool's purpose.`,
+    `Represent the tool's idea through everyday objects, gentle visual metaphors and mood. For example: an assignment-grading tool → a relaxed teacher on a morning jog with a thoughtful smile; a collaborative math tool → two students chatting warmly and gesturing on a campus lawn.`,
     `Keep it coherent and believable, warm and uplifting, conveying productivity, cohesion and community engagement. Natural lighting, shallow depth of field, centered composition readable at small thumbnail size. Avoid random text and watermarks.`,
     instruction ? `IMPORTANT — also weave in the user's specific request and blend it seamlessly with everything above into ONE coherent image: "${instruction}".` : '',
   ].filter(Boolean).join(' ');

@@ -163,12 +163,12 @@ export function ToolsView() {
   );
   // Plain corner icons over an image (owner/admin), no box: 🎨 regenerate (random),
   // ✎ regenerate from a custom typed prompt.
-  const overlayIcon = { position: 'absolute' as const, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 17, lineHeight: 1, filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.95))' };
+  const overlayIcon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 17, lineHeight: 1, filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.95))' } as const;
   const cornerIcons = (t: any) => canEditCard(t) ? (
-    <>
-      <button title="Custom image — describe what to show" disabled={!!thumbing[t.slug]} onClick={() => openImgPrompt(t)} style={{ ...overlayIcon, top: 6, left: 8 }}>✎</button>
-      <button title="Regenerate image with AI" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)} style={{ ...overlayIcon, top: 6, right: 8 }}>{thumbing[t.slug] ? '…' : '🎨'}</button>
-    </>
+    <span style={{ position: 'absolute', top: 6, right: 8, display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+      <button title="Custom image — describe what to show" disabled={!!thumbing[t.slug]} onClick={() => openImgPrompt(t)} style={overlayIcon}>✎</button>
+      <button title="Regenerate image with AI" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)} style={overlayIcon}>{thumbing[t.slug] ? '…' : '🎨'}</button>
+    </span>
   ) : null;
   // A tool's thumbnail photo (or a "no photo" placeholder + AI-generate buttons).
   const thumbBox = (t: any, h: number) => (
