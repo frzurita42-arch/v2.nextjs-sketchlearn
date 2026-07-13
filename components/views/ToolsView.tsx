@@ -11,6 +11,7 @@ import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { AdminToolsCarousel } from '@/components/tools/AdminToolsCarousel';
 import { Carousel } from '@/components/ui/Carousel';
+import { InstructionPlank } from '@/components/activities/InstructionPlank';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -291,6 +292,9 @@ export function ToolsView() {
           Each carousel draws its own dashed rule underneath. */}
       {!loading && tools.length > 0 && (
         <>
+          <InstructionPlank>
+            <b>🧰 Tools</b> — every tool on the platform. Tap a card’s picture or title to open its generator and create a new lesson. Owners &amp; admins can edit the title, description and picture (✎ type or 🎨 AI), or 🗑 remove it. Use the ‹ › buttons to slide, or 🔄 to refresh.
+          </InstructionPlank>
           <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
             onRefresh={reloadTools} refreshing={refreshingTools}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
@@ -298,6 +302,9 @@ export function ToolsView() {
             {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
           </Carousel>
           <div style={{ height: 8 }} />
+          <InstructionPlank>
+            <b>🛠️ Admin’s Made Tools</b> — the platform’s built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the <b>♻️</b> icon starts a fresh generation, <b>📖</b> opens the original saved results, and <b>🗑</b> hides it. Slide with ‹ › or 🔄 to reshuffle.
+          </InstructionPlank>
           <AdminToolsCarousel max={10}
             title={site.picksShelfTitle || "🛠️ Admin's Made Tools"}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
