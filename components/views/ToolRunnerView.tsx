@@ -16,6 +16,7 @@ import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
 import { SharePanel } from '@/components/tools/SharePanel';
 import { Collection } from '@/components/ui/Collection';
+import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
 import { isRenderableImage } from '@/lib/img';
 
 // Deterministic emoji+color avatar from a username (matches the feed's style).
@@ -169,6 +170,15 @@ export function ToolRunnerView() {
   const [entryFavs, setEntryFavs] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setEntryFavs(JSON.parse(localStorage.getItem('sl_entry_favs') || '{}')); } catch { /* ignore */ } }, []);
   const toggleEntryFav = (id: string) => setEntryFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_entry_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  // Delete an entry (its author, the tool owner, or an admin — enforced server-side).
+  const removeEntry = async (e: any) => {
+    if (!confirm('Delete this entry?')) return;
+    try {
+      const r = await API.call('DELETE', '/api/tools/entries', { slug: tool.slug, entryId: e.id });
+      if (r?.ok) setEntries(list => list.filter(x => x.id !== e.id));
+      else alert(r?.error || 'Could not delete.');
+    } catch (err: any) { alert(err?.message || 'Could not delete.'); }
+  };
   const [detail, setDetail] = useState<any>(null);   // entry opened as a post
   const [editField, setEditField] = useState<null | 'title' | 'description'>(null);
   const [descDraft, setDescDraft] = useState<string>(def?.description || '');
@@ -244,21 +254,36 @@ export function ToolRunnerView() {
   // One entry rendered as a grid card or a horizontal row (used by Collection).
   const eImageFields = entryFields.filter((f: any) => f.type === 'image' || f.type === 'drawing');
   const eTextFields = entryFields.filter((f: any) => f.type !== 'image' && f.type !== 'drawing');
-  const entryCard = (e: any, row: boolean) => (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: row ? 'row' : 'column', gap: row ? 10 : 0, alignItems: 'stretch' }}>
-      {!row && eImageFields.map((f: any) => e.data?.[f.id] && <div key={f.id}>{fieldValue(f, e)}</div>)}
-      <div style={{ padding: '10px 12px', minWidth: 0, flex: 1 }}>
-        {eTextFields.map((f: any) => <div key={f.id} style={{ fontSize: 14, marginBottom: 3 }}>{f.type === 'textarea' ? fieldValue(f, e) : <><b>{f.label}:</b> {fieldValue(f, e)}</>}</div>)}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-          <Byline e={e} />
-          <span style={{ display: 'flex', gap: 6 }}>
-            <button className="btn small ghost" title={entryFavs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleEntryFav(e.id)}>{entryFavs[e.id] ? '★' : '☆'}</button>
-            <button className="btn small ghost" onClick={() => setDetail(e)}>⤢ Open</button>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+  // Entry cards use the SAME shared CardShell as the home Tools gallery, fed with
+  // this generated tool's own result data: the first image field is the card
+  // image, the first text field is the title, the rest become the subtitle.
+  const entryCard = (e: any, row: boolean) => {
+    const imgField = eImageFields.find((f: any) => isRenderableImage(String(e.data?.[f.id] || '')));
+    const thumbnail = imgField ? String(e.data[imgField.id]) : (isRenderableImage(String(e.data?.thumbnail || '')) ? String(e.data.thumbnail) : null);
+    const texts = eTextFields.map((f: any) => String(e.data?.[f.id] ?? '')).filter(Boolean);
+    const title = String(e.data?.title || texts[0] || `Entry by @${e.username || 'anon'}`);
+    const restText = (e.data?.title ? texts : texts.slice(1)).join(' · ');
+    const subtitle = String(e.data?.subtitle || restText);
+    const canDelete = canEdit || e.username === API.user?.username;
+    return (
+      <CardShell
+        view={row ? 'row' : 'grid'}
+        title={title.length > 90 ? title.slice(0, 90).trimEnd() + '…' : title}
+        subtitle={subtitle ? (subtitle.length > 140 ? subtitle.slice(0, 140).trimEnd() + '…' : subtitle) : undefined}
+        fav={!!entryFavs[e.id]}
+        thumbnail={thumbnail}
+        onOpen={() => setDetail(e)}
+        meta={<Byline e={e} />}
+        del={canDelete ? <button style={delIcon} title="Delete this entry" onClick={() => removeEntry(e)}>🗑</button> : null}
+        actions={
+          <>
+            <button style={iconBtn} title={entryFavs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleEntryFav(e.id)}>{entryFavs[e.id] ? '★' : '☆'}</button>
+            <button className="btn small green" onClick={() => setDetail(e)}>Open →</button>
+          </>
+        }
+      />
+    );
+  };
 
   return (
     <>
