@@ -8,7 +8,7 @@ import { useApp } from '@/components/AppContext';
 import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection } from '@/components/ui/Collection';
-import { isRenderableImage } from '@/lib/img';
+import { ToolCard } from '@/components/tools/ToolCard';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -145,93 +145,12 @@ export function ToolsView() {
     try { await API.del(`/api/tools?slug=${encodeURIComponent(t.slug)}`); setTools(ts => ts.filter(x => x.slug !== t.slug)); } catch (e: any) { alert(e?.message || 'Could not delete.'); }
   };
 
-  const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
-  const meta = (t: any) => <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
-  // Small inline edit buttons that sit right after the title (like the tool page).
-  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, margin: 0, fontSize: 14, lineHeight: 1 } as const;
-  const editBtns = (t: any) => canEditCard(t) ? (
-    <span style={{ display: 'inline-flex', gap: 6, marginLeft: 5, verticalAlign: 'middle' }}>
-      <button title="Edit title & description (type or AI)" style={iconBtn} onClick={() => setEditTool(t)}>✎</button>
-      <button title="AI tap-mixer — reword title & description in the platform's friendly voice" style={iconBtn} disabled={!!mixing[t.slug]} onClick={() => remix(t)}>{mixing[t.slug] ? '…' : '🎨'}</button>
-    </span>
-  ) : null;
-  const actions = (t: any) => (
-    <span style={{ display: 'flex', gap: 6, flex: '0 0 auto', flexWrap: 'wrap' }}>
-      {canRemove(t) && <button className="btn small ghost" title={isExample(t) ? 'Hide this example' : 'Delete'} onClick={() => del(t)}>{isExample(t) ? '✕' : '🗑'}</button>}
-      <button className="btn small green" onClick={() => open(t)}>Open →</button>
-    </span>
-  );
-  // Plain corner icons over an image (owner/admin), no box: 🎨 regenerate (random),
-  // ✎ regenerate from a custom typed prompt.
-  const overlayIcon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 17, lineHeight: 1, filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.95))' } as const;
-  const cornerIcons = (t: any) => canEditCard(t) ? (
-    <span style={{ position: 'absolute', top: 6, right: 8, display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-      <button title="Custom image — describe what to show" disabled={!!thumbing[t.slug]} onClick={() => openImgPrompt(t)} style={overlayIcon}>✎</button>
-      <button title="Regenerate image with AI" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)} style={overlayIcon}>{thumbing[t.slug] ? '…' : '🎨'}</button>
-    </span>
-  ) : null;
-  // A tool's thumbnail photo (or a "no photo" placeholder + AI-generate buttons).
-  const thumbBox = (t: any, h: number) => (
-    isRenderableImage(t.thumbnail)
-      ? <div style={{ position: 'relative' }}>
-          <img src={t.thumbnail} alt="" loading="lazy" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
-          {cornerIcons(t)}
-        </div>
-      : <div style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', textAlign: 'center', padding: 6 }}>
-          <span style={{ fontSize: 12, opacity: 0.6 }}>🖼️ No photo available</span>
-          {canEditCard(t) && (
-            <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <button className="btn small ghost" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)}>{thumbing[t.slug] ? 'Generating…' : '🎨 Generate'}</button>
-              <button className="btn small ghost" disabled={!!thumbing[t.slug]} onClick={() => openImgPrompt(t)}>✎ Custom</button>
-            </span>
-          )}
-        </div>
-  );
-  const rowThumb = (t: any) => (
-    isRenderableImage(t.thumbnail)
-      ? <img src={t.thumbnail} alt="" loading="lazy" title={canEditCard(t) ? 'Click to regenerate' : ''} onClick={() => canEditCard(t) && !thumbing[t.slug] && genThumb(t)}
-          style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)', flex: '0 0 auto', cursor: canEditCard(t) ? 'pointer' : 'default' }} />
-      : <div title="No photo" style={{ width: 46, height: 46, borderRadius: 8, border: '2px dashed var(--ink)', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, opacity: 0.5, cursor: canEditCard(t) ? 'pointer' : 'default' }} onClick={() => canEditCard(t) && !thumbing[t.slug] && genThumb(t)}>{thumbing[t.slug] ? '…' : (canEditCard(t) ? '🎨' : '🖼️')}</div>
-  );
-  const renderRow = (t: any) => {
-    const desc = t.description || 'No description.';
-    const long = desc.length > 110;
-    return (
-      <div className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, maxWidth: '100%' }}>
-        {rowThumb(t)}
-        <div style={{ minWidth: 0, flex: 1, wordBreak: 'break-word' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-            <strong style={{ fontSize: 15 }}>{t.title}</strong>
-            {editBtns(t)}
-            <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.55 }}>{kindOf(t)}</span>
-            {favs[t.slug] && <span style={{ fontSize: 11 }}>★</span>}
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            {long ? desc.slice(0, 110).trimEnd() + '… ' : desc}
-            {long && <button className="btn small ghost" style={{ padding: '0 4px', fontSize: 11 }} onClick={() => open(t)}>Read more</button>}
-            {editBtns(t)}
-          </div>
-          {meta(t)}
-        </div>
-        {actions(t)}
-      </div>
-    );
-  };
-  const renderGrid = (t: any) => (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {thumbBox(t, 130)}
-      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-          <strong style={{ fontSize: 16 }}>{t.title}{favs[t.slug] ? ' ★' : ''}{editBtns(t)}</strong>
-          <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{kindOf(t)}</span>
-        </div>
-        <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}{editBtns(t)}</p>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {(Array.isArray(t.tags) ? t.tags : []).map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>{meta(t)}{actions(t)}</div>
-      </div>
-    </div>
+  // One card via the shared ToolCard, wired with this view's owner/admin handlers.
+  const card = (t: any, view: 'grid' | 'row') => (
+    <ToolCard tool={t} view={view} onOpen={open} favs={favs}
+      canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
+      onGenThumb={genThumb} onThumbPrompt={openImgPrompt} thumbing={!!thumbing[t.slug]}
+      canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
   );
 
   return (
@@ -306,8 +225,8 @@ export function ToolsView() {
               storageKey="sl_tools_view"
               emptyFiltered="No tools match these filters."
               emptyAll="No tools in this category yet."
-              renderGrid={renderGrid}
-              renderRow={renderRow}
+              renderGrid={(t: any) => card(t, 'grid')}
+              renderRow={(t: any) => card(t, 'row')}
             />
           </>
         )}
