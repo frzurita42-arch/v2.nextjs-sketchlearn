@@ -6,7 +6,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 
 export function Carousel({ title, onRefresh, refreshing, children, empty, cardWidth = 240, cardHeight,
-  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, headerExtra }: {
+  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, headerExtra, banner }: {
   title: string;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -19,6 +19,7 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
   onRemixTitle?: () => void;                  // AI "palette" reword (same meaning, new wording)
   remixingTitle?: boolean;
   headerExtra?: ReactNode;                    // extra control in the header (e.g. a Recommend button)
+  banner?: ReactNode;                         // a how-to banner shown BELOW the title, above the cards
 }) {
   const rail = useRef<HTMLDivElement>(null);
   const slide = (dir: number) => { try { rail.current?.scrollBy({ left: dir * (cardWidth + 14) * 2, behavior: 'smooth' }); } catch { /* ignore */ } };
@@ -56,6 +57,8 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
           </span>
         )}
       </div>
+      {/* How-to banner sits below the title, above the cards. */}
+      {banner}
       {count === 0 ? (
         <div style={{ opacity: 0.6, fontSize: 13, padding: '8px 0' }}>{empty || 'Nothing to show yet.'}</div>
       ) : (

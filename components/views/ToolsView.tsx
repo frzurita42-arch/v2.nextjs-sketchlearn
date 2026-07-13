@@ -265,9 +265,7 @@ export function ToolsView() {
           </div>
         ) : (
           <>
-            <InstructionPlank>
-              <b>🖼️ Gallery</b> — browse every tool. Search by name or @user, filter by ★ favorites / 🛡️ liked by admin / 💛 OP favorited, switch grid ▦ or rows ☰, sort newest/oldest, and page through. 🔄 Refresh shuffles into a random order. Tap a card to open its tool.
-            </InstructionPlank>
+            <InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />
             <CategoryFilter value={filter} onChange={setFilter} counts={counts} />
             <Divider />
             <Collection
@@ -298,23 +296,19 @@ export function ToolsView() {
           Each carousel draws its own dashed rule underneath. */}
       {!loading && tools.length > 0 && (
         <>
-          <InstructionPlank>
-            <b>🧰 Tools</b> — every tool on the platform. Tap a card’s picture or title to open its generator and create a new lesson. Owners &amp; admins can edit the title, description and picture (✎ type or 🎨 AI), or 🗑 remove it. Use the ‹ › buttons to slide, or 🔄 to refresh.
-          </InstructionPlank>
           <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
             onRefresh={reloadTools} refreshing={refreshingTools}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
-            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}>
+            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}
+            banner={<InstructionPlank settingKey="toolsBanner" defaultText="🧰 Tools — every tool on the platform. Tap a card's picture or title to open its generator and create a new lesson. Owners & admins can edit the title, description and picture, or remove it. Use the slider buttons, or Refresh for a random order." />}>
             {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
           </Carousel>
           <div style={{ height: 8 }} />
-          <InstructionPlank>
-            <b>🛠️ Admin’s Made Tools</b> — the platform’s built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the <b>♻️</b> icon starts a fresh generation, <b>📖</b> opens the original saved results, and <b>🗑</b> hides it. Slide with ‹ › or 🔄 to reshuffle.
-          </InstructionPlank>
           <AdminToolsCarousel max={10}
             title={site.picksShelfTitle || "🛠️ Admin's Made Tools"}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
-            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || "🛠️ Admin's Made Tools")} remixingTitle={!!headMix.picksShelfTitle} />
+            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || "🛠️ Admin's Made Tools")} remixingTitle={!!headMix.picksShelfTitle}
+            banner={<InstructionPlank settingKey="adminToolsBanner" defaultText="🛠️ Admin's Made Tools — the platform's built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the ♻️ icon starts a fresh generation, 📖 opens the original saved results, and 🗑 hides it. Slide or Refresh to reshuffle." />} />
         </>
       )}
     </>

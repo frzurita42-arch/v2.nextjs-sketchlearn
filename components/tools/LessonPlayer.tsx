@@ -1171,9 +1171,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         {/* The History section: a wooden how-to banner, then the shared Collection
             with the carousel-style editable header. (No topic filter — every
             rendition here is the same tool's topic.) */}
-        <InstructionPlank>
-          <b>📖 History</b> — every generation made with this tool. ▶ Play a fresh replica, 📖 open the OP results, ★ favorite, or search / filter / sort. 🔄 Refresh shuffles the order.
-        </InstructionPlank>
+        <InstructionPlank settingKey="historyBanner" defaultText="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order." />
         <Collection
           {...historyHdr} onRefresh={loadActivities}
           items={feedItems}

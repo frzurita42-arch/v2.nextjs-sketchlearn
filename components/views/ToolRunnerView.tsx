@@ -366,9 +366,7 @@ export function ToolRunnerView() {
               {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
             </div>
             <div style={{ marginTop: 16 }}>
-              <InstructionPlank>
-                <b>📖 History</b> — everything people added to this tool. Open an entry, ★ favorite, or search / filter / sort. 🔄 Refresh shuffles the order.
-              </InstructionPlank>
+              <InstructionPlank settingKey="historyBanner" defaultText="📖 History — everything people added to this tool. Open an entry, favorite, or search / filter / sort. Refresh shuffles the order." />
               <Collection
                 {...historyHdr} onRefresh={loadEntries}
                 items={asArray(entries)}

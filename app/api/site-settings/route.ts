@@ -9,7 +9,10 @@ export const runtime = 'nodejs';
 
 // Which page-copy keys admins may edit (allow-list keeps this from becoming a
 // free-form store). Values are short strings.
-const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle'];
+const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle',
+  // Section how-to banners (longer text).
+  'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner'];
+const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner']);
 
 // GET /api/site-settings -> the editable page copy (any signed-in viewer reads it).
 export async function GET(req: Request) {
@@ -29,7 +32,7 @@ export async function PUT(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const key = String(b.key || '');
   if (!KEYS.includes(key)) return NextResponse.json({ error: 'Unknown setting.' }, { status: 400 });
-  const value = String(b.value ?? '').slice(0, 240);
+  const value = String(b.value ?? '').slice(0, BANNER_KEYS.has(key) ? 600 : 240);
   await setSiteSetting(key, value);
   return NextResponse.json({ ok: true, key, value });
 }
