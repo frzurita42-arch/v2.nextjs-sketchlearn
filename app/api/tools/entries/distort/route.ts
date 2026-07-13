@@ -95,10 +95,22 @@ export async function POST(req: Request) {
     }
     const instruction = String(b.instruction || '').slice(0, 400);
     const theme = [curTitle, subject, curDesc].filter(Boolean).join(' — ');
+    // Optional performance reflection (0-100): the just-finished run's score, shown
+    // ONLY as a subtle shift in mood / body language — never as text or numbers.
+    const perfRaw = b.perf;
+    const perf = (typeof perfRaw === 'number' && perfRaw >= 0 && perfRaw <= 100) ? Math.round(perfRaw) : null;
+    const perfMood = perf == null ? '' :
+      perf >= 80 ? `Subtly reflect a strong result: the mood is quietly confident and accomplished — a calm, warm smile and relaxed, open, gently triumphant body language.`
+      : perf >= 50 ? `Subtly reflect a solid, mid-journey result: the mood is steady, focused and encouraged — hopeful, engaged body language, clearly making progress.`
+      : `Subtly reflect an early-stage result: the mood is gently determined and reflective — thoughtful, resilient, room-to-grow body language. Never sad, negative or discouraging.`;
     const prompt = [
       `A warm, advertising-style photorealistic thumbnail that REPRESENTS a learning activity — like a tasteful magazine ad, NOT a screenshot of software.`,
       `The activity is about: "${theme}".`,
       `Set it in an everyday scene with at most two expressive people (or none) — talking or interacting warmly, no computers, phones or screens. Let mood, body language and a few everyday objects tell the story.`,
+      // Diversity: real-world variety, randomly chosen, never a single default look.
+      `If people appear, feature a DIVERSE, randomly-chosen mix — vary ethnicity/race across the full real-world range and vary body types naturally; everyone healthy and normal-looking, authentic and respectful. Do not default to one look.`,
+      perfMood,
+      `Convey any feeling ONLY through expression, mood and body language — never through text, numbers, charts, checkmarks or score indicators.`,
       `Natural lighting, shallow depth of field, centered and readable at small size. No text or watermarks.`,
       instruction ? `Also weave in the user's request seamlessly: "${instruction}".` : '',
     ].filter(Boolean).join(' ');
@@ -116,7 +128,9 @@ export async function POST(req: Request) {
           }
         } catch { /* keep data URL */ }
       }
-      const data = await updateEntryData(entry.id, { thumbnail: img });
+      const patch: any = { thumbnail: img };
+      if (perf != null) { patch.score = perf; patch.perfBand = perf >= 80 ? 'strong' : perf >= 50 ? 'solid' : 'early'; }
+      const data = await updateEntryData(entry.id, patch);
       return NextResponse.json({ data });
     } catch {
       return NextResponse.json({ error: 'Image generation failed.' }, { status: 200 });

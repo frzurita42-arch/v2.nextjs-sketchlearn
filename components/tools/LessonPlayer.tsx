@@ -626,6 +626,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   // original deck so the results persist and are reachable via the tool's link /
   // the "OP results" button. `resultsArg` is the finisher's own score/answers.
   const savedRun = useRef(false);   // guard: auto-save a finished run only once
+  const playedEntryId = useRef<string | null>(null);   // the history card for the run in progress
+  const scoredEntry = useRef<string | null>(null);     // guard: score-image a run once
   const saveDeck = async (resultsArg?: Record<number, any>, silent = false) => {
     const gen = slidesRef.current.filter(Boolean);
     if (!gen.length) { if (!silent) setDeckMsg('Play through the deck first, then save.'); return; }
@@ -782,6 +784,20 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       savedRun.current = true;
       saveDeck(results, true);
     }
+    // When a run finishes, generate a FRESH image for its history card that subtly
+    // reflects how the student did (through mood / body language, never numbers).
+    // The player authored this card, so they may set its image.
+    if (phase === 'done' && playedEntryId.current && scoredEntry.current !== playedEntryId.current) {
+      const eid = playedEntryId.current;
+      scoredEntry.current = eid;
+      const all = Object.values(results).flatMap((r: any) => Object.values(r.answers || {}));
+      const answered = all.length;
+      const correct = all.filter((d: any) => d.correct).length;
+      const pct = answered ? Math.round((correct / answered) * 100) : 0;
+      API.post('/api/tools/entries/distort', { slug, entryId: eid, action: 'image', perf: pct })
+        .then(() => loadActivities())
+        .catch(() => { /* best-effort */ });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -791,7 +807,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   // goes through here so it shows up as an option in the history.
   const recordAndPlay = async (c: Cfg, extra?: Record<string, any>) => {
     const cc: Cfg = { ...c, level: c.level || c.difficulty || levels[0], topic: c.topic || '', category: c.category || defaultCat(), ...extra };
-    try { await API.post('/api/tools/entries', { slug, data: cc }); } catch { /* ignore */ }
+    playedEntryId.current = null; scoredEntry.current = null;
+    try { const r = await API.post('/api/tools/entries', { slug, data: cc }); playedEntryId.current = r?.entry?.id || null; } catch { /* ignore */ }
     loadActivities();
     play(cc);
   };
@@ -955,6 +972,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         <>
           {e.data?.suggested && <span title="AI-suggested topic">✦ AI pick</span>}
           {e.data?.replica && <span title="A fresh AI replica">♻ replica</span>}
+          {typeof e.data?.score === 'number' && <span title={`Scored ${e.data.score}% — the image mood reflects it`}>{e.data.score >= 80 ? '🌟' : e.data.score >= 50 ? '📈' : '🌱'} {e.data.score}%</span>}
           {e.byAdmin && <span title="By an admin">🛡️</span>}
         </>
       );
