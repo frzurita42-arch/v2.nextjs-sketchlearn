@@ -35,8 +35,16 @@ export async function GET(req: Request) {
   const viewerIsAdmin = a.user.role === 'admin';
   const adminOwners = (userState.users || []).filter((u: any) => u.role === 'admin').map((u: any) => u.username);
   const tools = await listTools({ includePrivateFor: a.user.username, adminOwners, viewerIsAdmin, limit: 60 });
+  // Flag tools an admin has liked (for the "liked by admin" gallery filter) and
+  // drop the raw liker list from the public payload.
+  const adminSet = new Set(adminOwners);
+  const decorated = tools.map((t: any) => {
+    const likedByAdmin = Array.isArray(t.likedBy) && t.likedBy.some((u: string) => adminSet.has(u));
+    const { likedBy, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
+    return { ...rest, likedByAdmin };
+  });
   // Prepend the built-in examples so the gallery always has a working lesson to try.
-  return NextResponse.json({ tools: [...EXAMPLE_TOOLS, ...tools] }, { headers: { 'Cache-Control': 'no-cache' } });
+  return NextResponse.json({ tools: [...EXAMPLE_TOOLS, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 // POST /api/tools  { definition, visibility, aiGenerated? } -> publish a tool

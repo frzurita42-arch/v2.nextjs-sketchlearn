@@ -20,6 +20,7 @@ export function ToolsView() {
   const [viewMode, setViewMode] = useState<'grid' | 'row'>('grid');   // card grid vs horizontal rows
   const [q, setQ] = useState('');                         // search by name / @username
   const [favOnly, setFavOnly] = useState(false);          // "my favorites" (liked)
+  const [adminLiked, setAdminLiked] = useState(false);    // "liked by admin"
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   useEffect(() => {
     try { setFavs(JSON.parse(localStorage.getItem('sl_tool_likes') || '{}')); } catch { /* ignore */ }
@@ -51,6 +52,7 @@ export function ToolsView() {
   const filtered = tools.filter(t => {
     if (filter !== 'all' && toolCategory(t) !== filter) return false;
     if (favOnly && !favs[t.slug]) return false;
+    if (adminLiked && !t.likedByAdmin) return false;
     if (needle && !(String(t.title || '').toLowerCase().includes(needle) || String(t.owner || '').toLowerCase().includes(needle))) return false;
     return true;
   });
@@ -64,11 +66,11 @@ export function ToolsView() {
     });
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tools, filter, newestFirst, q, favOnly, favs]);
+  }, [tools, filter, newestFirst, q, favOnly, adminLiked, favs]);
   const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
   // Keep the page in range when the filter/sort/list changes.
   useEffect(() => { setPage(p => Math.min(p, pageCount - 1)); }, [pageCount]);
-  useEffect(() => { setPage(0); }, [filter, newestFirst, q, favOnly]);
+  useEffect(() => { setPage(0); }, [filter, newestFirst, q, favOnly, adminLiked]);
   const shown = sorted.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
 
   // A dashed rule that separates gallery sections, matching the sketch theme.
@@ -105,6 +107,7 @@ export function ToolsView() {
           <div style={{ maxWidth: 900, margin: '0 auto 10px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 search by name or @user" style={{ fontSize: 13, flex: '1 1 200px', maxWidth: 280, padding: '5px 9px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
             <button className={`btn small ${favOnly ? 'blue' : 'ghost'}`} onClick={() => setFavOnly(v => !v)} title="Show only tools you've favorited">★ My favorites</button>
+            <button className={`btn small ${adminLiked ? 'blue' : 'ghost'}`} onClick={() => setAdminLiked(v => !v)} title="Show only tools an admin has liked">🛡️ Liked by admin</button>
             {/* grid vs horizontal-rows display */}
             <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
               <button className={`btn small ${viewMode === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Card grid" onClick={() => setView('grid')}>▦</button>

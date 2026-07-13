@@ -16,6 +16,6 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const slug = String(b.slug || '');
   if (!slug) return NextResponse.json({ error: 'Missing slug' }, { status: 400 });
-  const count = await setToolLikeDelta(slug, b.liked ? 1 : -1);
+  const count = await setToolLikeDelta(slug, b.liked ? 1 : -1, a.user.username);
   return NextResponse.json({ likeCount: count });
 }

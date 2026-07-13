@@ -39,6 +39,7 @@ function mapToolRow(r) {
     tags: asArr(r.tags),
     thumbnail: r.thumbnail,
     likeCount: r.like_count,
+    likedBy: asArr(r.liked_by),
     aiGenerated: r.ai_generated,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
@@ -154,21 +155,34 @@ async function deleteTool(slug) {
 }
 
 // Adjust a tool's like counter by delta (+1 / -1). Returns the new count or null.
-async function setToolLikeDelta(slug, delta) {
+async function setToolLikeDelta(slug, delta, username = null) {
   const d = Math.sign(parseInt(delta, 10) || 0);
+  const applyUser = (arr) => {
+    const s = new Set(Array.isArray(arr) ? arr : []);
+    if (username) { if (d > 0) s.add(username); else s.delete(username); }
+    return [...s];
+  };
   if (!db.pool) {
     const tools = readJSON('tools.json', []);
     const t = tools.find(x => x.slug === slug);
     if (!t) return null;
     t.likeCount = Math.max(0, (t.likeCount || 0) + d);
+    if (username) t.likedBy = applyUser(t.likedBy);
     writeJSON('tools.json', tools);
     return t.likeCount;
   }
   try {
-    const { rows } = await withDbTimeout(dbQuery(
-      'UPDATE tools SET like_count = GREATEST(0, like_count + $2) WHERE slug = $1 RETURNING like_count',
-      [slug, d]
-    ), 8000, 'Like tool');
+    // Read the current likers, adjust in JS, write count + set back (simple + correct).
+    let likedBy = null;
+    if (username) {
+      const cur = await withDbTimeout(dbQuery('SELECT liked_by FROM tools WHERE slug = $1', [slug]), 8000, 'Read likers');
+      likedBy = applyUser(asArr(cur.rows[0] && cur.rows[0].liked_by));
+    }
+    const sql = username
+      ? 'UPDATE tools SET like_count = GREATEST(0, like_count + $2), liked_by = $3::jsonb WHERE slug = $1 RETURNING like_count'
+      : 'UPDATE tools SET like_count = GREATEST(0, like_count + $2) WHERE slug = $1 RETURNING like_count';
+    const params = username ? [slug, d, JSON.stringify(likedBy)] : [slug, d];
+    const { rows } = await withDbTimeout(dbQuery(sql, params), 8000, 'Like tool');
     return rows[0] ? rows[0].like_count : null;
   } catch (e) {
     console.error('DB like update failed:', e.message);

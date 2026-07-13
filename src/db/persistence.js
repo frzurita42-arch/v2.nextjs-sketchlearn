@@ -126,6 +126,9 @@ async function initDatabase() {
   // Owner-supplied API keys, added later via the tool's settings page. Kept out of
   // every public read; only the owner-only settings endpoint returns them.
   await dbQuery('ALTER TABLE tools ADD COLUMN IF NOT EXISTS api_keys JSONB');
+  // Per-user like attribution (who liked each tool) — powers the "liked by admin"
+  // gallery filter. Kept alongside the like_count for the visible tally.
+  await dbQuery(`ALTER TABLE tools ADD COLUMN IF NOT EXISTS liked_by JSONB DEFAULT '[]'::jsonb`);
 
   // ---------- platform: generic entry store ----------
   // Rows created BY a tool at runtime (storage-system items, journal notes,
