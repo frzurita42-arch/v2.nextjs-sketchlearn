@@ -10,6 +10,7 @@ import { appState, LANGUAGES, LANG_LEVELS, WRITING_DEFAULT_BY_LEVEL } from '@/li
 import { withTimeout } from '@/lib/util';
 import { useApp } from '@/components/AppContext';
 import { InstructionPlank } from './InstructionPlank';
+import { DonationsCard } from '@/components/ui/DonationMug';
 
 const ACTIVITIES: [string, string][] = [
   ['grammar', 'Grammar'], ['reading', 'Reading'], ['listening', 'Listening'], ['spelling', 'Spelling'], ['vocabulary', 'Vocabulary'], ['writing', 'Character practice'],
@@ -176,13 +177,7 @@ export function LanguageLearning() {
               <input type="text" id="ll-topic" value={st.topic} placeholder="e.g. Food, Summer vibes, Travel…" onChange={e => patch({ topic: e.target.value })} />
             </div>
           </div>
-          <div className="card alt" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-            <a href="https://ko-fi.com" target="_blank" rel="noreferrer" title="Support this project" aria-label="Donations"
-              style={{ textDecoration: 'none', color: 'inherit', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <DonationMug />
-              <span style={{ fontFamily: 'var(--font-title)', fontSize: '1.15rem' }}>Donations</span>
-            </a>
-          </div>
+          <DonationsCard />
         </div>
 
         {/* ---- generate, beneath the topic card ---- */}
@@ -203,16 +198,3 @@ function PencilToggle({ active, onClick, title }: { active: boolean; onClick: ()
   );
 }
 
-// Hand-drawn sketch-style mug (matches the notebook theme; no external asset needed).
-function DonationMug() {
-  return (
-    <svg width="96" height="80" viewBox="0 0 120 100" role="img" aria-label="coffee mug">
-      <g fill="none" stroke="#2d2a26" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M24 30 Q22 78 34 84 L74 84 Q86 78 84 30 Z" fill="#f9a03f" />
-        <path d="M84 40 Q104 38 104 54 Q104 70 84 66" fill="#f7f3e9" />
-        <path d="M38 42 q10 8 20 0 M40 52 q10 8 24 0" opacity="0.7" />
-        <path d="M42 16 q-4 -8 2 -12 M56 16 q-4 -8 2 -12 M70 16 q-4 -8 2 -12" opacity="0.8" />
-      </g>
-    </svg>
-  );
-}

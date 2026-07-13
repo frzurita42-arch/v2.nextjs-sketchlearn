@@ -21,6 +21,7 @@ import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/s
 import { buildLessonZip } from '@/lib/lesson-export';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
+import { DonationsCard } from '@/components/ui/DonationMug';
 import { InstructionPlank } from '@/components/activities/InstructionPlank';
 import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
@@ -1144,23 +1145,28 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             </div>
           </div>
           {example ? (
-            <div style={{ marginTop: 8, maxWidth: 340 }}>
-              {/* The AI example uses the SAME card component — image spot (empty →
-                  no-photo placeholder), title, subtitle — with Play + Generate. */}
-              <CardShell
-                view="grid"
-                title={label({ level: example.level, topic: example.topic })}
-                subtitle={example.why || undefined}
-                thumbnail={null}
-                onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}
-                actions={
-                  <>
-                    <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
-                    <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
-                  </>
-                }
-              />
-              {addMsg && <p style={{ fontSize: 12, color: 'var(--accent,#5c80bc)', margin: '6px 0 0' }}>{addMsg}</p>}
+            /* Two columns: the AI example card on the left, the donations coffee-mug
+               card filling the space on the right. Wraps to one column when narrow. */
+            <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'stretch' }}>
+              <div style={{ minWidth: 0 }}>
+                {/* The AI example uses the SAME card component — image spot (empty →
+                    no-photo placeholder), title, subtitle — with Play + Generate. */}
+                <CardShell
+                  view="grid"
+                  title={label({ level: example.level, topic: example.topic })}
+                  subtitle={example.why || undefined}
+                  thumbnail={null}
+                  onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}
+                  actions={
+                    <>
+                      <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
+                      <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
+                    </>
+                  }
+                />
+                {addMsg && <p style={{ fontSize: 12, color: 'var(--accent,#5c80bc)', margin: '6px 0 0' }}>{addMsg}</p>}
+              </div>
+              <DonationsCard />
             </div>
           ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
         </div>
