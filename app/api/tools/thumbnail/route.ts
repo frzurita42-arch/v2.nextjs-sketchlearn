@@ -34,12 +34,32 @@ export async function POST(req: Request) {
   const subject = d.lesson?.subject || '';
   const desc = String(tool.description || '').slice(0, 180);
   const theme = [tool.title, subject, desc].filter(Boolean).join(' — ');
+
+  // A wide set of everyday-life settings so thumbnails vary — the idea for / use of
+  // the tool captured wherever inspiration strikes. One is picked at random.
+  const SCENES = [
+    'a cozy cafe with latte art and steamy windows', 'a bustling coffee shop counter',
+    'a grocery store aisle with a shopping cart', 'a colorful farmers market stall',
+    'a sunny beach at golden hour', 'a lively school classroom', 'a university lecture hall',
+    'a warm public library among tall bookshelves', 'a busy airport terminal with luggage',
+    'a train window seat watching the countryside', 'a lush green jungle with sunlight through leaves',
+    'a windy mountain summit above the clouds', 'a scenic hiking trail with a backpack',
+    'cycling on a country road at sunrise', 'a bright modern gym / fitness studio',
+    'inside a car on a road trip, hands on the wheel', 'a tech expo / conference booth with crowds',
+    'a home kitchen table covered in notes', 'a quiet park bench under a tree',
+    'a rooftop terrace at sunset over the city', 'a friendly co-working space',
+    'a charming independent bookstore', 'a museum gallery', 'a subway car in motion',
+    'friends around a campfire at night', 'a blooming backyard garden', 'a maker/craft workshop',
+    'a food truck festival', 'a boat on a calm lake', 'a ski lodge in winter',
+  ];
+  const scene = SCENES[Math.floor(Math.random() * SCENES.length)];
+
   const prompt = [
-    'A warm, inviting, cinematic photorealistic thumbnail image that REPRESENTS this specific tool and its theme.',
-    `Theme / topic of the tool: "${theme}". Build the whole scene around THAT subject — show settings, objects and imagery that clearly evoke this exact topic (not a generic office or design studio).`,
-    'Feature real, diverse PEOPLE whose expressions and body language convey the tool\'s sentiment and mood — focus, collaboration, curiosity and delight — reflecting the platform\'s goals of productivity, cohesion and engagement.',
-    `You MAY include the tool's name "${tool.title}" rendered as one clean, tastefully hand-lettered sign or banner within the scene (spelled correctly); otherwise avoid random text.`,
-    'Bright, uplifting, editorial-photo style with natural lighting and shallow depth of field. Composition centered and readable at small thumbnail size.',
+    `A warm, inviting, cinematic photorealistic thumbnail set in ${scene}.`,
+    `In that setting, show a diverse person (or a few people) having the idea for — or joyfully using — a tool about: "${theme}". Surround them with objects and details that clearly evoke this exact topic.`,
+    'Capture genuine emotion and sentiment through their expressions and body language — a spark of inspiration, focus, collaboration and delight — conveying the platform\'s core messages of productivity, cohesion and community engagement.',
+    `You MAY include the tool's name "${tool.title}" as one clean, tastefully hand-lettered sign or note within the scene (spelled correctly); otherwise avoid random text.`,
+    'Bright, uplifting, editorial-photo style, natural lighting, shallow depth of field. Composition centered and readable at small thumbnail size.',
   ].join(' ');
 
   try {
