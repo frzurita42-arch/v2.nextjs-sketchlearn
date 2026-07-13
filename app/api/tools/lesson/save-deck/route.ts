@@ -36,12 +36,14 @@ export async function POST(req: Request) {
   } else {
     const slides = Array.isArray(b.slides) ? b.slides.filter(Boolean).slice(0, 75) : [];
     if (!slides.length) return NextResponse.json({ error: 'No generated slides to save yet — play through the deck first.' }, { status: 400 });
-    const deck = {
+    const deck: any = {
       config: (b.config && typeof b.config === 'object') ? b.config : {},
       slides,
       savedAt: new Date().toISOString(),
       savedBy: a.user.username,
     };
+    // The finisher's own results (score + per-question outcomes), when provided.
+    if (b.results && typeof b.results === 'object') deck.results = b.results;
     // Guard against an oversized deck (many embedded AI images).
     if (JSON.stringify(deck).length > 3_500_000) {
       return NextResponse.json({ error: 'This deck is too large to save — use fewer AI images or slides.' }, { status: 413 });

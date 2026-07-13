@@ -9,6 +9,41 @@ import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection } from '@/components/ui/Collection';
 
+// Edit a card's title + description (type manually or ✦ write each with AI).
+function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
+  const [title, setTitle] = useState<string>(tool.title || '');
+  const [desc, setDesc] = useState<string>(tool.description || '');
+  const [busy, setBusy] = useState<'' | 'title' | 'description' | 'save'>('');
+  const ai = async (field: 'title' | 'description') => {
+    setBusy(field);
+    try { const r = await API.post('/api/tools/describe', { slug: tool.slug, field }); if (r?.text) { if (field === 'title') setTitle(r.text); else setDesc(r.text); } else if (r?.error) alert(r.error); }
+    catch { alert('AI unavailable — type it instead.'); }
+    setBusy('');
+  };
+  const save = async () => {
+    setBusy('save');
+    const t = title.trim() || tool.title; const d = desc.trim();
+    try { await API.post('/api/tools/rename', { slug: tool.slug, title: t, description: d }); onSaved(t, d); onClose(); }
+    catch (e: any) { alert(e?.message || 'Save failed'); setBusy(''); }
+  };
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480, width: '100%', padding: '16px 18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><b>Edit card</b><button className="btn small ghost" onClick={onClose}>✕</button></div>
+        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 3, display: 'flex', gap: 6, alignItems: 'center' }}>TITLE <button className="btn small blue" disabled={busy === 'title'} onClick={() => ai('title')} style={{ padding: '0 6px' }}>{busy === 'title' ? '…' : '✦ AI'}</button></div>
+        <input value={title} onChange={e => setTitle(e.target.value)} style={{ width: '100%', fontSize: 15, marginBottom: 8 }} />
+        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 3, display: 'flex', gap: 6, alignItems: 'center' }}>DESCRIPTION <button className="btn small blue" disabled={busy === 'description'} onClick={() => ai('description')} style={{ padding: '0 6px' }}>{busy === 'description' ? '…' : '✦ AI'}</button></div>
+        <textarea value={desc} onChange={e => setDesc(e.target.value)} style={{ width: '100%', minHeight: 70, fontSize: 14, marginBottom: 8 }} />
+        <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 8 }}>✦ AI writes from what the tool does — not just the prompt.</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn small ghost" onClick={onClose}>Cancel</button>
+          <button className="btn small green" disabled={busy === 'save'} onClick={save}>{busy === 'save' ? 'Saving…' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ToolsView() {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
@@ -16,6 +51,21 @@ export function ToolsView() {
   const [filter, setFilter] = useState('all');            // category chip (section-specific)
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_tool_likes') || '{}')); } catch { /* ignore */ } }, []);
+  const [editTool, setEditTool] = useState<any>(null);    // card being edited (title+desc)
+  const [mixing, setMixing] = useState<Record<string, boolean>>({});   // per-slug remix spinner
+  const patchTool = (slug: string, patch: any) => setTools(ts => ts.map(t => t.slug === slug ? { ...t, ...patch } : t));
+  const canEditCard = (t: any) => !(t.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === t.owner);
+  const remix = async (t: any) => {
+    setMixing(m => ({ ...m, [t.slug]: true }));
+    try {
+      const r = await API.post('/api/tools/remix', { slug: t.slug });
+      if (r?.title || r?.description) {
+        await API.post('/api/tools/rename', { slug: t.slug, title: r.title || t.title, description: r.description ?? t.description });
+        patchTool(t.slug, { title: r.title || t.title, description: r.description ?? t.description });
+      } else if (r?.error) alert(r.error);
+    } catch (e: any) { alert(e?.message || 'Could not remix.'); }
+    setMixing(m => { const n = { ...m }; delete n[t.slug]; return n; });
+  };
 
   // Admin-editable page copy (heading + subtitle), saved for everyone.
   const isAdmin = app.user?.role === 'admin';
@@ -73,7 +123,9 @@ export function ToolsView() {
   const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
   const meta = (t: any) => <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
   const actions = (t: any) => (
-    <span style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+    <span style={{ display: 'flex', gap: 6, flex: '0 0 auto', flexWrap: 'wrap' }}>
+      {canEditCard(t) && <button className="btn small ghost" title="Edit title & description (type or AI)" onClick={() => setEditTool(t)}>✎</button>}
+      {canEditCard(t) && <button className="btn small ghost" title="AI tap-mixer — reword title & description in the platform's friendly voice" disabled={!!mixing[t.slug]} onClick={() => remix(t)}>{mixing[t.slug] ? '…' : '🎨'}</button>}
       {canRemove(t) && <button className="btn small ghost" title={isExample(t) ? 'Hide this example' : 'Delete'} onClick={() => del(t)}>{isExample(t) ? '✕' : '🗑'}</button>}
       <button className="btn small green" onClick={() => open(t)}>Open →</button>
     </span>
@@ -115,6 +167,7 @@ export function ToolsView() {
 
   return (
     <>
+      {editTool && <CardEditor tool={editTool} onClose={() => setEditTool(null)} onSaved={(title, description) => patchTool(editTool.slug, { title, description })} />}
       {editHeading === 'galleryTitle' ? (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '0 auto' }}>
           <input value={headingDraft} onChange={e => setHeadingDraft(e.target.value)} autoFocus

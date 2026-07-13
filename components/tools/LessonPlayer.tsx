@@ -588,19 +588,23 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [deckMsg, setDeckMsg] = useState('');
   const offlineOn = lesson.offlineExport !== false;   // owner/admin can turn it off
   const [zipBusy, setZipBusy] = useState(false);
-  // Save the current run's generated slides as the original deck (owner/admin).
-  const saveDeck = async () => {
+  // Save the current run's generated slides (with images + answers) as the
+  // original deck so the results persist and are reachable via the tool's link /
+  // the "OP results" button. `resultsArg` is the finisher's own score/answers.
+  const savedRun = useRef(false);   // guard: auto-save a finished run only once
+  const saveDeck = async (resultsArg?: Record<number, any>, silent = false) => {
     const gen = slidesRef.current.filter(Boolean);
-    if (!gen.length) { setDeckMsg('Play through the deck first, then save.'); return; }
-    setDeckMsg('Saving…');
+    if (!gen.length) { if (!silent) setDeckMsg('Play through the deck first, then save.'); return; }
+    if (!silent) setDeckMsg('Saving…');
     try {
-      const r = await API.post('/api/tools/lesson/save-deck', { slug, config: cfgRef.current, slides: gen });
+      const r = await API.post('/api/tools/lesson/save-deck', { slug, config: cfgRef.current, slides: gen, results: resultsArg });
       if (r?.ok) {
-        const deck = { config: cfgRef.current, slides: gen, savedBy: API.user?.username, savedAt: new Date().toISOString() };
+        const deck: any = { config: cfgRef.current, slides: gen, savedBy: API.user?.username, savedAt: new Date().toISOString() };
+        if (resultsArg) deck.results = resultsArg;
         setSavedDeck(deck); if (def?.lesson) def.lesson.savedDeck = deck;
-        setDeckMsg(`Saved ✓ (${r.slideCount} slides)`);
-      } else setDeckMsg(r?.error || 'Could not save.');
-    } catch (e: any) { setDeckMsg(e?.message || 'Could not save.'); }
+        if (!silent) setDeckMsg(`Saved ✓ (${r.slideCount} slides)`);
+      } else if (!silent) setDeckMsg(r?.error || 'Could not save.');
+    } catch (e: any) { if (!silent) setDeckMsg(e?.message || 'Could not save.'); }
   };
   const [activities, setActivities] = useState<any[]>([]);
   const [example, setExample] = useState<any>(null);
@@ -685,9 +689,21 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
 
   const play = (c: Cfg) => {
     cfgRef.current = c; slidesRef.current = []; prefetching.current = {}; startedAt.current = Date.now();
+    savedRun.current = false;   // this fresh run hasn't been auto-saved yet
     setCfg(c); setSlides([]); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
     fetchInto(0, c, []);
   };
+
+  // When the OWNER/ADMIN finishes a run, auto-save the completed deck (slides +
+  // images + answers + their results) so "OP results" is always available and the
+  // results are reachable again via the tool's share link — no manual step needed.
+  useEffect(() => {
+    if (phase === 'done' && canEdit && !savedRun.current && slidesRef.current.filter(Boolean).length) {
+      savedRun.current = true;
+      saveDeck(results, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   const defaultCat = () => lesson.subjectKind === 'math' ? 'Mathematics' : lesson.subjectKind === 'programming' ? 'Technology' : lesson.subjectKind === 'language' ? 'Language Learning' : 'Science';
   // Record a play in the lesson history (activities feed), then play it. Every
@@ -749,6 +765,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   if (phase === 'history') {
     const hslides: Slide[] = Array.isArray(savedDeck?.slides) ? savedDeck.slides : [];
     const totalQs = hslides.reduce((a, s) => a + (Array.isArray(s.questions) ? s.questions.length : 0), 0);
+    // The OP's own score, if their finished run was saved with results.
+    const savedRes = savedDeck?.results && typeof savedDeck.results === 'object' ? savedDeck.results : null;
+    let opScore = 0, opAnswered = 0;
+    if (savedRes) for (const k of Object.keys(savedRes)) { const ans = savedRes[k]?.answers || {}; for (const qi of Object.keys(ans)) { opAnswered++; if (ans[qi]?.correct) opScore++; } }
     const jump = (i: number) => { if (typeof document !== 'undefined') document.getElementById(`hslide-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     return (
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -764,6 +784,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', margin: '10px 0' }}>
             <div><div style={{ fontSize: 24, fontWeight: 800 }}>{hslides.length}</div><div style={{ fontSize: 12, opacity: 0.6 }}>slides</div></div>
             <div><div style={{ fontSize: 24, fontWeight: 800 }}>{totalQs}</div><div style={{ fontSize: 12, opacity: 0.6 }}>questions (with answers)</div></div>
+            {savedRes && opAnswered > 0 && <div><div style={{ fontSize: 24, fontWeight: 800 }}>{opScore}/{opAnswered}</div><div style={{ fontSize: 12, opacity: 0.6 }}>author&apos;s score</div></div>}
           </div>
           <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>The exact slides the author made, shown with the answer key. Jump to any section below.</p>
         </div>
@@ -1004,7 +1025,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         </div>
         {canEdit && (
           <div className="card alt" style={{ padding: '10px 14px', marginTop: 12, textAlign: 'center' }}>
-            <button className="btn small blue" onClick={saveDeck}>💾 Save this as the original deck</button>
+            <button className="btn small blue" onClick={() => saveDeck(results)}>💾 Save this as the original deck</button>
             <p style={{ fontSize: 11, opacity: 0.65, margin: '6px 0 0' }}>Viewers can then open these exact slides (with the answer key). {deckMsg}</p>
           </div>
         )}

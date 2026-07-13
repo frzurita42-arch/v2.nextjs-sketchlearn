@@ -73,7 +73,7 @@ export interface LessonSpec {
   viewMode?: 'both' | 'history' | 'replica';
   // The original generated deck (slides + the config used), saved by the owner
   // so viewers can replay the exact same slides with their answers/answer key.
-  savedDeck?: { config?: Record<string, any>; slides?: any[]; savedAt?: string; savedBy?: string };
+  savedDeck?: { config?: Record<string, any>; slides?: any[]; savedAt?: string; savedBy?: string; results?: Record<string, any> };
   offlineExport?: boolean;   // show the "download offline copy (.zip)" button (default on)
 }
 
@@ -288,7 +288,8 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
         ? { config: l.savedDeck.config && typeof l.savedDeck.config === 'object' ? l.savedDeck.config : {},
             slides: l.savedDeck.slides.slice(0, 75),
             savedAt: String(l.savedDeck.savedAt || '').slice(0, 40) || undefined,
-            savedBy: String(l.savedDeck.savedBy || '').slice(0, 60) || undefined }
+            savedBy: String(l.savedDeck.savedBy || '').slice(0, 60) || undefined,
+            results: l.savedDeck.results && typeof l.savedDeck.results === 'object' ? l.savedDeck.results : undefined }
         : undefined,
     };
   } else if (archetype === 'generator') {
