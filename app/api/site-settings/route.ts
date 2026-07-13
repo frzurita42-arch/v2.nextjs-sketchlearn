@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 // Which page-copy keys admins may edit (allow-list keeps this from becoming a
 // free-form store). Values are short strings.
-const KEYS = ['galleryTitle', 'gallerySubtitle'];
+const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter'];
 
 // GET /api/site-settings -> the editable page copy (any signed-in viewer reads it).
 export async function GET(req: Request) {

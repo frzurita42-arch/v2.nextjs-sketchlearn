@@ -7,7 +7,7 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
-import { Collection } from '@/components/ui/Collection';
+import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
@@ -98,7 +98,7 @@ export function ToolsView() {
 
   // Admin-editable page copy (heading + subtitle), saved for everyone.
   const isAdmin = app.user?.role === 'admin';
-  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string }>({});
+  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string }>({});
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
   useEffect(() => { API.get('/api/site-settings').then((r: any) => setSite(r?.settings || {})).catch(() => { /* ignore */ }); }, []);
@@ -240,6 +240,9 @@ export function ToolsView() {
               perPage={9}
               storageKey="sl_tools_view"
               sortPrefKey="gallery"
+              defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(site.galleryFilter || '') ? site.galleryFilter : 'all') as FilterKey}
+              canSaveFilter={isAdmin}
+              onSaveFilter={(f) => { setSite(s => ({ ...s, galleryFilter: f })); API.put('/api/site-settings', { key: 'galleryFilter', value: f }).catch(() => { /* ignore */ }); }}
               emptyFiltered="No tools match these filters."
               emptyAll="No tools in this category yet."
               renderGrid={(t: any) => card(t, 'grid')}

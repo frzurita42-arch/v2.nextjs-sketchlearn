@@ -15,7 +15,7 @@ import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
 import { SharePanel } from '@/components/tools/SharePanel';
-import { Collection } from '@/components/ui/Collection';
+import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
 import { isRenderableImage } from '@/lib/img';
 
@@ -366,6 +366,9 @@ export function ToolRunnerView() {
                 perPage={9}
                 storageKey="sl_entry_view"
                 sortPrefKey="entryfeed"
+                defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(def?.feedFilter || '') ? def.feedFilter : 'all') as FilterKey}
+                canSaveFilter={canEdit}
+                onSaveFilter={(f) => { if (def) def.feedFilter = f; API.post('/api/tools/feed-filter', { slug: tool.slug, filter: f }).catch(() => { /* ignore */ }); }}
                 searchPlaceholder="🔍 search by text or @user"
                 emptyAll="No entries yet — add the first one above."
                 emptyFiltered="No entries match these filters."

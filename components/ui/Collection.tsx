@@ -9,6 +9,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { API } from '@/lib/api';
 
+// The mutually-exclusive status filter: everything, only-my-favorites,
+// only-liked-by-admin, or only-favorited-by-the-owner (OP).
+export type FilterKey = 'all' | 'fav' | 'admin' | 'owner';
+
 export interface CollectionProps<T> {
   items: T[];
   id: (t: T) => string;
@@ -22,6 +26,14 @@ export interface CollectionProps<T> {
   perPage?: number;                        // provide to paginate
   storageKey?: string;                     // localStorage key to persist the view mode
   sortPrefKey?: string;                    // when set, the sort order is saved per-user (DB) under this key
+  // The active status filter (All / favorites / admin / OP) is mutually exclusive.
+  // `defaultFilter` is the recorded page default (shown on load); when the viewer
+  // may persist it (owner/admin), pass `canSaveFilter` + `onSaveFilter` so their
+  // choice is saved for the whole page. Everyone else's choice is session-only and
+  // resets to `defaultFilter` on refresh.
+  defaultFilter?: FilterKey;
+  canSaveFilter?: boolean;
+  onSaveFilter?: (f: FilterKey) => void;
   defaultView?: 'grid' | 'row';
   gridMinPx?: number;                      // grid card min width (default 240)
   extra?: ReactNode;                       // section-specific control (e.g. a category select)
@@ -50,14 +62,23 @@ function interleaveThirds<T>(arr: T[]): T[] {
 
 export function Collection<T>({
   items, id, searchText, time, renderGrid, renderRow,
-  favs, likedByAdmin, likedByOwner, perPage, storageKey, sortPrefKey, defaultView = 'grid', gridMinPx = 240,
+  favs, likedByAdmin, likedByOwner, perPage, storageKey, sortPrefKey,
+  defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid', gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900,
 }: CollectionProps<T>) {
   const [q, setQ] = useState('');
-  const [favOnly, setFavOnly] = useState(false);
-  const [adminOnly, setAdminOnly] = useState(false);
-  const [ownerOnly, setOwnerOnly] = useState(false);
+  // One mutually-exclusive status filter (All is the neutral default). Whoever may
+  // save it (owner/admin) writes the page default; others' picks are session-only.
+  const [activeFilter, setActiveFilter] = useState<FilterKey>(defaultFilter);
+  const touched = useRef(false);
+  useEffect(() => { if (!touched.current) setActiveFilter(defaultFilter); }, [defaultFilter]);
+  const pickFilter = (f: FilterKey) => {
+    touched.current = true;
+    const next: FilterKey = (activeFilter === f && f !== 'all') ? 'all' : f;
+    setActiveFilter(next);
+    if (canSaveFilter && onSaveFilter) onSaveFilter(next);
+  };
   const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'algorithm'>('algorithm');   // default
   const [view, setView] = useState<'grid' | 'row'>(defaultView);
   const [page, setPage] = useState(0);
@@ -89,9 +110,9 @@ export function Collection<T>({
     // Favorites / liked-by-admin / OP-favorited are all just extra filters,
     // combinable with each other and with the search + sort.
     let arr = items.filter((t) => {
-      if (favOnly && favs && !favs[id(t)]) return false;
-      if (adminOnly && likedByAdmin && !likedByAdmin(t)) return false;
-      if (ownerOnly && likedByOwner && !likedByOwner(t)) return false;
+      if (activeFilter === 'fav' && favs && !favs[id(t)]) return false;
+      if (activeFilter === 'admin' && likedByAdmin && !likedByAdmin(t)) return false;
+      if (activeFilter === 'owner' && likedByOwner && !likedByOwner(t)) return false;
       if (nq && !searchText(t).toLowerCase().includes(nq)) return false;
       return true;
     });
@@ -103,11 +124,11 @@ export function Collection<T>({
     }
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, q, favOnly, adminOnly, ownerOnly, sortMode, favs]);
+  }, [items, q, activeFilter, sortMode, favs]);
 
   const pageCount = perPage ? Math.max(1, Math.ceil(filtered.length / perPage)) : 1;
   useEffect(() => { setPage((p) => Math.min(p, pageCount - 1)); }, [pageCount]);
-  useEffect(() => { setPage(0); }, [q, favOnly, adminOnly, ownerOnly, sortMode]);
+  useEffect(() => { setPage(0); }, [q, activeFilter, sortMode]);
   const shown = perPage ? filtered.slice(page * perPage, page * perPage + perPage) : filtered;
 
   // On a page change, jump back up to the toolbar so the next page starts at the
@@ -139,16 +160,20 @@ export function Collection<T>({
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
           style={{ fontSize: 13, flex: '1 1 120px', maxWidth: 170, minWidth: 90, padding: '5px 9px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
         {extra}
-        {favs && <button className={`btn small ${favOnly ? 'blue' : 'ghost'}`} onClick={() => setFavOnly((v) => !v)} title="Only your favorites">★ My favorites</button>}
-        {likedByAdmin && <button className={`btn small ${adminOnly ? 'blue' : 'ghost'}`} onClick={() => setAdminOnly((v) => !v)} title="Only tools an admin liked">🛡️ Liked by admin</button>}
-        {likedByOwner && <button className={`btn small ${ownerOnly ? 'blue' : 'ghost'}`} onClick={() => setOwnerOnly((v) => !v)} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
+        {(favs || likedByAdmin || likedByOwner) && <button className={`btn small ${activeFilter === 'all' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('all')} title="Show everything">All</button>}
+        {favs && <button className={`btn small ${activeFilter === 'fav' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('fav')} title="Only your favorites">★ My favorites</button>}
+        {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Liked by admin</button>}
+        {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
         {time && <button className="btn small" onClick={cycleSort} title="Sort: newest → oldest → algorithm (interleaved thirds)">{sortMode === 'newest' ? '↓ Newest' : sortMode === 'oldest' ? '↑ Oldest' : '🔀 Algorithm'}</button>}
         <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
           <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setViewP('grid')}>▦</button>
           <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setViewP('row')}>☰</button>
         </div>
       </div>
-      <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>{filtered.length} item{filtered.length === 1 ? '' : 's'}</div>
+      <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>
+        {filtered.length} item{filtered.length === 1 ? '' : 's'}
+        {canSaveFilter && (favs || likedByAdmin || likedByOwner) && <span style={{ marginLeft: 6, fontStyle: 'italic' }}>· your filter is saved as this page&apos;s default</span>}
+      </div>
 
       {/* Top pager — right after the filter toolbar */}
       {pagerBlock && <div style={{ marginBottom: 12 }}>{pagerBlock}</div>}

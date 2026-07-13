@@ -18,7 +18,7 @@ import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad'
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 import { buildLessonZip } from '@/lib/lesson-export';
-import { Collection } from '@/components/ui/Collection';
+import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 
@@ -1024,6 +1024,9 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           perPage={9}
           storageKey="sl_lessonfeed_view"
           sortPrefKey="lessonfeed"
+          defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(def?.feedFilter || '') ? def.feedFilter : 'all') as FilterKey}
+          canSaveFilter={canEdit}
+          onSaveFilter={(f) => { if (def) def.feedFilter = f; API.post('/api/tools/feed-filter', { slug, filter: f }).catch(() => { /* ignore */ }); }}
           searchPlaceholder="🔍 name / @user"
           emptyAll="No activities yet — generate the first one above."
           emptyFiltered="No activities match these filters."
