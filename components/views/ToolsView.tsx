@@ -122,10 +122,15 @@ export function ToolsView() {
 
   const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
   const meta = (t: any) => <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
+  // Small inline edit buttons that sit right after the title (like the tool page).
+  const editBtns = (t: any) => canEditCard(t) ? (
+    <span style={{ display: 'inline-flex', gap: 2, marginLeft: 4, verticalAlign: 'middle' }}>
+      <button className="btn small ghost" title="Edit title & description (type or AI)" style={{ padding: '0 5px', fontSize: 13, lineHeight: 1.4 }} onClick={() => setEditTool(t)}>✎</button>
+      <button className="btn small ghost" title="AI tap-mixer — reword title & description in the platform's friendly voice" style={{ padding: '0 5px', fontSize: 13, lineHeight: 1.4 }} disabled={!!mixing[t.slug]} onClick={() => remix(t)}>{mixing[t.slug] ? '…' : '🎨'}</button>
+    </span>
+  ) : null;
   const actions = (t: any) => (
     <span style={{ display: 'flex', gap: 6, flex: '0 0 auto', flexWrap: 'wrap' }}>
-      {canEditCard(t) && <button className="btn small ghost" title="Edit title & description (type or AI)" onClick={() => setEditTool(t)}>✎</button>}
-      {canEditCard(t) && <button className="btn small ghost" title="AI tap-mixer — reword title & description in the platform's friendly voice" disabled={!!mixing[t.slug]} onClick={() => remix(t)}>{mixing[t.slug] ? '…' : '🎨'}</button>}
       {canRemove(t) && <button className="btn small ghost" title={isExample(t) ? 'Hide this example' : 'Delete'} onClick={() => del(t)}>{isExample(t) ? '✕' : '🗑'}</button>}
       <button className="btn small green" onClick={() => open(t)}>Open →</button>
     </span>
@@ -138,6 +143,7 @@ export function ToolsView() {
         <div style={{ minWidth: 0, flex: 1, wordBreak: 'break-word' }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
             <strong style={{ fontSize: 15 }}>{t.title}</strong>
+            {editBtns(t)}
             <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.55 }}>{kindOf(t)}</span>
             {favs[t.slug] && <span style={{ fontSize: 11 }}>★</span>}
           </div>
@@ -154,7 +160,7 @@ export function ToolsView() {
   const renderGrid = (t: any) => (
     <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-        <strong style={{ fontSize: 16 }}>{t.title}{favs[t.slug] ? ' ★' : ''}</strong>
+        <strong style={{ fontSize: 16 }}>{t.title}{favs[t.slug] ? ' ★' : ''}{editBtns(t)}</strong>
         <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{kindOf(t)}</span>
       </div>
       <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}</p>
