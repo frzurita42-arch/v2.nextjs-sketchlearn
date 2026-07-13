@@ -147,10 +147,18 @@ export function ToolsView() {
       <button className="btn small green" onClick={() => open(t)}>Open →</button>
     </span>
   );
+  // Plain corner palette icon that regenerates the image (owner/admin), no box.
+  const cornerPalette = (t: any) => canEditCard(t) ? (
+    <button title="Regenerate image with AI" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)}
+      style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 18, lineHeight: 1, filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.95))' }}>{thumbing[t.slug] ? '…' : '🎨'}</button>
+  ) : null;
   // A tool's thumbnail photo (or a "no photo" placeholder + AI-generate button).
   const thumbBox = (t: any, h: number) => (
     isRenderableImage(t.thumbnail)
-      ? <img src={t.thumbnail} alt="" loading="lazy" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
+      ? <div style={{ position: 'relative' }}>
+          <img src={t.thumbnail} alt="" loading="lazy" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
+          {cornerPalette(t)}
+        </div>
       : <div style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', textAlign: 'center', padding: 6 }}>
           <span style={{ fontSize: 12, opacity: 0.6 }}>🖼️ No photo available</span>
           {canEditCard(t) && <button className="btn small ghost" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)}>{thumbing[t.slug] ? 'Generating…' : '🎨 Generate with AI'}</button>}
@@ -158,7 +166,8 @@ export function ToolsView() {
   );
   const rowThumb = (t: any) => (
     isRenderableImage(t.thumbnail)
-      ? <img src={t.thumbnail} alt="" loading="lazy" style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)', flex: '0 0 auto' }} />
+      ? <img src={t.thumbnail} alt="" loading="lazy" title={canEditCard(t) ? 'Click to regenerate' : ''} onClick={() => canEditCard(t) && !thumbing[t.slug] && genThumb(t)}
+          style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)', flex: '0 0 auto', cursor: canEditCard(t) ? 'pointer' : 'default' }} />
       : <div title="No photo" style={{ width: 46, height: 46, borderRadius: 8, border: '2px dashed var(--ink)', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, opacity: 0.5, cursor: canEditCard(t) ? 'pointer' : 'default' }} onClick={() => canEditCard(t) && !thumbing[t.slug] && genThumb(t)}>{thumbing[t.slug] ? '…' : (canEditCard(t) ? '🎨' : '🖼️')}</div>
   );
   const renderRow = (t: any) => {

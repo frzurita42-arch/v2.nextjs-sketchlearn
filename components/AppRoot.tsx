@@ -129,6 +129,8 @@ export default function AppRoot() {
     );
   }
 
+  const backBtnStyle = { background: '#f9a03f', color: 'var(--ink)', borderColor: 'var(--ink)', fontWeight: 700 } as const;
+
   const views: Record<ViewName, React.ReactNode> = {
     home: <HomeView />,
     path: <PathView />,
@@ -159,18 +161,22 @@ export default function AppRoot() {
           >×</button>
         </div>
       )}
-      {/* Global back bar — on every page, a centered Back button (→ home = Tools)
-          between two full-width dashed rules, right under the header. */}
-      <div style={{ margin: '6px 0 0', textAlign: 'center' }}>
+      {/* Global back bar — on every page, a centered orange Back button
+          (→ home = Tools) under a full-width dashed rule, right under the header. */}
+      <div style={{ margin: '6px 0 8px', textAlign: 'center' }}>
         <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
-        <button className="btn small" onClick={() => nav('tools')}>← Back</button>
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '8px 0 0' }} />
+        <button className="btn small" style={backBtnStyle} onClick={() => nav('tools')}>← Back</button>
       </div>
       {/* key={view} remounts only on a view switch (fresh state per view, like
           the legacy SPA); in-view rerender() updates in place. */}
       <main id="app" key={view}>
         <ErrorBoundary onHome={() => nav('tools')}>{views[view]}</ErrorBoundary>
       </main>
+      {/* A second Back button at the very bottom, above the footer. */}
+      <div style={{ margin: '10px 0 4px', textAlign: 'center' }}>
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
+        <button className="btn small" style={backBtnStyle} onClick={() => { nav('tools'); window.scrollTo(0, 0); }}>← Back</button>
+      </div>
       <Footer />
     </AppContext.Provider>
   );
