@@ -340,6 +340,7 @@ export function ToolRunnerView() {
                 likedByAdmin={(e: any) => !!e.byAdmin}
                 perPage={9}
                 storageKey="sl_entry_view"
+                sortPrefKey="entryfeed"
                 searchPlaceholder="🔍 search by text or @user"
                 emptyAll="No entries yet — add the first one above."
                 emptyFiltered="No entries match these filters."

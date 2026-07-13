@@ -1014,6 +1014,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           likedByAdmin={(e: any) => !!e.byAdmin}
           perPage={9}
           storageKey="sl_lessonfeed_view"
+          sortPrefKey="lessonfeed"
           searchPlaceholder="🔍 name / @user"
           emptyAll="No activities yet — generate the first one above."
           emptyFiltered="No activities match these filters."
