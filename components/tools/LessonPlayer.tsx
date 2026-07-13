@@ -749,17 +749,42 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   // ---------------- ORIGINAL DECK (history, with answers) ----------------
   if (phase === 'history') {
     const hslides: Slide[] = Array.isArray(savedDeck?.slides) ? savedDeck.slides : [];
+    const totalQs = hslides.reduce((a, s) => a + (Array.isArray(s.questions) ? s.questions.length : 0), 0);
+    const jump = (i: number) => { if (typeof document !== 'undefined') document.getElementById(`hslide-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     return (
-      <div>
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
           <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
-          <span style={{ fontSize: 13, opacity: 0.7 }}>📖 Original deck{savedDeck?.savedBy ? ` · by @${savedDeck.savedBy}` : ''}{savedDeck?.config ? ` · ${label(savedDeck.config)}` : ''}</span>
-          {viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Generate a fresh replica</button>}
+          {viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Play a replica</button>}
         </div>
-        <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginBottom: 10 }}>The exact slides the author generated, shown with the answer key.</p>
+
+        {/* Start at the ENDING: a results/summary header with navigation tools. */}
+        <div className="card" style={{ padding: '18px 20px', textAlign: 'center' }}>
+          <h2 style={{ marginTop: 0 }}>📖 Original results</h2>
+          <p style={{ fontSize: 13, opacity: 0.75, margin: '4px 0' }}>By @{savedDeck?.savedBy || 'the author'}{savedDeck?.config ? ` · ${label(savedDeck.config)}` : ''}</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', margin: '10px 0' }}>
+            <div><div style={{ fontSize: 24, fontWeight: 800 }}>{hslides.length}</div><div style={{ fontSize: 12, opacity: 0.6 }}>slides</div></div>
+            <div><div style={{ fontSize: 24, fontWeight: 800 }}>{totalQs}</div><div style={{ fontSize: 12, opacity: 0.6 }}>questions (with answers)</div></div>
+          </div>
+          <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>The exact slides the author made, shown with the answer key. Jump to any section below.</p>
+        </div>
+
+        {/* Section navigator (the "tools to navigate the lesson"). */}
+        {hslides.length > 0 && (
+          <div className="card alt" style={{ padding: '12px 14px', marginTop: 12 }}>
+            <h4 style={{ margin: '0 0 8px' }}>Go to a section</h4>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {hslides.map((s, i) => <button key={i} className="btn small" onClick={() => jump(i)} title={s.title || ''}>Slide {i + 1}</button>)}
+            </div>
+          </div>
+        )}
+
         {hslides.map((s, si) => (
-          <div key={si} className="card" style={{ padding: '16px 18px', maxWidth: 720, margin: '0 auto 14px' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5 }}>Slide {si + 1} / {hslides.length}</div>
+          <div key={si} id={`hslide-${si}`} className="card" style={{ padding: '16px 18px', margin: '14px 0', scrollMarginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5 }}>Slide {si + 1} / {hslides.length}</div>
+              <button className="btn small ghost" title="Back to top" onClick={() => jump(0)}>↑ Top</button>
+            </div>
             <h3 style={{ marginTop: 4, textAlign: 'center' }}>{s.title}</h3>
             {s.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={s.content} translateTo={lesson.translateTo || 'English'} /></p>}
             {(Array.isArray(s._supports) ? s._supports : (s.support ? [s.support] : [])).map((sup: any, k: number) => <Support key={k} s={sup} />)}
@@ -877,9 +902,11 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
                   </div>
                   <div style={{ fontSize: 12, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ''}</div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button className="btn small ghost" title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
-                  <button className="btn small green" onClick={() => play(e.data || {})}>▶ Play</button>
+                  {hasSaved && <button className="btn small" title="View the original poster's results (with answers)" onClick={() => { setPhase('history'); window.scrollTo(0, 0); }}>📖 OP results</button>}
+                  {/* Playing a replica (no answers shown) logs a NEW rendition to the history. */}
+                  <button className="btn small green" title="Play a fresh replica (no answers) — adds to the history" onClick={() => recordAndPlay(e.data || {}, { replica: true })}>▶ Play replica</button>
                 </div>
               </div>
             ))}
