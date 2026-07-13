@@ -166,10 +166,12 @@ export function ToolsView() {
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
   const isExample = (t: any) => (t.tags || []).includes('example');
-  // Real tools: owner/admin may delete. Built-in examples: anyone may hide from their own gallery.
-  const canRemove = (t: any) => isExample(t) || app.user?.role === 'admin' || app.user?.username === t.owner;
+  const mineToDelete = (t: any) => !isExample(t) && (app.user?.role === 'admin' || app.user?.username === t.owner);
+  // Every card gets a 🗑: the owner/admin truly deletes their tool; anyone else
+  // (or an example) hides it from their own gallery.
+  const canRemove = (_t: any) => true;
   const del = async (t: any) => {
-    if (isExample(t)) {
+    if (!mineToDelete(t)) {
       const hidden = Array.from(new Set([...loadHidden(), t.slug]));
       try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden)); } catch { /* ignore */ }
       setTools(ts => ts.filter(x => x.slug !== t.slug));
@@ -180,8 +182,9 @@ export function ToolsView() {
   };
 
   // One card via the shared ToolCard, wired with this view's owner/admin handlers.
-  const card = (t: any, view: 'grid' | 'row') => (
-    <ToolCard tool={t} view={view} onOpen={open} favs={favs}
+  // `hideOpen` (used in the carousel) drops the Open button — image + title open it.
+  const card = (t: any, view: 'grid' | 'row', hideOpen?: boolean) => (
+    <ToolCard tool={t} view={view} onOpen={open} favs={favs} hideOpen={hideOpen}
       canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
       onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} thumbing={!!thumbing[t.slug]}
       canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
@@ -279,7 +282,7 @@ export function ToolsView() {
           <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
             onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}>
-            {catItems.slice(0, 10).map((t: any) => <div key={t.id}>{card(t, 'grid')}</div>)}
+            {catItems.slice(0, 10).map((t: any) => <div key={t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
           </Carousel>
           <div style={{ height: 14 }} />
           <SuggestionCarousel limit={10}

@@ -27,6 +27,7 @@ export interface ToolCardProps {
   canRemove?: boolean;
   isExample?: boolean;
   onRemove?: (t: any) => void;
+  hideOpen?: boolean;   // omit the "Open →" button (image + title still open the tool)
 }
 
 const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
@@ -72,7 +73,7 @@ export function ToolCard(p: ToolCardProps) {
   const subtitle = view === 'row' && rawDesc.length > 120 ? rawDesc.slice(0, 120).trimEnd() + '…' : rawDesc;
 
   const del = p.canRemove && p.onRemove
-    ? <button style={delIcon} title={p.isExample ? 'Hide this example' : 'Delete'} onClick={() => p.onRemove!(t)}>{p.isExample ? '✕' : '🗑'}</button>
+    ? <button style={delIcon} title={p.isExample ? 'Hide this example' : 'Delete'} onClick={() => p.onRemove!(t)}>🗑</button>
     : null;
 
   return (
@@ -91,7 +92,7 @@ export function ToolCard(p: ToolCardProps) {
       tags={view === 'grid' && Array.isArray(t.tags) ? t.tags : undefined}
       meta={<span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>}
       del={del}
-      actions={<button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}
+      actions={p.hideOpen ? null : <button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}
     />
   );
 }

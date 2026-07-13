@@ -87,15 +87,26 @@ export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', 
     reader.readAsDataURL(file);
   };
 
+  // Delete: an owner/admin actually deletes a real tool; otherwise it just
+  // dismisses the suggestion from this shelf.
+  const remove = async (t: any) => {
+    if (!isExample(t) && canEdit(t)) {
+      if (!confirm(`Delete “${t.title}”? This can't be undone.`)) return;
+      try { await API.del(`/api/tools?slug=${encodeURIComponent(t.slug)}`); } catch { /* ignore */ }
+    }
+    setPicks(list => list.filter(x => x.slug !== t.slug));
+  };
+
   const card = (p: any) => {
     // ToolCard reads these fields; the pick carries them + a reason as description.
     const t = { ...p, description: p.description || p.reason };
     const editable = canEdit(p);
     return (
-      <ToolCard tool={t} view="grid" onOpen={open}
+      <ToolCard tool={t} view="grid" onOpen={open} hideOpen
         canEdit={editable} onEdit={editable ? editText : undefined} onRemix={editable ? remixText : undefined} mixing={!!work[p.slug]}
         onGenThumb={editable ? ((x: any) => genThumb(x)) : undefined} onThumbPrompt={editable ? thumbPrompt : undefined}
-        onUploadThumb={editable ? uploadThumb : undefined} thumbing={!!work[p.slug]} />
+        onUploadThumb={editable ? uploadThumb : undefined} thumbing={!!work[p.slug]}
+        canRemove isExample={isExample(p)} onRemove={remove} />
     );
   };
 
