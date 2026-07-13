@@ -151,6 +151,7 @@ export function ToolsView() {
           <div style={{ fontSize: 12, opacity: 0.8 }}>
             {long ? desc.slice(0, 110).trimEnd() + '… ' : desc}
             {long && <button className="btn small ghost" style={{ padding: '0 4px', fontSize: 11 }} onClick={() => open(t)}>Read more</button>}
+            {editBtns(t)}
           </div>
           {meta(t)}
         </div>
@@ -164,7 +165,7 @@ export function ToolsView() {
         <strong style={{ fontSize: 16 }}>{t.title}{favs[t.slug] ? ' ★' : ''}{editBtns(t)}</strong>
         <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{kindOf(t)}</span>
       </div>
-      <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}</p>
+      <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}{editBtns(t)}</p>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {(Array.isArray(t.tags) ? t.tags : []).map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
       </div>
