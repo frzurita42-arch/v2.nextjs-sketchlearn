@@ -35,11 +35,11 @@ export async function POST(req: Request) {
   const desc = String(tool.description || '').slice(0, 180);
   const theme = [tool.title, subject, desc].filter(Boolean).join(' — ');
   const prompt = [
-    'A cinematic, photorealistic scene: a warm, lived-in 1990s architectural design studio / woodworking workshop.',
-    'A large cork bulletin board is pinned full of hand-drawn sketches, blueprints, index cards and reference photos; nearby are drafting tools, rulers, pencils in jars, scale models, wood shavings and a brass desk lamp casting warm light — an analog, hand-crafted "SketchLearn" design-studio atmosphere.',
-    `Fill the scene with objects, models, pinned drawings and props clearly related to the theme of this tool: "${theme}". Everything on the board and desk should evoke that specific subject.`,
-    'Shallow depth of field, soft warm lighting, rich wood-and-paper textures, subtle film-photo grain, editorial still-life composition.',
-    'Absolutely NO text, NO letters, NO numbers, NO words anywhere in the image.',
+    'A warm, inviting, cinematic photorealistic thumbnail image that REPRESENTS this specific tool and its theme.',
+    `Theme / topic of the tool: "${theme}". Build the whole scene around THAT subject — show settings, objects and imagery that clearly evoke this exact topic (not a generic office or design studio).`,
+    'Feature real, diverse PEOPLE whose expressions and body language convey the tool\'s sentiment and mood — focus, collaboration, curiosity and delight — reflecting the platform\'s goals of productivity, cohesion and engagement.',
+    `You MAY include the tool's name "${tool.title}" rendered as one clean, tastefully hand-lettered sign or banner within the scene (spelled correctly); otherwise avoid random text.`,
+    'Bright, uplifting, editorial-photo style with natural lighting and shallow depth of field. Composition centered and readable at small thumbnail size.',
   ].join(' ');
 
   try {
