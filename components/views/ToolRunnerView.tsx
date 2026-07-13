@@ -144,6 +144,53 @@ function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn, onOpen }:
   );
 }
 
+// Edit a tool's title or description — type it manually, OR ask the AI to write
+// it from the tool's context (its type, subject, what it generates). Owner/admin.
+function AiEditPopup({ field, slug, initial, onSave, onClose }: {
+  field: 'title' | 'description'; slug: string; initial: string;
+  onSave: (v: string) => void; onClose: () => void;
+}) {
+  const [text, setText] = useState(initial);
+  const [instr, setInstr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const gen = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await API.post('/api/tools/describe', { slug, field, instruction: instr });
+      if (r?.text) setText(r.text); else setErr(r?.error || 'Could not generate.');
+    } catch { setErr('Could not reach the AI.'); }
+    setBusy(false);
+  };
+  const isTitle = field === 'title';
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: '100%', padding: '16px 18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <b>Edit {isTitle ? 'title' : 'description'}</b>
+          <button className="btn small ghost" onClick={onClose}>✕</button>
+        </div>
+        {isTitle
+          ? <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a title…" style={{ width: '100%', fontSize: 15, marginBottom: 8 }} />
+          : <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a description…" style={{ width: '100%', minHeight: 70, fontSize: 14, marginBottom: 8 }} />}
+        <div style={{ borderTop: '1.5px dashed var(--ink)', paddingTop: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>✦ OR WRITE IT WITH AI</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <input value={instr} onChange={(e) => setInstr(e.target.value)} placeholder={isTitle ? 'e.g. make it catchy and short' : 'e.g. friendly, mention who it helps'} onKeyDown={(e) => { if (e.key === 'Enter') gen(); }} style={{ flex: '1 1 180px', fontSize: 13 }} />
+            <button className="btn small blue" disabled={busy} onClick={gen}>{busy ? '…' : '✦ Write with AI'}</button>
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.55, marginTop: 3 }}>The AI writes from what this tool actually does — not just the prompt.</div>
+        </div>
+        {err && <p style={{ color: 'var(--danger,#e4572e)', fontSize: 12, margin: '6px 0 0' }}>{err}</p>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+          <button className="btn small ghost" onClick={onClose}>Cancel</button>
+          <button className="btn small green" onClick={() => onSave(text.trim())}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ToolRunnerView() {
   const app = useApp();
   const tool = appState.activeTool;
@@ -164,8 +211,8 @@ export function ToolRunnerView() {
   const [entries, setEntries] = useState<any[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [detail, setDetail] = useState<any>(null);   // entry opened as a post
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
+  const [editField, setEditField] = useState<null | 'title' | 'description'>(null);
+  const [descDraft, setDescDraft] = useState<string>(def?.description || '');
 
   // Like state (platform chrome): count from the tool, per-user liked flag in localStorage.
   const [likes, setLikes] = useState<number>(tool?.likeCount || 0);
@@ -220,28 +267,29 @@ export function ToolRunnerView() {
   const created = tool.createdAt ? new Date(tool.createdAt).toLocaleString() : '';
   const canEdit = !(tool.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === tool.owner);
 
-  const saveTitle = async () => {
-    const t = titleDraft.trim();
-    setEditingTitle(false);
+  const saveTitle = async (t: string) => {
+    setEditField(null);
     if (!t || t === tool.title) return;
     tool.title = t;                                        // optimistic (shared singleton)
     try { await API.post('/api/tools/rename', { slug: tool.slug, title: t }); } catch { /* ignore */ }
+  };
+  const saveDesc = async (d: string) => {
+    setEditField(null);
+    setDescDraft(d);
+    if (def) def.description = d;                           // optimistic (shared singleton)
+    tool.description = d;
+    try { await API.post('/api/tools/rename', { slug: tool.slug, description: d }); } catch { /* ignore */ }
   };
   const dashRule = { maxWidth: 820, margin: '10px auto', borderTop: '2px dashed var(--ink)', opacity: 0.45 } as const;
 
   return (
     <>
-      {editingTitle ? (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 820, margin: '0 auto' }}>
-          <input value={titleDraft} onChange={e => setTitleDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }} autoFocus
-            style={{ fontSize: 24, fontWeight: 700, padding: '4px 8px', borderRadius: 8, border: '2px solid var(--ink)', width: '100%', maxWidth: 560 }} />
-          <button className="btn small green" onClick={saveTitle}>Save</button>
-          <button className="btn small ghost" onClick={() => setEditingTitle(false)}>✕</button>
-        </div>
-      ) : (
-        <h1 className="view-title">{tool.title}
-          {canEdit && <button title="Rename" onClick={() => { setTitleDraft(tool.title); setEditingTitle(true); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
-        </h1>
+      <h1 className="view-title">{tool.title}
+        {canEdit && <button title="Edit title (type or AI)" onClick={() => setEditField('title')} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
+      </h1>
+      {editField && (
+        <AiEditPopup field={editField} slug={tool.slug} initial={editField === 'title' ? tool.title : (descDraft || def.description || '')}
+          onSave={editField === 'title' ? saveTitle : saveDesc} onClose={() => setEditField(null)} />
       )}
 
       {/* ┄ divider: title ┄ author/stats card ┄ */}
@@ -262,7 +310,12 @@ export function ToolRunnerView() {
         )}
         <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>
       </div>
-      {def.description && <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>{def.description}</p>}
+      {(def.description || descDraft || canEdit) && (
+        <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>
+          {descDraft || def.description || <em style={{ opacity: 0.6 }}>No description yet.</em>}
+          {canEdit && <button title="Edit description (type or AI)" onClick={() => setEditField('description')} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✎</button>}
+        </p>
+      )}
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
         {isRepo ? (

@@ -7,20 +7,28 @@ const { getToolBySlug, updateTool } = require('@/src/db/platform');
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// POST { slug, title } -> rename a tool. OWNER or ADMIN only; examples are locked.
+// POST { slug, title?, description? } -> rename / re-describe a tool.
+// OWNER or ADMIN only; examples are locked. Either field may be provided.
 export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const slug = String(b.slug || '');
+  const hasTitle = typeof b.title === 'string';
+  const hasDesc = typeof b.description === 'string';
   const title = String(b.title || '').trim().slice(0, 100);
-  if (!slug || !title) return NextResponse.json({ error: 'slug and title are required' }, { status: 400 });
+  const description = String(b.description || '').trim().slice(0, 400);
+  if (!slug || (!hasTitle && !hasDesc)) return NextResponse.json({ error: 'slug and title or description are required' }, { status: 400 });
+  if (hasTitle && !title) return NextResponse.json({ error: 'title cannot be empty' }, { status: 400 });
   const tool = await getToolBySlug(slug);
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if ((tool.tags || []).includes('example')) return NextResponse.json({ error: 'Example tools cannot be renamed.' }, { status: 400 });
+  if ((tool.tags || []).includes('example')) return NextResponse.json({ error: 'Example tools cannot be edited.' }, { status: 400 });
   if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
-    return NextResponse.json({ error: 'Only the owner or an admin can rename this tool.' }, { status: 403 });
+    return NextResponse.json({ error: 'Only the owner or an admin can edit this tool.' }, { status: 403 });
   }
-  await updateTool(slug, { title });
-  return NextResponse.json({ ok: true, title });
+  const patch: any = {};
+  if (hasTitle) patch.title = title;
+  if (hasDesc) patch.description = description;
+  await updateTool(slug, patch);
+  return NextResponse.json({ ok: true, title: hasTitle ? title : tool.title, description: hasDesc ? description : tool.description });
 }
