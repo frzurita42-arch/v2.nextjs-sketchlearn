@@ -24,11 +24,23 @@ import { CategoryFilter } from '@/components/tools/CategoryFilter';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
-// The text-difficulty scale, from extra-easy (Zero) to expert (C2). Zero/Beginner
-// stay to a few words / short sentences; higher levels get DEEPER and more
-// TECHNICAL, not just longer. Used by the create-form default and the per-slide
-// level gear that re-explains the slide text on the fly.
-const TEXT_LEVELS = ['Zero', 'Beginner', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+// The academic difficulty scale, from extra-easy (Zero) up to doctoral. Lower
+// levels stay to a few words / short sentences; higher levels get DEEPER and more
+// TECHNICAL, not just longer. Used for the level setting when generating a tool
+// and by the per-slide level gear that re-explains the slide text on the fly.
+const TEXT_LEVELS = [
+  'Zero', 'Lower Beginner', 'Beginner', 'Upper Beginner',
+  'Lower Intermediate', 'Intermediate', 'Upper Intermediate',
+  'Lower Advanced (Undergrad)', 'Advanced (Graduate)', 'Upper Advanced (PhD level)',
+];
+// Preset slide counts offered in the (editable) dropdown for the "slides" field.
+const SLIDE_COUNTS = ['3', '4', '5', '6', '8', '10', '12', '15', '20'];
+// Map any legacy CEFR level a tool was saved with onto the new academic scale, so
+// the Difficulty dropdown always shows a current option instead of stale "A1".
+const LEGACY_LEVEL_MAP: Record<string, string> = {
+  A1: 'Upper Beginner', A2: 'Lower Intermediate', B1: 'Intermediate',
+  B2: 'Upper Intermediate', C1: 'Lower Advanced (Undergrad)', C2: 'Advanced (Graduate)',
+};
 
 // Inline text that typesets any $...$ LaTeX segments (math/science prompts).
 function MathText({ text }: { text: string }) {
@@ -615,6 +627,13 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
 
   const [phase, setPhase] = useState<'hub' | 'play' | 'done' | 'history'>('hub');
   const [form, setForm] = useState<Cfg>(() => defaultsFor(settings));
+  // Upgrade a legacy CEFR default (A1…C2) to the new academic scale so the
+  // Difficulty dropdown always presents a current option.
+  useEffect(() => {
+    const lk = form.level ? 'level' : (form.difficulty ? 'difficulty' : '');
+    if (lk && LEGACY_LEVEL_MAP[(form as any)[lk]]) setForm(s => ({ ...s, [lk]: LEGACY_LEVEL_MAP[(s as any)[lk]] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Viewing options (owner/admin-configured): 'both' | 'history' | 'replica'.
   const viewMode: 'both' | 'history' | 'replica' = ['both', 'history', 'replica'].includes(lesson.viewMode) ? lesson.viewMode : 'replica';
   const [savedDeck, setSavedDeck] = useState<any>(lesson.savedDeck || null);
@@ -813,6 +832,15 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     play(cc);
   };
   const createAndPlay = () => recordAndPlay(form);
+  // Add a preset lesson to the history WITHOUT playing it (and with no image). It
+  // shows up as a fresh card in the feed whose no-photo spot carries the usual
+  // 🎨/✎/📎 buttons, so an image can be added later.
+  const [addMsg, setAddMsg] = useState('');
+  const addToHistory = async (c: Cfg, extra?: Record<string, any>) => {
+    const cc: Cfg = { ...c, level: c.level || c.difficulty || levels[0], topic: c.topic || '', category: c.category || defaultCat(), ...extra };
+    try { await API.post('/api/tools/entries', { slug, data: cc }); setAddMsg('Added to the history below ✓'); setTimeout(() => setAddMsg(''), 4000); } catch { /* ignore */ }
+    loadActivities();
+  };
 
   // Record one answered question (by index) on the current slide; mark the slide
   // `done` once every question has been answered.
@@ -924,11 +952,22 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
 
   // ---------------- HUB ----------------
   if (phase === 'hub') {
-    // Turn the free-text "topic" field into a dropdown of 5 suggested topics
-    // (still editable — every dropdown has the ✎ pencil for a custom value).
+    // Normalize each generation field so every dropdown is ALSO editable (the ✎
+    // pencil toggles the dropdown ↔ a free-text box):
+    //  • topic     → dropdown of AI-suggested topics (when we have them)
+    //  • level/diff → the academic scale Zero…PhD, always
+    //  • slides     → an editable dropdown of preset counts
+    const normField = (f: any) => {
+      if (f.id === 'topic' && topicIdeas.length) return { ...f, type: 'select-or-custom', options: topicIdeas };
+      if (f.id === 'level' || f.id === 'difficulty') return { ...f, type: 'select-or-custom', options: TEXT_LEVELS };
+      if (f.id === 'slides') return { ...f, type: 'select-or-custom', options: SLIDE_COUNTS };
+      return f;
+    };
     const formFields = [
-      ...settings.map((f: any) => (f.id === 'topic' && topicIdeas.length ? { ...f, type: 'select-or-custom', options: topicIdeas } : f)),
+      ...settings.map(normField),
       { id: 'category', label: 'Category', type: 'select-or-custom', options: GEN_CATEGORIES },
+      // A free-text box for anything else the author wants woven into the lesson.
+      { id: 'custom', label: 'Custom instructions (optional)', type: 'text', placeholder: 'e.g. focus on real-world examples, add a fun fact each slide…' },
     ];
     // Category is the only section-specific filter; the standard Collection owns
     // search / favorites / by-admin / grid-rows / sort / count / pagination.
@@ -1048,10 +1087,23 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             </div>
           </div>
           {example ? (
-            <div style={{ marginTop: 6 }}>
-              <strong>{label({ level: example.level, topic: example.topic })}</strong>
-              {example.why && <p style={{ margin: '4px 0', fontSize: 13, opacity: 0.8 }}>{example.why}</p>}
-              <button className="btn small green" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
+            <div style={{ marginTop: 8, maxWidth: 340 }}>
+              {/* The AI example uses the SAME card component — image spot (empty →
+                  no-photo placeholder), title, subtitle — with Play + Generate. */}
+              <CardShell
+                view="grid"
+                title={label({ level: example.level, topic: example.topic })}
+                subtitle={example.why || undefined}
+                thumbnail={null}
+                onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}
+                actions={
+                  <>
+                    <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
+                    <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
+                  </>
+                }
+              />
+              {addMsg && <p style={{ fontSize: 12, color: 'var(--accent,#5c80bc)', margin: '6px 0 0' }}>{addMsg}</p>}
             </div>
           ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
         </div>

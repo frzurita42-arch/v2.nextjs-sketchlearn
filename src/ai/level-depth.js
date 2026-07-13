@@ -5,21 +5,29 @@
  * precise, technical language. Paragraph length/count control the AMOUNT of text;
  * the level controls the DEPTH and TECHNICALITY. */
 
-const LEVELS = ['Zero', 'Beginner', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+// The general academic depth scale used for tool generation (Zero → PhD). Language
+// tools keep their own CEFR scale; this steers HOW DEEP/TECHNICAL for any subject.
+const LEVELS = [
+  'Zero', 'Lower Beginner', 'Beginner', 'Upper Beginner',
+  'Lower Intermediate', 'Intermediate', 'Upper Intermediate',
+  'Lower Advanced (Undergrad)', 'Advanced (Graduate)', 'Upper Advanced (PhD level)',
+];
 
 const DEPTH = {
-  Zero: 'EXTRA EASY. Use only a few words or a single very short sentence per idea — though you may use several short lines. Every line must be dead simple: no jargon at all, define anything in the plainest everyday words, use concrete familiar examples. Assume zero prior knowledge.',
-  Beginner: 'VERY SIMPLE. A few short sentences. One idea at a time, plain language and everyday analogies; avoid technical terms, or immediately explain any you must use.',
-  A1: 'SIMPLE and concrete. Short sentences; introduce the most basic terminology gently, always with a concrete example.',
-  A2: 'ROUTINE, slightly fuller. Explain the simple "why" behind facts and introduce core terms; still mostly concrete.',
-  B1: 'MODERATE depth. Explain mechanisms and reasons, use correct terminology, and connect ideas together; include some real detail.',
-  B2: 'DETAILED and more TECHNICAL. Use precise terminology, cover the underlying principles, compare/contrast cases and edge cases, and justify claims.',
-  C1: 'ADVANCED and RIGOROUS. Technical vocabulary, formal definitions, derivations/mechanisms, stated assumptions and limitations, and nuanced trade-offs.',
-  C2: 'EXPERT / near-specialist. Full precision and nuance, formalism and (where relevant) proofs or derivations, subtle distinctions and references to deeper theory; assume a strong background.',
+  'Zero': 'EXTRA EASY. Only a few words or one very short sentence per idea. Dead simple: no jargon at all, define anything in the plainest everyday words, concrete familiar examples. Assume zero prior knowledge.',
+  'Lower Beginner': 'VERY SIMPLE, first steps. Short sentences, one tiny idea at a time, lots of everyday analogies; introduce only the most essential word or two, always explained.',
+  'Beginner': 'SIMPLE. A few short sentences per idea; plain language and everyday analogies; avoid technical terms, or immediately explain any you must use.',
+  'Upper Beginner': 'SIMPLE but a little fuller. Introduce basic terminology gently, always with a concrete example; start connecting two ideas.',
+  'Lower Intermediate': 'ROUTINE, fuller. Explain the simple "why" behind facts and use core terms; still mostly concrete, with some real detail.',
+  'Intermediate': 'MODERATE depth. Explain mechanisms and reasons, use correct terminology, and connect ideas together; include genuine detail.',
+  'Upper Intermediate': 'DETAILED and more TECHNICAL. Precise terminology, underlying principles, compare/contrast cases and edge cases, justify claims.',
+  'Lower Advanced (Undergrad)': 'ADVANCED, undergraduate. Technical vocabulary, formal definitions, derivations/mechanisms, stated assumptions and limitations, nuanced trade-offs.',
+  'Advanced (Graduate)': 'GRADUATE-level rigour. Full precision, formalism and (where relevant) proofs/derivations, subtle distinctions, connections to broader theory; assume a strong background.',
+  'Upper Advanced (PhD level)': 'EXPERT / near-specialist (doctoral). Complete precision and nuance, formal proofs/derivations where relevant, open questions, references to deeper and current theory; assume a specialist background.',
 };
 
 function levelDepthGuidance(level) {
-  const g = DEPTH[level] || DEPTH.A1;
+  const g = DEPTH[level] || DEPTH['Beginner'];
   return `${g} As the level rises, increase conceptual DEPTH and TECHNICAL precision across every field (reading, captions, tables, worked steps) — NOT merely word count. The requested paragraph length/count set the amount of text; this level sets how deep and technical the explanation is.`;
 }
 

@@ -159,6 +159,8 @@ export async function POST(req: Request) {
   const paras = Math.max(1, Math.min(4, parseInt(b.values?.paragraphs, 10) || parseInt(pageSpec?.paragraphsPerSlide, 10) || parseInt(lesson.paragraphsPerSlide, 10) || 1));
   const pLen = ['brief', 'medium', 'detailed'].includes(b.values?.length) ? b.values.length : (pageSpec?.paragraphLength || lesson.paragraphLength || 'medium');
   const tone = String(b.values?.tone || lesson.tone || '').slice(0, 40);
+  // Free-text "Custom instructions" the author typed on the generate form.
+  const customNote = String(b.values?.custom || b.values?.customInstructions || '').slice(0, 400);
   // Learner-chosen support toggles (sup_*) override the page/tool defaults.
   const baseSup = pageSpec?.support || lesson.support || { images: true };
   const pickBool = (v: any, d: any) => (typeof v === 'boolean' ? v : d);
@@ -236,6 +238,7 @@ export async function POST(req: Request) {
     language ? `Level objective: ${levelGuidance(level)}` : '',
     `LEVEL DEPTH (${level}): ${levelDepthGuidance(level)}`,
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
+    customNote ? `AUTHOR'S CUSTOM INSTRUCTIONS (honor these wherever they don't conflict with the output schema): ${customNote}` : '',
     pageSpec?.style ? `This slide was designed to use: ${pageSpec.style}` : '',
     priorSummary ? `The learner has already seen (build on these — connect this slide to them and do NOT repeat): ${priorSummary}.` : '',
     'COHESION: Every component on THIS slide — the reading, each visual, and every question — must revolve around ONE coherent concept and clearly relate to each other; do not mix unrelated ideas on the same slide. Across the whole presentation the slides should build on one another into a connected lesson.',
