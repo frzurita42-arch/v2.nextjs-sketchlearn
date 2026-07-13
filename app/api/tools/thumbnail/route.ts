@@ -4,7 +4,9 @@ import { imageEnabled, geminiEnabled } from '@/src/config';
 import { generateImage } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getToolBySlug, updateTool } = require('@/src/db/platform');
+const { getToolBySlug, updateTool, setExampleOverride } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,12 +22,17 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const slug = String(b.slug || '');
 
-  const tool = await getToolBySlug(slug);
+  // Built-in examples are virtual (not DB rows): an ADMIN may curate them, and the
+  // change is saved as an override. Real tools: the owner or an admin edits them.
+  const ex = exampleBySlug(slug);
+  const tool = ex || await getToolBySlug(slug);
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if ((tool.tags || []).includes('example')) return NextResponse.json({ error: 'Example tools cannot be edited.' }, { status: 400 });
-  if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
+  if (ex) {
+    if (a.user.role !== 'admin') return NextResponse.json({ error: 'Only an admin can edit an example.' }, { status: 403 });
+  } else if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
     return NextResponse.json({ error: 'Only the owner or an admin can set the thumbnail.' }, { status: 403 });
   }
+  const saveThumb = (img: string) => ex ? setExampleOverride(slug, { thumbnail: img }) : updateTool(slug, { thumbnail: img });
 
   // A user-provided image (an uploaded blob URL, a pasted https URL, or a data
   // URL) — just save it; no AI model needed. Data URLs are offloaded to the blob
@@ -46,7 +53,7 @@ export async function POST(req: Request) {
         }
       } catch { /* keep the data URL */ }
     }
-    await updateTool(slug, { thumbnail: img });
+    await saveThumb(img);
     return NextResponse.json({ thumbnail: img });
   }
 
@@ -117,7 +124,7 @@ export async function POST(req: Request) {
       } catch { /* keep the data URL */ }
     }
 
-    await updateTool(slug, { thumbnail: img });
+    await saveThumb(img);
     return NextResponse.json({ thumbnail: img });
   } catch {
     return NextResponse.json({ error: 'Image generation failed.' }, { status: 200 });

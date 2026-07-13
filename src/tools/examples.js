@@ -61,4 +61,24 @@ function exampleBySlug(slug) {
   return EXAMPLE_TOOLS.find(t => t.slug === slug) || null;
 }
 
-module.exports = { EXAMPLE_TOOLS, GALLERY_EXAMPLES, exampleBySlug };
+function isExampleSlug(slug) {
+  return !!exampleBySlug(slug);
+}
+
+// Merge an admin override (title / description / thumbnail) onto an example tool.
+function applyOverride(tool, ov) {
+  if (!tool || !ov) return tool;
+  const t = { ...tool, definition: { ...(tool.definition || {}) } };
+  if (typeof ov.title === 'string' && ov.title) { t.title = ov.title; t.definition.title = ov.title; }
+  if (typeof ov.description === 'string' && ov.description) { t.description = ov.description; t.definition.description = ov.description; }
+  if (typeof ov.thumbnail === 'string') t.thumbnail = ov.thumbnail;
+  return t;
+}
+
+// Apply a whole overrides map onto a list of example tools.
+function applyOverrides(tools, overrides) {
+  if (!overrides) return tools;
+  return (tools || []).map(t => (overrides[t.slug] ? applyOverride(t, overrides[t.slug]) : t));
+}
+
+module.exports = { EXAMPLE_TOOLS, GALLERY_EXAMPLES, exampleBySlug, isExampleSlug, applyOverride, applyOverrides };

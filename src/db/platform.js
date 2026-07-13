@@ -512,6 +512,22 @@ async function setUserPref(username, key, value) {
   } catch (e) { console.error('User prefs write failed:', e.message); return false; }
 }
 
+// Admin-authored overrides for the built-in (virtual) example tools — title,
+// description and thumbnail edits that persist even though examples aren't DB
+// rows. Stored as one JSON blob under a single site setting.
+async function getExampleOverrides() {
+  const s = await getSiteSettings();
+  const o = s && s.exampleOverrides;
+  return (o && typeof o === 'object') ? o : {};
+}
+async function setExampleOverride(slug, patch) {
+  slug = String(slug || '');
+  const all = await getExampleOverrides();
+  all[slug] = { ...(all[slug] || {}), ...(patch || {}) };
+  await setSiteSetting('exampleOverrides', all);
+  return all[slug];
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
@@ -519,4 +535,5 @@ module.exports = {
   insertPost, listPosts,
   getSiteSettings, setSiteSetting,
   getUserPrefs, setUserPref,
+  getExampleOverrides, setExampleOverride,
 };

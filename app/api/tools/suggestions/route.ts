@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-guard';
 import { toolCategory } from '@/lib/tool-category';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { listTools } = require('@/src/db/platform');
+const { listTools, getExampleOverrides } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { EXAMPLE_TOOLS } = require('@/src/tools/examples');
+const { EXAMPLE_TOOLS, applyOverrides } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,7 +47,8 @@ export async function GET(req: Request) {
   const real: any[] = (await listTools({ viewer: a.user.username, viewerIsAdmin: a.user.role === 'admin', limit: 300 })) || [];
   // Include the built-in examples too (they're virtual, not in the DB), so the
   // shelf is never empty for a brand-new user with no tools yet.
-  const all: any[] = [...real, ...(Array.isArray(EXAMPLE_TOOLS) ? EXAMPLE_TOOLS : [])];
+  const exs = applyOverrides(Array.isArray(EXAMPLE_TOOLS) ? EXAMPLE_TOOLS : [], await getExampleOverrides());
+  const all: any[] = [...real, ...exs];
   const visible = all.filter(t => t.slug && (t.visibility !== 'private' || t.owner === a.user.username));
 
   // Interest profile: weighted bag of words from the tools you own + favorited +
@@ -82,7 +83,7 @@ export async function GET(req: Request) {
       const reason = hasProfile && shared
         ? `Because you like ${shared}`
         : (t.archetype === 'repo' ? 'A repository to explore' : 'Popular right now');
-      return { slug: t.slug, title: t.title, description: t.description || '', thumbnail: t.thumbnail || '', archetype: t.archetype, owner: t.owner, category: cat, reason };
+      return { slug: t.slug, title: t.title, description: t.description || '', thumbnail: t.thumbnail || '', archetype: t.archetype, owner: t.owner, visibility: t.visibility || 'public', tags: Array.isArray(t.tags) ? t.tags : [], category: cat, reason };
     });
 
   return NextResponse.json({ picks: scored }, { headers: { 'Cache-Control': 'no-cache' } });

@@ -2,7 +2,9 @@ import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getToolBySlug, updateTool } = require('@/src/db/platform');
+const { getToolBySlug, updateTool, setExampleOverride } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,15 +22,18 @@ export async function POST(req: Request) {
   const description = String(b.description || '').trim().slice(0, 400);
   if (!slug || (!hasTitle && !hasDesc)) return NextResponse.json({ error: 'slug and title or description are required' }, { status: 400 });
   if (hasTitle && !title) return NextResponse.json({ error: 'title cannot be empty' }, { status: 400 });
-  const tool = await getToolBySlug(slug);
+  // Built-in examples are virtual: an ADMIN may curate them (saved as overrides).
+  const ex = exampleBySlug(slug);
+  const tool = ex || await getToolBySlug(slug);
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if ((tool.tags || []).includes('example')) return NextResponse.json({ error: 'Example tools cannot be edited.' }, { status: 400 });
-  if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
+  if (ex) {
+    if (a.user.role !== 'admin') return NextResponse.json({ error: 'Only an admin can edit an example.' }, { status: 403 });
+  } else if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
     return NextResponse.json({ error: 'Only the owner or an admin can edit this tool.' }, { status: 403 });
   }
   const patch: any = {};
   if (hasTitle) patch.title = title;
   if (hasDesc) patch.description = description;
-  await updateTool(slug, patch);
+  await (ex ? setExampleOverride(slug, patch) : updateTool(slug, patch));
   return NextResponse.json({ ok: true, title: hasTitle ? title : tool.title, description: hasDesc ? description : tool.description });
 }

@@ -4,9 +4,9 @@ import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition, slugify } from '@/lib/tool-schema';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { insertTool, getToolBySlug, listTools, deleteTool } = require('@/src/db/platform');
+const { insertTool, getToolBySlug, listTools, deleteTool, getExampleOverrides } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { GALLERY_EXAMPLES, exampleBySlug } = require('@/src/tools/examples');
+const { GALLERY_EXAMPLES, exampleBySlug, applyOverride, applyOverrides } = require('@/src/tools/examples');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { userState } = require('@/src/db/users');
 
@@ -22,7 +22,10 @@ export async function GET(req: Request) {
   const slug = url.searchParams.get('slug');
   if (slug) {
     const example = exampleBySlug(slug);
-    if (example) return NextResponse.json({ tool: example }, { headers: { 'Cache-Control': 'no-cache' } });
+    if (example) {
+      const ov = (await getExampleOverrides())[slug];
+      return NextResponse.json({ tool: ov ? applyOverride(example, ov) : example }, { headers: { 'Cache-Control': 'no-cache' } });
+    }
     const tool = await getToolBySlug(slug);
     if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // Private tools are visible only to their owner (or an admin). Unlisted tools
@@ -45,9 +48,10 @@ export async function GET(req: Request) {
     const { likedBy, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
     return { ...rest, likedByAdmin, likedByOwner };
   });
-  // Prepend a couple of featured examples so the gallery always has a working
-  // lesson to try (the fuller example set powers the suggestion carousel).
-  return NextResponse.json({ tools: [...GALLERY_EXAMPLES, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
+  // Prepend a couple of featured examples (with any admin overrides applied) so
+  // the gallery always has a working lesson to try.
+  const featured = applyOverrides(GALLERY_EXAMPLES, await getExampleOverrides());
+  return NextResponse.json({ tools: [...featured, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 // POST /api/tools  { definition, visibility, aiGenerated? } -> publish a tool

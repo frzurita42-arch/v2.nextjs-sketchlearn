@@ -5,6 +5,8 @@ import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,9 +24,12 @@ export async function POST(req: Request) {
   const field = b.field === 'title' ? 'title' : 'description';
   const instruction = String(b.instruction || '').slice(0, 400);
 
-  const tool = await getToolBySlug(slug);
+  const ex = exampleBySlug(slug);
+  const tool = ex || await getToolBySlug(slug);
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
+  if (ex) {
+    if (a.user.role !== 'admin') return NextResponse.json({ error: 'Only an admin can edit an example.' }, { status: 403 });
+  } else if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
     return NextResponse.json({ error: 'Only the owner or an admin can edit this.' }, { status: 403 });
   }
   if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {

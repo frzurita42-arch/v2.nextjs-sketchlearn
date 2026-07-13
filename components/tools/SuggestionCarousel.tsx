@@ -2,21 +2,26 @@
 /* "Top picks for you" — a self-contained sliding feed of personalized tool +
  * repository suggestions (based on the viewer's activity: what they own and
  * favorited). Drop it in anywhere: the Tools home page and below the comments on
- * a tool page both render <SuggestionCarousel/>. Refresh pulls a fresh set. */
+ * a tool page both render <SuggestionCarousel/>. Refresh pulls a fresh set. Each
+ * card is the shared ToolCard, so owner/admin get the same ✎/🎨/📎 edit controls
+ * (title, description and picture — with AI or a custom input) as the gallery. */
 import { useCallback, useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
-import { isRenderableImage } from '@/lib/img';
+import { ToolCard } from '@/components/tools/ToolCard';
 import { Carousel } from '@/components/ui/Carousel';
 
-const kindOf = (a: string) => a === 'app' ? 'APP' : a === 'lesson' ? 'LESSON' : a === 'repo' ? 'REPO' : 'GEN';
-
-export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', limit = 10 }: { likeSlug?: string; title?: string; limit?: number }) {
+export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', limit = 10,
+  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle }: {
+  likeSlug?: string; title?: string; limit?: number;
+  canEditTitle?: boolean; onRenameTitle?: (t: string) => void; onRemixTitle?: () => void; remixingTitle?: boolean;
+}) {
   const app = useApp();
   const [picks, setPicks] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
+  const [work, setWork] = useState<Record<string, boolean>>({});   // per-card AI busy
 
   const favSlugs = (): string => {
     try { const m = JSON.parse(localStorage.getItem('sl_tool_likes') || '{}'); return Object.keys(m).filter(k => m[k]).join(','); } catch { return ''; }
@@ -37,33 +42,68 @@ export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', 
   useEffect(() => { load(seed); }, [load, seed]);
   const refresh = () => setSeed(Math.floor(Math.random() * 1e6));
 
-  const open = async (slug: string) => {
+  const patch = (slug: string, p: any) => setPicks(list => list.map(x => x.slug === slug ? { ...x, ...p } : x));
+  const setBusyFor = (slug: string, v: boolean) => setWork(w => { const n = { ...w }; if (v) n[slug] = true; else delete n[slug]; return n; });
+
+  const open = async (t: any) => {
     try {
-      const r = await API.get(`/api/tools?slug=${encodeURIComponent(slug)}`);
+      const r = await API.get(`/api/tools?slug=${encodeURIComponent(t.slug)}`);
       if (r?.tool) { appState.activeTool = r.tool; app.nav('tool'); }
     } catch { /* ignore */ }
   };
 
-  const card = (p: any) => (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%', cursor: 'pointer' }} onClick={() => open(p.slug)}>
-      {isRenderableImage(p.thumbnail)
-        ? <img src={p.thumbnail} alt="" loading="lazy" style={{ width: '100%', height: 96, objectFit: 'cover', borderBottom: '2px solid var(--ink)' }} />
-        : <div style={{ height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', fontSize: 12, opacity: 0.55 }}>🖼️ No photo</div>}
-      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'baseline' }}>
-          <strong style={{ fontSize: 14, lineHeight: 1.2 }}>{p.title}</strong>
-          <span style={{ fontSize: 9, fontWeight: 700, opacity: 0.55 }}>{kindOf(p.archetype)}</span>
-        </div>
-        <div style={{ fontSize: 11, opacity: 0.7, flex: 1 }}>{p.reason}</div>
-        <button className="btn small green" style={{ alignSelf: 'flex-start' }} onClick={(e) => { e.stopPropagation(); open(p.slug); }}>Open →</button>
-      </div>
-    </div>
-  );
+  // Owner/admin editing — same actions as the gallery, kept self-contained here.
+  const isExample = (t: any) => (t.tags || []).includes('example');
+  const canEdit = (t: any) => isExample(t) ? app.user?.role === 'admin' : (app.user?.role === 'admin' || app.user?.username === t.owner);
+
+  const editText = (t: any) => {
+    const titleV = window.prompt('Title:', t.title); if (titleV == null) return;
+    const descV = window.prompt('Description:', t.description || ''); if (descV == null) return;
+    API.post('/api/tools/rename', { slug: t.slug, title: titleV, description: descV })
+      .then((r: any) => { if (r?.ok) patch(t.slug, { title: r.title, description: r.description }); else if (r?.error) alert(r.error); })
+      .catch((e: any) => alert(e?.message || 'Could not save.'));
+  };
+  const remixText = async (t: any) => {
+    setBusyFor(t.slug, true);
+    try {
+      const r = await API.post('/api/tools/remix', { slug: t.slug });
+      if (r?.title) { await API.post('/api/tools/rename', { slug: t.slug, title: r.title, description: r.description }); patch(t.slug, { title: r.title, description: r.description }); }
+      else if (r?.error) alert(r.error);
+    } catch (e: any) { alert(e?.message || 'Could not remix.'); } finally { setBusyFor(t.slug, false); }
+  };
+  const genThumb = async (t: any, instruction?: string) => {
+    setBusyFor(t.slug, true);
+    try { const r = await API.post('/api/tools/thumbnail', { slug: t.slug, instruction }); if (r?.thumbnail) patch(t.slug, { thumbnail: r.thumbnail }); else if (r?.error) alert(r.error); }
+    catch (e: any) { alert(e?.message || 'Could not generate.'); } finally { setBusyFor(t.slug, false); }
+  };
+  const thumbPrompt = (t: any) => { const i = window.prompt('Describe the image to generate:', ''); if (i == null) return; genThumb(t, i); };
+  const uploadThumb = (t: any, file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setBusyFor(t.slug, true);
+      try { const r = await API.post('/api/tools/thumbnail', { slug: t.slug, image: String(reader.result || '') }); if (r?.thumbnail) patch(t.slug, { thumbnail: r.thumbnail }); else if (r?.error) alert(r.error); }
+      catch (e: any) { alert(e?.message || 'Could not upload.'); } finally { setBusyFor(t.slug, false); }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const card = (p: any) => {
+    // ToolCard reads these fields; the pick carries them + a reason as description.
+    const t = { ...p, description: p.description || p.reason };
+    const editable = canEdit(p);
+    return (
+      <ToolCard tool={t} view="grid" onOpen={open}
+        canEdit={editable} onEdit={editable ? editText : undefined} onRemix={editable ? remixText : undefined} mixing={!!work[p.slug]}
+        onGenThumb={editable ? ((x: any) => genThumb(x)) : undefined} onThumbPrompt={editable ? thumbPrompt : undefined}
+        onUploadThumb={editable ? uploadThumb : undefined} thumbing={!!work[p.slug]} />
+    );
+  };
 
   return (
-    <Carousel title={title} onRefresh={refresh} refreshing={busy} cardWidth={190}
+    <Carousel title={title} onRefresh={refresh} refreshing={busy} cardWidth={230}
+      canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
       empty={busy ? 'Finding picks…' : 'No suggestions yet — favorite a few tools and check back.'}>
-      {picks.map((p) => <div key={p.slug}>{card(p)}</div>)}
+      {picks.map((p) => <div key={p.slug} style={{ height: '100%' }}>{card(p)}</div>)}
     </Carousel>
   );
 }

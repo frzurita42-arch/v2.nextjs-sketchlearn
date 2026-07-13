@@ -10,6 +10,7 @@ import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
+import { Carousel } from '@/components/ui/Carousel';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -84,7 +85,9 @@ export function ToolsView() {
     setThumbing(m => { const n = { ...m }; delete n[t.slug]; return n; });
   };
   const patchTool = (slug: string, patch: any) => setTools(ts => ts.map(t => t.slug === slug ? { ...t, ...patch } : t));
-  const canEditCard = (t: any) => !(t.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === t.owner);
+  // Real tools: owner or admin. Built-in examples: an admin may curate them
+  // (title/description/thumbnail), saved as an override for everyone.
+  const canEditCard = (t: any) => (t.tags || []).includes('example') ? app.user?.role === 'admin' : (app.user?.role === 'admin' || app.user?.username === t.owner);
   const remix = async (t: any) => {
     setMixing(m => ({ ...m, [t.slug]: true }));
     try {
@@ -99,7 +102,7 @@ export function ToolsView() {
 
   // Admin-editable page copy (heading + subtitle), saved for everyone.
   const isAdmin = app.user?.role === 'admin';
-  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string }>({});
+  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string }>({});
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
   useEffect(() => { API.get('/api/site-settings').then((r: any) => setSite(r?.settings || {})).catch(() => { /* ignore */ }); }, []);
@@ -120,6 +123,21 @@ export function ToolsView() {
     setHeadMix(m => { const n = { ...m }; delete n[key]; return n; });
   };
   const headIcon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6 } as const;
+
+  // Editable, admin-saved titles for the two carousels ("shelves").
+  const saveShelf = async (key: 'toolsShelfTitle' | 'picksShelfTitle', val: string) => {
+    const v = val.trim(); if (!v) return;
+    setSite(s => ({ ...s, [key]: v }));
+    try { await API.put('/api/site-settings', { key, value: v }); } catch { /* ignore */ }
+  };
+  const remixShelf = async (key: 'toolsShelfTitle' | 'picksShelfTitle', cur: string) => {
+    setHeadMix(m => ({ ...m, [key]: true }));
+    try {
+      const r = await API.post('/api/site-settings/remix', { text: cur, kind: 'title' });
+      if (r?.text) await saveShelf(key, r.text); else if (r?.error) alert(r.error);
+    } catch { alert('Could not remix.'); }
+    setHeadMix(m => { const n = { ...m }; delete n[key]; return n; });
+  };
 
   const HIDDEN_KEY = 'sl_hidden_examples';
   const loadHidden = (): string[] => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } };
@@ -253,12 +271,22 @@ export function ToolsView() {
           </>
         )}
 
-      {/* "Top picks for you" — a sliding, refreshable feed of 10 personalized
-          picks, under the gallery and above the page's bottom Back button. */}
+      {/* Two sliding shelves under the gallery, above the page's bottom Back
+          button: a Tools carousel (front page only) and the personalized picks.
+          A single dashed rule sits at the BOTTOM of the sliders (no top line). */}
       {!loading && tools.length > 0 && (
         <>
+          <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240}
+            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
+            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}>
+            {catItems.slice(0, 10).map((t: any) => <div key={t.id}>{card(t, 'grid')}</div>)}
+          </Carousel>
+          <div style={{ height: 14 }} />
+          <SuggestionCarousel limit={10}
+            title={site.picksShelfTitle || '✨ Top picks for you'}
+            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
+            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || '✨ Top picks for you')} remixingTitle={!!headMix.picksShelfTitle} />
           <Divider />
-          <SuggestionCarousel limit={10} />
         </>
       )}
     </>

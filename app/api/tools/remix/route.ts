@@ -5,6 +5,8 @@ import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug, listTools } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,10 +24,13 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const slug = String(b.slug || '');
 
-  const tool = await getToolBySlug(slug);
+  // Examples are virtual; an admin may remix them (the result is saved via rename).
+  const ex = exampleBySlug(slug);
+  const tool = ex || await getToolBySlug(slug);
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if ((tool.tags || []).includes('example')) return NextResponse.json({ error: 'Example tools cannot be edited.' }, { status: 400 });
-  if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
+  if (ex) {
+    if (a.user.role !== 'admin') return NextResponse.json({ error: 'Only an admin can edit an example.' }, { status: 403 });
+  } else if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
     return NextResponse.json({ error: 'Only the owner or an admin can remix this.' }, { status: 403 });
   }
   if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
