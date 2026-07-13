@@ -3,7 +3,14 @@
  * hides categories that have zero items in the current list. */
 import { TOOL_CATEGORIES } from '@/lib/tool-category';
 
-export function CategoryFilter({ value, onChange, counts }: { value: string; onChange: (k: string) => void; counts: Record<string, number> }) {
+// The row of category filter chips. Defaults to the platform TOOL_CATEGORIES
+// (home gallery) but any list can pass its own `categories` (e.g. a lesson feed's
+// subject categories) to get the identical chip-row filter.
+export function CategoryFilter({ value, onChange, counts, categories }: {
+  value: string; onChange: (k: string) => void; counts: Record<string, number>;
+  categories?: { key: string; label: string }[];
+}) {
+  const cats = categories || TOOL_CATEGORIES;
   const chip = (key: string, label: string) => {
     const n = counts[key] || 0;
     if (key !== 'all' && !n) return null;        // hide empty categories
@@ -17,7 +24,7 @@ export function CategoryFilter({ value, onChange, counts }: { value: string; onC
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', margin: '0 auto 16px', maxWidth: 820 }}>
       {chip('all', `All (${counts.all || 0})`)}
-      {TOOL_CATEGORIES.map(c => chip(c.key, c.label))}
+      {cats.map(c => chip(c.key, c.label))}
     </div>
   );
 }

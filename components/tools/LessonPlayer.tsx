@@ -20,6 +20,7 @@ import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/s
 import { buildLessonZip } from '@/lib/lesson-export';
 import { Collection } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
+import { CategoryFilter } from '@/components/tools/CategoryFilter';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -883,6 +884,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     // Category is the only section-specific filter; the standard Collection owns
     // search / favorites / by-admin / grid-rows / sort / count / pagination.
     const feedItems = activities.filter((e: any) => feedCat === 'all' || (e.data?.category || '') === feedCat);
+    // Per-category counts for the chip-row filter — the SAME CategoryFilter the
+    // home Tools gallery uses (empty categories hide themselves).
+    const feedCounts: Record<string, number> = { all: activities.length };
+    for (const c of GEN_CATEGORIES) feedCounts[c] = activities.filter((e: any) => (e.data?.category || '') === c).length;
     // One rendition card — rendered through the SHARED CardShell so its container
     // (image space, title, subtitle, footer) is identical to the tools gallery
     // cards; only the buttons differ (Play + OP results instead of Open →). It
@@ -1005,6 +1010,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         <div style={dashRule} />
 
         <h4 style={{ margin: '0 0 8px' }}>Activities feed</h4>
+        {/* Same filter layout as the home Tools gallery: category chip row → dashed
+            divider → the shared Collection toolbar. */}
+        <CategoryFilter value={feedCat} onChange={setFeedCat} counts={feedCounts} categories={GEN_CATEGORIES.map(c => ({ key: c, label: c }))} />
+        <div style={dashRule} />
         <Collection
           items={feedItems}
           id={(e: any) => e.id}
@@ -1018,12 +1027,6 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           searchPlaceholder="🔍 name / @user"
           emptyAll="No activities yet — generate the first one above."
           emptyFiltered="No activities match these filters."
-          extra={(
-            <select value={feedCat} onChange={e => setFeedCat(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1.5px solid var(--ink)' }}>
-              <option value="all">All categories</option>
-              {GEN_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
           renderGrid={(e: any) => feedCard(e, false)}
           renderRow={(e: any) => feedCard(e, true)}
         />
