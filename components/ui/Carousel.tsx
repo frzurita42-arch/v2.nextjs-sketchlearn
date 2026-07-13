@@ -32,8 +32,9 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       {/* Hide the horizontal scrollbar (scrolling still works). */}
       <style>{'.sl-rail{scrollbar-width:none;-ms-overflow-style:none;}.sl-rail::-webkit-scrollbar{display:none;height:0;width:0;}'}</style>
-      {/* Title + its controls, all on the same (left) side. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+      {/* Title + its controls, all on the same (left) side. A little top space
+          drops the title further below the dashed rule of the section above. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8, flexWrap: 'wrap' }}>
         {editing ? (
           <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setDraft(title); setEditing(false); } }}
