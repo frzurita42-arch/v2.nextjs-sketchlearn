@@ -6,7 +6,7 @@ import { validateToolDefinition, slugify } from '@/lib/tool-schema';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { insertTool, getToolBySlug, listTools, deleteTool } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { EXAMPLE_TOOLS, exampleBySlug } = require('@/src/tools/examples');
+const { GALLERY_EXAMPLES, exampleBySlug } = require('@/src/tools/examples');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { userState } = require('@/src/db/users');
 
@@ -45,8 +45,9 @@ export async function GET(req: Request) {
     const { likedBy, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
     return { ...rest, likedByAdmin, likedByOwner };
   });
-  // Prepend the built-in examples so the gallery always has a working lesson to try.
-  return NextResponse.json({ tools: [...EXAMPLE_TOOLS, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
+  // Prepend a couple of featured examples so the gallery always has a working
+  // lesson to try (the fuller example set powers the suggestion carousel).
+  return NextResponse.json({ tools: [...GALLERY_EXAMPLES, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 // POST /api/tools  { definition, visibility, aiGenerated? } -> publish a tool
