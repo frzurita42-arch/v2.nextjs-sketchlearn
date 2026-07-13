@@ -11,7 +11,8 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import {
-  STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, studioItem, assembleDefinition, capAvailable,
+  STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, BUTTON_ACTIONS, parseTemplateSpec,
+  studioItem, assembleDefinition, capAvailable,
   type StudioConfig, type StudioComponent, type StudioLayout, type StudioPage, type ArtifactKind,
 } from '@/lib/studio-catalog';
 
@@ -59,7 +60,7 @@ export function BuilderStudioView() {
   // The SAME component type can be added many times (two text blocks, etc.), so
   // each placement gets a unique uid and we never dedupe by catalog id.
   const mkUid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  const addComp = (i: number, li: number, id: string) => { if (!id) return; mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: [...l.components, { id, uid: mkUid(), instr: '', opt: studioItem(id)?.sizes ? ANNOTATION_SIZES[1] : undefined }] } : l))); };
+  const addComp = (i: number, li: number, id: string) => { if (!id) return; const it = studioItem(id); const opt = it?.sizes ? ANNOTATION_SIZES[1] : it?.button ? 'ask' : undefined; mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: [...l.components, { id, uid: mkUid(), instr: '', opt }] } : l))); };
   const setComp = (i: number, li: number, uid: string, patch: Partial<StudioComponent>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.map((c) => ((c.uid || c.id) === uid ? { ...c, ...patch } : c)) } : l)));
   const rmComp = (i: number, li: number, uid: string) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.filter((c) => (c.uid || c.id) !== uid) } : l)));
 
@@ -126,9 +127,22 @@ export function BuilderStudioView() {
                 {ANNOTATION_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             )}
-            <input value={c.instr || ''} placeholder={it.deco ? 'Your message…' : it.note ? 'Your instruction for this slide…' : 'How should the AI use this? (optional)'} onChange={(e) => patch({ instr: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />
+            {it.button && (
+              <select value={c.opt || 'ask'} onChange={(e) => patch({ opt: e.target.value })} style={{ fontSize: 12 }}>
+                {BUTTON_ACTIONS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+              </select>
+            )}
+            <input value={c.instr || ''}
+              placeholder={it.tmpl ? 'e.g. 1x2(2x2)' : it.button ? 'Button label / message (e.g. “Ask about this”)' : it.deco ? 'Your message…' : it.note ? 'Your instruction for this slide…' : 'How should the AI use this? (optional)'}
+              onChange={(e) => patch({ instr: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />
             {it.linkField && <input value={c.link || ''} placeholder={it.deco ? 'Link (donation / YouTube / URL)' : 'Reference image URL / Drive link (optional)'} onChange={(e) => patch({ link: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />}
+            {it.button && (c.opt || 'ask') === 'action' && <input value={c.link || ''} placeholder="Link to open (optional)" onChange={(e) => patch({ link: e.target.value })} style={{ flex: '1 1 180px', fontSize: 13 }} />}
           </div>
+          {it.tmpl && c.instr && (
+            parseTemplateSpec(c.instr).ok
+              ? <div style={{ fontSize: 11, color: '#2d6a4f', marginTop: 4 }}>✓ {parseTemplateSpec(c.instr).desc}</div>
+              : <div style={{ fontSize: 11, color: 'var(--danger,#e4572e)', marginTop: 4 }}>Not a valid template — use rows×cols like 2x2, or nest like 1x2(2x2).</div>
+          )}
         </div>
         <button className="btn small ghost" title="Remove" onClick={onRemove}>✕</button>
       </div>

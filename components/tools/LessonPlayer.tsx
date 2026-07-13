@@ -234,12 +234,54 @@ function SupportsLoader({ slide, ctx }: { slide: Slide; ctx: any }) {
 // Decorations placed on a slide from the Studio: links & personalized messages.
 function ytId(url: string): string { const m = String(url || '').match(/(?:youtu\.be\/|[?&]v=|embed\/|shorts\/)([\w-]{11})/); return m ? m[1] : ''; }
 function safeHref(u: string): string { return /^https?:\/\//i.test(String(u || '')) ? String(u) : '#'; }
-function Decorations({ items }: { items: any[] }) {
+// A Studio "Button" decoration: shows results, asks the AI about the lesson, or
+// runs a custom action / opens a link. Self-contained (owns its own ask panel).
+function ButtonDeco({ d, subject, topic, onFinish }: { d: any; subject: string; topic: string; onFinish?: () => void }) {
+  const action = String(d.action || 'ask');
+  const label = d.message || (action === 'results' ? 'Show my results' : action === 'ask' ? 'Ask the AI' : 'Go');
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [ans, setAns] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ask = async (question: string) => {
+    if (!question.trim()) return;
+    setBusy(true); setAns('');
+    try {
+      const r = await API.post('/api/tools/lesson/ask', { question, subject, topic });
+      setAns(r?.answer || r?.error || 'No answer.');
+    } catch (e: any) { setAns(e?.message || 'Could not ask right now.'); }
+    finally { setBusy(false); }
+  };
+  if (action === 'results') return <button className="btn small blue" onClick={() => onFinish?.()}>📊 {label}</button>;
+  if (action === 'action') {
+    if (safeHref(d.link) !== '#') return <a className="btn small" href={safeHref(d.link)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>🔗 {label}</a>;
+    return <button className="btn small" onClick={() => alert(label)}>🔳 {label}</button>;
+  }
+  // action === 'ask'
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', maxWidth: 420 }}>
+      <button className="btn small" onClick={() => { setOpen(o => !o); if (!open && d.message && !q) setQ(d.message); }}>💬 {label}</button>
+      {open && (
+        <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ display: 'flex', gap: 6 }}>
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Ask the AI about this lesson…" onKeyDown={e => { if (e.key === 'Enter') ask(q); }}
+              style={{ flex: 1, fontSize: 13, padding: '5px 8px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
+            <button className="btn small green" disabled={busy} onClick={() => ask(q)}>{busy ? '…' : 'Ask'}</button>
+          </span>
+          {ans && <span style={{ fontSize: 13, background: 'rgba(0,0,0,0.04)', border: '1.5px solid var(--ink)', borderRadius: 6, padding: '8px 10px', whiteSpace: 'pre-wrap', textAlign: 'left' }}>{ans}</span>}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Decorations({ items, subject = '', topic = '', onFinish }: { items: any[]; subject?: string; topic?: string; onFinish?: () => void }) {
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   if (!Array.isArray(items) || !items.length) return null;
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', alignItems: 'center', margin: '2px 0 12px' }}>
       {items.map((d: any, i: number) => {
+        if (d.kind === 'button') return <ButtonDeco key={i} d={d} subject={subject} topic={topic} onFinish={onFinish} />;
         if (d.kind === 'coffee') return <a key={i} className="btn small" href={safeHref(d.link)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>☕ {d.message || 'Buy me a coffee'}</a>;
         if (d.kind === 'banner') return <div key={i} style={{ width: '100%', textAlign: 'center', padding: '8px 12px', background: 'var(--accent,#5c80bc)', color: '#fff', borderRadius: 8, fontWeight: 700 }}>{d.message}</div>;
         if (d.kind === 'note') return <div key={i} style={{ background: '#fdf6b2', border: '1.5px solid var(--ink)', borderRadius: 4, padding: '8px 12px', transform: 'rotate(-1.5deg)', fontSize: 14, boxShadow: '2px 2px 0 rgba(0,0,0,0.15)' }}>🗒️ {d.message}</div>;
@@ -1290,7 +1332,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             )}
           </div>
           {slideLevel[cur] && <div style={{ textAlign: 'center', fontSize: 11, opacity: 0.6, marginTop: 2 }}>Level: {slideLevel[cur]}</div>}
-          {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} /> : null}
+          {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
           {/* Reading passage (its own "paper"). */}
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>}
           {/* Support materials — each streams into its own card, dotted-separated. */}

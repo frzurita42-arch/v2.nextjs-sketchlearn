@@ -23,6 +23,42 @@ export interface StudioItem {
   requires?: string;                // capability path in /api/config caps (e.g. 'music', 'providers.grok')
   deco?: boolean;                   // a decoration (link / personalized message), not an activity
   reading?: boolean;                // a reading passage (its length follows the slide's paragraph settings)
+  tmpl?: boolean;                   // a custom layout template ("1x2(2x2)") typed into instr
+  button?: boolean;                 // an action button; instr = label/message, opt = action
+}
+
+// What a Button component does when tapped.
+export const BUTTON_ACTIONS: { key: string; label: string }[] = [
+  { key: 'ask', label: 'Ask the AI (about this lesson)' },
+  { key: 'results', label: 'Show my results' },
+  { key: 'action', label: 'Custom action / open a link' },
+];
+
+// Parse a custom template spec like "1x2(2x2)": rows×cols, optionally followed by
+// parenthesised sub-templates that fill successive cells (recursively). Returns a
+// human description for the generator, and whether it's valid. Kept small: rows/
+// cols 1..6, nesting depth <= 3.
+export function parseTemplateSpec(spec: string, depth = 0): { ok: boolean; desc: string } {
+  const s = String(spec || '').trim();
+  const m = s.match(/^(\d+)\s*[x×]\s*(\d+)/i);
+  if (!m) return { ok: false, desc: '' };
+  const rows = +m[1], cols = +m[2];
+  if (rows < 1 || rows > 6 || cols < 1 || cols > 6 || depth > 3) return { ok: false, desc: '' };
+  let rest = s.slice(m[0].length).trim();
+  const subs: string[] = [];
+  while (rest.startsWith('(')) {
+    let d = 0, i = 0;
+    for (; i < rest.length; i++) { if (rest[i] === '(') d++; else if (rest[i] === ')') { d--; if (d === 0) { i++; break; } } }
+    if (d !== 0) return { ok: false, desc: '' };            // unbalanced
+    const sub = parseTemplateSpec(rest.slice(1, i - 1), depth + 1);
+    if (!sub.ok) return { ok: false, desc: '' };
+    subs.push(sub.desc);
+    rest = rest.slice(i).trim();
+  }
+  if (rest) return { ok: false, desc: '' };                 // trailing junk
+  let desc = `${rows}×${cols} grid (${rows} row${rows > 1 ? 's' : ''} × ${cols} column${cols > 1 ? 's' : ''})`;
+  if (subs.length) desc += `, with a nested layout in ${subs.length} cell${subs.length > 1 ? 's' : ''} — ${subs.map((d2, i) => `cell ${i + 1}: ${d2}`).join('; ')}`;
+  return { ok: true, desc };
 }
 
 // Read a dotted capability path from the /api/config caps object.
@@ -79,6 +115,12 @@ export const STUDIO_CATEGORIES: StudioCategory[] = [
       { id: 'ai-openai', emoji: '🟢', name: 'GPT (OpenAI)', desc: 'Use GPT to generate.', requires: 'providers.openai' },
       { id: 'ai-deepseek', emoji: '🐋', name: 'DeepSeek', desc: 'Use DeepSeek to generate.', requires: 'providers.deepseek' },
       { id: 'ai-kimi', emoji: '🌙', name: 'Kimi (Moonshot)', desc: 'Use Kimi to generate.', requires: 'providers.kimi' },
+    ],
+  },
+  {
+    id: 'layout', label: '🧩 Layout & actions', for: 'both', items: [
+      { id: 'custom-template', emoji: '🧩', name: 'Custom template', desc: 'Type a grid like 1x2(2x2): rows×cols, with an optional nested (rows×cols) inside a cell.', tmpl: true },
+      { id: 'button', emoji: '🔳', name: 'Button (action)', desc: 'A button that shows results, asks the AI, or runs a custom action. Set its label/message and pick what it does.', button: true },
     ],
   },
   {
@@ -171,7 +213,7 @@ function compilePage(comps: StudioComponent[]) {
   let language = false;
   let reading = false;
   let padSize: 'large' | 'medium' | 'adaptive' | undefined;
-  const decorations: { kind: string; message: string; link: string }[] = [];
+  const decorations: { kind: string; message: string; link: string; action?: string }[] = [];
   const lines: string[] = [];
   const providers: string[] = [];
   for (const c of comps) {
@@ -185,6 +227,13 @@ function compilePage(comps: StudioComponent[]) {
     const how = String(c.instr || '').trim();
     const link = String(c.link || '').trim();
     if (it.note) { if (how) lines.push(`• Note: ${how}`); continue; }
+    if (it.tmpl) {
+      const t = parseTemplateSpec(how);
+      if (t.ok) lines.push(`• LAYOUT TEMPLATE — arrange this section as a ${t.desc}. Place the section's other components into these cells in order; keep it readable on the activity screen.`);
+      else if (how) lines.push(`• Note (layout): the author asked for a template "${how}".`);
+      continue;
+    }
+    if (it.button) { decorations.push({ kind: 'button', message: how, link, action: String(c.opt || 'ask') }); lines.push(`• Button — ${how ? `“${how}”` : 'action button'} (${c.opt || 'ask'}).`); continue; }
     if (it.deco) { decorations.push({ kind: it.id.replace('deco-', ''), message: how, link }); lines.push(`• Decoration — ${it.name}${how ? `: “${how}”` : ''}${link ? ` (${link})` : ''}`); continue; }
     if (it.id.startsWith('ai-')) { providers.push(it.name); continue; }
     const size = it.sizes && c.opt ? ` [${c.opt}]` : '';

@@ -44,7 +44,7 @@ export interface LessonPage {
   paragraphLength?: 'brief' | 'medium' | 'detailed';
   style?: string;          // compiled per-page "how to use these components"
   padSize?: 'large' | 'medium' | 'adaptive';   // annotation pad size for this slide
-  decorations?: { kind: string; message?: string; link?: string }[];   // links / messages on the slide
+  decorations?: { kind: string; message?: string; link?: string; action?: string }[];   // links / messages / buttons on the slide
   reading?: boolean;       // include a reading passage on this slide
 }
 
@@ -259,11 +259,12 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       style: String(pg?.style || '').slice(0, 400) || undefined,
       padSize: ['large', 'medium', 'adaptive'].includes(pg?.padSize) ? pg.padSize : undefined,
       reading: pg?.reading ? true : undefined,
-      decorations: (Array.isArray(pg?.decorations) ? pg.decorations : []).slice(0, 6).map((d: any) => ({
-        kind: ['coffee', 'note', 'banner', 'hint', 'tv'].includes(d?.kind) ? d.kind : 'note',
-        message: String(d?.message || '').slice(0, 300),
-        link: String(d?.link || '').slice(0, 400),
-      })).filter((d: any) => d.message || d.link) || undefined,
+      decorations: (Array.isArray(pg?.decorations) ? pg.decorations : []).slice(0, 6).map((d: any) => {
+        const kind = ['coffee', 'note', 'banner', 'hint', 'tv', 'button'].includes(d?.kind) ? d.kind : 'note';
+        const out: any = { kind, message: String(d?.message || '').slice(0, 300), link: String(d?.link || '').slice(0, 400) };
+        if (kind === 'button') out.action = ['ask', 'results', 'action'].includes(d?.action) ? d.action : 'ask';
+        return out;
+      }).filter((d: any) => d.message || d.link || d.kind === 'button') || undefined,
     }));
     lesson = {
       subject,
