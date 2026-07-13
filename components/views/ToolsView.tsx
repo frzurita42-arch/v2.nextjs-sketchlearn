@@ -152,6 +152,18 @@ export function ToolsView() {
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  // Reload the tools WITHOUT the full-page loading flag, so the carousel (and its
+  // Refresh button) stays mounted and just shows the spinner.
+  const [refreshingTools, setRefreshingTools] = useState(false);
+  const reloadTools = async () => {
+    setRefreshingTools(true);
+    try {
+      const r = await API.get('/api/tools');
+      const hidden = loadHidden();
+      setTools((Array.isArray(r?.tools) ? r.tools : []).filter((t: any) => !hidden.includes(t.slug)));
+    } catch { /* ignore */ }
+    setRefreshingTools(false);
+  };
 
   // Category counts (for the filter chips) + the visible subset.
   const counts = useMemo(() => {
@@ -280,6 +292,7 @@ export function ToolsView() {
       {!loading && tools.length > 0 && (
         <>
           <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
+            onRefresh={reloadTools} refreshing={refreshingTools}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
             onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}>
             {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}

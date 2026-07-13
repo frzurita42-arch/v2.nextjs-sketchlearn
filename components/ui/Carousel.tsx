@@ -21,6 +21,7 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
   headerExtra?: ReactNode;                    // extra control in the header (e.g. a Recommend button)
 }) {
   const rail = useRef<HTMLDivElement>(null);
+  const slide = (dir: number) => { try { rail.current?.scrollBy({ left: dir * (cardWidth + 14) * 2, behavior: 'smooth' }); } catch { /* ignore */ } };
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const count = Array.isArray(children) ? children.filter(Boolean).length : (children ? 1 : 0);
@@ -47,6 +48,13 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
         )}
         {onRefresh && <button className="btn small ghost" disabled={!!refreshing} onClick={onRefresh} title="Refresh suggestions">{refreshing ? '…' : '🔄 Refresh'}</button>}
         {headerExtra}
+        {/* Slider buttons to move the cards left / right. */}
+        {count > 1 && (
+          <span style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
+            <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide left" onClick={() => slide(-1)}>‹</button>
+            <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide right" onClick={() => slide(1)}>›</button>
+          </span>
+        )}
       </div>
       {count === 0 ? (
         <div style={{ opacity: 0.6, fontSize: 13, padding: '8px 0' }}>{empty || 'Nothing to show yet.'}</div>
