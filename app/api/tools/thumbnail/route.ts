@@ -30,37 +30,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No image model is configured.' }, { status: 200 });
   }
 
+  const instruction = String(b.instruction || '').slice(0, 400);
   const d = tool.definition || {};
   const subject = d.lesson?.subject || '';
   const desc = String(tool.description || '').slice(0, 180);
   const theme = [tool.title, subject, desc].filter(Boolean).join(' — ');
 
-  // A wide set of everyday-life settings so thumbnails vary — the idea for / use of
-  // the tool captured wherever inspiration strikes. One is picked at random.
+  // A wide set of everyday-life settings so thumbnails vary. One is picked at random.
   const SCENES = [
-    'a cozy cafe with latte art and steamy windows', 'a bustling coffee shop counter',
-    'a grocery store aisle with a shopping cart', 'a colorful farmers market stall',
-    'a sunny beach at golden hour', 'a lively school classroom', 'a university lecture hall',
-    'a warm public library among tall bookshelves', 'a busy airport terminal with luggage',
-    'a train window seat watching the countryside', 'a lush green jungle with sunlight through leaves',
-    'a windy mountain summit above the clouds', 'a scenic hiking trail with a backpack',
-    'cycling on a country road at sunrise', 'a bright modern gym / fitness studio',
-    'inside a car on a road trip, hands on the wheel', 'a tech expo / conference booth with crowds',
-    'a home kitchen table covered in notes', 'a quiet park bench under a tree',
-    'a rooftop terrace at sunset over the city', 'a friendly co-working space',
-    'a charming independent bookstore', 'a museum gallery', 'a subway car in motion',
-    'friends around a campfire at night', 'a blooming backyard garden', 'a maker/craft workshop',
-    'a food truck festival', 'a boat on a calm lake', 'a ski lodge in winter',
+    'a cozy cafe', 'a grocery store', 'a farmers market', 'a sunny beach', 'a school hallway',
+    'a university campus lawn', 'a public library', 'an airport / travel', 'a train ride',
+    'a lush jungle', 'a mountain summit', 'a hiking trail', 'a country road (cycling)',
+    'a gym / fitness studio', 'a road trip in a car', 'a tech expo', 'a home kitchen',
+    'a park', 'a city rooftop at sunset', 'a co-working space', 'a bookstore', 'a museum',
+    'a hotel lobby', 'a garden', 'a lakeside', 'a ski slope', 'a street market', 'a rooftop garden',
   ];
   const scene = SCENES[Math.floor(Math.random() * SCENES.length)];
+  // At most two people — sometimes none. Balanced combinations.
+  const PEOPLE = [
+    'no people — an evocative everyday still-life',
+    'no people — just meaningful everyday objects in the setting',
+    'exactly one man', 'exactly one woman',
+    'exactly one man and one woman together', 'exactly two men', 'exactly two women',
+  ];
+  const people = PEOPLE[Math.floor(Math.random() * PEOPLE.length)];
 
   const prompt = [
-    `A warm, inviting, cinematic photorealistic thumbnail set in ${scene}.`,
-    `In that setting, show a diverse person (or a few people) having the idea for — or joyfully using — a tool about: "${theme}". Surround them with objects and details that clearly evoke this exact topic.`,
-    'Capture genuine emotion and sentiment through their expressions and body language — a spark of inspiration, focus, collaboration and delight — conveying the platform\'s core messages of productivity, cohesion and community engagement.',
-    `You MAY include the tool's name "${tool.title}" as one clean, tastefully hand-lettered sign or note within the scene (spelled correctly); otherwise avoid random text.`,
-    'Bright, uplifting, editorial-photo style, natural lighting, shallow depth of field. Composition centered and readable at small thumbnail size.',
-  ].join(' ');
+    `A polished, advertising-style photorealistic thumbnail that REPRESENTS a tool — like a tasteful magazine ad or brand photo, NOT a screenshot of someone operating software.`,
+    `The tool is about: "${theme}".`,
+    `Setting / backdrop: ${scene}. People in the image: ${people}.`,
+    `Never show more than two people. If a person is present, show them doing a natural everyday activity in this setting with an expression or gesture that hints at the tool's PURPOSE — do NOT show anyone literally studying, typing on a laptop, or using an app in an implausible place (no laptops on mountaintops).`,
+    `Represent the tool's idea through everyday objects, gentle visual metaphors, and mood — in the person's hands, their surroundings, or implied by their thought/emotion. For example: an assignment-grading tool → a relaxed teacher on a morning jog, thoughtful smile as if mentally grading; a collaborative math tool → two students chatting warmly on a sunny campus lawn.`,
+    `Keep it coherent and believable, warm and uplifting, conveying productivity, cohesion and community engagement. Natural lighting, shallow depth of field, centered composition readable at small thumbnail size. Avoid random text and watermarks.`,
+    instruction ? `IMPORTANT — also weave in the user's specific request and blend it seamlessly with everything above into ONE coherent image: "${instruction}".` : '',
+  ].filter(Boolean).join(' ');
 
   try {
     let img = await generateImage(prompt);

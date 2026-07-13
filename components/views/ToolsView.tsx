@@ -55,15 +55,18 @@ export function ToolsView() {
   const [editTool, setEditTool] = useState<any>(null);    // card being edited (title+desc)
   const [mixing, setMixing] = useState<Record<string, boolean>>({});   // per-slug remix spinner
   const [thumbing, setThumbing] = useState<Record<string, boolean>>({});  // per-slug thumbnail spinner
-  const genThumb = async (t: any) => {
+  const [imgPromptTool, setImgPromptTool] = useState<any>(null);          // tool awaiting a custom image prompt
+  const [imgPromptText, setImgPromptText] = useState('');
+  const genThumb = async (t: any, instruction?: string) => {
     setThumbing(m => ({ ...m, [t.slug]: true }));
     try {
-      const r = await API.post('/api/tools/thumbnail', { slug: t.slug });
+      const r = await API.post('/api/tools/thumbnail', { slug: t.slug, instruction: instruction || '' });
       if (r?.thumbnail) patchTool(t.slug, { thumbnail: r.thumbnail });
       else if (r?.error) alert(r.error);
     } catch (e: any) { alert(e?.message || 'Could not generate a thumbnail.'); }
     setThumbing(m => { const n = { ...m }; delete n[t.slug]; return n; });
   };
+  const openImgPrompt = (t: any) => { setImgPromptText(''); setImgPromptTool(t); };
   const patchTool = (slug: string, patch: any) => setTools(ts => ts.map(t => t.slug === slug ? { ...t, ...patch } : t));
   const canEditCard = (t: any) => !(t.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === t.owner);
   const remix = async (t: any) => {
@@ -158,21 +161,30 @@ export function ToolsView() {
       <button className="btn small green" onClick={() => open(t)}>Open →</button>
     </span>
   );
-  // Plain corner palette icon that regenerates the image (owner/admin), no box.
-  const cornerPalette = (t: any) => canEditCard(t) ? (
-    <button title="Regenerate image with AI" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)}
-      style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 18, lineHeight: 1, filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.95))' }}>{thumbing[t.slug] ? '…' : '🎨'}</button>
+  // Plain corner icons over an image (owner/admin), no box: 🎨 regenerate (random),
+  // ✎ regenerate from a custom typed prompt.
+  const overlayIcon = { position: 'absolute' as const, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 17, lineHeight: 1, filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.95))' };
+  const cornerIcons = (t: any) => canEditCard(t) ? (
+    <>
+      <button title="Custom image — describe what to show" disabled={!!thumbing[t.slug]} onClick={() => openImgPrompt(t)} style={{ ...overlayIcon, top: 6, left: 8 }}>✎</button>
+      <button title="Regenerate image with AI" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)} style={{ ...overlayIcon, top: 6, right: 8 }}>{thumbing[t.slug] ? '…' : '🎨'}</button>
+    </>
   ) : null;
-  // A tool's thumbnail photo (or a "no photo" placeholder + AI-generate button).
+  // A tool's thumbnail photo (or a "no photo" placeholder + AI-generate buttons).
   const thumbBox = (t: any, h: number) => (
     isRenderableImage(t.thumbnail)
       ? <div style={{ position: 'relative' }}>
           <img src={t.thumbnail} alt="" loading="lazy" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
-          {cornerPalette(t)}
+          {cornerIcons(t)}
         </div>
       : <div style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', textAlign: 'center', padding: 6 }}>
           <span style={{ fontSize: 12, opacity: 0.6 }}>🖼️ No photo available</span>
-          {canEditCard(t) && <button className="btn small ghost" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)}>{thumbing[t.slug] ? 'Generating…' : '🎨 Generate with AI'}</button>}
+          {canEditCard(t) && (
+            <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button className="btn small ghost" disabled={!!thumbing[t.slug]} onClick={() => genThumb(t)}>{thumbing[t.slug] ? 'Generating…' : '🎨 Generate'}</button>
+              <button className="btn small ghost" disabled={!!thumbing[t.slug]} onClick={() => openImgPrompt(t)}>✎ Custom</button>
+            </span>
+          )}
         </div>
   );
   const rowThumb = (t: any) => (
@@ -225,6 +237,19 @@ export function ToolsView() {
   return (
     <>
       {editTool && <CardEditor tool={editTool} onClose={() => setEditTool(null)} onSaved={(title, description) => patchTool(editTool.slug, { title, description })} />}
+      {imgPromptTool && (
+        <div onClick={() => setImgPromptTool(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, width: '100%', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><b>Custom image for “{imgPromptTool.title}”</b><button className="btn small ghost" onClick={() => setImgPromptTool(null)}>✕</button></div>
+            <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 6px' }}>Describe what to show. Your idea is blended with the tool&apos;s theme and the everyday-scene style into one image.</p>
+            <textarea value={imgPromptText} onChange={e => setImgPromptText(e.target.value)} autoFocus placeholder="e.g. a teacher jogging at sunrise, thinking about grading" style={{ width: '100%', minHeight: 64, fontSize: 14, marginBottom: 8 }} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn small ghost" onClick={() => setImgPromptTool(null)}>Cancel</button>
+              <button className="btn small green" disabled={!!thumbing[imgPromptTool.slug]} onClick={() => { const t = imgPromptTool; setImgPromptTool(null); genThumb(t, imgPromptText.trim()); }}>{thumbing[imgPromptTool.slug] ? 'Generating…' : '🎨 Generate'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {editHeading === 'galleryTitle' ? (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '0 auto' }}>
           <input value={headingDraft} onChange={e => setHeadingDraft(e.target.value)} autoFocus
