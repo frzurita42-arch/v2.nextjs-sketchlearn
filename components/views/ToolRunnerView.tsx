@@ -16,6 +16,8 @@ import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
 import { SharePanel } from '@/components/tools/SharePanel';
 import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
+import { InstructionPlank } from '@/components/activities/InstructionPlank';
+import { useShelfTitle } from '@/components/tools/useShelfTitle';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
 import { isRenderableImage } from '@/lib/img';
@@ -157,6 +159,8 @@ export function ToolRunnerView() {
   // effects run first, so the LessonPlayer consumes it before this fires; for
   // non-lesson tools this drops an unconsumed intent so it can't leak later.
   useEffect(() => { const id = setTimeout(() => { appState.openIntent = null; }, 0); return () => clearTimeout(id); }, []);
+  // The History section header (editable + AI-distort), persisted for everyone.
+  const historyHdr = useShelfTitle('historyShelfTitle', '📖 History');
 
   // Coerced field arrays used everywhere below (never throw on a bad shape).
   const settingsFields = asArray(def?.settings);
@@ -362,8 +366,11 @@ export function ToolRunnerView() {
               {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
             </div>
             <div style={{ marginTop: 16 }}>
+              <InstructionPlank>
+                <b>📖 History</b> — everything people added to this tool. Open an entry, ★ favorite, or search / filter / sort. 🔄 Refresh shuffles the order.
+              </InstructionPlank>
               <Collection
-                title="History"
+                {...historyHdr} onRefresh={loadEntries}
                 items={asArray(entries)}
                 id={(e: any) => e.id}
                 searchText={(e: any) => `${e.username || ''} ${entryFields.filter((f: any) => !['image', 'audio', 'drawing'].includes(f.type)).map((f: any) => String(e.data?.[f.id] ?? '')).join(' ')}`}

@@ -12,6 +12,7 @@ import { ToolCard } from '@/components/tools/ToolCard';
 import { AdminToolsCarousel } from '@/components/tools/AdminToolsCarousel';
 import { Carousel } from '@/components/ui/Carousel';
 import { InstructionPlank } from '@/components/activities/InstructionPlank';
+import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -103,6 +104,8 @@ export function ToolsView() {
 
   // Admin-editable page copy (heading + subtitle), saved for everyone.
   const isAdmin = app.user?.role === 'admin';
+  // The gallery's section header (editable + AI-distort), persisted for everyone.
+  const galleryHdr = useShelfTitle('galleryShelfTitle', '🖼️ Gallery');
   const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string }>({});
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
@@ -262,10 +265,13 @@ export function ToolsView() {
           </div>
         ) : (
           <>
+            <InstructionPlank>
+              <b>🖼️ Gallery</b> — browse every tool. Search by name or @user, filter by ★ favorites / 🛡️ liked by admin / 💛 OP favorited, switch grid ▦ or rows ☰, sort newest/oldest, and page through. 🔄 Refresh shuffles into a random order. Tap a card to open its tool.
+            </InstructionPlank>
             <CategoryFilter value={filter} onChange={setFilter} counts={counts} />
             <Divider />
             <Collection
-              title="Gallery"
+              {...galleryHdr} onRefresh={reloadTools}
               items={catItems}
               id={(t: any) => t.id}
               searchText={(t: any) => `${t.title || ''} ${t.owner || ''}`}

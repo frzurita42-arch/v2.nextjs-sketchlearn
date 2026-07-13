@@ -21,7 +21,8 @@ import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/s
 import { buildLessonZip } from '@/lib/lesson-export';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { CategoryFilter } from '@/components/tools/CategoryFilter';
+import { InstructionPlank } from '@/components/activities/InstructionPlank';
+import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -660,6 +661,8 @@ function AnswerKey({ q }: { q: Q }) {
 
 export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: string; canEdit?: boolean }) {
   const lesson = def?.lesson || {};
+  // The History section header (editable + AI-distort), persisted for everyone.
+  const historyHdr = useShelfTitle('historyShelfTitle', '📖 History');
   // Conversation / journal modes are a growing canvas thread, not a slide deck.
   if (lesson.mode === 'conversation' || lesson.mode === 'journal') {
     return <CanvasConversation def={def} slug={slug} />;
@@ -711,7 +714,6 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [topicsBusy, setTopicsBusy] = useState(false);
   const [exHint, setExHint] = useState('');                     // steer the AI example
   // Activities-feed controls.
-  const [feedCat, setFeedCat] = useState('all');
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_gen_favs') || '{}')); } catch { /* ignore */ } }, []);
   const toggleFav = (id: string) => setFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_gen_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
@@ -1027,13 +1029,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       // A free-text box for anything else the author wants woven into the lesson.
       { id: 'custom', label: 'Custom instructions (optional)', type: 'text', placeholder: 'e.g. focus on real-world examples, add a fun fact each slide…' },
     ];
-    // Category is the only section-specific filter; the standard Collection owns
-    // search / favorites / by-admin / grid-rows / sort / count / pagination.
-    const feedItems = activities.filter((e: any) => feedCat === 'all' || (e.data?.category || '') === feedCat);
-    // Per-category counts for the chip-row filter — the SAME CategoryFilter the
-    // home Tools gallery uses (empty categories hide themselves).
-    const feedCounts: Record<string, number> = { all: activities.length };
-    for (const c of GEN_CATEGORIES) feedCounts[c] = activities.filter((e: any) => (e.data?.category || '') === c).length;
+    // Every rendition here is the same tool's topic, so there's no topic filter —
+    // the standard Collection owns search / favorites / by-admin / rows / sort /
+    // count / pagination.
+    const feedItems = activities;
     // One rendition card — rendered through the SHARED CardShell so its container
     // (image space, title, subtitle, footer) is identical to the tools gallery
     // cards; only the buttons differ (Play + OP results instead of Open →). It
@@ -1169,12 +1168,14 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         {/* ┄ divider: AI example ┄ activities feed ┄ */}
         <div style={dashRule} />
 
-        {/* Same filter layout as the home Tools gallery: category chip row → dashed
-            divider → the shared Collection toolbar (named "History"). */}
-        <CategoryFilter value={feedCat} onChange={setFeedCat} counts={feedCounts} categories={GEN_CATEGORIES.map(c => ({ key: c, label: c }))} />
-        <div style={dashRule} />
+        {/* The History section: a wooden how-to banner, then the shared Collection
+            with the carousel-style editable header. (No topic filter — every
+            rendition here is the same tool's topic.) */}
+        <InstructionPlank>
+          <b>📖 History</b> — every generation made with this tool. ▶ Play a fresh replica, 📖 open the OP results, ★ favorite, or search / filter / sort. 🔄 Refresh shuffles the order.
+        </InstructionPlank>
         <Collection
-          title="History"
+          {...historyHdr} onRefresh={loadActivities}
           items={feedItems}
           id={(e: any) => e.id}
           searchText={(e: any) => `${label(e.data || {})} ${e.username || ''} ${e.data?.topic || ''}`}

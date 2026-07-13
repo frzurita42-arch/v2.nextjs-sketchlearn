@@ -41,24 +41,28 @@ export interface CollectionProps<T> {
   emptyFiltered?: string;                  // message when filters hide everything
   searchPlaceholder?: string;
   maxWidth?: number;
-  title?: string;                          // a heading shown at the top of the filter (e.g. "Gallery", "History")
+  // A carousel-style section header (emoji + title, left-aligned) shown atop the
+  // filter, with optional edit (✎) / AI-distort (🎨) / refresh (🔄) controls.
+  title?: string;
+  canEditTitle?: boolean;
+  onRenameTitle?: (t: string) => void;
+  onRemixTitle?: () => void;
+  remixingTitle?: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
-// "Algorithm" order: split the list into three thirds and round-robin one from
-// each (first, middle, last, repeat) so the deck is evenly interleaved.
-function interleaveThirds<T>(arr: T[]): T[] {
-  const n = arr.length;
-  if (n < 3) return arr;
-  const t = Math.ceil(n / 3);
-  const a = arr.slice(0, t), b = arr.slice(t, 2 * t), c = arr.slice(2 * t);
-  const out: T[] = [];
-  const max = Math.max(a.length, b.length, c.length);
-  for (let i = 0; i < max; i++) {
-    if (i < a.length) out.push(a[i]);
-    if (i < b.length) out.push(b[i]);
-    if (i < c.length) out.push(c[i]);
+// A deterministic shuffle keyed by a seed, so Refresh gives a fresh random order
+// (no AI, no tokens) that stays stable across re-renders until the next Refresh.
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const a = [...arr];
+  let s = (seed || 1) >>> 0;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    const j = s % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  return out;
+  return a;
 }
 
 export function Collection<T>({
@@ -67,8 +71,13 @@ export function Collection<T>({
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid', gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
+  canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
 }: CollectionProps<T>) {
   const [q, setQ] = useState('');
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(title || '');
+  const saveTitle = () => { const v = titleDraft.trim(); if (v && onRenameTitle) onRenameTitle(v); setEditingTitle(false); };
+  const hdrIcon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 } as const;
   // One mutually-exclusive status filter (All is the neutral default). Whoever may
   // save it (owner/admin) writes the page default; others' picks are session-only.
   const [activeFilter, setActiveFilter] = useState<FilterKey>(defaultFilter);
@@ -80,7 +89,9 @@ export function Collection<T>({
     setActiveFilter(next);
     if (canSaveFilter && onSaveFilter) onSaveFilter(next);
   };
-  const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'algorithm'>('algorithm');   // default
+  const [sortMode, setSortMode] = useState<'newest' | 'oldest'>('newest');   // default
+  // A random-order seed set by Refresh; overrides the sort until a sort is picked.
+  const [shuffle, setShuffle] = useState<number | null>(null);
   const [view, setView] = useState<'grid' | 'row'>(defaultView);
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -95,16 +106,18 @@ export function Collection<T>({
     let cancelled = false;
     API.get('/api/prefs').then((r: any) => {
       const v = r?.prefs?.[`sort:${sortPrefKey}`];
-      if (!cancelled && (v === 'newest' || v === 'oldest' || v === 'algorithm')) setSortMode(v);
+      if (!cancelled && (v === 'newest' || v === 'oldest')) setSortMode(v);
     }).catch(() => { /* ignore */ });
     return () => { cancelled = true; };
   }, [sortPrefKey]);
   const cycleSort = () => {
-    const order = ['newest', 'oldest', 'algorithm'] as const;
-    const next = order[(order.indexOf(sortMode) + 1) % order.length];
+    const next = sortMode === 'newest' ? 'oldest' : 'newest';
+    setShuffle(null);   // choosing a sort clears the random order
     setSortMode(next);
     if (sortPrefKey) API.put('/api/prefs', { key: `sort:${sortPrefKey}`, value: next }).catch(() => { /* ignore */ });
   };
+  // Refresh = a fresh RANDOM order of the cards (plus any caller reload).
+  const doRefresh = () => { setShuffle(Math.floor(Math.random() * 1e9) + 1); onRefresh?.(); };
 
   const filtered = useMemo(() => {
     const nq = q.trim().toLowerCase();
@@ -117,19 +130,18 @@ export function Collection<T>({
       if (nq && !searchText(t).toLowerCase().includes(nq)) return false;
       return true;
     });
-    if (sortMode === 'algorithm') {
-      if (time) arr = [...arr].sort((a, b) => time(b) - time(a));   // base: newest-first
-      arr = interleaveThirds(arr);
+    if (shuffle != null) {
+      arr = seededShuffle(arr, shuffle);            // Refresh → random order
     } else if (time) {
       arr = [...arr].sort((a, b) => (sortMode === 'newest' ? time(b) - time(a) : time(a) - time(b)));
     }
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, q, activeFilter, sortMode, favs]);
+  }, [items, q, activeFilter, sortMode, shuffle, favs]);
 
   const pageCount = perPage ? Math.max(1, Math.ceil(filtered.length / perPage)) : 1;
   useEffect(() => { setPage((p) => Math.min(p, pageCount - 1)); }, [pageCount]);
-  useEffect(() => { setPage(0); }, [q, activeFilter, sortMode]);
+  useEffect(() => { setPage(0); }, [q, activeFilter, sortMode, shuffle]);
   const shown = perPage ? filtered.slice(page * perPage, page * perPage + perPage) : filtered;
 
   // On a page change, jump back up to the toolbar so the next page starts at the
@@ -156,8 +168,27 @@ export function Collection<T>({
   return (
     <div>
       <div ref={topRef} style={{ scrollMarginTop: 8 }} />
-      {/* Section name, sitting on top of the filter toolbar. */}
-      {title && <div style={{ ...wrap, textAlign: 'center', marginBottom: 8 }}><span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', opacity: 0.65 }}>{title}</span></div>}
+      {/* Section header — the same style as a carousel title (emoji + title, left-
+          aligned) with edit / AI-distort / refresh. No slider buttons (the pager
+          handles paging). */}
+      {title && (
+        <div style={{ ...wrap, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          {editingTitle ? (
+            <input autoFocus value={titleDraft} onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setTitleDraft(title); setEditingTitle(false); } }}
+              onBlur={saveTitle} style={{ fontSize: 17, fontWeight: 700, padding: '2px 6px', borderRadius: 6, border: '1.5px solid var(--ink)', maxWidth: 320 }} />
+          ) : (
+            <h3 style={{ margin: 0, fontSize: 18 }}>{title}</h3>
+          )}
+          {canEditTitle && !editingTitle && (
+            <>
+              <button title="Edit the title" style={hdrIcon} onClick={() => { setTitleDraft(title); setEditingTitle(true); }}>✎</button>
+              {onRemixTitle && <button title="AI tap-mixer — reword the title" style={hdrIcon} disabled={!!remixingTitle} onClick={onRemixTitle}>{remixingTitle ? '…' : '🎨'}</button>}
+            </>
+          )}
+          <button className="btn small ghost" disabled={!!refreshing} onClick={doRefresh} title="Shuffle into a fresh random order">{refreshing ? '…' : '🔄 Refresh'}</button>
+        </div>
+      )}
       {/* Toolbar */}
       <div style={{ ...wrap, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
@@ -167,7 +198,7 @@ export function Collection<T>({
         {favs && <button className={`btn small ${activeFilter === 'fav' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('fav')} title="Only your favorites">★ My favorites</button>}
         {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Liked by admin</button>}
         {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
-        {time && <button className="btn small" onClick={cycleSort} title="Sort: newest → oldest → algorithm (interleaved thirds)">{sortMode === 'newest' ? '↓ Newest' : sortMode === 'oldest' ? '↑ Oldest' : '🔀 Algorithm'}</button>}
+        {time && <button className="btn small" onClick={cycleSort} title="Sort: newest ↔ oldest">{sortMode === 'newest' ? '↓ Newest' : '↑ Oldest'}</button>}
         <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
           <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setViewP('grid')}>▦</button>
           <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setViewP('row')}>☰</button>
