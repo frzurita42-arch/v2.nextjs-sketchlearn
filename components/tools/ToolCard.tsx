@@ -28,6 +28,8 @@ export interface ToolCardProps {
   isExample?: boolean;
   onRemove?: (t: any) => void;
   hideOpen?: boolean;   // omit the "Open →" button (image + title still open the tool)
+  onReplay?: (t: any) => void;    // ♻️ new generation
+  onHistory?: (t: any) => void;   // 📖 OP history track (saved results)
 }
 
 const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
@@ -75,6 +77,8 @@ export function ToolCard(p: ToolCardProps) {
   const del = p.canRemove && p.onRemove
     ? <button style={delIcon} title={p.isExample ? 'Hide this example' : 'Delete'} onClick={() => p.onRemove!(t)}>🗑</button>
     : null;
+  const replay = p.onReplay ? <button style={delIcon} title="New generation" onClick={() => p.onReplay!(t)}>♻️</button> : null;
+  const history = p.onHistory ? <button style={delIcon} title="OP history — the first lesson made with this tool" onClick={() => p.onHistory!(t)}>📖</button> : null;
 
   return (
     <CardShell
@@ -91,7 +95,7 @@ export function ToolCard(p: ToolCardProps) {
       editBtns={editBtns}
       tags={view === 'grid' && Array.isArray(t.tags) ? t.tags : undefined}
       meta={<span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>}
-      del={del}
+      del={<>{history}{replay}{del}</>}
       actions={p.hideOpen ? null : <button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}
     />
   );

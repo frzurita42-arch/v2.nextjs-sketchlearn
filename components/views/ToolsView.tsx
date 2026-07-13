@@ -9,7 +9,7 @@ import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
-import { PostsCarousel } from '@/components/tools/PostsCarousel';
+import { AdminToolsCarousel } from '@/components/tools/AdminToolsCarousel';
 import { Carousel } from '@/components/ui/Carousel';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
@@ -275,21 +275,20 @@ export function ToolsView() {
         )}
 
       {/* Sliding shelves under the gallery, above the page's bottom Back button.
-          FIRST the posts generated from the tools, THEN the tools themselves.
+          The tool SYSTEM itself, then the platform's built-in admin-made tools.
           Each carousel draws its own dashed rule underneath. */}
       {!loading && tools.length > 0 && (
         <>
-          <PostsCarousel
-            title={site.picksShelfTitle || '📰 Posts from the tools'}
-            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
-            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || '📰 Posts from the tools')} remixingTitle={!!headMix.picksShelfTitle} />
-          <div style={{ height: 8 }} />
-          {/* The tool SYSTEM itself — each card links to that tool's generator page. */}
           <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
             onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}>
             {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
           </Carousel>
+          <div style={{ height: 8 }} />
+          <AdminToolsCarousel max={10}
+            title={site.picksShelfTitle || "🛠️ Admin's Made Tools"}
+            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
+            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || "🛠️ Admin's Made Tools")} remixingTitle={!!headMix.picksShelfTitle} />
         </>
       )}
     </>

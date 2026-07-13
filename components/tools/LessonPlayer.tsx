@@ -886,6 +886,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     intentDone.current = true; appState.openIntent = null;
     if (intent.action === 'results') { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } }
     else if (intent.action === 'replay') { recordAndPlay(intent.config || {}, { replica: true }); }
+    else if (intent.action === 'generate') { recordAndPlay(intent.config && Object.keys(intent.config).length ? intent.config : form); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

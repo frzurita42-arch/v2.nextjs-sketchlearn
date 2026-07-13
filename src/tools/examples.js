@@ -31,6 +31,7 @@ function exLesson(o) {
       lesson: {
         subject: o.subject, subjectKind: o.kind, totalSlides: 4, translateTo: 'English',
         ...(o.language ? { language: o.language } : {}),
+        ...(o.style ? { style: o.style } : {}),
         paragraphsPerSlide: 1, paragraphLength: 'brief',
         support, activityTypes: acts,
       },
@@ -53,12 +54,26 @@ const EXAMPLE_TOOLS = [
   exLesson({ slug: 'example-study-skills', title: 'Study Skills — Example Lesson', subject: 'Study Skills', kind: 'general', tags: ['productivity'], desc: 'Focus, note-taking and memory techniques to learn anything more effectively.' }),
 ];
 
+// The platform's own "admin-made" tools: the built-in learning activities exposed
+// as full tools so they get the standard tool page (input box + generations feed
+// with results & new-generation + comments + filter). A `style` steers the shared
+// lesson generator toward each activity's flavour.
+const ADMIN_TOOLS = [
+  exLesson({ slug: 'admin-learning-path', title: 'Learning Path', subject: 'Learning Path', kind: 'general', tags: ['admin', 'learning-path'], support: { images: true, tables: true }, style: 'Build a step-by-step LEARNING PATH: each slide is the next milestone that builds on the previous, from fundamentals toward mastery of the chosen topic.', desc: 'Pick any subject and get a guided, step-by-step path of slides from basics to mastery.' }),
+  exLesson({ slug: 'admin-suggested-topic', title: 'Suggested Topic', subject: 'Suggested Topic', kind: 'general', tags: ['admin', 'suggested'], support: { images: true }, style: 'Teach an interesting, well-chosen topic the learner might not have thought of — a delightful "did you know" style mini-lesson.', desc: 'A surprise, well-chosen topic to explore — a delightful mini-lesson each time.' }),
+  exLesson({ slug: 'admin-time-travel', title: 'Time Travel', subject: 'Time Travel', kind: 'general', tags: ['admin', 'history'], support: { images: true, tables: true }, style: 'Teach the topic through the lens of HISTORY and vivid "what-if" news-style headlines from different eras — travel through time to understand how ideas evolved.', desc: 'Learn any topic by travelling through time — history and “what-if” headlines from every era.' }),
+  exLesson({ slug: 'admin-structured-explanations', title: 'Structured Explanations', subject: 'Structured Explanations', kind: 'general', tags: ['admin'], support: { images: true, tables: true }, style: 'Give a clearly STRUCTURED, sectioned explanation: definition → why it matters → how it works → example → common pitfalls. Keep each slide one clean section.', desc: 'A clean, sectioned breakdown of any concept: definition, why, how, example, pitfalls.' }),
+  exLesson({ slug: 'admin-language-learning', title: 'Language Learning', subject: 'Spanish', kind: 'language', language: 'Spanish', levels: ['A1', 'A2', 'B1', 'B2'], tags: ['admin', 'language'], support: { images: true, audio: true }, style: 'A proper LANGUAGE lesson: short phrases to hear, translate and practice, with grammar and vocabulary appropriate to the level.', desc: 'Practice a language with hear-and-translate phrases, grammar and vocabulary by level.' }),
+];
+
 // The gallery features just a couple so it stays uncluttered; the full set backs
 // the suggestion carousel and slug resolution.
 const GALLERY_EXAMPLES = EXAMPLE_TOOLS.slice(0, 2);
+// Everything resolvable by slug (opened / edited): subject examples + admin tools.
+const ALL_EXAMPLES = [...EXAMPLE_TOOLS, ...ADMIN_TOOLS];
 
 function exampleBySlug(slug) {
-  return EXAMPLE_TOOLS.find(t => t.slug === slug) || null;
+  return ALL_EXAMPLES.find(t => t.slug === slug) || null;
 }
 
 function isExampleSlug(slug) {
@@ -81,4 +96,4 @@ function applyOverrides(tools, overrides) {
   return (tools || []).map(t => (overrides[t.slug] ? applyOverride(t, overrides[t.slug]) : t));
 }
 
-module.exports = { EXAMPLE_TOOLS, GALLERY_EXAMPLES, exampleBySlug, isExampleSlug, applyOverride, applyOverrides };
+module.exports = { EXAMPLE_TOOLS, ADMIN_TOOLS, GALLERY_EXAMPLES, exampleBySlug, isExampleSlug, applyOverride, applyOverrides };
