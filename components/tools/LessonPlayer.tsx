@@ -21,7 +21,7 @@ import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/s
 import { buildLessonZip } from '@/lib/lesson-export';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { DonationMug } from '@/components/ui/DonationMug';
+import { DonationPrompt } from '@/components/tools/DonationPrompt';
 import { InstructionPlank } from '@/components/activities/InstructionPlank';
 import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
@@ -1170,12 +1170,9 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
               </div>
             ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
           </div>
-          {/* Coffee mug — only the graphic, on the page background (no card), linking
-              to the donations page. */}
-          <a href="https://ko-fi.com" target="_blank" rel="noreferrer" title="Support this project" aria-label="Donations"
-            style={{ justifySelf: 'center', display: 'inline-flex', color: 'inherit' }}>
-            <DonationMug width={150} height={125} />
-          </a>
+          {/* Coffee mug donation prompt — the graphic (no card) + an editable nudge;
+              clicking it opens the Bitcoin donation popup. */}
+          <DonationPrompt mugWidth={220} mugHeight={183} />
         </div>
 
         {/* ┄ divider: AI example ┄ activities feed ┄ */}
