@@ -247,6 +247,11 @@ input[type=text], input[type=password], input[type=number], textarea, select {
   outline: none;
 }
 input:focus, textarea:focus, select:focus { background: #fffbe8; }
+/* Inputs written without an explicit type (e.g. the gallery filter search box and
+   the inline title editors) still get the app's handwritten font, so they match
+   the settings fields instead of falling back to the browser default. Font only —
+   their own inline sizing/border stays, so compact toolbar inputs aren't resized. */
+input:not([type]), input[type=search], input[type=email] { font-family: var(--font-hand); color: var(--ink); }
 input[type=range] { width: 100%; accent-color: var(--orange); cursor: pointer; padding: 0; border: none; background: none; }
 label.field { display: block; margin-bottom: 14px; font-weight: bold; }
 label.field > span { display: block; margin-bottom: 4px; }
