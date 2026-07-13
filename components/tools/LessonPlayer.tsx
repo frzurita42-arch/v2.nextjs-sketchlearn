@@ -53,6 +53,38 @@ function Spinner() {
   return <span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sl-spin 0.7s linear infinite', verticalAlign: '-1px', marginRight: 6 }} />;
 }
 
+// The slide-generation progress bar. It SLOWLY fills up like a loader but eases to
+// a stop just short of the target slide's checkpoint (it never "completes" on its
+// own — the bar disappears the instant the real slide arrives). Checkpoint ticks
+// mark every slide so you can see which slide it's loading to and how many remain.
+function GenProgress({ target, total }: { target: number; total: number }) {
+  const floor = ((target - 1) / total) * 100;      // previous checkpoint
+  const ceil = ((target - 0.07) / total) * 100;    // just before the target checkpoint
+  const [pct, setPct] = useState(floor);
+  useEffect(() => {
+    setPct(floor);
+    // On the next frame, transition (CSS, ease-out) from floor toward ceil — fast
+    // at first, then slower, so it feels like loading without ever finishing.
+    const id = requestAnimationFrame(() => setPct(ceil));
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, total]);
+  const left = Math.max(0, total - target);
+  return (
+    <div style={{ maxWidth: 640, margin: '10px auto', textAlign: 'center' }}>
+      <div style={{ position: 'relative', height: 14, background: 'rgba(0,0,0,0.08)', borderRadius: 999, overflow: 'hidden', border: '1.5px solid var(--ink)' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent,#5c80bc)', transition: 'width 9s cubic-bezier(0.06, 0.85, 0.15, 1)' }} />
+        {Array.from({ length: Math.max(0, total - 1) }, (_, i) => (
+          <span key={i} aria-hidden style={{ position: 'absolute', top: 0, bottom: 0, left: `${((i + 1) / total) * 100}%`, width: 2, background: 'var(--ink)', opacity: 0.45 }} />
+        ))}
+      </div>
+      <p style={{ opacity: 0.75, marginTop: 8, fontSize: 13 }}>
+        <Spinner />Loading slide {target} of {total}{left > 0 ? ` · ${left} slide${left === 1 ? '' : 's'} left until the end` : ' · last slide'}
+      </p>
+    </div>
+  );
+}
+
 // An interactive GeoGebra graph. Loads GeoGebra's deployggb.js once, then injects
 // an applet and runs the AI-provided commands (functions, points, circles…).
 function GeoGebra({ commands, caption }: { commands: string[]; caption?: string }) {
@@ -1158,11 +1190,15 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         <span style={{ fontSize: 13, opacity: 0.7 }}>Slide {cur + 1} / {tot}{qList.length > 1 ? ` · ${answeredCount}/${qList.length} answered` : ''}</span>
         <span style={{ fontSize: 13, opacity: 0.7 }}>Score: {scoreSoFar}</span>
       </div>
-      <div style={{ height: 8, background: 'rgba(0,0,0,0.08)', borderRadius: 999, overflow: 'hidden', border: '1.5px solid var(--ink)', marginBottom: 12 }}>
-        <div style={{ width: `${((cur + 1) / tot) * 100}%`, height: '100%', background: 'var(--accent,#5c80bc)' }} />
+      <div style={{ position: 'relative', height: 8, background: 'rgba(0,0,0,0.08)', borderRadius: 999, overflow: 'hidden', border: '1.5px solid var(--ink)', marginBottom: 12 }}>
+        <div style={{ width: `${((cur + 1) / tot) * 100}%`, height: '100%', background: 'var(--accent,#5c80bc)', transition: 'width 0.3s ease' }} />
+        {/* Checkpoint ticks — one per slide boundary. */}
+        {Array.from({ length: Math.max(0, tot - 1) }, (_, i) => (
+          <span key={i} aria-hidden style={{ position: 'absolute', top: 0, bottom: 0, left: `${((i + 1) / tot) * 100}%`, width: 2, background: 'var(--ink)', opacity: 0.4 }} />
+        ))}
       </div>
 
-      {genBusy && !curSlide && <p style={{ opacity: 0.7, textAlign: 'center' }}><Spinner />Generating slide…</p>}
+      {genBusy && !curSlide && <GenProgress target={cur + 1} total={tot} />}
       {err && !curSlide && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchInto(cur, cfg, slides.filter(Boolean).map(s => (s as Slide).title))}>Retry</button></p>}
 
       {curSlide && (
