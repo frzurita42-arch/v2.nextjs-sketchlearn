@@ -28,6 +28,8 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
   const save = () => { const v = draft.trim(); if (v && onRenameTitle) onRenameTitle(v); setEditing(false); };
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      {/* Hide the horizontal scrollbar (scrolling still works). */}
+      <style>{'.sl-rail{scrollbar-width:none;-ms-overflow-style:none;}.sl-rail::-webkit-scrollbar{display:none;height:0;width:0;}'}</style>
       {/* Title + its controls, all on the same (left) side. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         {editing ? (
@@ -49,12 +51,14 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
       {count === 0 ? (
         <div style={{ opacity: 0.6, fontSize: 13, padding: '8px 0' }}>{empty || 'Nothing to show yet.'}</div>
       ) : (
-        <div ref={rail} style={{ display: 'flex', gap: 14, overflowX: 'auto', scrollSnapType: 'x mandatory', paddingBottom: 8, WebkitOverflowScrolling: 'touch' }}>
+        <div ref={rail} className="sl-rail" style={{ display: 'flex', gap: 14, overflowX: 'auto', scrollSnapType: 'x mandatory', paddingBottom: 8, WebkitOverflowScrolling: 'touch' }}>
           {(Array.isArray(children) ? children : [children]).map((c, i) => (
             <div key={i} style={{ flex: `0 0 ${cardWidth}px`, maxWidth: cardWidth, height: cardHeight, scrollSnapAlign: 'start' }}>{c}</div>
           ))}
         </div>
       )}
+      {/* A dashed rule under every carousel. */}
+      <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '14px 0 0' }} />
     </div>
   );
 }

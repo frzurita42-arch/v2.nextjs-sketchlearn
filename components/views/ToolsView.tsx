@@ -9,7 +9,7 @@ import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
-import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
+import { PostsCarousel } from '@/components/tools/PostsCarousel';
 import { RecommendButton } from '@/components/tools/RecommendButton';
 import { Carousel } from '@/components/ui/Carousel';
 
@@ -276,11 +276,16 @@ export function ToolsView() {
           </>
         )}
 
-      {/* Two sliding shelves under the gallery, above the page's bottom Back
-          button: a Tools carousel (front page only) and the personalized picks.
-          A single dashed rule sits at the BOTTOM of the sliders (no top line). */}
+      {/* Sliding shelves under the gallery, above the page's bottom Back button.
+          FIRST the posts generated from the tools, THEN the tools themselves.
+          Each carousel draws its own dashed rule underneath. */}
       {!loading && tools.length > 0 && (
         <>
+          <PostsCarousel
+            title={site.picksShelfTitle || '📰 Posts from the tools'}
+            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
+            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || '📰 Posts from the tools')} remixingTitle={!!headMix.picksShelfTitle} />
+          <div style={{ height: 8 }} />
           <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
             onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}
@@ -288,14 +293,8 @@ export function ToolsView() {
               <RecommendButton limit={10} label="✨ Recommend 10" onResults={setToolRecs} />
               {toolRecs && <button className="btn small ghost" onClick={() => setToolRecs(null)} title="Show all tools again">↩︎ All</button>}
             </>}>
-            {(toolRecs || catItems.slice(0, 10)).map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
+            {(toolRecs || catItems).map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
           </Carousel>
-          <div style={{ height: 14 }} />
-          <SuggestionCarousel limit={10}
-            title={site.picksShelfTitle || '✨ Top picks for you'}
-            canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
-            onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || '✨ Top picks for you')} remixingTitle={!!headMix.picksShelfTitle} />
-          <Divider />
         </>
       )}
     </>

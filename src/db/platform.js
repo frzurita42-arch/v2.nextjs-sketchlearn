@@ -276,6 +276,23 @@ async function listEntries(toolId, { limit = 200 } = {}) {
   }
 }
 
+// Recent entries across ALL tools ("posts from the tools" — the generated
+// renditions people made). Newest first.
+async function listRecentEntries({ limit = 30 } = {}) {
+  const lim = Math.max(1, Math.min(200, parseInt(limit, 10) || 30));
+  if (!db.pool) {
+    return readJSON('entries.json', [])
+      .slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, lim);
+  }
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT * FROM entries ORDER BY created_at DESC LIMIT $1', [lim]), 8000, 'Recent entries');
+    return rows.map(mapEntryRow);
+  } catch (e) {
+    console.error('DB recent entries failed; falling back to file:', e.message);
+    return readJSON('entries.json', []).slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, lim);
+  }
+}
+
 // Move an entry through its status state machine (e.g. pending -> approved).
 async function setEntryStatus(entryId, status) {
   if (!db.pool) {
@@ -530,7 +547,7 @@ async function setExampleOverride(slug, patch) {
 
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
-  insertEntry, listEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
+  insertEntry, listEntries, listRecentEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
   insertComment, listComments,
   insertPost, listPosts,
   getSiteSettings, setSiteSetting,
