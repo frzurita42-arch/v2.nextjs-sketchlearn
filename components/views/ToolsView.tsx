@@ -90,6 +90,17 @@ export function ToolsView() {
     setSite(s => ({ ...s, [key]: v }));
     try { await API.put('/api/site-settings', { key, value: v }); } catch { /* ignore */ }
   };
+  const [headMix, setHeadMix] = useState<Record<string, boolean>>({});
+  const remixHeading = async (key: 'galleryTitle' | 'gallerySubtitle') => {
+    const cur = key === 'galleryTitle' ? (site.galleryTitle || 'Tool gallery') : (site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.');
+    setHeadMix(m => ({ ...m, [key]: true }));
+    try {
+      const r = await API.post('/api/site-settings/remix', { text: cur, kind: key === 'galleryTitle' ? 'title' : 'subtitle' });
+      if (r?.text) await saveHeading(key, r.text); else if (r?.error) alert(r.error);
+    } catch { alert('Could not remix.'); }
+    setHeadMix(m => { const n = { ...m }; delete n[key]; return n; });
+  };
+  const headIcon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6 } as const;
 
   const HIDDEN_KEY = 'sl_hidden_examples';
   const loadHidden = (): string[] => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } };
@@ -225,7 +236,8 @@ export function ToolsView() {
       ) : (
         <h1 className="view-title">
           {site.galleryTitle ? site.galleryTitle : <>Tool <span className="scribble-underline">gallery</span></>}
-          {isAdmin && <button title="Edit heading (admin)" onClick={() => { setHeadingDraft(site.galleryTitle || 'Tool gallery'); setEditHeading('galleryTitle'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 15 }}>✎</button>}
+          {isAdmin && <button title="Edit heading (admin)" onClick={() => { setHeadingDraft(site.galleryTitle || 'Tool gallery'); setEditHeading('galleryTitle'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>}
+          {isAdmin && <button title="AI tap-mixer — reword the heading" disabled={!!headMix.galleryTitle} onClick={() => remixHeading('galleryTitle')} style={{ ...headIcon, fontSize: 15 }}>{headMix.galleryTitle ? '…' : '🎨'}</button>}
         </h1>
       )}
       {editHeading === 'gallerySubtitle' ? (
@@ -239,7 +251,8 @@ export function ToolsView() {
       ) : (
         <p className="view-sub" style={{ textAlign: 'center' }}>
           {site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.'}
-          {isAdmin && <button title="Edit subtitle (admin)" onClick={() => { setHeadingDraft(site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.'); setEditHeading('gallerySubtitle'); }} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>✎</button>}
+          {isAdmin && <button title="Edit subtitle (admin)" onClick={() => { setHeadingDraft(site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.'); setEditHeading('gallerySubtitle'); }} style={{ ...headIcon, fontSize: 13 }}>✎</button>}
+          {isAdmin && <button title="AI tap-mixer — reword the subtitle" disabled={!!headMix.gallerySubtitle} onClick={() => remixHeading('gallerySubtitle')} style={{ ...headIcon, fontSize: 13 }}>{headMix.gallerySubtitle ? '…' : '🎨'}</button>}
         </p>
       )}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
