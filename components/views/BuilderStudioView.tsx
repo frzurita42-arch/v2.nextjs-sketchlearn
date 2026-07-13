@@ -196,15 +196,14 @@ export function BuilderStudioView() {
                     <div style={{ display: 'grid', gap: 10 }}>
                       {layouts.map((ly, li) => (
                         <div key={li} className="card alt" style={{ padding: '10px 12px', borderStyle: 'dashed' }}>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55 }}>▦ LAYOUT {li + 1}</span>
-                            <select value={ly.template || 'auto'} onChange={(e) => setLayout(i, li, { template: e.target.value })} style={{ fontSize: 12, flex: '1 1 auto' }}>
+                          {/* layout dropdown + add-component picker share ONE row */}
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, flex: '0 0 auto' }}>▦{li + 1}</span>
+                            <select value={ly.template || 'auto'} onChange={(e) => setLayout(i, li, { template: e.target.value })} style={{ fontSize: 12, flex: '1 1 120px', minWidth: 0 }}>
                               {LAYOUT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
                             </select>
-                            <button className="btn small ghost" style={{ flex: '0 0 auto' }} disabled={layouts.length <= 1} title="Remove layout" onClick={() => removeLayout(i, li)}>✕</button>
-                          </div>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                             {picker(presCats, ly.components.map((c) => c.id), (id) => addComp(i, li, id), '＋ Add component…')}
+                            <button className="btn small ghost" style={{ flex: '0 0 auto' }} disabled={layouts.length <= 1} title="Remove layout" onClick={() => removeLayout(i, li)}>✕</button>
                           </div>
                           {ly.components.length === 0
                             ? <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>Pick a layout above, then add the components that go in this section.</p>
