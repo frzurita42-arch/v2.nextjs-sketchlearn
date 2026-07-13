@@ -440,10 +440,43 @@ async function setSiteSetting(key, value) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// user_prefs — per-user key/value preferences (e.g. a page's saved sort order)
+// ---------------------------------------------------------------------------
+async function getUserPrefs(username) {
+  username = String(username || '');
+  if (!username) return {};
+  if (!db.pool) { const all = readJSON('user_prefs.json', {}); return all[username] || {}; }
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT prefs FROM user_prefs WHERE username = $1', [username]), 8000, 'User prefs');
+    return rows[0] ? parseJsonb(rows[0].prefs, {}) : {};
+  } catch (e) { console.error('User prefs read failed:', e.message); return {}; }
+}
+
+async function setUserPref(username, key, value) {
+  username = String(username || ''); key = String(key || '').slice(0, 60);
+  if (!username || !key) return false;
+  if (!db.pool) {
+    const all = readJSON('user_prefs.json', {});
+    all[username] = { ...(all[username] || {}), [key]: value };
+    writeJSON('user_prefs.json', all);
+    return true;
+  }
+  try {
+    await withDbTimeout(dbQuery(
+      `INSERT INTO user_prefs (username, prefs, updated_at) VALUES ($1, jsonb_build_object($2::text, $3::jsonb), NOW())
+       ON CONFLICT (username) DO UPDATE SET prefs = user_prefs.prefs || jsonb_build_object($2::text, $3::jsonb), updated_at = NOW()`,
+      [username, key, JSON.stringify(value)]
+    ), 8000, 'Set user pref');
+    return true;
+  } catch (e) { console.error('User prefs write failed:', e.message); return false; }
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, setEntryStatus,
   insertComment, listComments,
   insertPost, listPosts,
   getSiteSettings, setSiteSetting,
+  getUserPrefs, setUserPref,
 };

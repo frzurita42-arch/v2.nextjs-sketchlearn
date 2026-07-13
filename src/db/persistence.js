@@ -139,6 +139,15 @@ async function initDatabase() {
     )
   `);
 
+  // ---------- per-user preferences (e.g. a page's saved sort order) ----------
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS user_prefs (
+      username TEXT PRIMARY KEY,
+      prefs JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // ---------- platform: generic entry store ----------
   // Rows created BY a tool at runtime (storage-system items, journal notes,
   // calendar events, contest/payment submissions...). `data` is schema-shaped

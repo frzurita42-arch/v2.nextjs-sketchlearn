@@ -7,6 +7,7 @@
  * Each caller only supplies its data accessors and how to render one item as a
  * grid card vs. a horizontal row. */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { API } from '@/lib/api';
 
 export interface CollectionProps<T> {
   items: T[];
@@ -20,6 +21,7 @@ export interface CollectionProps<T> {
   likedByOwner?: (t: T) => boolean;        // provide to show the 💛 OP-favorited filter
   perPage?: number;                        // provide to paginate
   storageKey?: string;                     // localStorage key to persist the view mode
+  sortPrefKey?: string;                    // when set, the sort order is saved per-user (DB) under this key
   defaultView?: 'grid' | 'row';
   gridMinPx?: number;                      // grid card min width (default 240)
   extra?: ReactNode;                       // section-specific control (e.g. a category select)
@@ -48,7 +50,7 @@ function interleaveThirds<T>(arr: T[]): T[] {
 
 export function Collection<T>({
   items, id, searchText, time, renderGrid, renderRow,
-  favs, likedByAdmin, likedByOwner, perPage, storageKey, defaultView = 'grid', gridMinPx = 240,
+  favs, likedByAdmin, likedByOwner, perPage, storageKey, sortPrefKey, defaultView = 'grid', gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900,
 }: CollectionProps<T>) {
@@ -56,7 +58,7 @@ export function Collection<T>({
   const [favOnly, setFavOnly] = useState(false);
   const [adminOnly, setAdminOnly] = useState(false);
   const [ownerOnly, setOwnerOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'algorithm'>('newest');
+  const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'algorithm'>('algorithm');   // default
   const [view, setView] = useState<'grid' | 'row'>(defaultView);
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -64,6 +66,23 @@ export function Collection<T>({
     try { const v = localStorage.getItem(storageKey); if (v === 'grid' || v === 'row') setView(v); } catch { /* ignore */ }
   }, [storageKey]);
   const setViewP = (v: 'grid' | 'row') => { setView(v); if (storageKey) { try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } } };
+
+  // Per-user saved sort order (DB) for pages that opt in with sortPrefKey.
+  useEffect(() => {
+    if (!sortPrefKey) return;
+    let cancelled = false;
+    API.get('/api/prefs').then((r: any) => {
+      const v = r?.prefs?.[`sort:${sortPrefKey}`];
+      if (!cancelled && (v === 'newest' || v === 'oldest' || v === 'algorithm')) setSortMode(v);
+    }).catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [sortPrefKey]);
+  const cycleSort = () => {
+    const order = ['newest', 'oldest', 'algorithm'] as const;
+    const next = order[(order.indexOf(sortMode) + 1) % order.length];
+    setSortMode(next);
+    if (sortPrefKey) API.put('/api/prefs', { key: `sort:${sortPrefKey}`, value: next }).catch(() => { /* ignore */ });
+  };
 
   const filtered = useMemo(() => {
     const nq = q.trim().toLowerCase();
@@ -123,7 +142,7 @@ export function Collection<T>({
         {favs && <button className={`btn small ${favOnly ? 'blue' : 'ghost'}`} onClick={() => setFavOnly((v) => !v)} title="Only your favorites">★ My favorites</button>}
         {likedByAdmin && <button className={`btn small ${adminOnly ? 'blue' : 'ghost'}`} onClick={() => setAdminOnly((v) => !v)} title="Only tools an admin liked">🛡️ Liked by admin</button>}
         {likedByOwner && <button className={`btn small ${ownerOnly ? 'blue' : 'ghost'}`} onClick={() => setOwnerOnly((v) => !v)} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
-        {time && <button className="btn small" onClick={() => setSortMode((m) => m === 'newest' ? 'oldest' : m === 'oldest' ? 'algorithm' : 'newest')} title="Sort: newest → oldest → algorithm (interleaved thirds)">{sortMode === 'newest' ? '↓ Newest' : sortMode === 'oldest' ? '↑ Oldest' : '🔀 Algorithm'}</button>}
+        {time && <button className="btn small" onClick={cycleSort} title="Sort: newest → oldest → algorithm (interleaved thirds)">{sortMode === 'newest' ? '↓ Newest' : sortMode === 'oldest' ? '↑ Oldest' : '🔀 Algorithm'}</button>}
         <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
           <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setViewP('grid')}>▦</button>
           <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setViewP('row')}>☰</button>

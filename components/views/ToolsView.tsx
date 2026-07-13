@@ -224,6 +224,7 @@ export function ToolsView() {
               likedByOwner={(t: any) => !!t.likedByOwner}
               perPage={9}
               storageKey="sl_tools_view"
+              sortPrefKey="gallery"
               emptyFiltered="No tools match these filters."
               emptyAll="No tools in this category yet."
               renderGrid={(t: any) => card(t, 'grid')}
