@@ -1153,12 +1153,12 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         {/* ┄ divider: AI example ┄ activities feed ┄ */}
         <div style={dashRule} />
 
-        <h4 style={{ margin: '0 0 8px' }}>Activities feed</h4>
         {/* Same filter layout as the home Tools gallery: category chip row → dashed
-            divider → the shared Collection toolbar. */}
+            divider → the shared Collection toolbar (named "History"). */}
         <CategoryFilter value={feedCat} onChange={setFeedCat} counts={feedCounts} categories={GEN_CATEGORIES.map(c => ({ key: c, label: c }))} />
         <div style={dashRule} />
         <Collection
+          title="History"
           items={feedItems}
           id={(e: any) => e.id}
           searchText={(e: any) => `${label(e.data || {})} ${e.username || ''} ${e.data?.topic || ''}`}

@@ -41,6 +41,7 @@ export interface CollectionProps<T> {
   emptyFiltered?: string;                  // message when filters hide everything
   searchPlaceholder?: string;
   maxWidth?: number;
+  title?: string;                          // a heading shown at the top of the filter (e.g. "Gallery", "History")
 }
 
 // "Algorithm" order: split the list into three thirds and round-robin one from
@@ -65,7 +66,7 @@ export function Collection<T>({
   favs, likedByAdmin, likedByOwner, perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid', gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
-  searchPlaceholder = '🔍 name / @user', maxWidth = 900,
+  searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
 }: CollectionProps<T>) {
   const [q, setQ] = useState('');
   // One mutually-exclusive status filter (All is the neutral default). Whoever may
@@ -155,6 +156,8 @@ export function Collection<T>({
   return (
     <div>
       <div ref={topRef} style={{ scrollMarginTop: 8 }} />
+      {/* Section name, sitting on top of the filter toolbar. */}
+      {title && <div style={{ ...wrap, textAlign: 'center', marginBottom: 8 }}><span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', opacity: 0.65 }}>{title}</span></div>}
       {/* Toolbar */}
       <div style={{ ...wrap, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}

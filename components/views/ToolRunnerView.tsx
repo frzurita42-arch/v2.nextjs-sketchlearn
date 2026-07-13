@@ -15,6 +15,7 @@ import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
 import { SharePanel } from '@/components/tools/SharePanel';
+import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
 import { isRenderableImage } from '@/lib/img';
@@ -357,6 +358,7 @@ export function ToolRunnerView() {
             </div>
             <div style={{ marginTop: 16 }}>
               <Collection
+                title="History"
                 items={asArray(entries)}
                 id={(e: any) => e.id}
                 searchText={(e: any) => `${e.username || ''} ${entryFields.filter((f: any) => !['image', 'audio', 'drawing'].includes(f.type)).map((f: any) => String(e.data?.[f.id] ?? '')).join(' ')}`}
@@ -419,6 +421,11 @@ export function ToolRunnerView() {
 
       {/* Platform-provided comment section on every tool. */}
       <CommentSection targetType="tool" targetId={tool.slug} />
+
+      {/* ┄ divider: comments ┄ more picks ┄ */}
+      <div style={dashRule} />
+      {/* The SAME sliding suggestion feed as the Tools page, biased to this tool. */}
+      <SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" />
     </>
   );
 }

@@ -9,6 +9,7 @@ import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
+import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -219,6 +220,11 @@ export function ToolsView() {
         <button className="btn small" onClick={load}>↻ Refresh</button>
       </div>
 
+      {/* "Top picks for you" — a sliding, refreshable feed of personalized picks. */}
+      <Divider />
+      <SuggestionCarousel />
+      <Divider />
+
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
         : tools.length === 0 ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
@@ -230,6 +236,7 @@ export function ToolsView() {
             <CategoryFilter value={filter} onChange={setFilter} counts={counts} />
             <Divider />
             <Collection
+              title="Gallery"
               items={catItems}
               id={(t: any) => t.id}
               searchText={(t: any) => `${t.title || ''} ${t.owner || ''}`}
