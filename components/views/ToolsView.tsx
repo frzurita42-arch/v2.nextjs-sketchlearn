@@ -175,7 +175,7 @@ export function ToolsView() {
           {/* Card GRID or single-column horizontal ROWS. */}
           <div style={viewMode === 'grid'
             ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, maxWidth: 900, margin: '0 auto' }
-            : { display: 'grid', gap: 10, maxWidth: 900, margin: '0 auto' }}>
+            : { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10, maxWidth: 900, margin: '0 auto' }}>
             {shown.map(t => {
               const kind = t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
               const meta = <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
@@ -185,20 +185,28 @@ export function ToolsView() {
                   <button className="btn small green" onClick={() => open(t)}>Open →</button>
                 </span>
               );
-              if (viewMode === 'row') return (
-                <div key={t.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
+              if (viewMode === 'row') {
+                const desc = t.description || 'No description.';
+                const LIMIT = 110;
+                const long = desc.length > LIMIT;
+                return (
+                <div key={t.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, maxWidth: '100%' }}>
+                  <div style={{ minWidth: 0, flex: 1, wordBreak: 'break-word' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
                       <strong style={{ fontSize: 15 }}>{t.title}</strong>
                       <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.55 }}>{kind}</span>
                       {favs[t.slug] && <span style={{ fontSize: 11 }}>★</span>}
                     </div>
-                    <div style={{ fontSize: 12, opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description || 'No description.'}</div>
+                    <div style={{ fontSize: 12, opacity: 0.8 }}>
+                      {long ? desc.slice(0, LIMIT).trimEnd() + '… ' : desc}
+                      {long && <button className="btn small ghost" style={{ padding: '0 4px', fontSize: 11 }} onClick={() => open(t)}>Read more</button>}
+                    </div>
                     {meta}
                   </div>
                   {actions}
                 </div>
-              );
+                );
+              }
               return (
                 <div key={t.id} className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
