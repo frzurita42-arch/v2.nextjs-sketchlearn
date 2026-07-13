@@ -277,8 +277,11 @@ export function ToolsView() {
           </div>
         ) : (galleryCollapsed && !isAdmin) ? null : (
           <>
-            {!galleryCollapsed && <InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />}
+            {/* The category chips sit right under the Build / Refresh buttons, above
+                the banner. They're part of the gallery section, so they collapse
+                with the banner + gallery under the eye — only Build / Refresh stay. */}
             {!galleryCollapsed && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
+            {!galleryCollapsed && <InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />}
             {!galleryCollapsed && <Divider />}
             <Collection
               {...galleryHdr} onRefresh={reloadTools}
