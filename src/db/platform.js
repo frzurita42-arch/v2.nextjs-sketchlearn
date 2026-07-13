@@ -292,6 +292,46 @@ async function setEntryStatus(entryId, status) {
   return rowCount > 0;
 }
 
+// Fetch a single entry (to check ownership before editing/deleting).
+async function getEntry(entryId) {
+  if (!db.pool) return readJSON('entries.json', []).find(e => e.id === entryId) || null;
+  const { rows } = await withDbTimeout(dbQuery('SELECT * FROM entries WHERE id = $1', [entryId]), 8000, 'Get entry');
+  return rows[0] ? mapEntryRow(rows[0]) : null;
+}
+
+// Merge a patch into an entry's `data` (e.g. a distorted title/description or a
+// generated thumbnail on a rendition card). Returns the merged data or null.
+async function updateEntryData(entryId, patch) {
+  if (!db.pool) {
+    const entries = readJSON('entries.json', []);
+    const hit = entries.find(e => e.id === entryId);
+    if (!hit) return null;
+    hit.data = { ...(hit.data || {}), ...(patch || {}) };
+    hit.updatedAt = new Date().toISOString();
+    writeJSON('entries.json', entries);
+    return hit.data;
+  }
+  const { rows } = await withDbTimeout(dbQuery(
+    `UPDATE entries SET data = COALESCE(data, '{}'::jsonb) || $2::jsonb, updated_at = NOW()
+     WHERE id = $1 RETURNING data`,
+    [entryId, JSON.stringify(patch || {})]
+  ), 8000, 'Update entry data');
+  return rows[0] ? parseJsonb(rows[0].data, {}) : null;
+}
+
+// Delete a rendition/entry (author, tool owner, or admin — enforced in the route).
+async function deleteEntry(entryId) {
+  if (!db.pool) {
+    const entries = readJSON('entries.json', []);
+    const next = entries.filter(e => e.id !== entryId);
+    if (next.length === entries.length) return false;
+    writeJSON('entries.json', next);
+    return true;
+  }
+  const { rowCount } = await dbQuery('DELETE FROM entries WHERE id = $1', [entryId]);
+  return rowCount > 0;
+}
+
 // ---------------------------------------------------------------------------
 // comments — on a tool or a feed post
 // ---------------------------------------------------------------------------
@@ -474,7 +514,7 @@ async function setUserPref(username, key, value) {
 
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
-  insertEntry, listEntries, setEntryStatus,
+  insertEntry, listEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
   insertComment, listComments,
   insertPost, listPosts,
   getSiteSettings, setSiteSetting,

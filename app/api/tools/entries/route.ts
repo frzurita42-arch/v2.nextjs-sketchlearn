@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getToolBySlug, insertEntry, listEntries, setEntryStatus } = require('@/src/db/platform');
+const { getToolBySlug, insertEntry, listEntries, setEntryStatus, getEntry, deleteEntry } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { userState } = require('@/src/db/users');
 
@@ -73,4 +73,22 @@ export async function PUT(req: Request) {
     : (['active', 'approved', 'rejected', 'pending'].includes(b.status) ? b.status : 'approved');
   const okUpd = await setEntryStatus(String(b.entryId || ''), status);
   return NextResponse.json({ ok: okUpd });
+}
+
+// DELETE /api/tools/entries { slug, entryId } -> remove a rendition/entry.
+// The entry's author, the tool owner, or an admin may delete it.
+export async function DELETE(req: Request) {
+  const a = await requireAuth(req);
+  if (!a.ok) return a.response;
+  const b = (await req.json().catch(() => ({}))) || {};
+  const tool = await getToolBySlug(String(b.slug || ''));
+  if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const entry = await getEntry(String(b.entryId || ''));
+  if (!entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+  const isOwner = tool.owner === a.user.username || a.user.role === 'admin';
+  if (!(isOwner || entry.username === a.user.username)) {
+    return NextResponse.json({ error: 'You can only delete your own renditions.' }, { status: 403 });
+  }
+  const ok = await deleteEntry(entry.id);
+  return NextResponse.json({ ok });
 }

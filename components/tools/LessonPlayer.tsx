@@ -19,6 +19,7 @@ import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 import { buildLessonZip } from '@/lib/lesson-export';
 import { Collection } from '@/components/ui/Collection';
+import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -618,6 +619,52 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_gen_favs') || '{}')); } catch { /* ignore */ } }, []);
   const toggleFav = (id: string) => setFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_gen_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
 
+  // --- Rendition cards: the same AI-changing distortion powers as a tool card. ---
+  // Anyone may edit their OWN rendition; the owner/admin may edit any. `data` on
+  // each entry carries the distorted title/subtitle/thumbnail.
+  const [distBusy, setDistBusy] = useState<Record<string, boolean>>({});
+  const canEditEntry = (e: any) => canEdit || e.username === API.user?.username;
+  const mergeEntry = (id: string, data: any) => setActivities(list => list.map(e => e.id === id ? { ...e, data: { ...(e.data || {}), ...(data || {}) } } : e));
+  const distort = async (e: any, action: string, extra: any = {}) => {
+    setDistBusy(b => ({ ...b, [e.id]: true }));
+    try {
+      const r = await API.post('/api/tools/entries/distort', { slug, entryId: e.id, action, ...extra });
+      if (r?.data) mergeEntry(e.id, r.data);
+      else if (r?.error) alert(r.error);
+    } catch (err: any) { alert(err?.message || 'Could not update.'); }
+    finally { setDistBusy(b => { const n = { ...b }; delete n[e.id]; return n; }); }
+  };
+  const editEntryText = (e: any) => {
+    const title = window.prompt('Title for this rendition card:', e.data?.title || label(e.data || {}));
+    if (title == null) return;
+    const subtitle = window.prompt('Subtitle / short description (optional):', e.data?.subtitle || '');
+    distort(e, 'set', { title, subtitle: subtitle || '' });
+  };
+  const promptEntryImage = (e: any) => {
+    const instruction = window.prompt('Describe the image to generate for this card (optional):', '');
+    if (instruction == null) return;
+    distort(e, 'image', { instruction });
+  };
+  const uploadEntryImage = (e: any) => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => distort(e, 'set', { image: String(reader.result || '') });
+      reader.readAsDataURL(f);
+    };
+    inp.click();
+  };
+  const deleteRendition = async (e: any) => {
+    if (!confirm('Delete this rendition from the history?')) return;
+    try {
+      const r = await API.call('DELETE', '/api/tools/entries', { slug, entryId: e.id });
+      if (r?.ok) setActivities(list => list.filter(x => x.id !== e.id));
+      else alert(r?.error || 'Could not delete.');
+    } catch (err: any) { alert(err?.message || 'Could not delete.'); }
+  };
+
   const [cfg, setCfg] = useState<Cfg>({});
   const total = () => Math.max(1, Math.min(75, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const [slides, setSlides] = useState<(Slide | null)[]>([]);   // cached by 0-based index
@@ -836,27 +883,72 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     // Category is the only section-specific filter; the standard Collection owns
     // search / favorites / by-admin / grid-rows / sort / count / pagination.
     const feedItems = activities.filter((e: any) => feedCat === 'all' || (e.data?.category || '') === feedCat);
-    // One rendition card, used for both grid and row layouts.
-    const feedCard = (e: any, row: boolean) => (
-      <div className="card" style={{ padding: row ? '10px 14px' : '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: row ? 'center' : 'flex-start', gap: 10, flexWrap: 'wrap', height: '100%' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>{label(e.data || {})}
-            {e.data?.suggested && <span title="AI-suggested topic" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>✦ AI pick</span>}
-            {e.data?.replica && <span title="A fresh AI replica" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>♻ replica</span>}
-            {e.byAdmin && <span title="By an admin" style={{ marginLeft: 6, fontSize: 11 }}>🛡️</span>}
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ''}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn small ghost" title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
-          {(hasSaved || canEdit) && (
-            <button className="btn small" title={hasSaved ? "View the original poster's results (with answers)" : 'No original results saved yet'}
-              onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No original results saved yet. Play a run, then tap “Save this as the original deck” on the results screen — it will then show here for everyone.'); }}>📖 OP results</button>
-          )}
-          <button className="btn small green" title="Play a fresh replica (no answers) — adds to the history" onClick={() => recordAndPlay(e.data || {}, { replica: true })}>▶ Play replica</button>
-        </div>
-      </div>
-    );
+    // One rendition card — rendered through the SHARED CardShell so its container
+    // (image space, title, subtitle, footer) is identical to the tools gallery
+    // cards; only the buttons differ (Play + OP results instead of Open →). It
+    // gets the same AI-changing distortion powers (reword, generate/upload image).
+    const stop = (fn: () => void) => (ev: React.MouseEvent) => { ev.stopPropagation(); fn(); };
+    const feedCard = (e: any, row: boolean) => {
+      const busy = !!distBusy[e.id];
+      const editable = canEditEntry(e);
+      const title = e.data?.title || label(e.data || {});
+      const subtitle = e.data?.subtitle || (e.data?.why || '');
+      const play = () => recordAndPlay(e.data || {}, { replica: true });
+      const editIcons = editable ? (
+        <span style={{ display: 'inline-flex', gap: 6, marginLeft: 5, verticalAlign: 'middle' }}>
+          <button title="Edit title & subtitle" style={iconBtn} onClick={stop(() => editEntryText(e))}>✎</button>
+          <button title="AI tap-mixer — reword title & subtitle" style={iconBtn} disabled={busy} onClick={stop(() => distort(e, 'remix'))}>{busy ? '…' : '🎨'}</button>
+        </span>
+      ) : null;
+      const overlay = editable ? (
+        <span style={{ position: 'absolute', top: 6, right: 8, display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          <button title="Custom image — describe it" style={overlayIcon} disabled={busy} onClick={stop(() => promptEntryImage(e))}>✎</button>
+          <button title="Regenerate image with AI" style={overlayIcon} disabled={busy} onClick={stop(() => distort(e, 'image'))}>{busy ? '…' : '🎨'}</button>
+          <button title="Upload a custom image" style={overlayIcon} disabled={busy} onClick={stop(() => uploadEntryImage(e))}>📎</button>
+        </span>
+      ) : null;
+      const placeholder = editable ? (
+        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button className="btn small ghost" disabled={busy} onClick={stop(() => distort(e, 'image'))}>{busy ? 'Generating…' : '🎨 Generate'}</button>
+          <button className="btn small ghost" disabled={busy} onClick={stop(() => promptEntryImage(e))}>✎ Custom</button>
+          <button className="btn small ghost" disabled={busy} onClick={stop(() => uploadEntryImage(e))}>📎 Upload</button>
+        </span>
+      ) : null;
+      const badges = (
+        <>
+          {e.data?.suggested && <span title="AI-suggested topic">✦ AI pick</span>}
+          {e.data?.replica && <span title="A fresh AI replica">♻ replica</span>}
+          {e.byAdmin && <span title="By an admin">🛡️</span>}
+        </>
+      );
+      const del = editable ? <button style={delIcon} title="Delete this rendition" onClick={() => deleteRendition(e)}>🗑</button> : null;
+      return (
+        <CardShell
+          view={row ? 'row' : 'grid'}
+          title={title}
+          subtitle={subtitle || undefined}
+          fav={!!favs[e.id]}
+          thumbnail={e.data?.thumbnail}
+          onOpen={play}
+          overlay={overlay}
+          placeholder={placeholder}
+          editBtns={editIcons}
+          badges={badges}
+          meta={<span style={{ fontSize: 11, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleDateString()}` : ''}</span>}
+          del={del}
+          actions={
+            <>
+              <button style={iconBtn} title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
+              {(hasSaved || canEdit) && (
+                <button className="btn small" title={hasSaved ? "View the original poster's results (with answers)" : 'No original results saved yet'}
+                  onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No original results saved yet. Play a run, then tap “Save this as the original deck” on the results screen — it will then show here for everyone.'); }}>📖 OP results</button>
+              )}
+              <button className="btn small green" title="Play a fresh replica (no answers)" onClick={play}>▶ Play</button>
+            </>
+          }
+        />
+      );
+    };
     const dashRule = { borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '14px 0' } as const;
     // View options: offer the saved original deck and/or a fresh AI replica.
     const showGenerate = viewMode !== 'history' || !hasSaved;
@@ -922,9 +1014,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           likedByAdmin={(e: any) => !!e.byAdmin}
           perPage={9}
           storageKey="sl_lessonfeed_view"
-          gridMinPx={260}
-          maxWidth={760}
-          searchPlaceholder="🔍 search by name or @user"
+          searchPlaceholder="🔍 name / @user"
           emptyAll="No activities yet — generate the first one above."
           emptyFiltered="No activities match these filters."
           extra={(

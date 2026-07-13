@@ -51,25 +51,58 @@ export default function AppRoot() {
     }
   }, []);
 
+  // Build the URL that represents a view (so a refresh or a Back walks to it).
+  const urlFor = (next: ViewName) => {
+    const url = new URL(window.location.href);
+    if (RESTORABLE.includes(next)) {
+      url.searchParams.set('view', next);
+      if (next === 'tool' && appState.activeTool?.slug) url.searchParams.set('tool', appState.activeTool.slug);
+      else url.searchParams.delete('tool');
+    } else {
+      url.searchParams.delete('view');
+      url.searchParams.delete('tool');
+    }
+    return url.toString();
+  };
+
   const nav = useCallback((next: ViewName) => {
     if (appState.game && !appState.game.finished && next !== 'activity' &&
         !window.confirm('Leave the current activity? Your progress will be lost.')) return;
     if (next !== 'activity') appState.game = null;
     setView(next);
     window.scrollTo(0, 0);
-    // Persist the view to the URL so a refresh lands back on the same page.
+    // PUSH a new history entry so the browser's Back button walks back through
+    // the in-app views. (replaceState would leave nothing to go back to.)
     try {
-      const url = new URL(window.location.href);
-      if (RESTORABLE.includes(next)) {
-        url.searchParams.set('view', next);
-        if (next === 'tool' && appState.activeTool?.slug) url.searchParams.set('tool', appState.activeTool.slug);
-        else url.searchParams.delete('tool');
-      } else {
-        url.searchParams.delete('view');
-        url.searchParams.delete('tool');
-      }
-      window.history.replaceState(null, '', url.toString());
+      const state = { view: next, tool: next === 'tool' ? (appState.activeTool?.slug || null) : null };
+      window.history.pushState(state, '', urlFor(next));
     } catch { /* ignore */ }
+  }, []);
+
+  // Browser Back/Forward: restore the view the history entry points at, WITHOUT
+  // pushing a new entry (that would fight the browser). No activity-guard confirm
+  // here — Back leaving an unfinished activity is expected browser behavior.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPop = (e: PopStateEvent) => {
+      const st = (e.state || {}) as { view?: ViewName; tool?: string | null };
+      const params = new URLSearchParams(window.location.search);
+      const slug = st.tool || params.get('tool');
+      const v = (st.view || (params.get('view') as ViewName | null));
+      appState.game = null;
+      if (slug) {
+        API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
+          if (r?.tool) { appState.activeTool = r.tool; setView('tool'); }
+        }).catch(() => { /* ignore */ });
+      } else if (v && RESTORABLE.includes(v)) {
+        setView(v);
+      } else {
+        setView('tools');
+      }
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   const login = useCallback((token: string, u: SessionUser) => {
@@ -101,11 +134,16 @@ export default function AppRoot() {
     if (slug) {
       let cancelled = false;
       API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
-        if (!cancelled && r?.tool) { appState.activeTool = r.tool; setView('tool'); }
+        if (!cancelled && r?.tool) {
+          appState.activeTool = r.tool; setView('tool');
+          try { window.history.replaceState({ view: 'tool', tool: slug }, '', window.location.href); } catch { /* ignore */ }
+        }
       }).catch(() => { /* ignore */ });
       return () => { cancelled = true; };
     }
     if (v && v !== 'tool' && RESTORABLE.includes(v)) setView(v);
+    // Seed the current history entry with a state object so the first Back works.
+    try { window.history.replaceState({ view: (v && RESTORABLE.includes(v) ? v : 'tools'), tool: null }, '', window.location.href); } catch { /* ignore */ }
   }, [user]);
 
   // Demo-mode banner: show when the server has no AI provider connected.
