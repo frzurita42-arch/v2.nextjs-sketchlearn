@@ -15,6 +15,7 @@ import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
 import { SharePanel } from '@/components/tools/SharePanel';
+import { Collection } from '@/components/ui/Collection';
 import { isRenderableImage } from '@/lib/img';
 
 // Deterministic emoji+color avatar from a username (matches the feed's style).
@@ -98,53 +99,6 @@ function printPost(title: string, entry: any, fields: any[], author: string) {
   w.document.write(html); w.document.close();
 }
 
-function EntryDisplay({ entries: entriesIn, display, fields: fieldsIn, onOpen, favs = {}, onFav }: { entries: any[]; display: string; fields: any[]; onOpen: (e: any) => void; favs?: Record<string, boolean>; onFav?: (id: string) => void }) {
-  const entries = asArray(entriesIn);
-  const fields = asArray(fieldsIn);
-  const favBtn = (e: any) => onFav ? <button className="btn small ghost" title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => onFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button> : null;
-  if (!entries.length) return <p style={{ opacity: 0.6 }}>No entries match these filters.</p>;
-  const imageFields = fields.filter((f: any) => f.type === 'image');
-  const textFields = fields.filter((f: any) => f.type !== 'image');
-
-  if (display === 'table') return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className="sketch-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead><tr><th style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>By</th>{fields.map(f => <th key={f.id} style={{ textAlign: 'left', borderBottom: '2px solid var(--ink)', padding: 6 }}>{f.label}</th>)}<th /></tr></thead>
-        <tbody>{entries.map(e => (
-          <tr key={e.id}>
-            <td style={{ padding: 6, fontSize: 12, opacity: 0.7 }}>@{e.username || 'anon'}</td>
-            {fields.map(f => <td key={f.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.15)', padding: 6, maxWidth: 160 }}>{fieldValue(f, e)}</td>)}
-            <td style={{ padding: 6 }}><button className="btn small ghost" onClick={() => onOpen(e)}>⤢</button></td>
-          </tr>
-        ))}</tbody>
-      </table>
-    </div>
-  );
-  if (display === 'list') return (
-    <div>{entries.map(e => (
-      <div key={e.id} style={{ borderBottom: '2px dashed var(--ink)', padding: '8px 0' }}>
-        {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id} style={{ maxWidth: 320, marginBottom: 6 }}>{fieldValue(f, e)}</div>)}
-        {textFields.map((f: any) => <span key={f.id} style={{ marginRight: 10 }}><b>{f.label}:</b> {fieldValue(f, e)}</span>)}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><span style={{ display: 'flex', gap: 6 }}>{favBtn(e)}<button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></span></div>
-      </div>
-    ))}</div>
-  );
-  // cards (social-page style)
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-      {entries.map(e => (
-        <div key={e.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          {imageFields.map((f: any) => e.data?.[f.id] && <div key={f.id}>{fieldValue(f, e)}</div>)}
-          <div style={{ padding: '10px 12px' }}>
-            {textFields.map((f: any) => <div key={f.id} style={{ fontSize: 14, marginBottom: 3 }}>{f.type === 'textarea' ? fieldValue(f, e) : <><b>{f.label}:</b> {fieldValue(f, e)}</>}</div>)}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Byline e={e} /><span style={{ display: 'flex', gap: 6 }}>{favBtn(e)}<button className="btn small ghost" onClick={() => onOpen(e)}>⤢ Open</button></span></div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // Edit a tool's title or description — type it manually, OR ask the AI to write
 // it from the tool's context (its type, subject, what it generates). Owner/admin.
 function AiEditPopup({ field, slug, initial, onSave, onClose }: {
@@ -211,32 +165,10 @@ export function ToolRunnerView() {
   const [entryVals, setEntryVals] = useState<Record<string, any>>(() => defaultsFor(entryFields));
   const [entries, setEntries] = useState<any[]>([]);
   const [isOwner, setIsOwner] = useState(false);
-  // Entries feed controls (grid/rows, search, favorites, sort) — mirrors the gallery.
-  const [entryView, setEntryView] = useState<'cards' | 'list'>('cards');
-  const [entryQ, setEntryQ] = useState('');
-  const [entryFavOnly, setEntryFavOnly] = useState(false);
-  const [entrySort, setEntrySort] = useState<'recent' | 'oldest'>('recent');
+  // Per-entry favorites (the ★ star + the Collection's favorites filter).
   const [entryFavs, setEntryFavs] = useState<Record<string, boolean>>({});
-  useEffect(() => {
-    try { setEntryFavs(JSON.parse(localStorage.getItem('sl_entry_favs') || '{}')); } catch { /* ignore */ }
-    try { const v = localStorage.getItem('sl_entry_view'); if (v === 'cards' || v === 'list') setEntryView(v); } catch { /* ignore */ }
-  }, []);
-  const setEntryViewP = (v: 'cards' | 'list') => { setEntryView(v); try { localStorage.setItem('sl_entry_view', v); } catch { /* ignore */ } };
+  useEffect(() => { try { setEntryFavs(JSON.parse(localStorage.getItem('sl_entry_favs') || '{}')); } catch { /* ignore */ } }, []);
   const toggleEntryFav = (id: string) => setEntryFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_entry_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
-  const visibleEntries = useMemo(() => {
-    const nq = entryQ.trim().toLowerCase();
-    const arr = asArray(entries).filter((e: any) => {
-      if (entryFavOnly && !entryFavs[e.id]) return false;
-      if (!nq) return true;
-      if (String(e.username || '').toLowerCase().includes(nq)) return true;
-      return Object.values(e.data || {}).some((v: any) => String(v ?? '').toLowerCase().includes(nq));
-    });
-    arr.sort((a: any, b: any) => {
-      const ta = new Date(a.createdAt || 0).getTime(), tb = new Date(b.createdAt || 0).getTime();
-      return entrySort === 'recent' ? tb - ta : ta - tb;
-    });
-    return arr;
-  }, [entries, entryQ, entryFavOnly, entrySort, entryFavs]);
   const [detail, setDetail] = useState<any>(null);   // entry opened as a post
   const [editField, setEditField] = useState<null | 'title' | 'description'>(null);
   const [descDraft, setDescDraft] = useState<string>(def?.description || '');
@@ -309,6 +241,25 @@ export function ToolRunnerView() {
   };
   const dashRule = { maxWidth: 820, margin: '10px auto', borderTop: '2px dashed var(--ink)', opacity: 0.45 } as const;
 
+  // One entry rendered as a grid card or a horizontal row (used by Collection).
+  const eImageFields = entryFields.filter((f: any) => f.type === 'image' || f.type === 'drawing');
+  const eTextFields = entryFields.filter((f: any) => f.type !== 'image' && f.type !== 'drawing');
+  const entryCard = (e: any, row: boolean) => (
+    <div className="card" style={{ padding: 0, overflow: 'hidden', height: '100%', display: 'flex', flexDirection: row ? 'row' : 'column', gap: row ? 10 : 0, alignItems: 'stretch' }}>
+      {!row && eImageFields.map((f: any) => e.data?.[f.id] && <div key={f.id}>{fieldValue(f, e)}</div>)}
+      <div style={{ padding: '10px 12px', minWidth: 0, flex: 1 }}>
+        {eTextFields.map((f: any) => <div key={f.id} style={{ fontSize: 14, marginBottom: 3 }}>{f.type === 'textarea' ? fieldValue(f, e) : <><b>{f.label}:</b> {fieldValue(f, e)}</>}</div>)}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+          <Byline e={e} />
+          <span style={{ display: 'flex', gap: 6 }}>
+            <button className="btn small ghost" title={entryFavs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleEntryFav(e.id)}>{entryFavs[e.id] ? '★' : '☆'}</button>
+            <button className="btn small ghost" onClick={() => setDetail(e)}>⤢ Open</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <h1 className="view-title">{tool.title}
@@ -380,18 +331,21 @@ export function ToolRunnerView() {
               {err && <p style={{ color: 'var(--danger,#e4572e)', marginTop: 8 }}>{err}</p>}
             </div>
             <div style={{ marginTop: 16 }}>
-              {asArray(entries).length > 0 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                  <input value={entryQ} onChange={e => setEntryQ(e.target.value)} placeholder="🔍 search by text or @user" style={{ fontSize: 13, flex: '1 1 180px', maxWidth: 260, padding: '5px 9px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
-                  <button className={`btn small ${entryFavOnly ? 'blue' : 'ghost'}`} onClick={() => setEntryFavOnly(v => !v)} title="Show only your favorites">★ Favorites</button>
-                  <button className="btn small" onClick={() => setEntrySort(s => s === 'recent' ? 'oldest' : 'recent')} title="Toggle sort order">{entrySort === 'recent' ? '↓ Newest' : '↑ Oldest'}</button>
-                  <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
-                    <button className={`btn small ${entryView === 'cards' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setEntryViewP('cards')}>▦</button>
-                    <button className={`btn small ${entryView === 'list' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setEntryViewP('list')}>☰</button>
-                  </div>
-                </div>
-              )}
-              <EntryDisplay entries={visibleEntries} display={entryView} fields={entryFields} onOpen={setDetail} favs={entryFavs} onFav={toggleEntryFav} />
+              <Collection
+                items={asArray(entries)}
+                id={(e: any) => e.id}
+                searchText={(e: any) => `${e.username || ''} ${entryFields.filter((f: any) => !['image', 'audio', 'drawing'].includes(f.type)).map((f: any) => String(e.data?.[f.id] ?? '')).join(' ')}`}
+                time={(e: any) => new Date(e.createdAt || 0).getTime()}
+                favs={entryFavs}
+                likedByAdmin={(e: any) => !!e.byAdmin}
+                perPage={9}
+                storageKey="sl_entry_view"
+                searchPlaceholder="🔍 search by text or @user"
+                emptyAll="No entries yet — add the first one above."
+                emptyFiltered="No entries match these filters."
+                renderGrid={(e: any) => entryCard(e, false)}
+                renderRow={(e: any) => entryCard(e, true)}
+              />
               {isOwner && def.app?.review && asArray(entries).some((e: any) => e.status === 'pending') && (
                 <div className="card" style={{ padding: '12px 14px', marginTop: 12 }}>
                   <h4 style={{ margin: '0 0 8px' }}>Review queue (owner)</h4>

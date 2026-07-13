@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug, insertEntry, listEntries, setEntryStatus } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { userState } = require('@/src/db/users');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -26,7 +28,10 @@ export async function GET(req: Request) {
   } else {
     entries = isOwner ? all : all.filter((e: any) => e.status === 'active' || e.status === 'approved');
   }
-  return NextResponse.json({ entries, isOwner, review: !!tool.definition?.app?.review }, { headers: { 'Cache-Control': 'no-cache' } });
+  // Flag entries authored by an admin (for the "liked by admin" feed filter).
+  const admins = new Set((userState.users || []).filter((u: any) => u.role === 'admin').map((u: any) => u.username));
+  const flagged = entries.map((e: any) => ({ ...e, byAdmin: admins.has(e.username) }));
+  return NextResponse.json({ entries: flagged, isOwner, review: !!tool.definition?.app?.review }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 // POST /api/tools/entries { slug, data } -> add an entry (pending if the tool uses review).

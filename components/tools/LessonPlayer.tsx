@@ -18,6 +18,7 @@ import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad'
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 import { buildLessonZip } from '@/lib/lesson-export';
+import { Collection } from '@/components/ui/Collection';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -608,9 +609,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [topicsBusy, setTopicsBusy] = useState(false);
   const [exHint, setExHint] = useState('');                     // steer the AI example
   // Activities-feed controls.
-  const [feedTab, setFeedTab] = useState<'all' | 'mine' | 'fav'>('all');
   const [feedCat, setFeedCat] = useState('all');
-  const [feedUser, setFeedUser] = useState('');
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_gen_favs') || '{}')); } catch { /* ignore */ } }, []);
   const toggleFav = (id: string) => setFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_gen_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
@@ -813,14 +812,30 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       ...settings.map((f: any) => (f.id === 'topic' && topicIdeas.length ? { ...f, type: 'select-or-custom', options: topicIdeas } : f)),
       { id: 'category', label: 'Category', type: 'select-or-custom', options: GEN_CATEGORIES },
     ];
-    const me = API.user?.username;
-    const feed = activities.filter((e: any) => {
-      if (feedTab === 'mine' && e.username !== me) return false;
-      if (feedTab === 'fav' && !favs[e.id]) return false;
-      if (feedCat !== 'all' && (e.data?.category || '') !== feedCat) return false;
-      if (feedUser.trim() && !String(e.username || '').toLowerCase().includes(feedUser.trim().toLowerCase())) return false;
-      return true;
-    });
+    // Category is the only section-specific filter; the standard Collection owns
+    // search / favorites / by-admin / grid-rows / sort / count / pagination.
+    const feedItems = activities.filter((e: any) => feedCat === 'all' || (e.data?.category || '') === feedCat);
+    // One rendition card, used for both grid and row layouts.
+    const feedCard = (e: any, row: boolean) => (
+      <div className="card" style={{ padding: row ? '10px 14px' : '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: row ? 'center' : 'flex-start', gap: 10, flexWrap: 'wrap', height: '100%' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600 }}>{label(e.data || {})}
+            {e.data?.suggested && <span title="AI-suggested topic" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>✦ AI pick</span>}
+            {e.data?.replica && <span title="A fresh AI replica" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>♻ replica</span>}
+            {e.byAdmin && <span title="By an admin" style={{ marginLeft: 6, fontSize: 11 }}>🛡️</span>}
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ''}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn small ghost" title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
+          {(hasSaved || canEdit) && (
+            <button className="btn small" title={hasSaved ? "View the original poster's results (with answers)" : 'No original results saved yet'}
+              onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No original results saved yet. Play a run, then tap “Save this as the original deck” on the results screen — it will then show here for everyone.'); }}>📖 OP results</button>
+          )}
+          <button className="btn small green" title="Play a fresh replica (no answers) — adds to the history" onClick={() => recordAndPlay(e.data || {}, { replica: true })}>▶ Play replica</button>
+        </div>
+      </div>
+    );
     const dashRule = { borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '14px 0' } as const;
     // View options: offer the saved original deck and/or a fresh AI replica.
     const showGenerate = viewMode !== 'history' || !hasSaved;
@@ -877,41 +892,29 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         <div style={dashRule} />
 
         <h4 style={{ margin: '0 0 8px' }}>Activities feed</h4>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['all', 'mine', 'fav'] as const).map(t => (
-              <button key={t} className={`btn small ${feedTab === t ? 'blue' : 'ghost'}`} onClick={() => setFeedTab(t)}>{t === 'all' ? 'All' : t === 'mine' ? 'Mine' : '★ Favorites'}</button>
-            ))}
-          </div>
-          <select value={feedCat} onChange={e => setFeedCat(e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }}>
-            <option value="all">All categories</option>
-            {GEN_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <input value={feedUser} onChange={e => setFeedUser(e.target.value)} placeholder="🔍 by user" style={{ fontSize: 12, width: 120, padding: '4px 7px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
-        </div>
-        {feed.length === 0 ? (
-          <p style={{ opacity: 0.6, fontSize: 14 }}>{activities.length === 0 ? 'No activities yet — generate the first one above.' : 'No activities match these filters.'}</p>
-        ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
-            {feed.map((e: any) => (
-              <div key={e.id} className="card" style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{label(e.data || {})}
-                    {e.data?.suggested && <span title="AI-suggested topic" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>✦ AI pick</span>}
-                    {e.data?.replica && <span title="A fresh AI replica" style={{ marginLeft: 6, fontSize: 11, opacity: 0.75 }}>♻ replica</span>}
-                  </div>
-                  <div style={{ fontSize: 12, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ''}</div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button className="btn small ghost" title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
-                  {hasSaved && <button className="btn small" title="View the original poster's results (with answers)" onClick={() => { setPhase('history'); window.scrollTo(0, 0); }}>📖 OP results</button>}
-                  {/* Playing a replica (no answers shown) logs a NEW rendition to the history. */}
-                  <button className="btn small green" title="Play a fresh replica (no answers) — adds to the history" onClick={() => recordAndPlay(e.data || {}, { replica: true })}>▶ Play replica</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <Collection
+          items={feedItems}
+          id={(e: any) => e.id}
+          searchText={(e: any) => `${label(e.data || {})} ${e.username || ''} ${e.data?.topic || ''}`}
+          time={(e: any) => new Date(e.createdAt || 0).getTime()}
+          favs={favs}
+          likedByAdmin={(e: any) => !!e.byAdmin}
+          perPage={9}
+          storageKey="sl_lessonfeed_view"
+          gridMinPx={260}
+          maxWidth={760}
+          searchPlaceholder="🔍 search by name or @user"
+          emptyAll="No activities yet — generate the first one above."
+          emptyFiltered="No activities match these filters."
+          extra={(
+            <select value={feedCat} onChange={e => setFeedCat(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1.5px solid var(--ink)' }}>
+              <option value="all">All categories</option>
+              {GEN_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          renderGrid={(e: any) => feedCard(e, false)}
+          renderRow={(e: any) => feedCard(e, true)}
+        />
       </div>
     );
   }

@@ -7,26 +7,15 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
-
-const PER_PAGE = 9;   // gallery shows 9 tools per page
+import { Collection } from '@/components/ui/Collection';
 
 export function ToolsView() {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [newestFirst, setNewestFirst] = useState(true);   // sort order; toggle below
-  const [page, setPage] = useState(0);                    // 0-based page index
-  const [viewMode, setViewMode] = useState<'grid' | 'row'>('grid');   // card grid vs horizontal rows
-  const [q, setQ] = useState('');                         // search by name / @username
-  const [favOnly, setFavOnly] = useState(false);          // "my favorites" (liked)
-  const [adminLiked, setAdminLiked] = useState(false);    // "liked by admin"
+  const [filter, setFilter] = useState('all');            // category chip (section-specific)
   const [favs, setFavs] = useState<Record<string, boolean>>({});
-  useEffect(() => {
-    try { setFavs(JSON.parse(localStorage.getItem('sl_tool_likes') || '{}')); } catch { /* ignore */ }
-    try { const v = localStorage.getItem('sl_tools_view'); if (v === 'row' || v === 'grid') setViewMode(v); } catch { /* ignore */ }
-  }, []);
-  const setView = (v: 'grid' | 'row') => { setViewMode(v); try { localStorage.setItem('sl_tools_view', v); } catch { /* ignore */ } };
+  useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_tool_likes') || '{}')); } catch { /* ignore */ } }, []);
 
   // Admin-editable page copy (heading + subtitle), saved for everyone.
   const isAdmin = app.user?.role === 'admin';
@@ -61,31 +50,8 @@ export function ToolsView() {
     for (const t of tools) { const k = toolCategory(t); c[k] = (c[k] || 0) + 1; }
     return c;
   }, [tools]);
-  const needle = q.trim().toLowerCase();
-  const filtered = tools.filter(t => {
-    if (filter !== 'all' && toolCategory(t) !== filter) return false;
-    if (favOnly && !favs[t.slug]) return false;
-    if (adminLiked && !t.likedByAdmin) return false;
-    if (needle && !(String(t.title || '').toLowerCase().includes(needle) || String(t.owner || '').toLowerCase().includes(needle))) return false;
-    return true;
-  });
-  // Sort by creation time; newest→oldest by default, toggleable to oldest→newest.
-  const sorted = useMemo(() => {
-    const arr = [...filtered];
-    arr.sort((a, b) => {
-      const ta = new Date(a.createdAt || 0).getTime();
-      const tb = new Date(b.createdAt || 0).getTime();
-      return newestFirst ? tb - ta : ta - tb;
-    });
-    return arr;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tools, filter, newestFirst, q, favOnly, adminLiked, favs]);
-  const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
-  // Keep the page in range when the filter/sort/list changes.
-  useEffect(() => { setPage(p => Math.min(p, pageCount - 1)); }, [pageCount]);
-  useEffect(() => { setPage(0); }, [filter, newestFirst, q, favOnly, adminLiked]);
-  const shown = sorted.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
-
+  // Category is the section-specific filter; the standard Collection owns the rest.
+  const catItems = filter === 'all' ? tools : tools.filter(t => toolCategory(t) === filter);
   // A dashed rule that separates gallery sections, matching the sketch theme.
   const Divider = () => <div style={{ maxWidth: 900, margin: '16px auto', borderTop: '2px dashed var(--ink)', opacity: 0.5 }} />;
 
@@ -103,6 +69,49 @@ export function ToolsView() {
     if (!confirm(`Delete “${t.title}”? This can't be undone.`)) return;
     try { await API.del(`/api/tools?slug=${encodeURIComponent(t.slug)}`); setTools(ts => ts.filter(x => x.slug !== t.slug)); } catch (e: any) { alert(e?.message || 'Could not delete.'); }
   };
+
+  const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
+  const meta = (t: any) => <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
+  const actions = (t: any) => (
+    <span style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+      {canRemove(t) && <button className="btn small ghost" title={isExample(t) ? 'Hide this example' : 'Delete'} onClick={() => del(t)}>{isExample(t) ? '✕' : '🗑'}</button>}
+      <button className="btn small green" onClick={() => open(t)}>Open →</button>
+    </span>
+  );
+  const renderRow = (t: any) => {
+    const desc = t.description || 'No description.';
+    const long = desc.length > 110;
+    return (
+      <div className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, maxWidth: '100%' }}>
+        <div style={{ minWidth: 0, flex: 1, wordBreak: 'break-word' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <strong style={{ fontSize: 15 }}>{t.title}</strong>
+            <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.55 }}>{kindOf(t)}</span>
+            {favs[t.slug] && <span style={{ fontSize: 11 }}>★</span>}
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            {long ? desc.slice(0, 110).trimEnd() + '… ' : desc}
+            {long && <button className="btn small ghost" style={{ padding: '0 4px', fontSize: 11 }} onClick={() => open(t)}>Read more</button>}
+          </div>
+          {meta(t)}
+        </div>
+        {actions(t)}
+      </div>
+    );
+  };
+  const renderGrid = (t: any) => (
+    <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+        <strong style={{ fontSize: 16 }}>{t.title}{favs[t.slug] ? ' ★' : ''}</strong>
+        <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{kindOf(t)}</span>
+      </div>
+      <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}</p>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {(Array.isArray(t.tags) ? t.tags : []).map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>{meta(t)}{actions(t)}</div>
+    </div>
+  );
 
   return (
     <>
@@ -139,102 +148,30 @@ export function ToolsView() {
         <button className="btn small" onClick={load}>↻ Refresh</button>
       </div>
 
-      {!loading && tools.length > 0 && (
-        <>
-          <CategoryFilter value={filter} onChange={setFilter} counts={counts} />
-          <Divider />
-          <div style={{ maxWidth: 900, margin: '0 auto 10px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 search by name or @user" style={{ fontSize: 13, flex: '1 1 200px', maxWidth: 280, padding: '5px 9px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
-            <button className={`btn small ${favOnly ? 'blue' : 'ghost'}`} onClick={() => setFavOnly(v => !v)} title="Show only tools you've favorited">★ My favorites</button>
-            <button className={`btn small ${adminLiked ? 'blue' : 'ghost'}`} onClick={() => setAdminLiked(v => !v)} title="Show only tools an admin has liked">🛡️ Liked by admin</button>
-            {/* grid vs horizontal-rows display */}
-            <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
-              <button className={`btn small ${viewMode === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Card grid" onClick={() => setView('grid')}>▦</button>
-              <button className={`btn small ${viewMode === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setView('row')}>☰</button>
-            </div>
-          </div>
-          <div style={{ maxWidth: 900, margin: '0 auto 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, opacity: 0.6 }}>{sorted.length} tool{sorted.length === 1 ? '' : 's'}</span>
-            <button className="btn small" onClick={() => setNewestFirst(v => !v)} title="Toggle sort order">
-              {newestFirst ? '↓ Newest first' : '↑ Oldest first'}
-            </button>
-          </div>
-        </>
-      )}
-
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
         : tools.length === 0 ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: '0 0 10px' }}>No tools yet. Be the first — describe a tool and the AI will assemble it.</p>
             <button className="btn green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
           </div>
-        ) : shown.length === 0 ? (
-          <p style={{ textAlign: 'center', opacity: 0.7 }}>No tools match these filters.</p>
         ) : (
           <>
-          {/* Card GRID or single-column horizontal ROWS. */}
-          <div style={viewMode === 'grid'
-            ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, maxWidth: 900, margin: '0 auto' }
-            : { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10, maxWidth: 900, margin: '0 auto' }}>
-            {shown.map(t => {
-              const kind = t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
-              const meta = <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
-              const actions = (
-                <span style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
-                  {canRemove(t) && <button className="btn small ghost" title={isExample(t) ? 'Hide this example' : 'Delete'} onClick={() => del(t)}>{isExample(t) ? '✕' : '🗑'}</button>}
-                  <button className="btn small green" onClick={() => open(t)}>Open →</button>
-                </span>
-              );
-              if (viewMode === 'row') {
-                const desc = t.description || 'No description.';
-                const LIMIT = 110;
-                const long = desc.length > LIMIT;
-                return (
-                <div key={t.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, maxWidth: '100%' }}>
-                  <div style={{ minWidth: 0, flex: 1, wordBreak: 'break-word' }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: 15 }}>{t.title}</strong>
-                      <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.55 }}>{kind}</span>
-                      {favs[t.slug] && <span style={{ fontSize: 11 }}>★</span>}
-                    </div>
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>
-                      {long ? desc.slice(0, LIMIT).trimEnd() + '… ' : desc}
-                      {long && <button className="btn small ghost" style={{ padding: '0 4px', fontSize: 11 }} onClick={() => open(t)}>Read more</button>}
-                    </div>
-                    {meta}
-                  </div>
-                  {actions}
-                </div>
-                );
-              }
-              return (
-                <div key={t.id} className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-                    <strong style={{ fontSize: 16 }}>{t.title}{favs[t.slug] ? ' ★' : ''}</strong>
-                    <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{kind}</span>
-                  </div>
-                  <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{t.description || 'No description.'}</p>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {(Array.isArray(t.tags) ? t.tags : []).map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                    {meta}
-                    {actions}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {pageCount > 1 && (
-            <>
-              <Divider />
-              <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
-                <button className="btn small" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>← Prev</button>
-                <span style={{ fontSize: 13, opacity: 0.7 }}>Page {page + 1} / {pageCount}</span>
-                <button className="btn small" disabled={page >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Next →</button>
-              </div>
-            </>
-          )}
+            <CategoryFilter value={filter} onChange={setFilter} counts={counts} />
+            <Divider />
+            <Collection
+              items={catItems}
+              id={(t: any) => t.id}
+              searchText={(t: any) => `${t.title || ''} ${t.owner || ''}`}
+              time={(t: any) => new Date(t.createdAt || 0).getTime()}
+              favs={favs}
+              likedByAdmin={(t: any) => !!t.likedByAdmin}
+              perPage={9}
+              storageKey="sl_tools_view"
+              emptyFiltered="No tools match these filters."
+              emptyAll="No tools in this category yet."
+              renderGrid={renderGrid}
+              renderRow={renderRow}
+            />
           </>
         )}
     </>
