@@ -10,6 +10,7 @@ import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
+import { RecommendButton } from '@/components/tools/RecommendButton';
 import { Carousel } from '@/components/ui/Carousel';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
@@ -50,6 +51,7 @@ function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void
 export function ToolsView() {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
+  const [toolRecs, setToolRecs] = useState<any[] | null>(null);   // AI-recommended tools for the Tools shelf
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');            // category chip (section-specific)
   const [favs, setFavs] = useState<Record<string, boolean>>({});
@@ -279,10 +281,14 @@ export function ToolsView() {
           A single dashed rule sits at the BOTTOM of the sliders (no top line). */}
       {!loading && tools.length > 0 && (
         <>
-          <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240}
+          <Carousel title={site.toolsShelfTitle || '🧰 Tools'} cardWidth={240} cardHeight={360}
             canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('toolsShelfTitle', t)}
-            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}>
-            {catItems.slice(0, 10).map((t: any) => <div key={t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
+            onRemixTitle={() => remixShelf('toolsShelfTitle', site.toolsShelfTitle || '🧰 Tools')} remixingTitle={!!headMix.toolsShelfTitle}
+            headerExtra={<>
+              <RecommendButton limit={10} label="✨ Recommend 10" onResults={setToolRecs} />
+              {toolRecs && <button className="btn small ghost" onClick={() => setToolRecs(null)} title="Show all tools again">↩︎ All</button>}
+            </>}>
+            {(toolRecs || catItems.slice(0, 10)).map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
           </Carousel>
           <div style={{ height: 14 }} />
           <SuggestionCarousel limit={10}

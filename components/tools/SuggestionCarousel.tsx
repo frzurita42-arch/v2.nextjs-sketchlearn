@@ -10,6 +10,7 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
+import { RecommendButton } from '@/components/tools/RecommendButton';
 import { Carousel } from '@/components/ui/Carousel';
 
 export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', limit = 10,
@@ -111,8 +112,9 @@ export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', 
   };
 
   return (
-    <Carousel title={title} onRefresh={refresh} refreshing={busy} cardWidth={230}
+    <Carousel title={title} onRefresh={refresh} refreshing={busy} cardWidth={230} cardHeight={360}
       canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
+      headerExtra={<RecommendButton likeSlug={likeSlug} limit={limit} label="✨ Recommend 10" onResults={setPicks} />}
       empty={busy ? 'Finding picks…' : 'No suggestions yet — favorite a few tools and check back.'}>
       {picks.map((p) => <div key={p.slug} style={{ height: '100%' }}>{card(p)}</div>)}
     </Carousel>
