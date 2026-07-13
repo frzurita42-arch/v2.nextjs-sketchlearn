@@ -7,9 +7,8 @@ export function Header() {
   const { nav, user, logout } = useApp();
   return (
     <nav id="topbar" className="topbar">
-      <button className="brand" onClick={() => nav('home')}>✏️ SketchLearn</button>
+      <button className="brand" onClick={() => nav('tools')}>✏️ SketchLearn</button>
       <div className="topbar-links">
-        <button onClick={() => nav('home')}>Learn</button>
         <button onClick={() => nav('tools')}>Tools</button>
         <button onClick={() => nav('feed')}>Feed</button>
         <button onClick={() => nav('chat')}>Coach chat</button>

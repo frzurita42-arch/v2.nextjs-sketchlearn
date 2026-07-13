@@ -123,10 +123,11 @@ export function ToolsView() {
   const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
   const meta = (t: any) => <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
   // Small inline edit buttons that sit right after the title (like the tool page).
+  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, margin: 0, fontSize: 14, lineHeight: 1 } as const;
   const editBtns = (t: any) => canEditCard(t) ? (
-    <span style={{ display: 'inline-flex', gap: 2, marginLeft: 4, verticalAlign: 'middle' }}>
-      <button className="btn small ghost" title="Edit title & description (type or AI)" style={{ padding: '0 5px', fontSize: 13, lineHeight: 1.4 }} onClick={() => setEditTool(t)}>✎</button>
-      <button className="btn small ghost" title="AI tap-mixer — reword title & description in the platform's friendly voice" style={{ padding: '0 5px', fontSize: 13, lineHeight: 1.4 }} disabled={!!mixing[t.slug]} onClick={() => remix(t)}>{mixing[t.slug] ? '…' : '🎨'}</button>
+    <span style={{ display: 'inline-flex', gap: 6, marginLeft: 5, verticalAlign: 'middle' }}>
+      <button title="Edit title & description (type or AI)" style={iconBtn} onClick={() => setEditTool(t)}>✎</button>
+      <button title="AI tap-mixer — reword title & description in the platform's friendly voice" style={iconBtn} disabled={!!mixing[t.slug]} onClick={() => remix(t)}>{mixing[t.slug] ? '…' : '🎨'}</button>
     </span>
   ) : null;
   const actions = (t: any) => (

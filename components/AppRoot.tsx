@@ -34,7 +34,7 @@ const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [view, setView] = useState<ViewName>('home');
+  const [view, setView] = useState<ViewName>('tools');   // Tools is the home page
   const [tick, setTick] = useState(0);
   const [demo, setDemo] = useState(false);
 
@@ -75,8 +75,8 @@ export default function AppRoot() {
   const login = useCallback((token: string, u: SessionUser) => {
     API.setSession(token, u);
     setUser(u);
-    setView('home');
-    // Fresh sign-in starts at home; drop any restored view/tool from the URL.
+    setView('tools');
+    // Fresh sign-in starts on the home (Tools) page; drop any restored view/tool from the URL.
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('view');
@@ -159,10 +159,17 @@ export default function AppRoot() {
           >×</button>
         </div>
       )}
+      {/* Global back bar — on every page, a centered Back button (→ home = Tools)
+          between two dotted rules, right under the header. */}
+      <div style={{ maxWidth: 820, margin: '6px auto 0', textAlign: 'center' }}>
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, marginBottom: 8 }} />
+        <button className="btn small" onClick={() => nav('tools')}>← Back</button>
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, marginTop: 8 }} />
+      </div>
       {/* key={view} remounts only on a view switch (fresh state per view, like
           the legacy SPA); in-view rerender() updates in place. */}
       <main id="app" key={view}>
-        <ErrorBoundary onHome={() => nav('home')}>{views[view]}</ErrorBoundary>
+        <ErrorBoundary onHome={() => nav('tools')}>{views[view]}</ErrorBoundary>
       </main>
       <Footer />
     </AppContext.Provider>
