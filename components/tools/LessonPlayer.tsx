@@ -21,7 +21,7 @@ import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/s
 import { buildLessonZip } from '@/lib/lesson-export';
 import { Collection, type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { DonationsCard } from '@/components/ui/DonationMug';
+import { DonationMug } from '@/components/ui/DonationMug';
 import { InstructionPlank } from '@/components/activities/InstructionPlank';
 import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
@@ -1135,20 +1135,22 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         {/* ┄ divider: settings ┄ AI example ┄ */}
         <div style={dashRule} />
 
-        <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about… (optional)" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
-                style={{ fontSize: 12, width: 160, padding: '4px 7px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
-              <button className="btn small ghost" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄 Suggest'}</button>
+        {/* Two columns: the dashed AI-example card (its header + the generated
+            example) on the LEFT, and the coffee-mug donation image — just the
+            graphic on the page background, no card — on the RIGHT. Wraps to one
+            column when narrow. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'center' }}>
+          <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed', minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about… (optional)" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
+                  style={{ fontSize: 12, width: 160, padding: '4px 7px', borderRadius: 6, border: '1.5px solid var(--ink)' }} />
+                <button className="btn small ghost" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄 Suggest'}</button>
+              </div>
             </div>
-          </div>
-          {example ? (
-            /* Two columns: the AI example card on the left, the donations coffee-mug
-               card filling the space on the right. Wraps to one column when narrow. */
-            <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'stretch' }}>
-              <div style={{ minWidth: 0 }}>
+            {example ? (
+              <div style={{ marginTop: 8 }}>
                 {/* The AI example uses the SAME card component — image spot (empty →
                     no-photo placeholder), title, subtitle — with Play + Generate. */}
                 <CardShell
@@ -1166,20 +1168,26 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
                 />
                 {addMsg && <p style={{ fontSize: 12, color: 'var(--accent,#5c80bc)', margin: '6px 0 0' }}>{addMsg}</p>}
               </div>
-              <DonationsCard />
-            </div>
-          ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
+            ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
+          </div>
+          {/* Coffee mug — only the graphic, on the page background (no card), linking
+              to the donations page. */}
+          <a href="https://ko-fi.com" target="_blank" rel="noreferrer" title="Support this project" aria-label="Donations"
+            style={{ justifySelf: 'center', display: 'inline-flex', color: 'inherit' }}>
+            <DonationMug width={150} height={125} />
+          </a>
         </div>
 
         {/* ┄ divider: AI example ┄ activities feed ┄ */}
         <div style={dashRule} />
 
-        {/* The History section: a wooden how-to banner, then the shared Collection
-            with the carousel-style editable header. (No topic filter — every
+        {/* The History section uses the SAME shared Collection container as the
+            gallery: small space → title (+ buttons) → banner → filter → items.
+            Only the title and the banner/handlers differ. (No topic filter — every
             rendition here is the same tool's topic.) */}
-        <InstructionPlank settingKey="historyBanner" defaultText="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order." />
         <Collection
           {...historyHdr} onRefresh={loadActivities}
+          banner={<InstructionPlank settingKey="historyBanner" defaultText="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order." />}
           showCollapse
           items={feedItems}
           id={(e: any) => e.id}

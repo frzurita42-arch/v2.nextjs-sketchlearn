@@ -189,8 +189,6 @@ export function ToolsView() {
   }, [tools]);
   // Category is the section-specific filter; the standard Collection owns the rest.
   const catItems = filter === 'all' ? tools : tools.filter(t => toolCategory(t) === filter);
-  // A dashed rule that separates gallery sections, matching the sketch theme.
-  const Divider = () => <div style={{ maxWidth: 900, margin: '16px auto', borderTop: '2px dashed var(--ink)', opacity: 0.5 }} />;
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
   const isExample = (t: any) => (t.tags || []).includes('example');
@@ -278,13 +276,14 @@ export function ToolsView() {
         ) : (galleryCollapsed && !isAdmin) ? null : (
           <>
             {/* The category chips sit right under the Build / Refresh buttons, above
-                the banner. They're part of the gallery section, so they collapse
-                with the banner + gallery under the eye — only Build / Refresh stay. */}
+                the gallery container. They're part of the gallery section, so they
+                collapse with it under the eye — only Build / Refresh stay. */}
             {!galleryCollapsed && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
-            {!galleryCollapsed && <InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />}
-            {!galleryCollapsed && <Divider />}
+            {/* Same shared container as the History feed: small space → title (+
+                buttons) → banner → filter → items. */}
             <Collection
               {...galleryHdr} onRefresh={reloadTools}
+              banner={<InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />}
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
               items={catItems}

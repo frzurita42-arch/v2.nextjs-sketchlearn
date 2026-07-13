@@ -50,6 +50,9 @@ export interface CollectionProps<T> {
   remixingTitle?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
+  // A how-to banner (e.g. an InstructionPlank) shown between the title header and
+  // the filter toolbar, so every section reads: title → banner → filter → items.
+  banner?: ReactNode;
   // 👁 hide/show toggle in the header. `showCollapse` renders it; it's clickable only
   // when `onToggleCollapse` is given (admin, home page), disabled otherwise. When
   // `collapsed`, the toolbar + items are hidden (only the admin ever renders it then).
@@ -78,7 +81,7 @@ export function Collection<T>({
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
-  showCollapse, collapsed, onToggleCollapse,
+  banner, showCollapse, collapsed, onToggleCollapse,
 }: CollectionProps<T>) {
   const [q, setQ] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -179,7 +182,7 @@ export function Collection<T>({
           aligned) with edit / AI-distort / refresh. No slider buttons (the pager
           handles paging). */}
       {title && (
-        <div style={{ ...wrap, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <div style={{ ...wrap, display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8, flexWrap: 'wrap' }}>
           {editingTitle ? (
             <input autoFocus value={titleDraft} onChange={e => setTitleDraft(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setTitleDraft(title); setEditingTitle(false); } }}
@@ -205,6 +208,9 @@ export function Collection<T>({
         </div>
       )}
       {collapsed ? null : (<>
+      {/* How-to banner sits between the title and the filter toolbar, so every
+          section reads: title → banner → filter → items. */}
+      {banner}
       {/* Toolbar */}
       <div style={{ ...wrap, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
