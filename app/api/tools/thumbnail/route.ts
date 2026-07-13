@@ -26,6 +26,30 @@ export async function POST(req: Request) {
   if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
     return NextResponse.json({ error: 'Only the owner or an admin can set the thumbnail.' }, { status: 403 });
   }
+
+  // A user-provided image (an uploaded blob URL, a pasted https URL, or a data
+  // URL) — just save it; no AI model needed. Data URLs are offloaded to the blob
+  // store when configured so the gallery payload stays light.
+  const provided = String(b.image || '');
+  if (provided) {
+    if (!(/^https?:\/\//i.test(provided) || /^data:image\//i.test(provided))) {
+      return NextResponse.json({ error: 'Not a valid image.' }, { status: 400 });
+    }
+    let img = provided.slice(0, 1_800_000);
+    if (/^data:image\//i.test(img) && process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const m = img.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
+        if (m) {
+          const { put } = await import('@vercel/blob');
+          const blob = await put(`thumbs/${slug}-${Date.now()}.png`, Buffer.from(m[2], 'base64'), { access: 'public', addRandomSuffix: true, contentType: m[1] });
+          img = blob.url;
+        }
+      } catch { /* keep the data URL */ }
+    }
+    await updateTool(slug, { thumbnail: img });
+    return NextResponse.json({ thumbnail: img });
+  }
+
   if (!imageEnabled && !geminiEnabled) {
     return NextResponse.json({ error: 'No image model is configured.' }, { status: 200 });
   }

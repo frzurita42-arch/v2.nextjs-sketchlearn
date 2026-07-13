@@ -19,6 +19,7 @@ export interface ToolCardProps {
   // Owner/admin thumbnail controls:
   onGenThumb?: (t: any) => void;      // regenerate a random image
   onThumbPrompt?: (t: any) => void;   // regenerate from a typed prompt
+  onUploadThumb?: (t: any, file: File) => void;   // upload a custom image
   thumbing?: boolean;
   // Footer actions:
   canRemove?: boolean;
@@ -32,6 +33,14 @@ const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation();
 export function ToolCard(p: ToolCardProps) {
   const { tool: t, view, onOpen, favs = {}, canEdit } = p;
   const fav = !!favs[t.slug];
+  // Open a file picker for a custom thumbnail upload (no per-card ref needed).
+  const pickFile = () => {
+    if (!p.onUploadThumb) return;
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) p.onUploadThumb!(t, f); };
+    inp.click();
+  };
 
   const editBtns = canEdit && (p.onEdit || p.onRemix) ? (
     <span style={{ display: 'inline-flex', gap: 6, marginLeft: 5, verticalAlign: 'middle' }}>
@@ -40,10 +49,11 @@ export function ToolCard(p: ToolCardProps) {
     </span>
   ) : null;
 
-  const overlayIcons = canEdit && (p.onThumbPrompt || p.onGenThumb) ? (
+  const overlayIcons = canEdit && (p.onThumbPrompt || p.onGenThumb || p.onUploadThumb) ? (
     <span style={{ position: 'absolute', top: 6, right: 8, display: 'inline-flex', gap: 8, alignItems: 'center' }}>
       {p.onThumbPrompt && <button title="Custom image — describe what to show" style={overlayIcon} disabled={!!p.thumbing} onClick={stop(() => p.onThumbPrompt!(t))}>✎</button>}
       {p.onGenThumb && <button title="Regenerate image with AI" style={overlayIcon} disabled={!!p.thumbing} onClick={stop(() => p.onGenThumb!(t))}>{p.thumbing ? '…' : '🎨'}</button>}
+      {p.onUploadThumb && <button title="Upload a custom image" style={overlayIcon} disabled={!!p.thumbing} onClick={stop(pickFile)}>📎</button>}
     </span>
   ) : null;
 
@@ -55,10 +65,11 @@ export function ToolCard(p: ToolCardProps) {
         </div>
       : <div style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', textAlign: 'center', padding: 6, cursor: 'pointer' }} onClick={() => onOpen(t)}>
           <span style={{ fontSize: 12, opacity: 0.6 }}>🖼️ No photo available</span>
-          {canEdit && (p.onGenThumb || p.onThumbPrompt) && (
+          {canEdit && (p.onGenThumb || p.onThumbPrompt || p.onUploadThumb) && (
             <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
               {p.onGenThumb && <button className="btn small ghost" disabled={!!p.thumbing} onClick={stop(() => p.onGenThumb!(t))}>{p.thumbing ? 'Generating…' : '🎨 Generate'}</button>}
               {p.onThumbPrompt && <button className="btn small ghost" disabled={!!p.thumbing} onClick={stop(() => p.onThumbPrompt!(t))}>✎ Custom</button>}
+              {p.onUploadThumb && <button className="btn small ghost" disabled={!!p.thumbing} onClick={stop(pickFile)}>📎 Upload</button>}
             </span>
           )}
         </div>

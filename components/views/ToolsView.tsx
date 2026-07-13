@@ -67,6 +67,21 @@ export function ToolsView() {
     setThumbing(m => { const n = { ...m }; delete n[t.slug]; return n; });
   };
   const openImgPrompt = (t: any) => { setImgPromptText(''); setImgPromptTool(t); };
+  // Upload a custom image file as the thumbnail (blob store, data-URL fallback).
+  const uploadThumb = async (t: any, file: File) => {
+    if (!/^image\//.test(file.type)) { alert('Please choose an image file.'); return; }
+    if (file.size > 8_000_000) { alert('Please pick an image under 8 MB.'); return; }
+    setThumbing(m => ({ ...m, [t.slug]: true }));
+    try {
+      let url = '';
+      try { const up = await API.upload('/api/upload', file); if (up?.url) url = up.url; } catch { /* fall back to data URL */ }
+      if (!url) url = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result || '')); r.readAsDataURL(file); });
+      const r = await API.post('/api/tools/thumbnail', { slug: t.slug, image: url });
+      if (r?.thumbnail) patchTool(t.slug, { thumbnail: r.thumbnail });
+      else if (r?.error) alert(r.error);
+    } catch (e: any) { alert(e?.message || 'Could not upload the image.'); }
+    setThumbing(m => { const n = { ...m }; delete n[t.slug]; return n; });
+  };
   const patchTool = (slug: string, patch: any) => setTools(ts => ts.map(t => t.slug === slug ? { ...t, ...patch } : t));
   const canEditCard = (t: any) => !(t.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === t.owner);
   const remix = async (t: any) => {
@@ -149,7 +164,7 @@ export function ToolsView() {
   const card = (t: any, view: 'grid' | 'row') => (
     <ToolCard tool={t} view={view} onOpen={open} favs={favs}
       canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
-      onGenThumb={genThumb} onThumbPrompt={openImgPrompt} thumbing={!!thumbing[t.slug]}
+      onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} thumbing={!!thumbing[t.slug]}
       canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
   );
 
