@@ -28,6 +28,19 @@ export function ToolsView() {
   }, []);
   const setView = (v: 'grid' | 'row') => { setViewMode(v); try { localStorage.setItem('sl_tools_view', v); } catch { /* ignore */ } };
 
+  // Admin-editable page copy (heading + subtitle), saved for everyone.
+  const isAdmin = app.user?.role === 'admin';
+  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string }>({});
+  const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
+  const [headingDraft, setHeadingDraft] = useState('');
+  useEffect(() => { API.get('/api/site-settings').then((r: any) => setSite(r?.settings || {})).catch(() => { /* ignore */ }); }, []);
+  const saveHeading = async (key: 'galleryTitle' | 'gallerySubtitle', val: string) => {
+    setEditHeading(null);
+    const v = val.trim();
+    setSite(s => ({ ...s, [key]: v }));
+    try { await API.put('/api/site-settings', { key, value: v }); } catch { /* ignore */ }
+  };
+
   const HIDDEN_KEY = 'sl_hidden_examples';
   const loadHidden = (): string[] => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } };
 
@@ -93,8 +106,34 @@ export function ToolsView() {
 
   return (
     <>
-      <h1 className="view-title">Tool <span className="scribble-underline">gallery</span></h1>
-      <p className="view-sub" style={{ textAlign: 'center' }}>Open a tool, or build your own by describing it to the AI.</p>
+      {editHeading === 'galleryTitle' ? (
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '0 auto' }}>
+          <input value={headingDraft} onChange={e => setHeadingDraft(e.target.value)} autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') saveHeading('galleryTitle', headingDraft); if (e.key === 'Escape') setEditHeading(null); }}
+            style={{ fontSize: 24, fontWeight: 700, padding: '4px 8px', borderRadius: 8, border: '2px solid var(--ink)', width: '100%', maxWidth: 460 }} />
+          <button className="btn small green" onClick={() => saveHeading('galleryTitle', headingDraft)}>Save</button>
+          <button className="btn small ghost" onClick={() => setEditHeading(null)}>✕</button>
+        </div>
+      ) : (
+        <h1 className="view-title">
+          {site.galleryTitle ? site.galleryTitle : <>Tool <span className="scribble-underline">gallery</span></>}
+          {isAdmin && <button title="Edit heading (admin)" onClick={() => { setHeadingDraft(site.galleryTitle || 'Tool gallery'); setEditHeading('galleryTitle'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 15 }}>✎</button>}
+        </h1>
+      )}
+      {editHeading === 'gallerySubtitle' ? (
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '4px auto' }}>
+          <input value={headingDraft} onChange={e => setHeadingDraft(e.target.value)} autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') saveHeading('gallerySubtitle', headingDraft); if (e.key === 'Escape') setEditHeading(null); }}
+            style={{ fontSize: 14, padding: '4px 8px', borderRadius: 8, border: '2px solid var(--ink)', width: '100%', maxWidth: 460 }} />
+          <button className="btn small green" onClick={() => saveHeading('gallerySubtitle', headingDraft)}>Save</button>
+          <button className="btn small ghost" onClick={() => setEditHeading(null)}>✕</button>
+        </div>
+      ) : (
+        <p className="view-sub" style={{ textAlign: 'center' }}>
+          {site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.'}
+          {isAdmin && <button title="Edit subtitle (admin)" onClick={() => { setHeadingDraft(site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.'); setEditHeading('gallerySubtitle'); }} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>✎</button>}
+        </p>
+      )}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
         <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
         <button className="btn small" onClick={load}>↻ Refresh</button>

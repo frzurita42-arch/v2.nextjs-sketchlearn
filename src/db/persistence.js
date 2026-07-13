@@ -130,6 +130,15 @@ async function initDatabase() {
   // gallery filter. Kept alongside the like_count for the visible tally.
   await dbQuery(`ALTER TABLE tools ADD COLUMN IF NOT EXISTS liked_by JSONB DEFAULT '[]'::jsonb`);
 
+  // ---------- site settings: small admin-editable key/value store (page copy) ----------
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS site_settings (
+      key TEXT PRIMARY KEY,
+      value JSONB,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // ---------- platform: generic entry store ----------
   // Rows created BY a tool at runtime (storage-system items, journal notes,
   // calendar events, contest/payment submissions...). `data` is schema-shaped

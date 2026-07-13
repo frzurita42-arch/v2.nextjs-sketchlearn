@@ -401,9 +401,47 @@ async function listPosts({ limit = 100 } = {}) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// site_settings — a tiny admin-editable key/value store for page copy
+// ---------------------------------------------------------------------------
+async function getSiteSettings() {
+  if (!db.pool) return readJSON('site_settings.json', {});
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT key, value FROM site_settings', []), 8000, 'Site settings');
+    const o = {};
+    for (const r of rows) o[r.key] = parseJsonb(r.value, null);
+    return o;
+  } catch (e) {
+    console.error('Site settings read failed; falling back to file:', e.message);
+    return readJSON('site_settings.json', {});
+  }
+}
+
+async function setSiteSetting(key, value) {
+  key = String(key || '').slice(0, 60);
+  if (!key) return false;
+  if (!db.pool) {
+    const s = readJSON('site_settings.json', {});
+    s[key] = value; writeJSON('site_settings.json', s);
+    return true;
+  }
+  try {
+    await withDbTimeout(dbQuery(
+      `INSERT INTO site_settings (key, value, updated_at) VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [key, JSON.stringify(value)]
+    ), 8000, 'Set site setting');
+    return true;
+  } catch (e) {
+    console.error('Site settings write failed:', e.message);
+    return false;
+  }
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, setEntryStatus,
   insertComment, listComments,
   insertPost, listPosts,
+  getSiteSettings, setSiteSetting,
 };
