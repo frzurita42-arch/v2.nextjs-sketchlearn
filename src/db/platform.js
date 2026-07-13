@@ -109,6 +109,7 @@ async function updateTool(slug, patch) {
     if (patch.definition !== undefined) { t.definition = patch.definition; t.title = patch.definition.title || t.title; t.description = patch.definition.description || t.description; t.archetype = patch.definition.archetype || t.archetype; t.tags = patch.definition.tags || t.tags; }
     if (patch.title !== undefined) { t.title = patch.title; if (t.definition) t.definition.title = patch.title; }
     if (patch.description !== undefined) { t.description = patch.description; if (t.definition) t.definition.description = patch.description; }
+    if (patch.thumbnail !== undefined) t.thumbnail = patch.thumbnail;
     if (patch.visibility !== undefined) t.visibility = patch.visibility;
     if (patch.apiKeys !== undefined) t.apiKeys = patch.apiKeys;
     t.updatedAt = new Date().toISOString();
@@ -123,6 +124,7 @@ async function updateTool(slug, patch) {
     }
     if (patch.title !== undefined) { sets.push(`title = $${i++}`); vals.push(patch.title); }
     if (patch.description !== undefined) { sets.push(`description = $${i++}`); vals.push(patch.description); }
+    if (patch.thumbnail !== undefined) { sets.push(`thumbnail = $${i++}`); vals.push(patch.thumbnail); }
     if (patch.visibility !== undefined) { sets.push(`visibility = $${i++}`); vals.push(patch.visibility); }
     if (patch.apiKeys !== undefined) { sets.push(`api_keys = $${i++}::jsonb`); vals.push(JSON.stringify(patch.apiKeys)); }
     if (!sets.length) return true;

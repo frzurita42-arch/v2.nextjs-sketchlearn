@@ -71,11 +71,17 @@ export function Collection<T>({
   const goPage = (p: number) => { setPage(Math.max(0, Math.min(pageCount - 1, p))); goTop(); };
 
   const wrap = { maxWidth, margin: '0 auto' } as const;
-  const pager = perPage && pageCount > 1 ? (
-    <div style={{ ...wrap, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
-      <button className="btn small" disabled={page === 0} onClick={() => goPage(page - 1)}>← Prev</button>
-      <span style={{ fontSize: 13, opacity: 0.7 }}>Page {page + 1} / {pageCount}</span>
-      <button className="btn small" disabled={page >= pageCount - 1} onClick={() => goPage(page + 1)}>Next →</button>
+  const fullDash = { borderTop: '2px dashed var(--ink)', opacity: 0.5, width: '100%' } as const;
+  // A pager framed by full-page-width dashed rules, top and bottom.
+  const pagerBlock = perPage && pageCount > 1 ? (
+    <div>
+      <div style={fullDash} />
+      <div style={{ ...wrap, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+        <button className="btn small" disabled={page === 0} onClick={() => goPage(page - 1)}>← Prev</button>
+        <span style={{ fontSize: 13, opacity: 0.7 }}>Page {page + 1} / {pageCount}</span>
+        <button className="btn small" disabled={page >= pageCount - 1} onClick={() => goPage(page + 1)}>Next →</button>
+      </div>
+      <div style={fullDash} />
     </div>
   ) : null;
 
@@ -98,7 +104,7 @@ export function Collection<T>({
       <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>{filtered.length} item{filtered.length === 1 ? '' : 's'}</div>
 
       {/* Top pager — right after the filter toolbar */}
-      {pager && <div style={{ marginBottom: 12 }}>{pager}</div>}
+      {pagerBlock && <div style={{ marginBottom: 12 }}>{pagerBlock}</div>}
 
       {/* Items */}
       {items.length === 0 ? (
@@ -114,7 +120,7 @@ export function Collection<T>({
       )}
 
       {/* Bottom pager — scrolls back up to the toolbar on Prev/Next */}
-      {pager && <div style={{ marginTop: 14 }}>{pager}</div>}
+      {pagerBlock && <div style={{ marginTop: 14 }}>{pagerBlock}</div>}
     </div>
   );
 }

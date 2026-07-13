@@ -160,11 +160,11 @@ export default function AppRoot() {
         </div>
       )}
       {/* Global back bar — on every page, a centered Back button (→ home = Tools)
-          between two dotted rules, right under the header. */}
-      <div style={{ maxWidth: 820, margin: '6px auto 0', textAlign: 'center' }}>
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, marginBottom: 8 }} />
+          between two full-width dashed rules, right under the header. */}
+      <div style={{ margin: '6px 0 0', textAlign: 'center' }}>
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
         <button className="btn small" onClick={() => nav('tools')}>← Back</button>
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, marginTop: 8 }} />
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '8px 0 0' }} />
       </div>
       {/* key={view} remounts only on a view switch (fresh state per view, like
           the legacy SPA); in-view rerender() updates in place. */}
