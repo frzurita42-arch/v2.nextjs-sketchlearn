@@ -31,15 +31,16 @@ export async function POST(req: Request) {
   }
 
   const d = tool.definition || {};
-  const kind = d.archetype || tool.archetype;
   const subject = d.lesson?.subject || '';
+  const desc = String(tool.description || '').slice(0, 180);
+  const theme = [tool.title, subject, desc].filter(Boolean).join(' — ');
   const prompt = [
-    `A clean, friendly, colorful thumbnail illustration for a tool named "${tool.title}".`,
-    tool.description ? `The tool: ${String(tool.description).slice(0, 200)}.` : '',
-    subject ? `Topic: ${subject}.` : '',
-    `It is a ${kind} tool on SketchLearn — a platform of AI-built tools for teaching, productivity, sales, marketing and more.`,
-    'Simple, iconic, modern flat illustration. Centered subject. NO text, NO words, NO letters.',
-  ].filter(Boolean).join(' ');
+    'A cinematic, photorealistic scene: a warm, lived-in 1990s architectural design studio / woodworking workshop.',
+    'A large cork bulletin board is pinned full of hand-drawn sketches, blueprints, index cards and reference photos; nearby are drafting tools, rulers, pencils in jars, scale models, wood shavings and a brass desk lamp casting warm light — an analog, hand-crafted "SketchLearn" design-studio atmosphere.',
+    `Fill the scene with objects, models, pinned drawings and props clearly related to the theme of this tool: "${theme}". Everything on the board and desk should evoke that specific subject.`,
+    'Shallow depth of field, soft warm lighting, rich wood-and-paper textures, subtle film-photo grain, editorial still-life composition.',
+    'Absolutely NO text, NO letters, NO numbers, NO words anywhere in the image.',
+  ].join(' ');
 
   try {
     let img = await generateImage(prompt);
