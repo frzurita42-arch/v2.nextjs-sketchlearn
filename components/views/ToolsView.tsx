@@ -220,11 +220,6 @@ export function ToolsView() {
         <button className="btn small" onClick={load}>↻ Refresh</button>
       </div>
 
-      {/* "Top picks for you" — a sliding, refreshable feed of personalized picks. */}
-      <Divider />
-      <SuggestionCarousel />
-      <Divider />
-
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
         : tools.length === 0 ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
@@ -257,6 +252,15 @@ export function ToolsView() {
             />
           </>
         )}
+
+      {/* "Top picks for you" — a sliding, refreshable feed of 10 personalized
+          picks, under the gallery and above the page's bottom Back button. */}
+      {!loading && tools.length > 0 && (
+        <>
+          <Divider />
+          <SuggestionCarousel limit={10} />
+        </>
+      )}
     </>
   );
 }
