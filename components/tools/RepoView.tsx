@@ -468,10 +468,8 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 // ★, and the attachments as footer buttons. Owner/admin edit IN PLACE: a ✎ pencil
 // sits next to the title (with 🎨 to AI-rewrite it) and another ✎ next to the
 // subtitle, so you edit the thing you click. Card-level actions stay small and
-// bare: ⚙️ add a card inside, 🗑 delete. Nested cards show ONLY the first as a
-// preview and can be collapsed/expanded to reveal the rest — this preview
-// behaviour is exclusive to repo collection cards (not the tool gallery, posts,
-// or homepage).
+// bare: ⚙️ add a sibling, ➕ add a card inside, 🗑 delete. In rows view all nested
+// cards are shown; in grid view a card is shown alone (click it to flip to rows).
 function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx; switchToRows?: () => void; nested?: boolean }) {
   // Hidden children vanish for normal viewers; owner/admin still see them greyed.
   const kids = (card.children || []).filter((k) => ctx.canEdit || !k.hidden);
@@ -486,7 +484,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const previewBlocked = mode === 'preview' && !ctx.canEdit;
   const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
   const isFav = !!ctx.favs[card.id];
-  const [expanded, setExpanded] = useState(true);   // default: show all nested (Show less)
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingSub, setEditingSub] = useState(false);
   const [titleDraft, setTitleDraft] = useState(card.title || '');
@@ -697,8 +694,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const iconGrid = (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 6, justifyItems: 'center', alignItems: 'center', flex: '0 0 auto' }}>
       {favBtn}
-      {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>}
-      {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>➕</button>}
+      {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
+      {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>}
+      {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>}
       {/* 📎 clip → blue attachment · 📁 folder → green attachment. Second click removes the last one. */}
       {canUseClip && <button type="button" title="Attach a file or link (blue) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'blue' ? 1 : 0.85 }} onClick={clipClick}>📎</button>}
       {canUseFolder && <button type="button" title="Attach a file or link (green) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'green' ? 1 : 0.85 }} onClick={folderClick}>📁</button>}
@@ -753,25 +751,15 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // admin preview) is just greyed.
   const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{attachForm}</div>;
 
-  // GRID view: a card is shown ALONE — no nested cards beneath it. (Clicking a
-  // card with children flips to the rows view, above, to reveal the tree.) Only
-  // the ROWS view draws the nested preview + collapse/expand.
+  // GRID view: a card is shown ALONE — no nested cards beneath it (clicking a
+  // card with children flips to the rows view to reveal the tree). ROWS view
+  // draws ALL nested cards, always.
   if (view === 'grid' || !kids.length) return <div>{body}</div>;
-  // Preview: show just the first nested card; the rest collapse/expand in place.
-  const shown = expanded ? kids : kids.slice(0, 1);
-  const more = kids.length - 1;
   return (
     <div>
       {body}
       <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
-        {shown.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
-        {more > 0 && (
-          <button type="button" onClick={() => setExpanded((e) => !e)}
-            title={expanded ? 'Collapse' : `Show ${more} more inside`}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textAlign: 'left', fontSize: 12, fontWeight: 700, opacity: 0.7, color: 'var(--ink)', justifySelf: 'start' }}>
-            {expanded ? '▾ Show less' : `▸ Show ${more} more ${more === 1 ? 'card' : 'cards'} inside`}
-          </button>
-        )}
+        {kids.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
       </div>
     </div>
   );
