@@ -3,7 +3,8 @@
  * right beside the title) over a scrollable rail of cards. The title can be made
  * editable — type a new one, or ✎ / 🎨 to reword it with AI. Used for the "Top
  * picks for you" feed on the Tools page and below the comments on a tool page. */
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 
 export function Carousel({ title, onRefresh, refreshing, children, empty, cardWidth = 240, cardHeight,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, headerExtra, banner,
@@ -27,53 +28,28 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
 }) {
   const rail = useRef<HTMLDivElement>(null);
   const slide = (dir: number) => { try { rail.current?.scrollBy({ left: dir * (cardWidth + 14) * 2, behavior: 'smooth' }); } catch { /* ignore */ } };
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(title);
   const count = Array.isArray(children) ? children.filter(Boolean).length : (children ? 1 : 0);
-  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 } as const;
-  const save = () => { const v = draft.trim(); if (v && onRenameTitle) onRenameTitle(v); setEditing(false); };
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       {/* Hide the horizontal scrollbar (scrolling still works). */}
       <style>{'.sl-rail{scrollbar-width:none;-ms-overflow-style:none;}.sl-rail::-webkit-scrollbar{display:none;height:0;width:0;}'}</style>
-      {/* Title + its controls, all on the same (left) side. A little top space
-          drops the title further below the dashed rule of the section above. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8, flexWrap: 'wrap' }}>
-        {editing ? (
-          <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setDraft(title); setEditing(false); } }}
-            onBlur={save} style={{ fontSize: 17, fontWeight: 700, padding: '2px 6px', borderRadius: 6, border: '1.5px solid var(--ink)', maxWidth: 320 }} />
-        ) : (
-          <h3 style={{ margin: 0, fontSize: 18 }}>{title}</h3>
-        )}
-        {canEditTitle && !editing && (
-          <>
-            <button title="Edit the title" style={iconBtn} onClick={() => { setDraft(title); setEditing(true); }}>✎</button>
-            {onRemixTitle && <button title="AI tap-mixer — reword the title" style={iconBtn} disabled={!!remixingTitle} onClick={onRemixTitle}>{remixingTitle ? '…' : '🎨'}</button>}
-          </>
-        )}
-        {/* 👁 visibility toggle — clickable only where a handler is given (admin, home
-            page); shown disabled elsewhere. Collapsed = hidden from regular users. */}
-        {showCollapse && (
-          <button title={onToggleCollapse ? (collapsed ? 'Hidden from other users — click to show this section' : 'Hide this section from other users') : 'Section visibility (admin only, home page)'}
-            style={{ ...iconBtn, cursor: onToggleCollapse ? 'pointer' : 'default', opacity: collapsed ? 0.4 : 1 }}
-            disabled={!onToggleCollapse} onClick={onToggleCollapse}>{'👁︎'}</button>
-        )}
-        {!collapsed && onRefresh && <button className="btn small ghost" disabled={!!refreshing} onClick={onRefresh} title="Refresh suggestions">{refreshing ? '…' : '🔄 Refresh'}</button>}
-        {!collapsed && headerExtra}
-        {/* Slider buttons to move the cards left / right. */}
-        {!collapsed && count > 1 && (
-          <span style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
-            <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide left" onClick={() => slide(-1)}>‹</button>
-            <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide right" onClick={() => slide(1)}>›</button>
-          </span>
-        )}
-      </div>
+      {/* Shared title row: ✎ · 🎨 · 🔄 · slider · 👁 (eye always last). */}
+      <SectionHeader title={title}
+        canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
+        onRefresh={onRefresh} refreshing={refreshing} refreshTitle="Refresh suggestions"
+        showCollapse={showCollapse} collapsed={collapsed} onToggleCollapse={onToggleCollapse}
+        extra={<>
+          {headerExtra}
+          {count > 1 && (
+            <span style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
+              <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide left" onClick={() => slide(-1)}>‹</button>
+              <button className="btn small ghost" style={{ borderRadius: 0, border: 'none' }} title="Slide right" onClick={() => slide(1)}>›</button>
+            </span>
+          )}
+        </>} />
       {/* When collapsed, only the admin reaches this (regular users don't render the
-          section at all) — show a compact "hidden" note beside the header. */}
-      {collapsed ? (
-        <div style={{ opacity: 0.55, fontSize: 12, fontStyle: 'italic', padding: '2px 0 6px' }}>Hidden from other users · click 👁 to show</div>
-      ) : (<>
+          section at all); the header already shows the "hidden" note. */}
+      {collapsed ? null : (<>
       {/* How-to banner sits below the title, above the cards. */}
       {banner}
       {count === 0 ? (

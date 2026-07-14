@@ -8,6 +8,7 @@
  * grid card vs. a horizontal row. */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { API } from '@/lib/api';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 
 // The mutually-exclusive status filter: everything, only-my-favorites,
 // only-liked-by-admin, or only-favorited-by-the-owner (OP).
@@ -85,10 +86,6 @@ export function Collection<T>({
   banner, showCollapse, collapsed, onToggleCollapse,
 }: CollectionProps<T>) {
   const [q, setQ] = useState('');
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(title || '');
-  const saveTitle = () => { const v = titleDraft.trim(); if (v && onRenameTitle) onRenameTitle(v); setEditingTitle(false); };
-  const hdrIcon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 } as const;
   // One mutually-exclusive status filter (All is the neutral default). Whoever may
   // save it (owner/admin) writes the page default; others' picks are session-only.
   const [activeFilter, setActiveFilter] = useState<FilterKey>(defaultFilter);
@@ -179,34 +176,13 @@ export function Collection<T>({
   return (
     <div>
       <div ref={topRef} style={{ scrollMarginTop: 8 }} />
-      {/* Section header — the same style as a carousel title (emoji + title, left-
-          aligned) with edit / AI-distort / refresh. No slider buttons (the pager
-          handles paging). */}
+      {/* Shared section title row (same ✎ · 🎨 · 🔄 · 👁 order as carousels). No
+          slider buttons here — the pager handles paging. */}
       {title && (
-        <div style={{ ...wrap, display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8, flexWrap: 'wrap' }}>
-          {editingTitle ? (
-            <input autoFocus value={titleDraft} onChange={e => setTitleDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setTitleDraft(title); setEditingTitle(false); } }}
-              onBlur={saveTitle} style={{ fontSize: 17, fontWeight: 700, padding: '2px 6px', borderRadius: 6, border: '1.5px solid var(--ink)', maxWidth: 320 }} />
-          ) : (
-            <h3 style={{ margin: 0, fontSize: 18 }}>{title}</h3>
-          )}
-          {canEditTitle && !editingTitle && (
-            <>
-              <button title="Edit the title" style={hdrIcon} onClick={() => { setTitleDraft(title); setEditingTitle(true); }}>✎</button>
-              {onRemixTitle && <button title="AI tap-mixer — reword the title" style={hdrIcon} disabled={!!remixingTitle} onClick={onRemixTitle}>{remixingTitle ? '…' : '🎨'}</button>}
-            </>
-          )}
-          {!collapsed && <button className="btn small ghost" disabled={!!refreshing} onClick={doRefresh} title="Shuffle into a fresh random order">{refreshing ? '…' : '🔄 Refresh'}</button>}
-          {/* 👁 visibility toggle — clickable only where a handler is given (admin,
-              home page); disabled elsewhere. Collapsed = hidden from regular users. */}
-          {showCollapse && (
-            <button title={onToggleCollapse ? (collapsed ? 'Hidden from other users — click to show this section' : 'Hide this section from other users') : 'Section visibility (admin only, home page)'}
-              style={{ ...hdrIcon, cursor: onToggleCollapse ? 'pointer' : 'default', opacity: collapsed ? 0.4 : 1 }}
-              disabled={!onToggleCollapse} onClick={onToggleCollapse}>{'👁︎'}</button>
-          )}
-          {collapsed && <span style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.55 }}>Hidden from other users · click 👁 to show</span>}
-        </div>
+        <SectionHeader title={title} maxWidth={maxWidth}
+          canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
+          onRefresh={doRefresh} refreshing={refreshing} refreshTitle="Shuffle into a fresh random order"
+          showCollapse={showCollapse} collapsed={collapsed} onToggleCollapse={onToggleCollapse} />
       )}
       {collapsed ? null : (<>
       {/* How-to banner sits between the title and the filter toolbar, so every
