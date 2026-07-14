@@ -32,6 +32,8 @@ type ViewCtx = {
   favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
+  clipForAll: boolean; folderForAll: boolean;      // Configurations: attach access for normal users
+  applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
   distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
   distortText: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the description
@@ -475,13 +477,35 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // ---- attachments: BOTH the 📎 clip and the 📁 folder add a link or uploaded
   // file to THIS card (they render as the 🔗 buttons). They differ only in the
   // button colour — clip → blue, folder → green — so you can group attachments.
+  const canUseClip = ctx.canEdit || ctx.clipForAll;       // Configurations access
+  const canUseFolder = ctx.canEdit || ctx.folderForAll;
   const toggleAttach = (c: 'blue' | 'green') => {
     if (attaching && attachColor === c) { setAttaching(false); return; }
     setAttachColor(c); setAttaching(true);
   };
-  const appendLink = (label: string, url: string) => ctx.editField(card.id, {
-    links: [...(card.links || []), { label: label.slice(0, 15) || 'Link', url, ...(attachColor === 'green' ? { color: 'green' as const } : {}) }],
-  });
+  // Owner/admin edit the card tree directly; normal users go through the guarded
+  // /api/tools/repo/attach endpoint (which only they're allowed to when the repo
+  // Configurations permit that colour).
+  const appendLink = async (label: string, url: string) => {
+    const lbl = label.slice(0, 15) || 'Link';
+    if (ctx.canEdit) {
+      ctx.editField(card.id, { links: [...(card.links || []), { label: lbl, url, ...(attachColor === 'green' ? { color: 'green' as const } : {}) }] });
+    } else {
+      try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, action: 'add', color: attachColor, link: { label: lbl, url } }); if (r?.repo) ctx.applyRepo(r.repo); else if (r?.error) alert(r.error); } catch { alert('Could not attach.'); }
+    }
+  };
+  // Second click on the clip/folder removes the last link of that colour.
+  const removeLastColor = async (isGreen: boolean): Promise<boolean> => {
+    const arr = card.links || [];
+    let idx = -1;
+    for (let i = arr.length - 1; i >= 0; i--) { if (((arr[i] as any).color === 'green') === isGreen) { idx = i; break; } }
+    if (idx === -1) return false;
+    if (ctx.canEdit) ctx.editField(card.id, { links: arr.filter((_, j) => j !== idx) });
+    else { try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, action: 'remove', color: isGreen ? 'green' : 'blue' }); if (r?.repo) ctx.applyRepo(r.repo); } catch { /* ignore */ } }
+    return true;
+  };
+  const clipClick = () => { if (!canUseClip) return; removeLastColor(false).then((removed) => { if (!removed) toggleAttach('blue'); }); };
+  const folderClick = () => { if (!canUseFolder) return; removeLastColor(true).then((removed) => { if (!removed) toggleAttach('green'); }); };
   const addLink = () => {
     let url = linkUrl.trim(); if (!url) return;
     // A bare domain like "example.com" is dropped by the server sanitizer (which
@@ -604,24 +628,43 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </span>
   )) : null;
 
-  const actions = (
-    <>
-      {links.map((l, i) => <a key={i} className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>🔗 {cap15(l.label || 'Open')}</a>)}
-      {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
-      <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
+  // Link buttons grouped by colour into a single column with (up to) two rows —
+  // blue (clip) links on top, green (folder) links below.
+  const blueLinks = links.filter((l) => l.color !== 'green');
+  const greenLinks = links.filter((l) => l.color === 'green');
+  const linkBtn = (l: RepoLink, i: number) => <a key={l.url + i} className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>🔗 {cap15(l.label || 'Open')}</a>;
+  const linkColumn = links.length > 0 ? (
+    <div style={{ display: 'grid', gap: 4, flex: '0 0 auto' }}>
+      {blueLinks.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{blueLinks.map(linkBtn)}</div>}
+      {greenLinks.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{greenLinks.map(linkBtn)}</div>}
+    </div>
+  ) : null;
+
+  // The control icons laid out in a tidy 3-per-row grid.
+  const favBtn = (
+    <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
+  );
+  const iconGrid = (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 6, justifyItems: 'center', alignItems: 'center', flex: '0 0 auto' }}>
+      {favBtn}
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>}
       {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>➕</button>}
-      {/* 📎 clip → blue attachment button · 📁 folder → green attachment button. */}
-      {ctx.canEdit && <button type="button" title="Attach a file or link (blue button)" style={{ ...iconBtn, opacity: attaching && attachColor === 'blue' ? 1 : 0.85 }} onClick={() => toggleAttach('blue')}>📎</button>}
-      {ctx.canEdit && <button type="button" title="Attach a file or link (green button)" style={{ ...iconBtn, opacity: attaching && attachColor === 'green' ? 1 : 0.85 }} onClick={() => toggleAttach('green')}>📁</button>}
-      {/* 👁 hide from normal viewers — always last. Owner/admin still see it (greyed). */}
+      {/* 📎 clip → blue attachment · 📁 folder → green attachment. Second click removes the last one. */}
+      {canUseClip && <button type="button" title="Attach a file or link (blue) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'blue' ? 1 : 0.85 }} onClick={clipClick}>📎</button>}
+      {canUseFolder && <button type="button" title="Attach a file or link (green) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'green' ? 1 : 0.85 }} onClick={folderClick}>📁</button>}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
+      {ctx.canEdit && <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>}
+    </div>
+  );
+  const actions = (
+    <>
+      {linkColumn}
+      {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
+      {iconGrid}
     </>
   );
-  const del = ctx.canEdit ? (
-    <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>
-  ) : undefined;
+  const del = undefined;   // delete lives inside the icon grid now
 
   const shell = (
     <CardShell view={view}
@@ -638,7 +681,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
 
   // The clip/folder inline editor: type a link (label + URL) or upload a file.
   // Both append to the card's links (shown as 🔗 buttons) in the chosen colour.
-  const attachForm = ctx.canEdit && attaching ? (
+  const attachForm = attaching ? (
     <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
       <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁' : '📎'} Attach a file or add a link — makes a <span style={{ color: attachColor === 'green' ? '#1f8b4c' : '#2f6fdb' }}>{attachColor}</span> button</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -690,6 +733,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const display: 'bars' | 'grid' = repo.display === 'grid' ? 'grid' : 'bars';
   // Studio "collections" show a gallery-style filter toolbar over vertical cards.
   const isCollection = (def?.tags || []).includes('collection');
+  // Configurations: owner/admin choose whether NORMAL users may use the 📎 clip
+  // and 📁 folder attach buttons (default off — attaching is owner/admin-only).
+  // The 4 states All / Only 📁 / Only 📎 / None are the combos of these two.
+  const [clipForAll, setClipForAll] = useState(!!repo.clipForAll);
+  const [folderForAll, setFolderForAll] = useState(!!repo.folderForAll);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState('');
@@ -735,10 +783,28 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveCards = async (next: RepoCard[]) => {
     setCards(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, cards: next } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, clipForAll, folderForAll, cards: next } });
       if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
     } catch { /* keep the optimistic copy */ }
   };
+  // A returned repo (from the normal-user attach endpoint) reconciled into state.
+  const applyRepo = (nextRepo: RepoSpec) => { if (!nextRepo) return; setCards(nextRepo.cards || []); if (def) def.repo = nextRepo; };
+  // Persist a Configurations change (attach access) without touching cards.
+  const saveConfig = async (patch: { clipForAll?: boolean; folderForAll?: boolean }) => {
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, clipForAll, folderForAll, cards, ...patch } });
+      if (r?.repo && def) def.repo = r.repo;
+    } catch { /* keep the optimistic toggle */ }
+  };
+  // Cycle the single Configurations toggle: All → Only 📁 → Only 📎 → None → …
+  const cycleAccess = () => {
+    const next = clipForAll && folderForAll ? { clipForAll: false, folderForAll: true }   // All → Only folder
+      : !clipForAll && folderForAll ? { clipForAll: true, folderForAll: false }            // Only folder → Only clip
+      : clipForAll && !folderForAll ? { clipForAll: false, folderForAll: false }           // Only clip → None
+      : { clipForAll: true, folderForAll: true };                                          // None → All
+    setClipForAll(next.clipForAll); setFolderForAll(next.folderForAll); saveConfig(next);
+  };
+  const accessLabel = clipForAll && folderForAll ? 'All' : folderForAll ? 'Only 📁 folder' : clipForAll ? 'Only 📎 clip' : 'None (owner/admin only)';
   const editField = (id: string, p: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...p })));
   // The gear adds a nested card seeded with a generic title AND subtitle, so its
   // ✎ pencils have something to edit right away.
@@ -772,7 +838,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, clipForAll, folderForAll, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
@@ -876,7 +942,18 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           <p style={{ margin: 0 }}>This repository is empty.{canEdit ? ' Tap ✎ Edit to add your first card.' : ''}</p>
         </div>
       ) : isCollection ? (
-        /* A collection: the shared titled + banner'd + filterable gallery block. */
+       <>
+        {/* Configurations card — owner/admin only, right above the first card. Sets
+            whether normal users may use the 📎 clip and 📁 folder attach buttons. */}
+        {canEdit && (
+          <div className="card" style={{ maxWidth: 900, margin: '0 auto 10px', padding: '10px 14px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <strong style={{ fontSize: 14 }}>⚙️ Configurations</strong>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Who can use 📎 / 📁 attach:</span>
+            <button className="btn small blue" onClick={cycleAccess} title="Cycle: All → Only 📁 → Only 📎 → None">{accessLabel} ↻</button>
+            <span style={{ fontSize: 11, opacity: 0.55 }}>Owner/admin always can. Only you can change this.</span>
+          </div>
+        )}
+        {/* A collection: the shared titled + banner'd + filterable gallery block. */}
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"
           bannerKey="collectionBanner" bannerDefault="🗂️ Your saved cards — search by name, favorite them (★ / liked by admin / OP), switch grid ▦ or rows ☰ (the owner can 🔒 lock the layout), and page through. Tap a card to open its attachment."
@@ -903,6 +980,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           emptyAll="This collection is empty."
           emptyFiltered="No cards match your search."
         />
+       </>
       ) : (
         <div style={display === 'grid'
           ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }

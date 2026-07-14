@@ -131,6 +131,12 @@ export interface RepoSpec {
   display?: 'bars' | 'grid';    // default arrangement of cards (horizontal bars or a grid)
   displayLocked?: boolean;      // owner/admin lock: when true viewers can't switch grid/rows
   offlineExport?: boolean;      // show the "download offline copy (.zip)" button (default on)
+  // Configurations access — whether NORMAL users (not just owner/admin) may use
+  // the attach buttons. The 4 states All / Only 📁 / Only 📎 / None are just the
+  // combinations of these two. Owner/admin always have both. Default: both off
+  // (attaching is owner/admin-only).
+  clipForAll?: boolean;         // 📎 clip attach available to all users
+  folderForAll?: boolean;       // 📁 folder attach available to all users
   cards: RepoCard[];
 }
 
@@ -252,7 +258,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
     const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
-    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, cards };
+    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);
