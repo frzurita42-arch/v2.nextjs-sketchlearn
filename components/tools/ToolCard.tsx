@@ -7,7 +7,8 @@
  * generate/regenerate the thumbnail, delete) are optional and only render when
  * their handlers are supplied. Delete is a small plain icon, not a boxed button. */
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { emojiOf } from '@/lib/emoji-thumb';
+import { emojiOf, defaultEmojiFor } from '@/lib/emoji-thumb';
+import { isRenderableImage } from '@/lib/img';
 
 export interface ToolCardProps {
   tool: any;
@@ -86,7 +87,12 @@ export function ToolCard(p: ToolCardProps) {
 
   // An "emoji:" thumbnail renders as an emoji in the image spot instead of a photo
   // (the default for fresh repos/presentations, swappable with 🎲 die / 📎 upload).
-  const emoji = emojiOf(t.thumbnail);
+  // If a card has NO real image and NO stored emoji (older tools, seeded examples,
+  // any create path that didn't stamp one), fall back to a topic-derived emoji at
+  // render time so a card is NEVER blank — the user shouldn't have to press a
+  // button to get an image when there isn't one.
+  const emoji = emojiOf(t.thumbnail)
+    || (isRenderableImage(t.thumbnail) ? '' : defaultEmojiFor(`${t.title || ''} ${t.description || ''} ${t.definition?.lesson?.subject || ''}`, t.tags));
   return (
     <CardShell
       view={view}
