@@ -33,7 +33,9 @@ export async function GET(req: Request) {
   // user sees only their own submissions; the owner/admin sees everyone's.
   let entries;
   if (tool.archetype === 'repo') {
-    entries = isOwner ? all : all.filter((e: any) => e.username === a.user.username);
+    // Contributions are private (each user sees only their own); favorites (__fav)
+    // are public signals so the ★ / liked-by-admin / OP filters work for everyone.
+    entries = isOwner ? all : all.filter((e: any) => e.username === a.user.username || e?.data?.__fav);
   } else {
     entries = isOwner ? all : all.filter((e: any) => e.status === 'active' || e.status === 'approved');
   }

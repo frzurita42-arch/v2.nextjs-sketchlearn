@@ -332,7 +332,7 @@ export function ToolRunnerView() {
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
         {isRepo ? (
-          <RepoView def={def} slug={tool.slug} canEdit={canEdit} />
+          <RepoView def={def} slug={tool.slug} canEdit={canEdit} owner={tool.owner} />
         ) : isLesson ? (
           <LessonPlayer def={def} slug={tool.slug} canEdit={canEdit} />
         ) : !isApp ? (

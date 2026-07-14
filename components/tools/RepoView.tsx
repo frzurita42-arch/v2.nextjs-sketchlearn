@@ -28,6 +28,7 @@ type ViewCtx = {
   slug: string; me: string; isOwner: boolean;
   done: Record<string, boolean>; toggle: (id: string) => void;
   entriesByCard: Record<string, any[]>; onAdded: () => void;
+  favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
 };
 
 function timeAgo(iso: string): string {
@@ -201,6 +202,9 @@ function CardView({ card, depth, defaultDisplay, ctx }: {
             {done[card.id] ? '✓ Done' : '○ Mark done'}
           </button>
         )}
+        {/* Favorite this card (feeds the ★ / liked-by-admin / OP filters). */}
+        <button onClick={() => ctx.toggleFav(card.id)} title={ctx.favs[card.id] ? 'Unfavorite' : 'Favorite'}
+          style={{ flex: '0 0 auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, color: ctx.favs[card.id] ? '#f0a202' : 'var(--ink)', opacity: ctx.favs[card.id] ? 1 : 0.45 }}>{ctx.favs[card.id] ? '★' : '☆'}</button>
       </div>
       {card.text && <div style={{ fontSize: 14, marginTop: 6 }}><RichText text={card.text} /></div>}
       {!!card.links?.length && (
@@ -412,7 +416,7 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
   );
 }
 
-export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEdit: boolean }) {
+export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string; canEdit: boolean; owner?: string }) {
   const repo: RepoSpec = def?.repo || { cards: [] };
   const [cards, setCards] = useState<RepoCard[]>(() => repo.cards || []);
   // Top-level arrangement. There is no display control in the edit bar on purpose:
@@ -444,7 +448,24 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
     for (const e of entries) { const cid = e?.data?.__repoCardId; if (cid) (map[cid] ||= []).push(e); }
     return map;
   }, [entries]);
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries };
+
+  // Per-card favorites, stored as lightweight entries ({ __fav: cardId }). This
+  // gives the gallery-style ★ My favorites / 🛡️ Liked by admin / 💛 OP favorited
+  // filters real data for repo cards, keyed by who favorited each card.
+  const favEntries = useMemo(() => entries.filter((e: any) => e?.data?.__fav), [entries]);
+  const myFavs = useMemo(() => { const o: Record<string, boolean> = {}; for (const e of favEntries) if (e.username === me) o[e.data.__fav] = true; return o; }, [favEntries, me]);
+  const adminFavSet = useMemo(() => new Set(favEntries.filter((e: any) => e.byAdmin).map((e: any) => e.data.__fav)), [favEntries]);
+  const ownerFavSet = useMemo(() => new Set(favEntries.filter((e: any) => owner && e.username === owner).map((e: any) => e.data.__fav)), [favEntries, owner]);
+  const myFavEntryId = useMemo(() => { const m: Record<string, string> = {}; for (const e of favEntries) if (e.username === me) m[e.data.__fav] = e.id; return m; }, [favEntries, me]);
+  const toggleFav = async (cardId: string) => {
+    try {
+      if (myFavs[cardId] && myFavEntryId[cardId]) await API.call('DELETE', '/api/tools/entries', { slug, entryId: myFavEntryId[cardId] });
+      else await API.post('/api/tools/entries', { slug, data: { __fav: cardId } });
+      loadEntries();
+    } catch { /* ignore */ }
+  };
+
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav };
 
   // Offline export (owner/admin can toggle it off in Settings).
   const offlineOn = repo.offlineExport !== false;
@@ -547,6 +568,9 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
           perPage={8}
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
+          favs={myFavs}
+          likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
+          likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}
           renderGrid={(c: RepoCard) => <CardView card={c} depth={0} defaultDisplay="bars" ctx={ctx} />}
           renderRow={(c: RepoCard) => <CardView card={c} depth={0} defaultDisplay="bars" ctx={ctx} />}
           emptyAll="This collection is empty."
