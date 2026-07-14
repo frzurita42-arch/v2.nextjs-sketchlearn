@@ -131,7 +131,7 @@ const STATUS_META: Record<string, { label: string; bg: string }> = {
 };
 // The icon + words shown on the owner/admin cycle button for each mode.
 const MODE_BTN: Record<CardMode, string> = {
-  enabled: '🟢', assigned: '📋', pending: '⏳', approved: '✔️', rejected: '⛔', disabled: '🚫', preview: '👁',
+  enabled: '🟢', assigned: '📋', pending: '⏳', approved: '✔️', rejected: '⛔', disabled: '🚫', preview: '👓',
 };
 const modeOf = (m?: string): CardMode => (MODE_ORDER.includes(m as CardMode) ? (m as CardMode) : 'enabled');
 const nextMode = (m?: string): CardMode => MODE_ORDER[(MODE_ORDER.indexOf(modeOf(m)) + 1) % MODE_ORDER.length];
@@ -723,7 +723,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={editingTitle ? '' : (card.title || 'Untitled')}
       subtitle={editingSub ? ' ' : (card.text || '')}
       thumbnail={isImg(card.image) ? card.image : null}
-      badge={dimmed ? '🙈 hidden' : (ctx.canEdit && mode === 'disabled' ? '🚫 disabled' : ctx.canEdit && mode === 'preview' ? '👁 preview' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined))}
+      badge={dimmed ? '🙈 hidden' : (ctx.canEdit && mode === 'disabled' ? '🚫 disabled' : ctx.canEdit && mode === 'preview' ? '👓 preview' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined))}
       onOpen={open}
       iconNode={iconNode}
       overlay={imgOverlay} placeholder={imgPlaceholder}
