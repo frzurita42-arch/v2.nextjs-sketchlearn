@@ -195,13 +195,18 @@ export function layoutHint(key?: string): string {
   const h = map[String(key || '')];
   return h ? `${h} This is only a suggestion — arrange the section for the clearest, most usable display on the activity screen, adding more sections below if needed.` : '';
 }
+// A repository is a collection of saved link/resource cards. Each card the owner
+// designs in the Studio becomes a starter card on the published page; viewers can
+// add their own new cards too.
+export interface RepoCard { name: string; link: string; description: string; }
 export interface StudioConfig {
   artifact: ArtifactKind;
   title?: string;
   subject?: string;
   tone?: string;
   pages?: StudioPage[];              // presentation: one entry per slide
-  components?: StudioComponent[];    // repository: the item fields
+  components?: StudioComponent[];    // (legacy) repository item fields
+  cards?: RepoCard[];                // repository: the starter link/resource cards
   context?: string;
   display?: 'cards' | 'list' | 'table';
 }
@@ -259,24 +264,23 @@ export function assembleDefinition(cfg: StudioConfig): any {
   const context = String(cfg.context || '').trim();
 
   if (cfg.artifact === 'repository') {
-    // A repository is a NESTED tree of cards ("layers"), not a gallery of posts.
-    // We seed one starter card so the owner has something to expand with the
-    // in-place editor (add card / add section / links / completion toggles).
-    const post = cfg.display === 'list';   // reuse the display picker as course/post
-    const layout: 'course' | 'post' = post ? 'post' : 'course';
-    const now = Date.now().toString(36);
-    const starter = layout === 'course'
-      ? [{
-          id: `c${now}`, kind: 'card', title: cfg.subject || title || 'Section 1',
-          subtitle: 'Add units and activities inside — use ✎ Edit to build the layers.',
-          children: [{ id: `c${now}u`, kind: 'card', title: 'Unit 1', text: 'Describe this unit.', completable: true, links: [] }],
-        }]
-      : [{ id: `c${now}`, kind: 'card', title: cfg.subject || title || 'First entry', text: context || 'Write your post here, and add link buttons.', links: [] }];
+    // A repository is a COLLECTION of saved link/resource cards. It publishes as an
+    // `app` tool whose entries ARE the cards: a Name, an attachment / Google-Drive
+    // link, and a description. The owner's designed cards are seeded after publish;
+    // viewers can add their own to store links they want to keep.
+    const display: 'cards' | 'list' = cfg.display === 'list' ? 'list' : 'cards';
     return {
-      version: 1, archetype: 'repo', title: `Repository — ${title}`.slice(0, 70),
-      description: context || `A ${layout} repository: ${cfg.subject || title}`,
-      tags: ['repository', 'studio'], settings: [],
-      repo: { layout, cards: starter },
+      version: 1, archetype: 'app', title: `Collection — ${title}`.slice(0, 70),
+      description: context || `A saved collection of links & resources: ${cfg.subject || title}`,
+      tags: ['collection', 'repository', 'studio'], settings: [],
+      app: {
+        display,
+        entryFields: [
+          { id: 'name', label: 'Name', type: 'text', required: true, placeholder: 'What is this?' },
+          { id: 'link', label: 'Attachment / Google Drive link', type: 'text', placeholder: 'https://… or a Google Drive link' },
+          { id: 'description', label: 'Description', type: 'textarea', placeholder: 'A short note about it' },
+        ],
+      },
     };
   }
 

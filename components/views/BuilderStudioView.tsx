@@ -13,7 +13,7 @@ import { useApp } from '@/components/AppContext';
 import {
   STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, BUTTON_ACTIONS, parseTemplateSpec,
   studioItem, assembleDefinition, capAvailable,
-  type StudioConfig, type StudioComponent, type StudioLayout, type StudioPage, type ArtifactKind,
+  type StudioConfig, type StudioComponent, type StudioLayout, type StudioPage, type ArtifactKind, type RepoCard,
 } from '@/lib/studio-catalog';
 
 type Msg = { role: 'assistant' | 'user'; content: string };
@@ -33,6 +33,11 @@ export function BuilderStudioView() {
   const [tone, setTone] = useState('Friendly');
   const [display, setDisplay] = useState<'cards' | 'list' | 'table'>('cards');
   const [pages, setPages] = useState<StudioPage[]>([newPage()]);
+  // Repository: the starter link/resource cards the owner designs.
+  const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '' }]);
+  const setCard = (i: number, patch: Partial<RepoCard>) => setRepoCards((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '' }]);
+  const removeCard = (i: number) => setRepoCards((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
   const [context, setContext] = useState('');
   const [visibility, setVisibility] = useState('unlisted');
   const [busy, setBusy] = useState(false);
@@ -66,12 +71,26 @@ export function BuilderStudioView() {
 
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, context, display };
+    : { artifact, title, subject, context, display, cards: repoCards };
 
   const generate = async () => {
     if (busy) return;
     setBusy(true); setErr('');
     try {
+      // A repository is user-authored (no AI): publish the collection tool, then
+      // seed the owner's designed cards as its first entries.
+      if (artifact === 'repository') {
+        const def = assembleDefinition(config());
+        const pub = await API.post('/api/tools', { definition: def, visibility });
+        const cards = repoCards.filter((c) => (c.name.trim() || c.link.trim() || c.description.trim()));
+        for (const c of cards) {
+          try { await API.post('/api/tools/entries', { slug: pub.slug, data: { name: c.name.trim(), link: c.link.trim(), description: c.description.trim() } }); } catch { /* ignore */ }
+        }
+        const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
+        if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
+        app.nav('tools');
+        return;
+      }
       const assembled = assembleDefinition(config());
       const r = await API.post('/api/tools/studio-build', { definition: assembled, messages }, { retries: 1 });
       const def = r?.definition || assembled;
@@ -185,7 +204,7 @@ export function BuilderStudioView() {
               <label className="field"><span>{artifact === 'presentation' ? 'Subject / topic' : 'Collection name'}</span><input type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. My sketchbook'} onChange={(e) => setSubject(e.target.value)} /></label>
               {artifact === 'presentation'
                 ? <label className="field"><span>Tone</span><input type="text" value={tone} onChange={(e) => setTone(e.target.value)} /></label>
-                : <label className="field"><span>Repository type</span><select value={display} onChange={(e) => setDisplay(e.target.value as any)}><option value="cards">Course (nested weeks / units)</option><option value="list">Post (entries with links)</option></select></label>}
+                : <label className="field"><span>Repository type</span><select value={display} onChange={(e) => setDisplay(e.target.value as any)}><option value="cards">Card grid</option><option value="list">List (rows)</option></select></label>}
             </div>
           </div>
 
@@ -248,17 +267,39 @@ export function BuilderStudioView() {
               </div>
             </>
           ) : (
-            /* REPOSITORY — nested layers */
-            <div className="card" style={{ padding: '12px 14px', marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6 }}>🗂️ LAYERED REPOSITORY</div>
-              <p style={{ fontSize: 13, opacity: 0.75, margin: 0 }}>
-                A repository is a tree of <b>cards inside cards</b> — no slides, just layers.
-                We&apos;ll create a starter card; then open the repository and use <b>✎ Edit</b> to
-                add cards (nested inside), add sections (new layers below), attach <b>link buttons</b>,
-                and turn on <b>✓ completion toggles</b>. You (and admins) can also ask the AI to
-                lay it out for you. Great for a course (Week ▸ Unit ▸ activities) or post-style notes.
+            /* REPOSITORY — a collection of saved link/resource cards. Each card unit
+               (styled like a slide) holds a Name, an attachment / Drive link and a
+               description. Published, they show as cards on the page and viewers can
+               add their own. */
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>CARDS ({repoCards.length}) — each is a saved link / resource</div>
+              </div>
+              <div style={{ display: 'grid', gap: 12 }}>
+                {repoCards.map((c, i) => (
+                  <div key={i} className="card" style={{ padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <strong>🗂️ Card {i + 1}</strong>
+                      <button className="btn small ghost" disabled={repoCards.length <= 1} title="Remove card" onClick={() => removeCard(i)}>🗑</button>
+                    </div>
+                    <div className="card alt" style={{ padding: '10px 12px', borderStyle: 'dashed', display: 'grid', gap: 8 }}>
+                      <label className="field" style={{ margin: 0 }}><span>Name</span>
+                        <input type="text" value={c.name} placeholder="e.g. Chapter 3 notes" onChange={(e) => setCard(i, { name: e.target.value })} /></label>
+                      <label className="field" style={{ margin: 0 }}><span>Attachment / Google Drive link</span>
+                        <input type="text" value={c.link} placeholder="https://… or a Google Drive link" onChange={(e) => setCard(i, { link: e.target.value })} /></label>
+                      <label className="field" style={{ margin: 0 }}><span>Description</span>
+                        <textarea value={c.description} placeholder="A short note about this item…" onChange={(e) => setCard(i, { description: e.target.value })} style={{ minHeight: 52 }} /></label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ textAlign: 'center', margin: '12px 0' }}>
+                <button className="btn" onClick={addCard}>＋ Add card</button>
+              </div>
+              <p style={{ fontSize: 12, opacity: 0.7, textAlign: 'center', margin: '0 0 4px' }}>
+                When published, these show as cards on the page — and anyone can add new ones to save their own links.
               </p>
-            </div>
+            </>
           )}
 
           {/* Free context */}
