@@ -68,11 +68,15 @@ export function BuilderStudioView() {
   const [provider, setProvider] = useState('auto');   // which model to force ('auto' = failover)
 
   // ---- Studio config ----
-  const [artifact, setArtifact] = useState<ArtifactKind>('repository');
-  const [title, setTitle] = useState('');
-  const [subject, setSubject] = useState('');
+  // A one-shot seed (from a repository's "topic pick") prefills the artifact +
+  // subject/title. Read synchronously so the first render already reflects it.
+  const seed = appState.builderSeed;
+  const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
+  const [title, setTitle] = useState(seed?.title || '');
+  const [subject, setSubject] = useState(seed?.subject || '');
   const [tone, setTone] = useState('Friendly');
   const [pages, setPages] = useState<StudioPage[]>([newPage()]);
+  useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
   const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '', children: [] }]);

@@ -42,6 +42,9 @@ export interface AppState {
   // specific rendition config. Consumed once by the LessonPlayer on mount.
   openIntent?: { action: 'results' | 'replay' | 'generate'; config?: any } | null;
   builderDraft?: any;
+  // A one-shot seed for the tool builder: prefill the artifact type + subject/
+  // title from a suggested topic. Consumed once by BuilderStudioView on mount.
+  builderSeed?: { artifact?: 'presentation' | 'repository'; subject?: string; title?: string; context?: string } | null;
   suggestedSettings: any;
   suggestedGuidance: string;
   concept: string | null;

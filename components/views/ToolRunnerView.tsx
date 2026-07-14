@@ -16,6 +16,7 @@ import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
 import { SharePanel } from '@/components/tools/SharePanel';
 import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
+import { TopicSuggestions } from '@/components/tools/TopicSuggestions';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
@@ -435,8 +436,12 @@ export function ToolRunnerView() {
 
       {/* ┄ divider: comments ┄ more picks ┄ */}
       <div style={dashRule} />
-      {/* The SAME sliding suggestion feed as the Tools page, biased to this tool. */}
-      <SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" />
+      {/* On a REPOSITORY: 10 AI-recommended TOPICS drawn from its subjects, each a
+          preset that opens the presentation builder. Elsewhere: the usual "more
+          like this" tool feed. */}
+      {isRepo
+        ? <TopicSuggestions repoSlug={tool.slug} repoTitle={tool.title} />
+        : <SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" />}
     </>
   );
 }
