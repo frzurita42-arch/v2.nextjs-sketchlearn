@@ -50,8 +50,9 @@ export function Carousel({ title, onRefresh, refreshing, children, empty, cardWi
       {/* When collapsed, only the admin reaches this (regular users don't render the
           section at all); the header already shows the "hidden" note. */}
       {collapsed ? null : (<>
-      {/* How-to banner sits below the title, above the cards. */}
-      {banner}
+      {/* How-to banner sits below the title, above the cards — with breathing
+          room before the sliding cards. */}
+      {banner && <div style={{ marginBottom: 14 }}>{banner}</div>}
       {count === 0 ? (
         <div style={{ opacity: 0.6, fontSize: 13, padding: '8px 0' }}>{empty || 'Nothing to show yet.'}</div>
       ) : (
