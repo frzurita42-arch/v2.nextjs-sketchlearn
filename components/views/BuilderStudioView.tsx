@@ -19,6 +19,45 @@ import {
 type Msg = { role: 'assistant' | 'user'; content: string };
 const newLayout = (): StudioLayout => ({ template: 'auto', components: [] });
 const newPage = (): StudioPage => ({ layouts: [newLayout()], length: 'medium', paragraphs: 1 });
+const blankRepoCard = (): RepoCard => ({ name: '', link: '', description: '', children: [] });
+
+// One repository card in the builder — a compact Name + Link row, a roomier
+// Description, and any nested child cards (the same shape, one layer inward).
+function RepoCardNode({ card, onChange, onRemove, canRemove, depth }: {
+  card: RepoCard; onChange: (c: RepoCard) => void; onRemove: () => void; canRemove: boolean; depth: number;
+}) {
+  const kids = card.children || [];
+  const setField = (patch: Partial<RepoCard>) => onChange({ ...card, ...patch });
+  const setChild = (i: number, nc: RepoCard) => onChange({ ...card, children: kids.map((k, j) => (j === i ? nc : k)) });
+  const addChild = () => onChange({ ...card, children: [...kids, blankRepoCard()] });
+  const removeChild = (i: number) => onChange({ ...card, children: kids.filter((_, j) => j !== i) });
+  const smallLabel = { fontSize: 11, fontWeight: 700, opacity: 0.6 } as const;
+  return (
+    <div className="card" style={{ padding: '10px 12px', marginLeft: depth ? 16 : 0, borderLeft: depth ? '3px solid var(--accent, #5c80bc)' : undefined }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <strong style={{ fontSize: depth ? 13 : 15 }}>🗂️ {card.name.trim() || (depth ? 'Nested card' : 'Card')}{depth ? ` · L${depth + 1}` : ''}</strong>
+        <button className="btn small ghost" disabled={!canRemove} title="Remove this card (and anything nested inside)" onClick={onRemove}>🗑</button>
+      </div>
+      {/* Compact: Name + Link share one row; Description gets a roomier row. */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <label style={{ flex: '2 1 130px', minWidth: 0, display: 'grid', gap: 2 }}><span style={smallLabel}>Name</span>
+          <input type="text" value={card.name} placeholder="Title" onChange={(e) => setField({ name: e.target.value })} style={{ padding: '6px 9px' }} /></label>
+        <label style={{ flex: '2 1 130px', minWidth: 0, display: 'grid', gap: 2 }}><span style={smallLabel}>Link</span>
+          <input type="text" value={card.link} placeholder="Attachment / Drive URL" onChange={(e) => setField({ link: e.target.value })} style={{ padding: '6px 9px' }} /></label>
+      </div>
+      <label style={{ display: 'grid', gap: 2, marginTop: 6 }}><span style={smallLabel}>Description</span>
+        <textarea value={card.description} placeholder="A short note about this item…" onChange={(e) => setField({ description: e.target.value })} style={{ minHeight: 56, padding: '7px 10px' }} /></label>
+      {kids.length > 0 && (
+        <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+          {kids.map((k, i) => <RepoCardNode key={i} card={k} depth={depth + 1} canRemove onChange={(nc) => setChild(i, nc)} onRemove={() => removeChild(i)} />)}
+        </div>
+      )}
+      <div style={{ marginTop: 8 }}>
+        <button className="btn small ghost" onClick={addChild}>＋ Add nested card (one layer inside)</button>
+      </div>
+    </div>
+  );
+}
 
 export function BuilderStudioView() {
   const app = useApp();
@@ -33,11 +72,9 @@ export function BuilderStudioView() {
   const [tone, setTone] = useState('Friendly');
   const [display, setDisplay] = useState<'cards' | 'list' | 'table'>('cards');
   const [pages, setPages] = useState<StudioPage[]>([newPage()]);
-  // Repository: the starter link/resource cards the owner designs.
-  const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '' }]);
-  const setCard = (i: number, patch: Partial<RepoCard>) => setRepoCards((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
-  const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '' }]);
-  const removeCard = (i: number) => setRepoCards((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
+  // Repository: a TREE of link/resource cards the owner designs (each may nest).
+  const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
+  const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '', children: [] }]);
   const [context, setContext] = useState('');
   const [visibility, setVisibility] = useState('unlisted');
   const [busy, setBusy] = useState(false);
@@ -77,15 +114,10 @@ export function BuilderStudioView() {
     if (busy) return;
     setBusy(true); setErr('');
     try {
-      // A repository is user-authored (no AI): publish the collection tool, then
-      // seed the owner's designed cards as its first entries.
+      // A repository is user-authored (no AI): publish the layered card tree directly.
       if (artifact === 'repository') {
         const def = assembleDefinition(config());
         const pub = await API.post('/api/tools', { definition: def, visibility });
-        const cards = repoCards.filter((c) => (c.name.trim() || c.link.trim() || c.description.trim()));
-        for (const c of cards) {
-          try { await API.post('/api/tools/entries', { slug: pub.slug, data: { name: c.name.trim(), link: c.link.trim(), description: c.description.trim() } }); } catch { /* ignore */ }
-        }
         const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
         if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
         app.nav('tools');
@@ -273,31 +305,20 @@ export function BuilderStudioView() {
                add their own. */
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>CARDS ({repoCards.length}) — each is a saved link / resource</div>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>CARDS ({repoCards.length}) — name · link · description, nest cards inside cards</div>
               </div>
               <div style={{ display: 'grid', gap: 12 }}>
                 {repoCards.map((c, i) => (
-                  <div key={i} className="card" style={{ padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <strong>🗂️ Card {i + 1}</strong>
-                      <button className="btn small ghost" disabled={repoCards.length <= 1} title="Remove card" onClick={() => removeCard(i)}>🗑</button>
-                    </div>
-                    <div className="card alt" style={{ padding: '10px 12px', borderStyle: 'dashed', display: 'grid', gap: 8 }}>
-                      <label className="field" style={{ margin: 0 }}><span>Name</span>
-                        <input type="text" value={c.name} placeholder="e.g. Chapter 3 notes" onChange={(e) => setCard(i, { name: e.target.value })} /></label>
-                      <label className="field" style={{ margin: 0 }}><span>Attachment / Google Drive link</span>
-                        <input type="text" value={c.link} placeholder="https://… or a Google Drive link" onChange={(e) => setCard(i, { link: e.target.value })} /></label>
-                      <label className="field" style={{ margin: 0 }}><span>Description</span>
-                        <textarea value={c.description} placeholder="A short note about this item…" onChange={(e) => setCard(i, { description: e.target.value })} style={{ minHeight: 52 }} /></label>
-                    </div>
-                  </div>
+                  <RepoCardNode key={i} card={c} depth={0} canRemove={repoCards.length > 1}
+                    onChange={(nc) => setRepoCards((cs) => cs.map((x, j) => (j === i ? nc : x)))}
+                    onRemove={() => setRepoCards((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs))} />
                 ))}
               </div>
               <div style={{ textAlign: 'center', margin: '12px 0' }}>
                 <button className="btn" onClick={addCard}>＋ Add card</button>
               </div>
               <p style={{ fontSize: 12, opacity: 0.7, textAlign: 'center', margin: '0 0 4px' }}>
-                When published, these show as cards on the page — and anyone can add new ones to save their own links.
+                Each card holds a name, a link/attachment and a description — and can nest more cards inside it. Published, they render as layered cards with link buttons.
               </p>
             </>
           )}

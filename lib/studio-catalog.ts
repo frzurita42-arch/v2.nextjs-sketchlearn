@@ -195,10 +195,10 @@ export function layoutHint(key?: string): string {
   const h = map[String(key || '')];
   return h ? `${h} This is only a suggestion — arrange the section for the clearest, most usable display on the activity screen, adding more sections below if needed.` : '';
 }
-// A repository is a collection of saved link/resource cards. Each card the owner
-// designs in the Studio becomes a starter card on the published page; viewers can
-// add their own new cards too.
-export interface RepoCard { name: string; link: string; description: string; }
+// A repository is a tree of saved link/resource cards. Each card has a name, an
+// attachment / Drive link and a description — and may nest child cards inside it
+// (the same logic, one layer deeper), so the owner can build layered collections.
+export interface RepoCard { name: string; link: string; description: string; children?: RepoCard[]; }
 export interface StudioConfig {
   artifact: ArtifactKind;
   title?: string;
@@ -264,22 +264,30 @@ export function assembleDefinition(cfg: StudioConfig): any {
   const context = String(cfg.context || '').trim();
 
   if (cfg.artifact === 'repository') {
-    // A repository is a COLLECTION of saved link/resource cards. It publishes as an
-    // `app` tool whose entries ARE the cards: a Name, an attachment / Google-Drive
-    // link, and a description. The owner's designed cards are seeded after publish;
-    // viewers can add their own to store links they want to keep.
-    const display: 'cards' | 'list' = cfg.display === 'list' ? 'list' : 'cards';
+    // A repository is a TREE of link/resource cards. Each card the owner designs
+    // (name + attachment/Drive link + description) becomes a repo card; cards may
+    // nest child cards inside them (the same shape, one layer inward). Published as
+    // the `repo` archetype, RepoView renders the layered cards with link buttons.
+    let seq = 0;
+    const toRepoCard = (c: RepoCard): any => {
+      const links = c.link && c.link.trim() ? [{ label: 'Attachment', url: c.link.trim() }] : [];
+      const kids = (c.children || []).filter((k) => (k.name || k.link || k.description || (k.children || []).length)).map(toRepoCard);
+      return {
+        id: `c${(seq++).toString(36)}`, kind: 'card',
+        title: (c.name || 'Untitled').trim().slice(0, 120),
+        text: (c.description || '').trim().slice(0, 2000),
+        links, children: kids.length ? kids : undefined,
+      };
+    };
+    const cards = (cfg.cards || []).filter((c) => (c.name || c.link || c.description || (c.children || []).length)).map(toRepoCard);
+    const layout: 'course' | 'post' = cfg.display === 'list' ? 'post' : 'course';
     return {
-      version: 1, archetype: 'app', title: `Collection — ${title}`.slice(0, 70),
-      description: context || `A saved collection of links & resources: ${cfg.subject || title}`,
+      version: 1, archetype: 'repo', title: `Collection — ${title}`.slice(0, 70),
+      description: context || `A layered collection of links & resources: ${cfg.subject || title}`,
       tags: ['collection', 'repository', 'studio'], settings: [],
-      app: {
-        display,
-        entryFields: [
-          { id: 'name', label: 'Name', type: 'text', required: true, placeholder: 'What is this?' },
-          { id: 'link', label: 'Attachment / Google Drive link', type: 'text', placeholder: 'https://… or a Google Drive link' },
-          { id: 'description', label: 'Description', type: 'textarea', placeholder: 'A short note about it' },
-        ],
+      repo: {
+        layout, display: cfg.display === 'list' ? 'bars' : 'grid',
+        cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },
     };
   }
