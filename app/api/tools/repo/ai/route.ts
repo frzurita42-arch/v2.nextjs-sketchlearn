@@ -108,13 +108,22 @@ export async function POST(req: Request) {
     const docDataUrl = String(b.docDataUrl || '');
     const existing = Array.isArray(b.cards) ? b.cards.slice(0, 40) : [];
     const withLinks = !!b.withLinks;   // "link suggestion" toggle: add a reference link per card
+    // The builder's chat history — folded in so the plan reflects what the user
+    // told the assistant, not just the goal box.
+    const chat = (Array.isArray(b.messages) ? b.messages : [])
+      .filter((mm: any) => mm && (mm.role === 'user' || mm.role === 'assistant') && mm.content)
+      .slice(-12)
+      .map((mm: any) => `${mm.role === 'user' ? 'User' : 'Assistant'}: ${String(mm.content).slice(0, 600)}`)
+      .join('\n');
     const m = docDataUrl.match(/^data:([^;]+);base64,(.+)$/);
     const isPdfOrDoc = !!m && /pdf|msword|officedocument|text|rtf/i.test(m[1]);
-    const hasSeed = goal.trim() || docText.trim() || isPdfOrDoc || existing.length;
-    if (!hasSeed) return NextResponse.json({ error: 'Add a goal, attach a document, or enter a card or two for the AI to build on.' }, { status: 200 });
+    const hasSeed = goal.trim() || docText.trim() || isPdfOrDoc || existing.length || chat.trim();
+    if (!hasSeed) return NextResponse.json({ error: 'Add a goal, attach a document, chat with the AI, or enter a card or two for the AI to build on.' }, { status: 200 });
 
     const system = [
       'You design an ACTIONABLE PLAN as a REPOSITORY: an ordered list of cards. Depending on the request this is a learning path, a study itinerary, an action plan, a curriculum, a catalogue/menu, or the steps to achieve or understand something.',
+      // SketchLearn is a community platform; nudge plans toward its core values.
+      'This is for SketchLearn, a community learning platform whose core values are positivity, cohesion/community, and encouraging engagement. Where it fits naturally, shape the plan to reflect them — collaborative/social steps, encouraging tone, momentum that keeps people coming back — but never force it or make the plan preachy; the user\'s goal always comes first.',
       'RULES:',
       '1. Produce an ORDERED sequence of top-level cards — the steps/weeks/units/items, in a sensible order. AT MOST 20 top-level cards. Use as MANY or as FEW as the goal, document or topic actually needs (a 5-item list is fine; do not pad to 20).',
       '2. Give each card a clear "title" (e.g. "Week 1 — Foundations", "Step 3: Draft the outline", "Margherita Pizza") and a "text": a 1–2 sentence description. Write in the SAME LANGUAGE as the goal/document.',
@@ -131,6 +140,7 @@ export async function POST(req: Request) {
       `Tool title: ${title || '(untitled)'}`,
       subject ? `Topic / subject: ${subject}` : '',
       goal ? `Goal — what the plan should achieve or help understand:\n${goal}` : '',
+      chat ? `The user's chat with the assistant (consider it):\n${chat}` : '',
       existing.length ? `The user has already entered these cards (keep and build on them):\n${JSON.stringify(existing).slice(0, 6000)}` : 'The user has not entered any cards yet.',
       docText ? `Reference document text:\n${docText}` : (isPdfOrDoc ? 'A reference document is attached — read it.' : ''),
     ].filter(Boolean).join('\n\n');

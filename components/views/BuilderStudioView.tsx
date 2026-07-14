@@ -66,7 +66,7 @@ export function BuilderStudioView() {
   useEffect(() => { API.get('/api/config').then((c) => setCaps(c?.caps || {})).catch(() => setCaps({})); }, []);
 
   // ---- Studio config ----
-  const [artifact, setArtifact] = useState<ArtifactKind>('presentation');
+  const [artifact, setArtifact] = useState<ArtifactKind>('repository');
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [tone, setTone] = useState('Friendly');
@@ -113,7 +113,7 @@ export function BuilderStudioView() {
     try {
       const r: any = await API.post('/api/tools/repo/ai', {
         op: 'suggest', title, subject, goal: context, withLinks,
-        docText, docDataUrl, cards: cardsToAi(repoCards),
+        docText, docDataUrl, cards: cardsToAi(repoCards), messages,
       }, { retries: 1 });
       const mapped = mapAiCards(r?.cards || []);
       if (mapped.length) setRepoCards(mapped);
@@ -122,6 +122,28 @@ export function BuilderStudioView() {
     setSuggesting(false);
   };
   const [context, setContext] = useState('');
+  // "Generate the tool" for a repository: let the AI build the plan from
+  // everything (goal, chat, document, current cards, toggles) AND publish it in
+  // one step. (The plain "Post" button publishes the current cards untouched.)
+  const generateWithAI = async () => {
+    if (busy || suggesting) return;
+    setBusy(true); setErr('');
+    try {
+      const r: any = await API.post('/api/tools/repo/ai', {
+        op: 'suggest', title, subject, goal: context, withLinks,
+        docText, docDataUrl, cards: cardsToAi(repoCards), messages,
+      }, { retries: 1 });
+      const mapped = mapAiCards(r?.cards || []);
+      const finalCards = mapped.length ? mapped : repoCards;
+      setRepoCards(finalCards);
+      const def = assembleDefinition({ artifact: 'repository', title, subject, context, cards: finalCards, imageGen: suggestImages });
+      const pub = await API.post('/api/tools', { definition: def, visibility, aiGenerated: true });
+      const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
+      if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
+      app.nav('tools');
+    } catch (e: any) { setErr(e?.message || 'Could not generate the tool.'); }
+    setBusy(false);
+  };
   const [visibility, setVisibility] = useState('unlisted');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -394,7 +416,18 @@ export function BuilderStudioView() {
                 {docName && <span style={{ fontSize: 12, opacity: 0.75 }}>📄 {docName} <button className="btn small ghost" style={{ padding: '0 6px' }} title="Remove document" onClick={clearDoc}>✕</button></span>}
               </div>
             )}
-            {messages.some((m) => m.role === 'user') && <small style={{ fontSize: 11, opacity: 0.65 }}>💬 Your chat answers will also be merged in when you generate.</small>}
+            {/* Suggest with AI lives WITH the goal: it reads the goal, your chat,
+                the document, the toggles and the cards you've added so far, then
+                fills the cards above for you to review and edit. */}
+            {artifact === 'repository' && (
+              <div style={{ marginTop: 8 }}>
+                <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={suggestWithAI}
+                  title="Let the AI propose or extend the plan into the cards above — it considers your goal, chat, document and the cards so far. Then edit them and Post.">
+                  {suggesting ? '🤖 Thinking…' : '🤖 Suggest with AI'}
+                </button>
+              </div>
+            )}
+            {messages.some((m) => m.role === 'user') && <small style={{ fontSize: 11, opacity: 0.65, display: 'block', marginTop: 6 }}>💬 Your chat answers are also considered.</small>}
           </div>
 
           {err && <p style={{ color: 'var(--danger,#e4572e)', textAlign: 'center' }}>{err}</p>}
@@ -403,12 +436,18 @@ export function BuilderStudioView() {
               <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
                 <option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>
               </select></label>
-            {artifact === 'repository' && (
-              <button className="btn blue" disabled={busy || suggesting} onClick={suggestWithAI}
-                title="Let the AI propose or extend the plan into the cards above — then edit them and Generate.">{suggesting ? '🤖 Thinking…' : '🤖 Suggest with AI'}</button>
+            {artifact === 'repository' ? (
+              <>
+                {/* AI builds the whole plan from your goal/chat/document and publishes it. */}
+                <button className="btn ghost" disabled={busy || suggesting} onClick={generateWithAI}
+                  title="Let the AI build the whole plan from your goal, chat and document — and publish it.">{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
+                {/* Publishes EXACTLY the current cards — no AI changes. */}
+                <button className="btn green" disabled={busy || suggesting} onClick={generate}
+                  title="Publish exactly what is in the cards above right now (no AI changes).">📮 Post</button>
+              </>
+            ) : (
+              <button className="btn green" disabled={busy || suggesting} onClick={generate}>{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
             )}
-            <button className="btn green" disabled={busy || suggesting} onClick={generate}
-              title={artifact === 'repository' ? 'Publish exactly what is in the cards above (no AI changes).' : undefined}>{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
           </div>
         </div>
       ) : (
