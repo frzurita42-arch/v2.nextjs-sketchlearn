@@ -194,6 +194,11 @@ async function initDatabase() {
     )
   `);
   await dbQuery('CREATE INDEX IF NOT EXISTS idx_comments_target ON comments(target_type, target_id, created_at DESC)');
+  // Threaded comments with attachments + likes (added incrementally so existing
+  // deployments upgrade cleanly).
+  await dbQuery("ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id TEXT");
+  await dbQuery("ALTER TABLE comments ADD COLUMN IF NOT EXISTS links JSONB");
+  await dbQuery("ALTER TABLE comments ADD COLUMN IF NOT EXISTS liked_by JSONB");
 }
 
 // Persist every AI generation to a JSON file, as the site's content source of record.

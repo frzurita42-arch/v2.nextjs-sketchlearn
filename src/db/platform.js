@@ -352,6 +352,8 @@ async function deleteEntry(entryId) {
 // ---------------------------------------------------------------------------
 // comments — on a tool or a feed post
 // ---------------------------------------------------------------------------
+function asJson(v, fallback) { if (v == null) return fallback; if (typeof v === 'string') { try { return JSON.parse(v); } catch { return fallback; } } return v; }
+
 function mapCommentRow(r) {
   return {
     id: r.id,
@@ -359,6 +361,9 @@ function mapCommentRow(r) {
     targetId: r.target_id,
     author: r.author,
     body: r.body,
+    parentId: r.parent_id || null,
+    links: asJson(r.links, []) || [],
+    likedBy: asJson(r.liked_by, []) || [],
     aiGenerated: r.ai_generated,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
   };
@@ -374,14 +379,69 @@ async function insertComment(record) {
   if (!db.pool) { insertCommentFile(record); return; }
   try {
     await withDbTimeout(dbQuery(
-      `INSERT INTO comments (id, target_type, target_id, author, body, ai_generated)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [record.id, record.targetType, record.targetId, record.author, record.body, !!record.aiGenerated]
+      `INSERT INTO comments (id, target_type, target_id, author, body, ai_generated, parent_id, links, liked_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [record.id, record.targetType, record.targetId, record.author, record.body, !!record.aiGenerated,
+       record.parentId || null, JSON.stringify(record.links || []), JSON.stringify(record.likedBy || [])]
     ), 8000, 'Save comment');
   } catch (e) {
     console.error('DB insert for comment failed; saving to file instead:', e.message);
     insertCommentFile(record);
   }
+}
+
+// Fetch one comment (used to authorize/mutate likes, links, deletion).
+async function getComment(id) {
+  if (!db.pool) return readJSON('comments.json', []).find(c => c.id === id) || null;
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT * FROM comments WHERE id = $1', [id]), 8000, 'Get comment');
+    return rows[0] ? mapCommentRow(rows[0]) : null;
+  } catch (e) {
+    console.error('DB get comment failed; falling back to file:', e.message);
+    return readJSON('comments.json', []).find(c => c.id === id) || null;
+  }
+}
+
+// Patch a comment's mutable fields (body, links, likedBy).
+async function updateComment(id, patch) {
+  if (!db.pool) {
+    const comments = readJSON('comments.json', []);
+    const i = comments.findIndex(c => c.id === id);
+    if (i === -1) return null;
+    comments[i] = { ...comments[i], ...patch };
+    writeJSON('comments.json', comments);
+    return comments[i];
+  }
+  const sets = []; const vals = []; let n = 1;
+  if (patch.body !== undefined) { sets.push(`body = $${n++}`); vals.push(patch.body); }
+  if (patch.links !== undefined) { sets.push(`links = $${n++}`); vals.push(JSON.stringify(patch.links)); }
+  if (patch.likedBy !== undefined) { sets.push(`liked_by = $${n++}`); vals.push(JSON.stringify(patch.likedBy)); }
+  if (!sets.length) return getComment(id);
+  vals.push(id);
+  try {
+    const { rows } = await withDbTimeout(dbQuery(`UPDATE comments SET ${sets.join(', ')} WHERE id = $${n} RETURNING *`, vals), 8000, 'Update comment');
+    return rows[0] ? mapCommentRow(rows[0]) : null;
+  } catch (e) { console.error('DB update comment failed:', e.message); return null; }
+}
+
+// Delete a comment and any of its direct/nested replies.
+async function deleteComment(id) {
+  if (!db.pool) {
+    let comments = readJSON('comments.json', []);
+    const kill = new Set([id]);
+    let grew = true;
+    while (grew) { grew = false; for (const c of comments) { if (c.parentId && kill.has(c.parentId) && !kill.has(c.id)) { kill.add(c.id); grew = true; } } }
+    comments = comments.filter(c => !kill.has(c.id));
+    writeJSON('comments.json', comments);
+    return;
+  }
+  try {
+    // Recursively collect the subtree, then delete it.
+    const { rows } = await withDbTimeout(dbQuery('SELECT id, parent_id FROM comments', []), 8000, 'List comment ids');
+    const kill = new Set([id]); let grew = true;
+    while (grew) { grew = false; for (const r of rows) { if (r.parent_id && kill.has(r.parent_id) && !kill.has(r.id)) { kill.add(r.id); grew = true; } } }
+    await withDbTimeout(dbQuery('DELETE FROM comments WHERE id = ANY($1)', [[...kill]]), 8000, 'Delete comment');
+  } catch (e) { console.error('DB delete comment failed:', e.message); }
 }
 
 async function listComments(targetType, targetId, { limit = 200 } = {}) {
@@ -564,7 +624,7 @@ async function setDonation(slug, patch) {
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, listRecentEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
-  insertComment, listComments,
+  insertComment, listComments, getComment, updateComment, deleteComment,
   insertPost, listPosts,
   getSiteSettings, setSiteSetting,
   getUserPrefs, setUserPref,
