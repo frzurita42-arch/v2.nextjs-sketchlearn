@@ -74,12 +74,11 @@ export function BuilderStudioView() {
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
   const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '', children: [] }]);
-  // "Suggest with AI": a reference document (attached in the "Anything else for
-  // the AI to consider" box, PDF or text) plus the goal + any hand-entered cards
-  // let the AI propose / extend a plan into the editable card fields below.
-  const [docName, setDocName] = useState('');
-  const [docText, setDocText] = useState('');       // extracted (or pasted) text
-  const [docDataUrl, setDocDataUrl] = useState(''); // binary (PDF etc.) for Gemini
+  // "Suggest with AI": one or MORE reference documents (attached in the goal box,
+  // PDF or text) plus the goal + any hand-entered cards let the AI propose /
+  // extend a plan into the editable card fields below.
+  type DocItem = { name: string; text?: string; dataUrl?: string };
+  const [docs, setDocs] = useState<DocItem[]>([]);
   const [suggesting, setSuggesting] = useState(false);
   const [withLinks, setWithLinks] = useState(false);   // "link suggestion" toggle
   const [suggestImages, setSuggestImages] = useState(false);   // "Suggest AI" per-card picture button
@@ -100,12 +99,15 @@ export function BuilderStudioView() {
   const onConsiderDoc = async (f: File) => {
     if (!f) return;
     if (f.size > 20_000_000) { setErr('Please pick a document under 20 MB.'); return; }
-    setErr(''); setDocName(f.name); setDocText(''); setDocDataUrl('');
+    setErr('');
+    const item: DocItem = { name: f.name };
     const isText = /text|json|markdown/.test(f.type) || /\.(txt|md|csv)$/i.test(f.name);
-    if (isText) setDocText(await f.text());
-    else setDocDataUrl(await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); }));
+    if (isText) item.text = await f.text();
+    else item.dataUrl = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
+    setDocs((d) => [...d, item].slice(0, 6));
   };
-  const clearDoc = () => { setDocName(''); setDocText(''); setDocDataUrl(''); };
+  const removeDoc = (i: number) => setDocs((d) => d.filter((_, j) => j !== i));
+  const docsPayload = () => docs.map((d) => ({ text: d.text || '', dataUrl: d.dataUrl || '' }));
   // AI proposes / extends the plan into the editable card fields (does NOT publish).
   const suggestWithAI = async () => {
     if (suggesting || busy) return;
@@ -113,7 +115,7 @@ export function BuilderStudioView() {
     try {
       const r: any = await API.post('/api/tools/repo/ai', {
         op: 'suggest', title, subject, goal: context, withLinks,
-        docText, docDataUrl, cards: cardsToAi(repoCards), messages,
+        docs: docsPayload(), cards: cardsToAi(repoCards), messages,
       }, { retries: 1 });
       const mapped = mapAiCards(r?.cards || []);
       if (mapped.length) setRepoCards(mapped);
@@ -131,7 +133,7 @@ export function BuilderStudioView() {
     try {
       const r: any = await API.post('/api/tools/repo/ai', {
         op: 'suggest', title, subject, goal: context, withLinks,
-        docText, docDataUrl, cards: cardsToAi(repoCards), messages,
+        docs: docsPayload(), cards: cardsToAi(repoCards), messages,
       }, { retries: 1 });
       const mapped = mapAiCards(r?.cards || []);
       const finalCards = mapped.length ? mapped : repoCards;
@@ -398,10 +400,23 @@ export function BuilderStudioView() {
               <textarea value={context}
                 placeholder={artifact === 'repository' ? 'e.g. “A 12-week plan to pass Physics I”, “Steps to launch a podcast”, constraints, your goal…' : 'Extra details, constraints, examples…'}
                 onChange={(e) => setContext(e.target.value)} style={{ minHeight: 52 }} /></label>
+            {/* Attached-document chips: their own row, directly under the input,
+                left-aligned; more documents sit next to each other on this row. */}
+            {artifact === 'repository' && docs.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                {docs.map((d, i) => (
+                  <span key={i} style={{ fontSize: 12, opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--card-alt, rgba(0,0,0,0.04))', borderRadius: 6, padding: '2px 8px' }}>
+                    📄 {d.name} <button className="btn small ghost" style={{ padding: '0 6px' }} title="Remove document" onClick={() => removeDoc(i)}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* One row of controls: add a document, the two toggles, and the
+                Suggest-with-AI action. */}
             {artifact === 'repository' && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                 <label className="btn small blue" style={{ cursor: 'pointer' }}>
-                  {docName ? '📎 Change document' : '📎 Attach a document (optional)'}
+                  📎 {docs.length ? 'Add another document' : 'Attach a document (optional)'}
                   <input type="file" accept=".pdf,.txt,.md,.csv,.doc,.docx,.rtf,text/*,application/pdf" style={{ display: 'none' }}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) onConsiderDoc(f); e.currentTarget.value = ''; }} />
                 </label>
@@ -413,16 +428,8 @@ export function BuilderStudioView() {
                   title="When on, each published card gets a 🖼️ button — the owner/admin can generate an AI picture of that item; it stays saved for everyone to view.">
                   🖼️ Suggest AI: {suggestImages ? 'On' : 'Off'}
                 </button>
-                {docName && <span style={{ fontSize: 12, opacity: 0.75 }}>📄 {docName} <button className="btn small ghost" style={{ padding: '0 6px' }} title="Remove document" onClick={clearDoc}>✕</button></span>}
-              </div>
-            )}
-            {/* Suggest with AI lives WITH the goal: it reads the goal, your chat,
-                the document, the toggles and the cards you've added so far, then
-                fills the cards above for you to review and edit. */}
-            {artifact === 'repository' && (
-              <div style={{ marginTop: 8 }}>
                 <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={suggestWithAI}
-                  title="Let the AI propose or extend the plan into the cards above — it considers your goal, chat, document and the cards so far. Then edit them and Post.">
+                  title="Let the AI propose or extend the plan into the cards above — it considers your goal, chat, documents and the cards so far. Then edit them and Post.">
                   {suggesting ? '🤖 Thinking…' : '🤖 Suggest with AI'}
                 </button>
               </div>

@@ -8,7 +8,7 @@ const { getToolBySlug } = require('@/src/db/platform');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 45;
+export const maxDuration = 60;
 
 const textAI = () => openrouterEnabled || geminiEnabled || deepseekEnabled;
 
@@ -104,10 +104,22 @@ export async function POST(req: Request) {
     const title = String(b.title || '').slice(0, 160);
     const subject = String(b.subject || '').slice(0, 160);
     const goal = String(b.goal || b.context || '').slice(0, 4000);
-    const docText = String(b.docText || '').slice(0, 40000);
-    const docDataUrl = String(b.docDataUrl || '');
     const existing = Array.isArray(b.cards) ? b.cards.slice(0, 40) : [];
     const withLinks = !!b.withLinks;   // "link suggestion" toggle: add a reference link per card
+    // Documents to consider — an array of { text?, dataUrl? } (plus the legacy
+    // single docText/docDataUrl for backward compatibility). Text docs are
+    // concatenated into the prompt; PDF/binary docs are sent to Gemini natively.
+    const docItems: any[] = Array.isArray(b.docs) ? b.docs.slice(0, 6) : [];
+    if (b.docText || b.docDataUrl) docItems.push({ text: b.docText, dataUrl: b.docDataUrl });
+    const textPieces: string[] = [];
+    const binDocs: { mimeType: string; data: string }[] = [];
+    for (const d of docItems) {
+      if (d?.text) textPieces.push(String(d.text));
+      const mm = String(d?.dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+      if (mm && /pdf|msword|officedocument|text|rtf/i.test(mm[1])) binDocs.push({ mimeType: mm[1], data: mm[2] });
+    }
+    const docText = textPieces.join('\n\n---\n\n').slice(0, 60000);
+    const isPdfOrDoc = binDocs.length > 0;
     // The builder's chat history — folded in so the plan reflects what the user
     // told the assistant, not just the goal box.
     const chat = (Array.isArray(b.messages) ? b.messages : [])
@@ -115,8 +127,6 @@ export async function POST(req: Request) {
       .slice(-12)
       .map((mm: any) => `${mm.role === 'user' ? 'User' : 'Assistant'}: ${String(mm.content).slice(0, 600)}`)
       .join('\n');
-    const m = docDataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    const isPdfOrDoc = !!m && /pdf|msword|officedocument|text|rtf/i.test(m[1]);
     const hasSeed = goal.trim() || docText.trim() || isPdfOrDoc || existing.length || chat.trim();
     if (!hasSeed) return NextResponse.json({ error: 'Add a goal, attach a document, chat with the AI, or enter a card or two for the AI to build on.' }, { status: 200 });
 
@@ -152,19 +162,24 @@ export async function POST(req: Request) {
 
     try {
       let out: any = null;
-      if (m && geminiEnabled) {
-        const r: any = await geminiDoc(system, userText, [{ mimeType: m[1], data: m[2] }], { maxTokens: 5000, temperature: 0.4 });
+      // Splitting every sub-topic into its own card makes the JSON large, so give
+      // the model plenty of output room or it truncates and the parse fails.
+      if (binDocs.length && geminiEnabled) {
+        const r: any = await geminiDoc(system, userText, binDocs, { maxTokens: 16000, temperature: 0.4 });
         out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
       } else if (textAI()) {
-        const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: userText }], { temperature: 0.4, maxTokens: 3800 });
+        const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: userText }], { temperature: 0.4, maxTokens: 9000 });
         out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
       } else {
-        return NextResponse.json({ error: m ? 'Reading a PDF needs Gemini. Paste the document text instead.' : 'No AI model is configured.' }, { status: 200 });
+        return NextResponse.json({ error: binDocs.length ? 'Reading a PDF needs Gemini. Paste the document text instead.' : 'No AI model is configured.' }, { status: 200 });
       }
       if (!out) return NextResponse.json({ error: 'The AI could not build a plan. Add a bit more detail and try again.' }, { status: 200 });
       return NextResponse.json({ cards: out.slice(0, 20) });
-    } catch {
-      return NextResponse.json({ error: 'Could not build a suggestion. Try again or add more detail.' }, { status: 200 });
+    } catch (e: any) {
+      // Surface the real reason (truncated JSON, timeout, quota…) so it's fixable.
+      console.error('repo suggest failed:', e?.message || e);
+      const reason = String(e?.message || 'unknown error').slice(0, 160);
+      return NextResponse.json({ error: `Could not build a suggestion (${reason}). Try again, shorten the document, or add fewer details.` }, { status: 200 });
     }
   }
 
