@@ -432,7 +432,7 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 // preview and can be collapsed/expanded to reveal the rest — this preview
 // behaviour is exclusive to repo collection cards (not the tool gallery, posts,
 // or homepage).
-function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx }) {
+function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx; switchToRows?: () => void }) {
   const kids = card.children || [];
   const links = card.links || [];
   const isFav = !!ctx.favs[card.id];
@@ -443,7 +443,13 @@ function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' 
   const [subDraft, setSubDraft] = useState(card.text || '');
   const [distorting, setDistorting] = useState(false);
   const editing = editingTitle || editingSub;
-  const open = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
+  const openLink = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
+  // In GRID view a card shows only itself; clicking a card that has nested cards
+  // flips the whole section to the horizontal (rows) view so the tree is visible.
+  // Elsewhere a click opens the card's first attachment.
+  const open = editing ? undefined
+    : (view === 'grid' && kids.length && switchToRows) ? switchToRows
+    : openLink;
 
   const openTitle = () => { setTitleDraft(card.title || ''); setEditingSub(false); setEditingTitle(true); };
   const openSub = () => { setSubDraft(card.text || ''); setEditingTitle(false); setEditingSub(true); };
@@ -501,12 +507,16 @@ function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' 
       title={editingTitle ? '' : (card.title || 'Untitled')}
       subtitle={editingSub ? ' ' : (card.text || '')}
       thumbnail={isImg(card.image) ? card.image : null}
-      onOpen={editing ? undefined : open}
+      badge={view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined}
+      onOpen={open}
       afterTitle={afterTitle} afterSubtitle={afterSubtitle}
       actions={actions} del={del} />
   );
 
-  if (!kids.length) return <div>{shell}</div>;
+  // GRID view: a card is shown ALONE — no nested cards beneath it. (Clicking a
+  // card with children flips to the rows view, above, to reveal the tree.) Only
+  // the ROWS view draws the nested preview + collapse/expand.
+  if (view === 'grid' || !kids.length) return <div>{shell}</div>;
   // Preview: show just the first nested card; the rest collapse/expand in place.
   const shown = expanded ? kids : kids.slice(0, 1);
   const more = kids.length - 1;
@@ -723,7 +733,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}
-          renderGrid={(c: RepoCard) => <RepoCollectionCard card={c} view="grid" ctx={ctx} />}
+          renderGrid={(c: RepoCard, v?: { setView: (m: 'grid' | 'row') => void }) => <RepoCollectionCard card={c} view="grid" ctx={ctx} switchToRows={() => v?.setView('row')} />}
           renderRow={(c: RepoCard) => <RepoCollectionCard card={c} view="row" ctx={ctx} />}
           emptyAll="This collection is empty."
           emptyFiltered="No cards match your search."

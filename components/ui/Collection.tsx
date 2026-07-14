@@ -14,13 +14,22 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 // only-liked-by-admin, or only-favorited-by-the-owner (OP).
 export type FilterKey = 'all' | 'fav' | 'admin' | 'owner';
 
+// Handed to renderGrid/renderRow so a card can read or switch the section's view
+// (e.g. a repo card that toggles to rows on click). Ignored by callers that don't
+// need it — the argument is optional.
+export interface CollectionViewApi {
+  view: 'grid' | 'row';
+  setView: (v: 'grid' | 'row') => void;    // no-op while the display is locked
+  locked: boolean;
+}
+
 export interface CollectionProps<T> {
   items: T[];
   id: (t: T) => string;
   searchText: (t: T) => string;            // haystack for the search box (name, @user…)
   time?: (t: T) => number;                 // ms timestamp for sorting (omit to hide sort)
-  renderGrid: (t: T) => ReactNode;         // one card in grid mode
-  renderRow: (t: T) => ReactNode;          // one card in rows mode
+  renderGrid: (t: T, view?: CollectionViewApi) => ReactNode;  // one card in grid mode
+  renderRow: (t: T, view?: CollectionViewApi) => ReactNode;   // one card in rows mode
   favs?: Record<string, boolean>;          // provide to show the ★ favorites filter
   likedByAdmin?: (t: T) => boolean;        // provide to show the 🛡️ liked-by-admin filter
   likedByOwner?: (t: T) => boolean;        // provide to show the 💛 OP-favorited filter
@@ -120,6 +129,7 @@ export function Collection<T>({
   }, [storageKey, locked]);
   const setViewP = (v: 'grid' | 'row') => { if (locked) return; setView(v); if (storageKey) { try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } } };
   const toggleLock = () => { const next = !locked; setLocked(next); onViewLockChange?.(next, view); };
+  const viewApi: CollectionViewApi = { view, setView: setViewP, locked };
 
   // Per-user saved sort order (DB) for pages that opt in with sortPrefKey.
   useEffect(() => {
@@ -243,7 +253,7 @@ export function Collection<T>({
         <div style={view === 'grid'
           ? { ...wrap, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinPx}px, 1fr))`, gap: 14 }
           : { ...wrap, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
-          {shown.map((t) => <div key={id(t)} style={{ minWidth: 0 }}>{view === 'grid' ? renderGrid(t) : renderRow(t)}</div>)}
+          {shown.map((t) => <div key={id(t)} style={{ minWidth: 0 }}>{view === 'grid' ? renderGrid(t, viewApi) : renderRow(t, viewApi)}</div>)}
         </div>
       )}
 
