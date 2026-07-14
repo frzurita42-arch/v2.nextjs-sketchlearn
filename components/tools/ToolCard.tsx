@@ -94,7 +94,11 @@ export function ToolCard(p: ToolCardProps) {
       rowThumbFallback={canEdit && p.onGenThumb ? (p.thumbing ? '…' : '🎨') : '🖼️'}
       editBtns={editBtns}
       tags={view === 'grid' && Array.isArray(t.tags) ? t.tags : undefined}
-      meta={<span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>}
+      meta={(() => {
+        let when = '';
+        if (t.createdAt) { const d = new Date(t.createdAt); if (!isNaN(d.getTime())) try { when = d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }); } catch { when = d.toLocaleString(); } }
+        return <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner}{when ? ` · ${when}` : ''} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
+      })()}
       del={<>{history}{replay}{del}</>}
       actions={p.hideOpen ? null : <button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}
     />
