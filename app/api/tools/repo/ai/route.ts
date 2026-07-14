@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, openrouterEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled, imageEnabled } from '@/src/config';
 import { generateStructured, generateImage, geminiDoc } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const textAI = () => openrouterEnabled || geminiEnabled || deepseekEnabled;
+const textAI = () => openrouterEnabled || geminiEnabled || deepseekEnabled || moonshotEnabled;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // POST { slug, op, ... } -> owner/admin AI helpers for a repository.
 //   op 'field'   { field, current, instruction, context } -> { text }
@@ -106,6 +107,8 @@ export async function POST(req: Request) {
     const goal = String(b.goal || b.context || '').slice(0, 4000);
     const existing = Array.isArray(b.cards) ? b.cards.slice(0, 40) : [];
     const withLinks = !!b.withLinks;   // "link suggestion" toggle: add a reference link per card
+    // Which text model to use ('auto' failover, or a specific configured provider).
+    const provider = ['openrouter', 'gemini', 'deepseek', 'moonshot'].includes(String(b.provider)) ? String(b.provider) : 'auto';
     // Documents to consider — an array of { text?, dataUrl? } (plus the legacy
     // single docText/docDataUrl for backward compatibility). Text docs are
     // concatenated into the prompt; PDF/binary docs are sent to Gemini natively.
@@ -160,16 +163,44 @@ export async function POST(req: Request) {
       docText ? `Reference document text:\n${docText}` : (isPdfOrDoc ? 'A reference document is attached — read it.' : ''),
     ].filter(Boolean).join('\n\n');
 
+    // Only Gemini can read a binary PDF here, so a binary doc uses geminiDoc
+    // unless the user explicitly picked a different model (then it works on the
+    // goal/text only). Splitting every sub-topic makes the JSON large, so give the
+    // model plenty of output room or it truncates and the parse fails.
+    const useGeminiDoc = binDocs.length > 0 && geminiEnabled && (provider === 'auto' || provider === 'gemini');
+    const runStructured = async () => {
+      const r: any = await generateStructured(
+        [{ role: 'system', content: system }, { role: 'user', content: userText }],
+        { temperature: 0.4, maxTokens: 9000, provider });
+      return Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+    };
     try {
       let out: any = null;
-      // Splitting every sub-topic into its own card makes the JSON large, so give
-      // the model plenty of output room or it truncates and the parse fails.
-      if (binDocs.length && geminiEnabled) {
-        const r: any = await geminiDoc(system, userText, binDocs, { maxTokens: 16000, temperature: 0.4 });
-        out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+      if (useGeminiDoc) {
+        // Gemini often returns a transient 503 ("high demand"); retry a few times
+        // with backoff, then fall back to a text model on the extracted text.
+        let lastErr: any = null;
+        for (let attempt = 0; attempt < 3 && out == null; attempt++) {
+          try {
+            const r: any = await geminiDoc(system, userText, binDocs, { maxTokens: 16000, temperature: 0.4 });
+            out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+          } catch (e: any) {
+            lastErr = e;
+            const msg = String(e?.message || '');
+            if (!/429|overloaded|503|quota|rate limit|timed out|temporarily/i.test(msg)) throw e;   // non-transient → stop
+            if (attempt < 2) await sleep(1200 * (attempt + 1));   // 1.2s, 2.4s backoff
+          }
+        }
+        if (out == null) {
+          // Gemini still busy: try another text model on whatever text we have.
+          if ((openrouterEnabled || deepseekEnabled || moonshotEnabled) && (docText.trim() || goal.trim() || chat.trim() || existing.length)) {
+            out = await runStructured();
+          } else {
+            throw lastErr || new Error('Gemini is busy');
+          }
+        }
       } else if (textAI()) {
-        const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: userText }], { temperature: 0.4, maxTokens: 9000 });
-        out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+        out = await runStructured();
       } else {
         return NextResponse.json({ error: binDocs.length ? 'Reading a PDF needs Gemini. Paste the document text instead.' : 'No AI model is configured.' }, { status: 200 });
       }
@@ -179,7 +210,7 @@ export async function POST(req: Request) {
       // Surface the real reason (truncated JSON, timeout, quota…) so it's fixable.
       console.error('repo suggest failed:', e?.message || e);
       const reason = String(e?.message || 'unknown error').slice(0, 160);
-      return NextResponse.json({ error: `Could not build a suggestion (${reason}). Try again, shorten the document, or add fewer details.` }, { status: 200 });
+      return NextResponse.json({ error: `Could not build a suggestion (${reason}). Try again in a moment, pick a different model, or paste the document text.` }, { status: 200 });
     }
   }
 

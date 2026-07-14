@@ -4,6 +4,7 @@ const {
   DEEPSEEK_API_KEY, DEEPSEEK_URL, deepseekEnabled,
   GEMINI_API_KEY, GEMINI_API_BASE, GEMINI_TEXT_MODEL, GEMINI_IMAGE_MODEL, geminiEnabled,
   OPENROUTER_API_KEY, OPENROUTER_URL, OPENROUTER_MODEL, OPENROUTER_MODEL_REASON, OPENROUTER_MODEL_VISION, openrouterEnabled,
+  MOONSHOT_API_KEY, MOONSHOT_URL, MOONSHOT_MODEL, moonshotEnabled,
   IMAGE_API_KEY, IMAGE_API_URL, IMAGE_API_MODEL,
   ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
   ELEVENLABS_API_KEY, ELEVENLABS_API_URL, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled
@@ -104,6 +105,41 @@ async function deepseek(messages, { json = true, temperature = 0.8, maxTokens = 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error('Empty response from DeepSeek');
+    if (!json) return content;
+    try {
+      return parseModelJson(content);
+    } catch (e) {
+      lastParseErr = e;
+    }
+  }
+  throw lastParseErr || new Error('Model returned invalid JSON');
+}
+
+// Moonshot AI (Kimi) — OpenAI-compatible chat completions (same shape as DeepSeek).
+async function moonshot(messages, { json = true, temperature = 0.8, maxTokens = 4096 } = {}) {
+  if (!moonshotEnabled) throw new Error('MOONSHOT_API_KEY is not configured. Set a real key in .env.');
+  let lastParseErr = null;
+  for (let attempt = 0; attempt < (json ? 4 : 1); attempt++) {
+    const attemptMaxTokens = json ? Math.min(16384, Math.round(maxTokens * Math.pow(1.6, attempt))) : maxTokens;
+    const body = {
+      model: MOONSHOT_MODEL,
+      messages,
+      temperature: attempt === 0 ? temperature : 0.2,
+      max_tokens: attemptMaxTokens
+    };
+    if (json) body.response_format = { type: 'json_object' };
+    const res = await fetchWithTimeout(MOONSHOT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${MOONSHOT_API_KEY}` },
+      body: JSON.stringify(body)
+    }, 45000, 'Kimi (Moonshot) request');
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Kimi (Moonshot) API error ${res.status}: ${text.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from Kimi');
     if (!json) return content;
     try {
       return parseModelJson(content);
@@ -262,32 +298,41 @@ async function openrouter(messages, { json = true, temperature = 0.8, maxTokens 
 }
 
 // Text-provider dispatcher with failover: OpenRouter → Gemini → DeepSeek.
-async function generateText(messages, opts) {
-  if (openrouterEnabled) {
+// An explicit opts.provider ('openrouter'|'gemini'|'deepseek'|'moonshot') routes
+// straight to that provider when it's configured; 'auto' (or an unavailable
+// choice) uses the normal failover order below.
+async function generateText(messages, opts = {}) {
+  const pick = opts && opts.provider;
+  if (pick && pick !== 'auto') {
+    if (pick === 'openrouter' && openrouterEnabled) return openrouter(messages, opts);
+    if (pick === 'gemini' && geminiEnabled) return gemini(messages, opts);
+    if (pick === 'moonshot' && moonshotEnabled) return moonshot(messages, opts);
+    if (pick === 'deepseek' && deepseekEnabled) return deepseek(messages, opts);
+    // Chosen provider isn't configured — fall through to auto failover.
+  }
+  // Auto: try each configured provider in order and fall through to the next when
+  // one fails (e.g. Gemini 503 "high demand") — so a single provider's hiccup no
+  // longer fails the whole request.
+  const chain = [
+    openrouterEnabled && ['OpenRouter', openrouter],
+    geminiEnabled && ['Gemini', gemini],
+    moonshotEnabled && ['Kimi', moonshot],
+    deepseekEnabled && ['DeepSeek', deepseek],
+  ].filter(Boolean);
+  if (!chain.length) {
+    throw new Error('No AI provider key is configured. Set OPENROUTER_API_KEY, GEMINI_API_KEY, MOONSHOT_API_KEY or DEEPSEEK_API_KEY in environment variables.');
+  }
+  let lastErr = null;
+  for (let i = 0; i < chain.length; i++) {
+    const [name, fn] = chain[i];
     try {
-      return await openrouter(messages, opts);
+      return await fn(messages, opts);
     } catch (e) {
-      if (!geminiEnabled && !deepseekEnabled) throw e;
-      console.warn('OpenRouter unavailable; falling back to Gemini/DeepSeek:', String(e && e.message || '').slice(0, 120));
+      lastErr = e;
+      if (i < chain.length - 1) console.warn(`${name} unavailable; trying the next provider:`, String(e && e.message || '').slice(0, 140));
     }
   }
-  if (geminiEnabled) {
-    try {
-      return await gemini(messages, opts);
-    } catch (e) {
-      const msg = String(e && e.message || '');
-      const shouldFailover = /quota|rate limit|429|overloaded|503/i.test(msg);
-      if (shouldFailover && deepseekEnabled) {
-        console.warn('Gemini unavailable; falling back to DeepSeek for this request.');
-        return deepseek(messages, opts);
-      }
-      throw e;
-    }
-  }
-  if (!deepseekEnabled) {
-    throw new Error('No AI provider key is configured. Set OPENROUTER_API_KEY, GEMINI_API_KEY or DEEPSEEK_API_KEY in environment variables.');
-  }
-  return deepseek(messages, opts);
+  throw lastErr;
 }
 
 async function generateStructured(messages, opts = {}, { attempts = 3 } = {}) {
@@ -465,6 +510,7 @@ module.exports = {
   parseModelJson,
   deepseek,
   gemini,
+  moonshot,
   generateText,
   generateStructured, geminiDoc,
   generateVisionJSON,

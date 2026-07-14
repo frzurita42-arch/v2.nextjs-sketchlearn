@@ -63,7 +63,9 @@ export function BuilderStudioView() {
   const app = useApp();
   const [tab, setTab] = useState<'studio' | 'chat'>('studio');
   const [caps, setCaps] = useState<any>(null);   // which integrations/keys are configured
-  useEffect(() => { API.get('/api/config').then((c) => setCaps(c?.caps || {})).catch(() => setCaps({})); }, []);
+  const [textProviders, setTextProviders] = useState<{ id: string; label: string }[]>([]);   // directly-selectable models
+  useEffect(() => { API.get('/api/config').then((c) => { setCaps(c?.caps || {}); setTextProviders(Array.isArray(c?.textProviders) ? c.textProviders : []); }).catch(() => setCaps({})); }, []);
+  const [provider, setProvider] = useState('auto');   // which model to force ('auto' = failover)
 
   // ---- Studio config ----
   const [artifact, setArtifact] = useState<ArtifactKind>('repository');
@@ -114,7 +116,7 @@ export function BuilderStudioView() {
     setSuggesting(true); setErr('');
     try {
       const r: any = await API.post('/api/tools/repo/ai', {
-        op: 'suggest', title, subject, goal: context, withLinks,
+        op: 'suggest', title, subject, goal: context, withLinks, provider,
         docs: docsPayload(), cards: cardsToAi(repoCards), messages,
       }, { retries: 1 });
       const mapped = mapAiCards(r?.cards || []);
@@ -132,7 +134,7 @@ export function BuilderStudioView() {
     setBusy(true); setErr('');
     try {
       const r: any = await API.post('/api/tools/repo/ai', {
-        op: 'suggest', title, subject, goal: context, withLinks,
+        op: 'suggest', title, subject, goal: context, withLinks, provider,
         docs: docsPayload(), cards: cardsToAi(repoCards), messages,
       }, { retries: 1 });
       const mapped = mapAiCards(r?.cards || []);
@@ -443,6 +445,15 @@ export function BuilderStudioView() {
               <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
                 <option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>
               </select></label>
+            {/* Model picker — same style as Visibility. Lists the API models that are
+                configured; "Auto" tries them in order (and falls over on a 503). */}
+            {textProviders.length > 0 && (
+              <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Model</span>
+                <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                  <option value="auto">Auto</option>
+                  {textProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select></label>
+            )}
             {artifact === 'repository' ? (
               <>
                 {/* AI builds the whole plan from your goal/chat/document and publishes it. */}

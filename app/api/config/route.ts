@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled } from '@/src/config';
+import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled } from '@/src/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,8 +11,15 @@ export async function GET() {
   const openrouter = hasConfiguredKey(process.env.OPENROUTER_API_KEY);
   return NextResponse.json(
     {
-      aiEnabled: !!(openrouterEnabled || geminiEnabled || deepseekEnabled),
-      provider: openrouterEnabled ? 'openrouter' : (geminiEnabled ? 'gemini' : (deepseekEnabled ? 'deepseek' : null)),
+      aiEnabled: !!(openrouterEnabled || geminiEnabled || deepseekEnabled || moonshotEnabled),
+      provider: openrouterEnabled ? 'openrouter' : (geminiEnabled ? 'gemini' : (moonshotEnabled ? 'moonshot' : (deepseekEnabled ? 'deepseek' : null))),
+      // Directly-selectable text models (a builder dropdown lets the user force one).
+      textProviders: [
+        openrouterEnabled && { id: 'openrouter', label: 'OpenRouter' },
+        geminiEnabled && { id: 'gemini', label: 'Gemini' },
+        moonshotEnabled && { id: 'moonshot', label: 'Kimi (Moonshot)' },
+        deepseekEnabled && { id: 'deepseek', label: 'DeepSeek' },
+      ].filter(Boolean),
       imagesEnabled: !!imageEnabled,
       voiceEnabled: !!elevenlabsEnabled,
       dbEnabled: !!dbEnabled,

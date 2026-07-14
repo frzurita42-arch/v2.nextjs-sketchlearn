@@ -135,6 +135,15 @@ const OPENROUTER_MODEL_REASON = process.env.OPENROUTER_MODEL_REASON || OPENROUTE
 const OPENROUTER_MODEL_VISION = process.env.OPENROUTER_MODEL_VISION || OPENROUTER_MODEL; // reads images / handwriting
 const openrouterEnabled = !forceFallback && hasConfiguredKey(OPENROUTER_API_KEY);
 
+// Optional: Moonshot AI (Kimi) — an OpenAI-compatible chat endpoint. Set
+// MOONSHOT_API_KEY to make "Kimi" a directly selectable text model. Endpoint and
+// model are overridable (Moonshot's global host is api.moonshot.ai; the mainland
+// host is api.moonshot.cn). Default model tracks Kimi K2.
+const MOONSHOT_API_KEY = process.env.MOONSHOT_API_KEY;
+const MOONSHOT_URL = process.env.MOONSHOT_API_URL || 'https://api.moonshot.ai/v1/chat/completions';
+const MOONSHOT_MODEL = process.env.MOONSHOT_MODEL || 'kimi-k2-0711-preview';
+const moonshotEnabled = !forceFallback && hasConfiguredKey(MOONSHOT_API_KEY);
+
 // Optional image-generation backend (see .env.example). Priority: an explicit
 // OpenAI-compatible image provider, else Gemini's image model, else no images.
 const IMAGE_API_KEY = process.env.IMAGE_API_KEY;
@@ -209,6 +218,10 @@ module.exports = {
   OPENROUTER_MODEL_REASON,
   OPENROUTER_MODEL_VISION,
   openrouterEnabled,
+  MOONSHOT_API_KEY,
+  MOONSHOT_URL,
+  MOONSHOT_MODEL,
+  moonshotEnabled,
   IMAGE_API_KEY,
   IMAGE_API_URL,
   IMAGE_API_MODEL,
