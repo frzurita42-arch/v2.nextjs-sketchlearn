@@ -21,6 +21,7 @@ export interface CardShellProps {
   thumbHeight?: number;       // grid image height (default 130)
   onOpen?: () => void;        // click the image or the title to open
 
+  iconNode?: React.ReactNode;     // an emoji/text icon shown in the image spot INSTEAD of a photo
   overlay?: React.ReactNode;      // edit icons floated over the image (top-right)
   placeholder?: React.ReactNode;  // buttons shown inside the empty image box
   rowThumbFallback?: React.ReactNode; // 46×46 fallback content for row view
@@ -42,7 +43,12 @@ export function CardShell(p: CardShellProps) {
   const hasImg = isRenderableImage(thumbnail || undefined);
 
   const imageBox = (
-    hasImg
+    p.iconNode
+      ? <div style={{ position: 'relative', height: h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 52, lineHeight: 1, background: 'rgba(0,0,0,0.03)', borderBottom: '2px solid var(--ink)', cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
+          {p.iconNode}
+          {p.overlay}
+        </div>
+      : hasImg
       ? <div style={{ position: 'relative', cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
           <img src={thumbnail as string} alt="" loading="lazy" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
           {p.overlay}
@@ -55,7 +61,9 @@ export function CardShell(p: CardShellProps) {
 
   if (view === 'row') {
     const desc = subtitle || '';
-    const rowThumb = hasImg
+    const rowThumb = p.iconNode
+      ? <div onClick={onOpen} style={{ width: 46, height: 46, borderRadius: 8, border: '2px solid var(--ink)', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, lineHeight: 1, cursor: onOpen ? 'pointer' : 'default' }}>{p.iconNode}</div>
+      : hasImg
       ? <img src={thumbnail as string} alt="" loading="lazy" onClick={onOpen} style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)', flex: '0 0 auto', cursor: onOpen ? 'pointer' : 'default' }} />
       : <div title="No photo" onClick={onOpen} style={{ width: 46, height: 46, borderRadius: 8, border: '2px dashed var(--ink)', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, opacity: 0.6, cursor: onOpen ? 'pointer' : 'default' }}>{p.rowThumbFallback ?? '🖼️'}</div>;
     return (

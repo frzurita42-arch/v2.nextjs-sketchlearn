@@ -36,6 +36,8 @@ type ViewCtx = {
   distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
   addSubcard: (id: string) => void;                                // ⚙️ add a card inside
   addAttachCard: (id: string) => void;                             // 📁 add a file/link card inside
+  setIcon: (id: string, patch: Partial<RepoCard>) => void;         // set/clear image & emoji icon
+  numberCard: (id: string) => void;                                // 🔢 icon = this card's number
   deleteCard: (id: string) => void;                                // 🗑 delete
 };
 
@@ -109,6 +111,19 @@ function useDone(slug: string) {
 }
 
 const isImg = (v: any) => isRenderableImage(v);
+
+// Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
+const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
+// The number the 🔢 button assigns a card: top-level cards are always 0; cards
+// nested inside another are numbered 1,2,3… by their position among siblings.
+function cardNumber(cards: RepoCard[], id: string, top = true): number | null {
+  const i = cards.findIndex((c) => c.id === id);
+  if (i !== -1) return top ? 0 : i + 1;
+  for (const c of cards) {
+    if (c.children?.length) { const r = cardNumber(c.children, id, false); if (r != null) return r; }
+  }
+  return null;
+}
 
 // ---- user contributions on a "collect" card ------------------------------
 // Any signed-in user can add their own entry (note + optional link + optional
@@ -433,11 +448,12 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 // preview and can be collapsed/expanded to reveal the rest — this preview
 // behaviour is exclusive to repo collection cards (not the tool gallery, posts,
 // or homepage).
-function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx; switchToRows?: () => void }) {
+function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx; switchToRows?: () => void; nested?: boolean }) {
   // Hidden children vanish for normal viewers; owner/admin still see them greyed.
   const kids = (card.children || []).filter((k) => ctx.canEdit || !k.hidden);
   const links = card.links || [];
   const dimmed = !!card.hidden && ctx.canEdit;   // owner/admin preview of a hidden card
+  const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
   const isFav = !!ctx.favs[card.id];
   const [expanded, setExpanded] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -479,7 +495,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
     setImgBusy(true);
     try {
       const r = await API.post('/api/tools/repo/ai', { slug: ctx.slug, op: 'image', instruction: instruction || card.title || card.text || 'icon', title: card.title });
-      if (r?.image) ctx.editField(card.id, { image: r.image });
+      if (r?.image) ctx.setIcon(card.id, { image: r.image, icon: undefined });
       else if (r?.error) alert(r.error);
     } catch { alert('Image generation failed.'); }
     setImgBusy(false);
@@ -495,7 +511,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
         let url = '';
         try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
         if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
-        ctx.editField(card.id, { image: url });
+        ctx.setIcon(card.id, { image: url, icon: undefined });
       } catch { alert('Could not upload the picture.'); }
       setImgBusy(false);
     };
@@ -548,6 +564,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
     <span style={{ display: 'inline-flex', gap: 8, marginLeft: 8, verticalAlign: 'middle' }}>
       <button type="button" title="Edit title" style={iconBtn} onClick={openTitle}>✎</button>
       <button type="button" title="Rewrite the title with AI" disabled={distorting} style={{ ...iconBtn, opacity: distorting ? 0.4 : 1 }} onClick={distort}>🎨</button>
+      {/* 🔢 number this card — sets its icon to a number emoji (top card = 0️⃣). */}
+      <button type="button" title="Number this card (icon)" style={iconBtn} onClick={() => ctx.numberCard(card.id)}>🔢</button>
+      {/* 📎 upload an icon image — nested cards only (the first card uses grid view). */}
+      {nested && <button type="button" title="Upload an icon image" disabled={imgBusy} style={{ ...iconBtn, opacity: imgBusy ? 0.4 : 1 }} onClick={uploadImage}>📎</button>}
     </span>
   )) : null;
 
@@ -588,6 +608,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
       thumbnail={isImg(card.image) ? card.image : null}
       badge={dimmed ? '🙈 hidden' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined)}
       onOpen={open}
+      iconNode={iconNode}
       overlay={imgOverlay} placeholder={imgPlaceholder}
       afterTitle={afterTitle} afterSubtitle={afterSubtitle}
       actions={actions} del={del} />
@@ -625,7 +646,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
     <div>
       {body}
       <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
-        {shown.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} />)}
+        {shown.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
         {more > 0 && (
           <button type="button" onClick={() => setExpanded((e) => !e)}
             title={expanded ? 'Collapse' : `Show ${more} more inside`}
@@ -703,6 +724,12 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // The 📁 file icon adds a nested card meant for a file or link: generic title +
   // description, ready for the 📎 clip.
   const addAttachCard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), title: 'New attachment', text: 'Describe this file or link' }));
+  // Set/replace the card icon: an uploaded/AI image OR a number emoji (mutually
+  // exclusive — the 🔢 button clears the image, an upload clears the emoji).
+  const setIcon = (id: string, patch: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...patch })));
+  const numberCard = (id: string) => { const n = cardNumber(cards, id); if (n == null) return; setIcon(id, { icon: toKeycaps(n), image: undefined }); };
+  // Add a brand-new TOP-LEVEL card straight from the collection page (owner/admin).
+  const addTopCardSaved = () => saveCards([...cards, { ...blankCard('card'), text: 'New subtitle' }]);
   const deleteCard = (id: string) => { if (!confirm('Delete this card and everything inside it?')) return; saveCards(removeFromTree(cards, id)); };
   const distortTitle = async (card: RepoCard) => {
     try {
@@ -712,7 +739,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, addSubcard, addAttachCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, addSubcard, addAttachCard, setIcon, numberCard, deleteCard };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
@@ -834,6 +861,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           perPage={8}
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
+          extra={canEdit ? <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button> : undefined}
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}

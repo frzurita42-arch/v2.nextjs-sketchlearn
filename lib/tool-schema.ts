@@ -109,6 +109,8 @@ export interface RepoCard {
   subtitle?: string;
   text?: string;
   image?: string;            // icon/cover image: an uploaded data URL or an https URL
+  icon?: string;             // an emoji shown as the card icon INSTEAD of an image
+                             // (e.g. number keycaps 1️⃣0️⃣); set by the 🔢 button
   links?: RepoLink[];        // each rendered as a button that opens its url
   completable?: boolean;     // when true, shows a per-user completion toggle
   collect?: boolean;         // when true, ANY user can add their own entry inside
@@ -206,6 +208,8 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (subtitle) card.subtitle = subtitle;
   if (text) card.text = text;
   if (image) card.image = image;
+  const icon = String(c.icon || '').slice(0, 40);
+  if (icon) card.icon = icon;
   if (links.length) card.links = links;
   if (c.completable) card.completable = true;
   if (c.collect) card.collect = true;
@@ -217,7 +221,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (c.hidden) card.hidden = true;
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
-  if (!title && !subtitle && !text && !image && !links.length && !children.length && !card.completable && !card.collect) return null;
+  if (!title && !subtitle && !text && !image && !icon && !links.length && !children.length && !card.completable && !card.collect) return null;
   return card;
 }
 
