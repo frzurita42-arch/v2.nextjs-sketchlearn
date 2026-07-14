@@ -296,6 +296,17 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
   const setLink = (i: number, p: Partial<RepoLink>) => patch(card.id, { links: links.map((l, j) => (j === i ? { ...l, ...p } : l)) });
   const addLink = () => patch(card.id, { links: [...links, { label: '', url: '' }] });
   const rmLink = (i: number) => patch(card.id, { links: links.filter((_, j) => j !== i) });
+  // Attach / replace an actual document or file for a link (blob store, data-URL
+  // fallback). The label defaults to the file name.
+  const uploadFile = async (i: number, file: File) => {
+    if (file.size > 25_000_000) { alert('Please pick a file under 25 MB.'); return; }
+    try {
+      let url = '';
+      try { const up = await API.upload('/api/upload', file); if (up?.url) url = up.url; } catch { /* fall back to data URL */ }
+      if (!url) url = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result || '')); r.readAsDataURL(file); });
+      setLink(i, { url, label: links[i]?.label || file.name });
+    } catch { alert('Could not attach the file.'); }
+  };
 
   const aiImage = async () => {
     setImgBusy(true);
@@ -335,15 +346,18 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 
       {/* Links */}
       <div style={{ marginBottom: 6 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 3 }}>LINK BUTTONS</div>
+        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 3 }}>ATTACHMENTS — link or uploaded file</div>
         {links.map((l, i) => (
           <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
             <input value={l.label} placeholder="Button label" onChange={(e) => setLink(i, { label: e.target.value })} style={{ flex: '1 1 100px', fontSize: 13 }} />
-            <input value={l.url} placeholder="https://…" onChange={(e) => setLink(i, { url: e.target.value })} style={{ flex: '2 1 160px', fontSize: 13 }} />
+            <input value={l.url} placeholder="https://… or upload →" onChange={(e) => setLink(i, { url: e.target.value })} style={{ flex: '2 1 160px', fontSize: 13 }} />
+            <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach / replace a document or file">📎
+              <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(i, f); e.currentTarget.value = ''; }} />
+            </label>
             <button className="btn small ghost" onClick={() => rmLink(i)}>✕</button>
           </div>
         ))}
-        <button className="btn small ghost" onClick={addLink}>＋ Add link</button>
+        <button className="btn small ghost" onClick={addLink}>＋ Add attachment</button>
       </div>
 
       {/* Options */}

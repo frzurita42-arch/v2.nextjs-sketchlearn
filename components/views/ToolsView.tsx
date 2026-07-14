@@ -279,6 +279,8 @@ export function ToolsView() {
                 the gallery container. They're part of the gallery section, so they
                 collapse with it under the eye — only Build / Refresh stay. */}
             {!galleryCollapsed && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
+            {/* A little breathing room between the category chips and the gallery title. */}
+            {!galleryCollapsed && <div style={{ height: 16 }} />}
             {/* Same shared container as the History feed: small space → title (+
                 buttons) → banner → filter → items. */}
             <Collection
