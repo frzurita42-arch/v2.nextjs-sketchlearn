@@ -117,6 +117,17 @@ const isImg = (v: any) => isRenderableImage(v);
 // Attachment button labels are capped so a card's button row stays tidy.
 const cap15 = (s: string) => (s.length > 15 ? s.slice(0, 14) + '…' : s);
 
+// Per-card workflow status: a cycle of four, each with a chip colour + label.
+const STATUS_ORDER = ['assigned', 'pending', 'approved', 'rejected'] as const;
+type CardStatus = typeof STATUS_ORDER[number];
+const STATUS_META: Record<CardStatus, { label: string; bg: string }> = {
+  assigned: { label: '📋 Assigned', bg: '#5c80bc' },
+  pending: { label: '⏳ Pending', bg: '#f0a202' },
+  approved: { label: '✅ Approved', bg: '#1f8b4c' },
+  rejected: { label: '⛔ Rejected', bg: '#c0392b' },
+};
+const nextStatus = (s?: string): CardStatus => STATUS_ORDER[((STATUS_ORDER.indexOf(s as CardStatus) + 1) % STATUS_ORDER.length + STATUS_ORDER.length) % STATUS_ORDER.length];
+
 // Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
 const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
 // The number the 🔢 button assigns a card: top-level cards are always 0; cards
@@ -458,6 +469,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const kids = (card.children || []).filter((k) => ctx.canEdit || !k.hidden);
   const links = card.links || [];
   const dimmed = !!card.hidden && ctx.canEdit;   // owner/admin preview of a hidden card
+  // A disabled card is greyed + fully unclickable for normal viewers; owner/admin
+  // keep full use (so they can re-enable it).
+  const blocked = !!card.disabled && !ctx.canEdit;
   const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
   const isFav = !!ctx.favs[card.id];
   const [expanded, setExpanded] = useState(true);   // default: show all nested (Show less)
@@ -640,6 +654,19 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </div>
   ) : null;
 
+  // Status chip — visible to everyone; owner/admin click it to cycle
+  // Assigned → Pending → Approved → Rejected. Shown only once a status is set,
+  // or (for owner/admin) always so they can start the workflow.
+  const stMeta = card.status ? STATUS_META[card.status] : null;
+  const statusChip = (stMeta || ctx.canEdit) ? (
+    <button type="button" disabled={!ctx.canEdit}
+      title={ctx.canEdit ? 'Cycle status: Assigned → Pending → Approved → Rejected' : (stMeta?.label || '')}
+      onClick={ctx.canEdit ? () => ctx.editField(card.id, { status: nextStatus(card.status) }) : undefined}
+      style={{ border: 'none', borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: stMeta ? '#fff' : 'var(--ink)', background: stMeta ? stMeta.bg : 'transparent', boxShadow: stMeta ? 'none' : 'inset 0 0 0 1.5px var(--ink)', cursor: ctx.canEdit ? 'pointer' : 'default', flex: '0 0 auto' }}>
+      {stMeta ? stMeta.label : '＋ Status'}
+    </button>
+  ) : null;
+
   // The control icons laid out in a tidy 3-per-row grid.
   const favBtn = (
     <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
@@ -653,6 +680,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {/* 📎 clip → blue attachment · 📁 folder → green attachment. Second click removes the last one. */}
       {canUseClip && <button type="button" title="Attach a file or link (blue) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'blue' ? 1 : 0.85 }} onClick={clipClick}>📎</button>}
       {canUseFolder && <button type="button" title="Attach a file or link (green) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'green' ? 1 : 0.85 }} onClick={folderClick}>📁</button>}
+      {/* Enable/disable — owner/admin only. Disabled ⇒ greyed + unclickable for viewers. */}
+      {ctx.canEdit && <button type="button" title={card.disabled ? 'Disabled for viewers — click to enable' : 'Enabled — click to disable (grey out + block for viewers)'} style={{ ...iconBtn, opacity: card.disabled ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { disabled: !card.disabled })}>{card.disabled ? '🚫' : '✅'}</button>}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
       {ctx.canEdit && <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>}
     </div>
@@ -660,6 +689,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const actions = (
     <>
       {linkColumn}
+      {statusChip}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       {iconGrid}
     </>
@@ -671,7 +701,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={editingTitle ? '' : (card.title || 'Untitled')}
       subtitle={editingSub ? ' ' : (card.text || '')}
       thumbnail={isImg(card.image) ? card.image : null}
-      badge={dimmed ? '🙈 hidden' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined)}
+      badge={dimmed ? '🙈 hidden' : (card.disabled && ctx.canEdit ? '🚫 disabled' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined))}
       onOpen={open}
       iconNode={iconNode}
       overlay={imgOverlay} placeholder={imgPlaceholder}
@@ -697,8 +727,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </div>
   ) : null;
 
-  // Owner/admin see a hidden card greyed out (normal viewers never get here).
-  const body = <div style={dimmed ? { opacity: 0.5 } : undefined}>{shell}{attachForm}</div>;
+  // A disabled card is greyed + unclickable for viewers; a hidden card (owner/
+  // admin preview) is just greyed.
+  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{attachForm}</div>;
 
   // GRID view: a card is shown ALONE — no nested cards beneath it. (Clicking a
   // card with children flips to the rows view, above, to reveal the tree.) Only

@@ -123,6 +123,9 @@ export interface RepoCard {
   layout?: 'bars' | 'grid';  // how THIS card's children are arranged (overrides repo default)
   hidden?: boolean;          // when true, hidden from normal viewers; owner/admin
                              // still see it (greyed out) and can toggle it back
+  status?: 'assigned' | 'pending' | 'approved' | 'rejected';   // workflow chip
+  disabled?: boolean;        // when true, normal viewers see it greyed + unclickable
+                             // (owner/admin keep full use, can toggle it back on)
   children?: RepoCard[];     // nested cards / sections one level deeper
 }
 
@@ -230,6 +233,8 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (statuses.length) card.statuses = statuses;
   if (c.layout === 'bars' || c.layout === 'grid') card.layout = c.layout;
   if (c.hidden) card.hidden = true;
+  if (['assigned', 'pending', 'approved', 'rejected'].includes(c.status)) card.status = c.status;
+  if (c.disabled) card.disabled = true;
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
   if (!title && !subtitle && !text && !image && !icon && !links.length && !children.length && !card.completable && !card.collect) return null;
