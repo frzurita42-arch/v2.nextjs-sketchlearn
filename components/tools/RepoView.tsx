@@ -491,6 +491,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const previewBlocked = mode === 'preview' && !ctx.canEdit;
   const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
   const isFav = !!ctx.favs[card.id];
+  const [collapsed, setCollapsed] = useState(false);   // hide this card's nested cards
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingSub, setEditingSub] = useState(false);
   const [titleDraft, setTitleDraft] = useState(card.title || '');
@@ -713,9 +714,17 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {ctx.canEdit && <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>}
     </div>
   );
+  // Collapse toggle — hides this card's nested cards (the card itself stays). Only
+  // meaningful in rows view where the tree is drawn; available to every viewer.
+  const collapseBtn = (view === 'row' && kids.length > 0) ? (
+    <button type="button" onClick={() => setCollapsed((c) => !c)}
+      title={collapsed ? `Expand ${kids.length} card${kids.length === 1 ? '' : 's'} inside` : 'Collapse the cards inside'}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.75, flex: '0 0 auto' }}>{collapsed ? '▸' : '▾'}</button>
+  ) : null;
   const actions = (
     <>
       {linkColumn}
+      {collapseBtn}
       {statusChip}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       {iconGrid}
@@ -765,9 +774,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   return (
     <div>
       {body}
-      <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
-        {kids.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
-      </div>
+      {!collapsed && (
+        <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
+          {kids.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
+        </div>
+      )}
     </div>
   );
 }
