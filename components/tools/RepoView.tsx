@@ -472,7 +472,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // (they render as the 🔗 buttons). The 📁 file icon spawns a new card inside
   // ready to hold a file/link.
   const addLink = () => {
-    const url = linkUrl.trim(); if (!url) return;
+    let url = linkUrl.trim(); if (!url) return;
+    // A bare domain like "example.com" is dropped by the server sanitizer (which
+    // keeps only http(s):// or /… URLs), which made the button vanish a second
+    // after it appeared. Give it a scheme so it sticks.
+    if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) url = 'https://' + url;
     ctx.editField(card.id, { links: [...(card.links || []), { label: linkLabel.trim() || 'Link', url }] });
     setLinkLabel(''); setLinkUrl(''); setAttaching(false);
   };
