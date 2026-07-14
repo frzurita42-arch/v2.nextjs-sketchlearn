@@ -22,6 +22,9 @@ export interface CardShellProps {
   gridHeight?: number;        // when set, GRID cards are this fixed total height
                               // (uniform tiles); the description is clamped and the
                               // footer pins to the bottom so nothing overflows.
+  rowTextLines?: number;      // when set, the ROW description text is clamped to
+                              // this many lines (a fixed amount of text). Inline
+                              // edit icons stay visible.
   onOpen?: () => void;        // click the image or the title to open
 
   iconNode?: React.ReactNode;     // an emoji/text icon shown in the image spot INSTEAD of a photo
@@ -81,7 +84,14 @@ export function CardShell(p: CardShellProps) {
             {p.editBtns}
             {p.afterTitle}
           </div>
-          {(desc || p.afterSubtitle) && <div style={{ fontSize: 12, opacity: 0.8, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>{desc}{p.afterSubtitle}</div>}
+          {(desc || p.afterSubtitle) && (
+            <div style={{ fontSize: 12, opacity: 0.8, display: 'flex', alignItems: p.rowTextLines ? 'flex-start' : 'center', gap: 4, flexWrap: 'wrap' }}>
+              {desc && (p.rowTextLines
+                ? <span style={{ overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: p.rowTextLines, minWidth: 0 }}>{desc}</span>
+                : <span>{desc}</span>)}
+              {p.afterSubtitle}
+            </div>
+          )}
           {p.meta}
         </div>
         <span style={{ display: 'flex', gap: 8, flex: '0 0 auto', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -95,9 +105,6 @@ export function CardShell(p: CardShellProps) {
   // Fixed-height tiles: clamp the description to a couple of lines and let the
   // footer pin to the bottom, so every card is exactly the same height.
   const fixed = typeof p.gridHeight === 'number';
-  const descStyle: React.CSSProperties = fixed
-    ? { margin: 0, fontSize: 13, opacity: 0.85, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, minHeight: 0 }
-    : { margin: 0, fontSize: 13, opacity: 0.85, flex: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' };
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: fixed ? p.gridHeight : '100%' }}>
       {imageBox}
@@ -107,7 +114,16 @@ export function CardShell(p: CardShellProps) {
           {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{badge}</span>}
         </div>
         {p.badges && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, opacity: 0.75 }}>{p.badges}</div>}
-        {(subtitle !== undefined || p.afterSubtitle) && <p style={descStyle}>{subtitle || 'No description.'}{p.editBtns}{p.afterSubtitle}</p>}
+        {(subtitle !== undefined || p.afterSubtitle) && (
+          fixed
+            // Fixed tiles: clamp the description TEXT to two lines, but keep the
+            // inline edit icons visible after it.
+            ? <div style={{ margin: 0, fontSize: 13, opacity: 0.85, display: 'flex', alignItems: 'flex-start', gap: 4, flexWrap: 'wrap', minHeight: 0 }}>
+                <span style={{ overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}>{subtitle || 'No description.'}</span>
+                {p.editBtns}{p.afterSubtitle}
+              </div>
+            : <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>{subtitle || 'No description.'}{p.editBtns}{p.afterSubtitle}</p>
+        )}
         {p.tags && p.tags.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {p.tags.map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}

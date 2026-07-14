@@ -855,17 +855,23 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   );
   const del = undefined;   // delete lives inside the icon grid now
 
+  // GRID view is a browse/display view: uniform fixed-height tiles showing only
+  // name + description; the control cluster + inline edit icons are hidden (they
+  // all live in ROW view, opened by a click). ROW view keeps everything.
+  const isGrid = view === 'grid';
   const shell = (
     <CardShell view={view}
+      gridHeight={isGrid ? 300 : undefined}
+      rowTextLines={2}
       title={editingTitle ? '' : (card.title || 'Untitled')}
       subtitle={editingSub ? ' ' : (card.text || '')}
       thumbnail={isImg(card.image) ? card.image : null}
       badge={dimmed ? '🙈 hidden' : (ctx.canEdit && mode === 'disabled' ? '🚫 disabled' : ctx.canEdit && mode === 'preview' ? '👓 preview' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined))}
       onOpen={open}
       iconNode={iconNode}
-      overlay={imgOverlay} placeholder={imgPlaceholder}
-      afterTitle={afterTitle} afterSubtitle={afterSubtitle}
-      actions={actions} del={del} />
+      overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
+      afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}
+      actions={isGrid ? null : actions} del={isGrid ? undefined : del} />
   );
 
   // The clip/folder inline editor: type a link (label + URL) or upload a file.
