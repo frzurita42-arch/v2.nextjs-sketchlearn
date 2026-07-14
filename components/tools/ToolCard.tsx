@@ -88,6 +88,7 @@ export function ToolCard(p: ToolCardProps) {
       badge={kindOf(t)}
       fav={fav}
       thumbnail={t.thumbnail}
+      gridHeight={view === 'grid' ? 300 : undefined}   // uniform fixed-height tiles
       onOpen={() => onOpen(t)}
       overlay={overlay}
       placeholder={placeholder}

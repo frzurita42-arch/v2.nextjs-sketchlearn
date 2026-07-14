@@ -19,6 +19,9 @@ export interface CardShellProps {
   fav?: boolean;
   thumbnail?: string | null;
   thumbHeight?: number;       // grid image height (default 130)
+  gridHeight?: number;        // when set, GRID cards are this fixed total height
+                              // (uniform tiles); the description is clamped and the
+                              // footer pins to the bottom so nothing overflows.
   onOpen?: () => void;        // click the image or the title to open
 
   iconNode?: React.ReactNode;     // an emoji/text icon shown in the image spot INSTEAD of a photo
@@ -89,22 +92,28 @@ export function CardShell(p: CardShellProps) {
     );
   }
 
+  // Fixed-height tiles: clamp the description to a couple of lines and let the
+  // footer pin to the bottom, so every card is exactly the same height.
+  const fixed = typeof p.gridHeight === 'number';
+  const descStyle: React.CSSProperties = fixed
+    ? { margin: 0, fontSize: 13, opacity: 0.85, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, minHeight: 0 }
+    : { margin: 0, fontSize: 13, opacity: 0.85, flex: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' };
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: fixed ? p.gridHeight : '100%' }}>
       {imageBox}
-      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
           <strong style={{ fontSize: 16, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}{p.editBtns}{p.afterTitle}</strong>
           {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{badge}</span>}
         </div>
         {p.badges && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, opacity: 0.75 }}>{p.badges}</div>}
-        {(subtitle !== undefined || p.afterSubtitle) && <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>{subtitle || 'No description.'}{p.editBtns}{p.afterSubtitle}</p>}
+        {(subtitle !== undefined || p.afterSubtitle) && <p style={descStyle}>{subtitle || 'No description.'}{p.editBtns}{p.afterSubtitle}</p>}
         {p.tags && p.tags.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {p.tags.map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
           </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
           {p.meta}
           <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{p.actions}{p.del}</span>
         </div>
