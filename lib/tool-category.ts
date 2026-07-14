@@ -6,7 +6,7 @@
 
 export type CategoryKey =
   | 'presentation' | 'single' | 'annotation' | 'code' | 'math-mix'
-  | 'writing' | 'conversation' | 'journal' | 'gallery' | 'storage' | 'generator' | 'other';
+  | 'writing' | 'conversation' | 'journal' | 'gallery' | 'storage' | 'repository' | 'generator' | 'other';
 
 export const TOOL_CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: 'presentation', label: '📊 Presentations' },
@@ -18,7 +18,8 @@ export const TOOL_CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: 'conversation', label: '💬 AI canvas chats' },
   { key: 'journal', label: '📓 Journals' },
   { key: 'gallery', label: '🖼️ Galleries' },
-  { key: 'storage', label: '🗂️ Storage' },
+  { key: 'repository', label: '🗂️ Repositories' },
+  { key: 'storage', label: '🗄️ Storage' },
   { key: 'generator', label: '✨ Generators' },
 ];
 
@@ -47,6 +48,7 @@ export function toolCategory(t: any): CategoryKey {
     return 'presentation';
   }
   if (archetype === 'generator') return 'generator';
+  if (archetype === 'repo') return 'repository';
   if (archetype === 'app') {
     const display = (def.app && def.app.display) || t.appDisplay;
     return display === 'list' || display === 'table' ? 'storage' : 'gallery';
