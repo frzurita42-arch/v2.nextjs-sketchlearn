@@ -33,26 +33,35 @@ export async function POST(req: Request) {
 
   const repo = tool.definition.repo || {};
   const isOwnerAdmin = a.user.role === 'admin' || tool.owner === a.user.username;
-  const allowed = isOwnerAdmin || (color === 'green' ? !!repo.folderForAll : !!repo.clipForAll);
-  if (!allowed) return NextResponse.json({ error: 'Attaching is disabled for you on this repository.' }, { status: 403 });
+  const isAdmin = a.user.role === 'admin';
+  const me = a.user.username;
+  // POSTER (blue) links belong to the owner/admin — only they add/remove them.
+  // USER (green) links are uploaded by any signed-in viewer; the uploader (by)
+  // or an admin may remove one, but the owner (OP) may NOT remove a user's link.
+  const index = Number.isInteger(b.index) ? b.index : -1;
 
-  // Walk the tree to the target card and add/remove exactly one link of `color`.
-  let touched = false;
+  let touched = false; let denied = false;
   const visit = (cards: RepoCard[]): RepoCard[] => cards.map((c) => {
     if (c.id === cardId) {
       const links = Array.isArray(c.links) ? [...c.links] : [];
       if (action === 'add') {
+        if (color === 'blue' && !isOwnerAdmin) { denied = true; return c; }   // only OP/admin post
         let url = String(b.link?.url || '').trim();
         if (!url) return c;
         if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) url = 'https://' + url;
         const label = String(b.link?.label || 'Link').slice(0, 15) || 'Link';
-        links.push(color === 'green' ? { label, url, color: 'green' } : { label, url });
+        links.push(color === 'green' ? { label, url, color: 'green', by: me } : { label, url, by: me });
+        touched = true;
       } else {
-        for (let i = links.length - 1; i >= 0; i--) {
-          if (((links[i] as any).color === 'green') === (color === 'green')) { links.splice(i, 1); break; }
-        }
+        // Remove a specific link (by index) with per-link permission.
+        const target = index >= 0 && index < links.length ? links[index] as any : null;
+        if (!target) return c;
+        const isUser = target.color === 'green';
+        const canRemove = isUser ? (target.by === me || isAdmin) : isOwnerAdmin;
+        if (!canRemove) { denied = true; return c; }
+        links.splice(index, 1);
+        touched = true;
       }
-      touched = true;
       return { ...c, links };
     }
     if (c.children?.length) return { ...c, children: visit(c.children) };
@@ -60,6 +69,7 @@ export async function POST(req: Request) {
   });
 
   const nextCards = visit(Array.isArray(repo.cards) ? repo.cards : []);
+  if (denied) return NextResponse.json({ error: 'You are not allowed to change that attachment.' }, { status: 403 });
   if (!touched) return NextResponse.json({ error: 'Card not found.' }, { status: 404 });
 
   // Re-validate the full definition (caps link counts / URLs) before saving.

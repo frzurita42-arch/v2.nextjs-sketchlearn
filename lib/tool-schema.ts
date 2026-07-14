@@ -98,7 +98,10 @@ export interface AppSpec {
 export interface RepoLink {
   label: string;
   url: string;
-  color?: 'blue' | 'green';   // button colour: clip 📎 adds blue, folder 📁 adds green
+  // 'poster' (blue) — posted by the owner/admin; everyone can open/download it.
+  // 'user'   (green) — uploaded by a viewer; only they (or an admin) can remove it.
+  color?: 'blue' | 'green';
+  by?: string;                // username who added this link (for the User kind)
 }
 
 export interface RepoCard {
@@ -211,6 +214,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
       url: String(l?.url || l?.href || '').slice(0, 800),
     };
     if (l?.color === 'green') link.color = 'green';
+    if (l?.by) link.by = String(l.by).slice(0, 40);
     return link;
   }).filter((l: RepoLink) => /^https?:\/\//i.test(l.url) || l.url.startsWith('/'));
   const children: RepoCard[] = (Array.isArray(c.children) ? c.children : [])

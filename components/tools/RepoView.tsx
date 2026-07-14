@@ -32,7 +32,7 @@ type ViewCtx = {
   favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
-  clipForAll: boolean; folderForAll: boolean;      // Configurations: attach access for normal users
+  isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
   distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
@@ -523,38 +523,28 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     );
   }
 
-  // ---- attachments: BOTH the 📎 clip and the 📁 folder add a link or uploaded
-  // file to THIS card (they render as the 🔗 buttons). They differ only in the
-  // button colour — clip → blue, folder → green — so you can group attachments.
-  const canUseClip = ctx.canEdit || ctx.clipForAll;       // Configurations access
-  const canUseFolder = ctx.canEdit || ctx.folderForAll;
+  // ---- attachments: two roles. POSTER (blue) — the owner/admin posts a file or
+  // link everyone can open/download. USER (green) — any signed-in viewer uploads
+  // their own; only they (or an admin) can remove it (the OP cannot). All changes
+  // go through the guarded /api/tools/repo/attach endpoint, which stamps `by` and
+  // enforces the permissions.
+  const canPoster = ctx.canEdit;              // owner/admin manage the Poster slot
+  const canUser = !!ctx.me;                    // any signed-in viewer has a User slot
+  const myUserLinkIdx = links.findIndex((l) => l.color === 'green' && l.by === ctx.me);
+  const lastPosterIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
   const toggleAttach = (c: 'blue' | 'green') => {
     if (attaching && attachColor === c) { setAttaching(false); return; }
     setAttachColor(c); setAttaching(true);
   };
-  // Owner/admin edit the card tree directly; normal users go through the guarded
-  // /api/tools/repo/attach endpoint (which only they're allowed to when the repo
-  // Configurations permit that colour).
-  const appendLink = async (label: string, url: string) => {
-    const lbl = label.slice(0, 15) || 'Link';
-    if (ctx.canEdit) {
-      ctx.editField(card.id, { links: [...(card.links || []), { label: lbl, url, ...(attachColor === 'green' ? { color: 'green' as const } : {}) }] });
-    } else {
-      try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, action: 'add', color: attachColor, link: { label: lbl, url } }); if (r?.repo) ctx.applyRepo(r.repo); else if (r?.error) alert(r.error); } catch { alert('Could not attach.'); }
-    }
+  const attachServer = async (payload: any) => {
+    try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, ...payload }); if (r?.repo) ctx.applyRepo(r.repo); else if (r?.error) alert(r.error); } catch { alert('Could not update the attachment.'); }
   };
-  // Second click on the clip/folder removes the last link of that colour.
-  const removeLastColor = async (isGreen: boolean): Promise<boolean> => {
-    const arr = card.links || [];
-    let idx = -1;
-    for (let i = arr.length - 1; i >= 0; i--) { if (((arr[i] as any).color === 'green') === isGreen) { idx = i; break; } }
-    if (idx === -1) return false;
-    if (ctx.canEdit) ctx.editField(card.id, { links: arr.filter((_, j) => j !== idx) });
-    else { try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, action: 'remove', color: isGreen ? 'green' : 'blue' }); if (r?.repo) ctx.applyRepo(r.repo); } catch { /* ignore */ } }
-    return true;
-  };
-  const clipClick = () => { if (!canUseClip) return; removeLastColor(false).then((removed) => { if (!removed) toggleAttach('blue'); }); };
-  const folderClick = () => { if (!canUseFolder) return; removeLastColor(true).then((removed) => { if (!removed) toggleAttach('green'); }); };
+  const appendLink = async (label: string, url: string) => { await attachServer({ action: 'add', color: attachColor, link: { label: label.slice(0, 15) || 'Link', url } }); };
+  const removeLinkAt = (index: number) => attachServer({ action: 'remove', index });
+  // Poster button: post one (form) or remove the posted one. User button: upload
+  // your own or remove yours.
+  const posterClick = () => { if (!canPoster) return; if (lastPosterIdx >= 0) removeLinkAt(lastPosterIdx); else toggleAttach('blue'); };
+  const userClick = () => { if (!canUser) return; if (myUserLinkIdx >= 0) removeLinkAt(myUserLinkIdx); else toggleAttach('green'); };
   const addLink = () => {
     let url = linkUrl.trim(); if (!url) return;
     // A bare domain like "example.com" is dropped by the server sanitizer (which
@@ -680,10 +670,21 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   )) : null;
 
   // Link buttons grouped by colour into a single column with (up to) two rows —
-  // blue (clip) links on top, green (folder) links below.
-  const blueLinks = links.filter((l) => l.color !== 'green');
-  const greenLinks = links.filter((l) => l.color === 'green');
-  const linkBtn = (l: RepoLink, i: number) => <a key={l.url + i} className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>🔗 {cap15(l.label || 'Open')}</a>;
+  // POSTER (blue) links on top, USER (green) links below. Everyone can open/
+  // download any link. A remove ✕ shows next to a link only for someone allowed
+  // to delete it: Poster links → owner/admin; User links → the uploader or admin
+  // (the OP cannot remove another user's upload).
+  const blueLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color !== 'green');
+  const greenLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color === 'green');
+  const canRemoveLink = (l: RepoLink) => l.color === 'green' ? (l.by === ctx.me || ctx.isAdmin) : ctx.canEdit;
+  const linkBtn = ({ l, i }: { l: RepoLink; i: number }) => (
+    <span key={l.url + i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+      <a className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}
+        title={l.by ? `${l.color === 'green' ? 'User' : 'Poster'}: ${l.by}` : undefined}>🔗 {cap15(l.label || 'Open')}</a>
+      {canRemoveLink(l) && <button type="button" title="Remove this attachment" onClick={eat(() => removeLinkAt(i))}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1, opacity: 0.6 }}>✕</button>}
+    </span>
+  );
   const linkColumn = links.length > 0 ? (
     <div style={{ display: 'grid', gap: 4, flex: '0 0 auto' }}>
       {blueLinks.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{blueLinks.map(linkBtn)}</div>}
@@ -715,9 +716,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
       {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>}
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>}
-      {/* 📎 clip → blue attachment · 📁 folder → green attachment. Second click removes the last one. */}
-      {canUseClip && <button type="button" title="Attach a file or link (blue) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'blue' ? 1 : 0.85 }} onClick={clipClick}>📎</button>}
-      {canUseFolder && <button type="button" title="Attach a file or link (green) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'green' ? 1 : 0.85 }} onClick={folderClick}>📁</button>}
       {/* Mode cycle — owner/admin only: Enabled → statuses → Disabled → Preview. */}
       {modeBtn}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
@@ -731,9 +729,29 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={collapsed ? `Expand ${kids.length} card${kids.length === 1 ? '' : 's'} inside` : 'Collapse the cards inside'}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.75, flex: '0 0 auto' }}>{collapsed ? '▸' : '▾'}</button>
   ) : null;
+  // Poster / User role buttons — fixed text labels. POSTER (📎, owner/admin):
+  // post a file or link everyone can open. Click again to remove what you posted.
+  // USER (📁, any signed-in viewer): upload your own document; click again to
+  // remove yours and upload a new one. The OP cannot remove a User's upload, but
+  // an admin can (handled by the endpoint + the ✕ on each link).
+  const roleButtons = (canPoster || canUser) ? (
+    <div style={{ display: 'inline-flex', gap: 6, flex: '0 0 auto' }} onClick={stop}>
+      {canPoster && (
+        <button type="button" onClick={posterClick}
+          title={lastPosterIdx >= 0 ? 'Remove the posted file/link' : 'Post a file or link — everyone can open it'}
+          className={`btn small ${attaching && attachColor === 'blue' ? 'blue' : 'ghost'}`}>📎 Poster</button>
+      )}
+      {canUser && (
+        <button type="button" onClick={userClick}
+          title={myUserLinkIdx >= 0 ? 'Remove your upload (then you can upload a new one)' : 'Upload your own document'}
+          className={`btn small ${attaching && attachColor === 'green' ? 'green' : 'ghost'}`}>📁 User</button>
+      )}
+    </div>
+  ) : null;
   const actions = (
     <>
       {linkColumn}
+      {roleButtons}
       {collapseBtn}
       {statusChip}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
@@ -759,7 +777,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // Both append to the card's links (shown as 🔗 buttons) in the chosen colour.
   const attachForm = attaching ? (
     <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁' : '📎'} Attach a file or add a link — makes a <span style={{ color: attachColor === 'green' ? '#1f8b4c' : '#2f6fdb' }}>{attachColor}</span> button</div>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — upload your own document (only you or an admin can remove it)' : '📎 Poster — post a file or link everyone can open'}</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={linkLabel} placeholder="Label (max 15)" maxLength={15} onChange={(e) => setLinkLabel(e.target.value.slice(0, 15))} style={{ flex: '1 1 90px', fontSize: 13 }} />
         <input value={linkUrl} placeholder="https://…" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '2 1 150px', fontSize: 13 }} />
@@ -802,11 +820,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const display: 'bars' | 'grid' = repo.display === 'grid' ? 'grid' : 'bars';
   // Studio "collections" show a gallery-style filter toolbar over vertical cards.
   const isCollection = (def?.tags || []).includes('collection');
-  // Configurations: owner/admin choose whether NORMAL users may use the 📎 clip
-  // and 📁 folder attach buttons (default off — attaching is owner/admin-only).
-  // The 4 states All / Only 📁 / Only 📎 / None are the combos of these two.
-  const [clipForAll, setClipForAll] = useState(!!repo.clipForAll);
-  const [folderForAll, setFolderForAll] = useState(!!repo.folderForAll);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState('');
@@ -819,6 +832,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // User contributions (collect cards): load entries and group them by card id.
   const app = useApp();
   const me = app.user?.username || '';
+  const isAdmin = app.user?.role === 'admin';
   const isOwner = canEdit;
   const [entries, setEntries] = useState<any[]>([]);
   const loadEntries = () => {
@@ -852,28 +866,12 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveCards = async (next: RepoCard[]) => {
     setCards(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, clipForAll, folderForAll, cards: next } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, cards: next } });
       if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
     } catch { /* keep the optimistic copy */ }
   };
   // A returned repo (from the normal-user attach endpoint) reconciled into state.
   const applyRepo = (nextRepo: RepoSpec) => { if (!nextRepo) return; setCards(nextRepo.cards || []); if (def) def.repo = nextRepo; };
-  // Persist a Configurations change (attach access) without touching cards.
-  const saveConfig = async (patch: { clipForAll?: boolean; folderForAll?: boolean }) => {
-    try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, clipForAll, folderForAll, cards, ...patch } });
-      if (r?.repo && def) def.repo = r.repo;
-    } catch { /* keep the optimistic toggle */ }
-  };
-  // Cycle the single Configurations toggle: All → Only 📁 → Only 📎 → None → …
-  const cycleAccess = () => {
-    const next = clipForAll && folderForAll ? { clipForAll: false, folderForAll: true }   // All → Only folder
-      : !clipForAll && folderForAll ? { clipForAll: true, folderForAll: false }            // Only folder → Only clip
-      : clipForAll && !folderForAll ? { clipForAll: false, folderForAll: false }           // Only clip → None
-      : { clipForAll: true, folderForAll: true };                                          // None → All
-    setClipForAll(next.clipForAll); setFolderForAll(next.folderForAll); saveConfig(next);
-  };
-  const accessLabel = clipForAll && folderForAll ? 'All' : folderForAll ? 'Only 📁 folder' : clipForAll ? 'Only 📎 clip' : 'None (owner/admin only)';
   const editField = (id: string, p: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...p })));
   // The gear adds a nested card seeded with a generic title AND subtitle, so its
   // ✎ pencils have something to edit right away.
@@ -907,7 +905,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, clipForAll, folderForAll, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, isAdmin, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
@@ -984,16 +982,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         </div>
       ) : isCollection ? (
        <>
-        {/* Configurations card — owner/admin only, right above the first card. Sets
-            whether normal users may use the 📎 clip and 📁 folder attach buttons. */}
-        {canEdit && (
-          <div className="card" style={{ maxWidth: 900, margin: '0 auto 10px', padding: '10px 14px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <strong style={{ fontSize: 14 }}>⚙️ Configurations</strong>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>Who can use 📎 / 📁 attach:</span>
-            <button className="btn small blue" onClick={cycleAccess} title="Cycle: All → Only 📁 → Only 📎 → None">{accessLabel} ↻</button>
-            <span style={{ fontSize: 11, opacity: 0.55 }}>Owner/admin always can. Only you can change this.</span>
-          </div>
-        )}
         {/* A collection: the shared titled + banner'd + filterable gallery block. */}
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"

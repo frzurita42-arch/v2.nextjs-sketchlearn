@@ -11,14 +11,17 @@ export const runtime = 'nodejs';
 const ALLOWED = ['post', 'tool'];
 
 // Keep attachment links safe + small: http(s)/relative URLs, capped, coloured
-// blue (clip) or green (folder) exactly like the repo cards.
-function cleanLinks(raw: any): { label: string; url: string; color?: 'green' }[] {
+// blue (POSTER — author's) or green (USER — a viewer's own upload). `by` records
+// the uploader of a User link so only they (or an admin) can later remove it.
+type CLink = { label: string; url: string; color?: 'green'; by?: string };
+function cleanLinks(raw: any): CLink[] {
   if (!Array.isArray(raw)) return [];
   return raw.slice(0, 8).map((l: any) => {
     let url = String(l?.url || '').trim();
     if (url && !/^https?:\/\//i.test(url) && !url.startsWith('/')) url = 'https://' + url;
-    const link: { label: string; url: string; color?: 'green' } = { label: String(l?.label || 'Link').slice(0, 30), url };
+    const link: CLink = { label: String(l?.label || 'Link').slice(0, 30), url };
     if (l?.color === 'green') link.color = 'green';
+    if (l?.by) link.by = String(l.by).slice(0, 40);
     return link;
   }).filter((l) => /^https?:\/\//i.test(l.url) || l.url.startsWith('/'));
 }
@@ -63,8 +66,11 @@ export async function POST(req: Request) {
   return NextResponse.json({ comment: record });
 }
 
-// PUT { id, action } -> like (toggle, anyone) / addLink / removeLink (author or
-// admin). Returns the updated comment.
+// PUT { id, action } -> like (toggle, anyone) / addLink / removeLink. POSTER
+// (blue) attachments belong to the comment's author — only they or an admin
+// add/remove them. USER (green) attachments are uploaded by any signed-in
+// viewer; the uploader (by) or an admin may remove one, but the author (like an
+// OP) may NOT remove another user's upload. Returns the updated comment.
 export async function PUT(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
@@ -73,25 +79,35 @@ export async function PUT(req: Request) {
   const action = String(b.action || '');
   const c = id ? await getComment(id) : null;
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const isOwnerAdmin = a.user.role === 'admin' || c.author === a.user.username;
+  const me = a.user.username;
+  const isAdmin = a.user.role === 'admin';
+  const isAuthorAdmin = isAdmin || c.author === me;
 
   if (action === 'like') {
     const likedBy: string[] = Array.isArray(c.likedBy) ? c.likedBy : [];
-    const has = likedBy.includes(a.user.username);
-    const next = has ? likedBy.filter((u: string) => u !== a.user.username) : [...likedBy, a.user.username];
+    const has = likedBy.includes(me);
+    const next = has ? likedBy.filter((u: string) => u !== me) : [...likedBy, me];
     const updated = await updateComment(id, { likedBy: next });
     return NextResponse.json({ comment: updated });
   }
-  if (action === 'addLink' || action === 'removeLink') {
-    if (!isOwnerAdmin) return NextResponse.json({ error: 'Only the author or an admin can change attachments.' }, { status: 403 });
+  if (action === 'addLink') {
+    const color: 'blue' | 'green' = b.color === 'green' ? 'green' : 'blue';
+    // Only the author/admin post (blue); any signed-in viewer uploads a User (green).
+    if (color === 'blue' && !isAuthorAdmin) return NextResponse.json({ error: 'Only the author or an admin can post an attachment.' }, { status: 403 });
     const links = Array.isArray(c.links) ? [...c.links] : [];
-    if (action === 'addLink') {
-      const [nl] = cleanLinks([b.link]);
-      if (nl) links.push(nl);
-    } else {
-      const green = b.color === 'green';
-      for (let i = links.length - 1; i >= 0; i--) { if (((links[i] as any).color === 'green') === green) { links.splice(i, 1); break; } }
-    }
+    const [nl] = cleanLinks([{ ...(b.link || {}), color: color === 'green' ? 'green' : undefined, by: color === 'green' ? me : undefined }]);
+    if (nl) links.push(nl);
+    const updated = await updateComment(id, { links });
+    return NextResponse.json({ comment: updated });
+  }
+  if (action === 'removeLink') {
+    const links = Array.isArray(c.links) ? [...c.links] : [];
+    const index = Number.isInteger(b.index) ? b.index : -1;
+    const target = index >= 0 && index < links.length ? (links[index] as any) : null;
+    if (!target) return NextResponse.json({ error: 'Attachment not found.' }, { status: 404 });
+    const canRemove = target.color === 'green' ? (target.by === me || isAdmin) : isAuthorAdmin;
+    if (!canRemove) return NextResponse.json({ error: 'You are not allowed to remove that attachment.' }, { status: 403 });
+    links.splice(index, 1);
     const updated = await updateComment(id, { links });
     return NextResponse.json({ comment: updated });
   }
