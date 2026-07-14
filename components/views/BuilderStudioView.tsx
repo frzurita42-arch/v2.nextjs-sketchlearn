@@ -181,10 +181,10 @@ export function BuilderStudioView() {
           <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 8 }}>OVERALL</div>
             <div style={gridCol}>
-              <label className="field"><span>Title</span><input value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} /></label>
-              <label className="field"><span>{artifact === 'presentation' ? 'Subject / topic' : 'Collection name'}</span><input value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. My sketchbook'} onChange={(e) => setSubject(e.target.value)} /></label>
+              <label className="field"><span>Title</span><input type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} /></label>
+              <label className="field"><span>{artifact === 'presentation' ? 'Subject / topic' : 'Collection name'}</span><input type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. My sketchbook'} onChange={(e) => setSubject(e.target.value)} /></label>
               {artifact === 'presentation'
-                ? <label className="field"><span>Tone</span><input value={tone} onChange={(e) => setTone(e.target.value)} /></label>
+                ? <label className="field"><span>Tone</span><input type="text" value={tone} onChange={(e) => setTone(e.target.value)} /></label>
                 : <label className="field"><span>Repository type</span><select value={display} onChange={(e) => setDisplay(e.target.value as any)}><option value="cards">Course (nested weeks / units)</option><option value="list">Post (entries with links)</option></select></label>}
             </div>
           </div>
