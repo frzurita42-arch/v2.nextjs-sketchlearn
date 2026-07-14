@@ -183,20 +183,20 @@ export function Collection<T>({
 
   const wrap = { maxWidth, margin: '0 auto' } as const;
   const fullDash = { borderTop: '2px dashed var(--ink)', opacity: 0.5, width: '100%' } as const;
-  // A pager framed by full-page-width dashed rules, top and bottom. It shows
-  // whenever pagination is configured — even on a single page (both buttons
-  // disabled) — so it's always visibly there.
-  const pagerBlock = perPage ? (
-    <div>
-      <div style={fullDash} />
-      <div style={{ ...wrap, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '10px 0' }}>
-        <button className="btn small" disabled={page === 0} onClick={() => goPage(page - 1)}>← Prev</button>
-        <span style={{ fontSize: 13, opacity: 0.7 }}>Page {page + 1} / {pageCount}</span>
-        <button className="btn small" disabled={page >= pageCount - 1} onClick={() => goPage(page + 1)}>Next →</button>
-      </div>
-      <div style={fullDash} />
+  // The pager row (buttons + count). It shows whenever pagination is configured —
+  // even on a single page (both buttons disabled) — so it's always visibly there.
+  const pagerRow = perPage ? (
+    <div style={{ ...wrap, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+      <button className="btn small" disabled={page === 0} onClick={() => goPage(page - 1)}>← Prev</button>
+      <span style={{ fontSize: 13, opacity: 0.7 }}>Page {page + 1} / {pageCount}</span>
+      <button className="btn small" disabled={page >= pageCount - 1} onClick={() => goPage(page + 1)}>Next →</button>
     </div>
   ) : null;
+  // The TOP pager is framed by dashed rules on both sides (it sits between the
+  // count and the items). The BOTTOM pager omits its trailing rule so it doesn't
+  // double up with whatever section divider follows it below.
+  const pagerTop = pagerRow ? (<div><div style={fullDash} />{pagerRow}<div style={fullDash} /></div>) : null;
+  const pagerBottom = pagerRow ? (<div><div style={fullDash} />{pagerRow}</div>) : null;
 
   return (
     <div>
@@ -244,7 +244,7 @@ export function Collection<T>({
       </div>
 
       {/* Top pager — right after the filter toolbar */}
-      {pagerBlock && <div style={{ marginBottom: 12 }}>{pagerBlock}</div>}
+      {pagerTop && <div style={{ marginBottom: 12 }}>{pagerTop}</div>}
 
       {/* Items */}
       {items.length === 0 ? (
@@ -260,7 +260,7 @@ export function Collection<T>({
       )}
 
       {/* Bottom pager — scrolls back up to the toolbar on Prev/Next */}
-      {pagerBlock && <div style={{ marginTop: 14 }}>{pagerBlock}</div>}
+      {pagerBottom && <div style={{ marginTop: 14 }}>{pagerBottom}</div>}
       </>)}
     </div>
   );
