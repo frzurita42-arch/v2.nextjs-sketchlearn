@@ -109,18 +109,27 @@ export function CardShell(p: CardShellProps) {
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: fixed ? p.gridHeight : '100%' }}>
       {imageBox}
       <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-          <strong style={{ fontSize: 16, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}{p.editBtns}{p.afterTitle}</strong>
-          {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{badge}</span>}
-        </div>
+        {fixed
+          // Fixed tiles: the title clamps to two lines and the edit icons + badge
+          // sit in a fixed, non-shrinking slot on the SAME row (they never wrap to
+          // a new line and push the layout / overflow).
+          ? <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <strong style={{ fontSize: 16, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}</strong>
+              {(p.editBtns || p.afterTitle) && <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 4, alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>{p.editBtns}{p.afterTitle}</span>}
+              {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6, flex: '0 0 auto' }}>{badge}</span>}
+            </div>
+          : <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+              <strong style={{ fontSize: 16, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}{p.editBtns}{p.afterTitle}</strong>
+              {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{badge}</span>}
+            </div>}
         {p.badges && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, opacity: 0.75 }}>{p.badges}</div>}
         {(subtitle !== undefined || p.afterSubtitle) && (
           fixed
-            // Fixed tiles: clamp the description TEXT to two lines, but keep the
-            // inline edit icons visible after it.
-            ? <div style={{ margin: 0, fontSize: 13, opacity: 0.85, display: 'flex', alignItems: 'flex-start', gap: 4, flexWrap: 'wrap', minHeight: 0 }}>
-                <span style={{ overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}>{subtitle || 'No description.'}</span>
-                {p.editBtns}{p.afterSubtitle}
+            // Fixed tiles: clamp the description TEXT to two lines. The edit icons
+            // already show next to the title, so they are not repeated here.
+            ? <div style={{ margin: 0, fontSize: 13, opacity: 0.85, display: 'flex', alignItems: 'flex-start', gap: 4, minHeight: 0 }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}>{subtitle || 'No description.'}</span>
+                {p.afterSubtitle}
               </div>
             : <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>{subtitle || 'No description.'}{p.editBtns}{p.afterSubtitle}</p>
         )}
