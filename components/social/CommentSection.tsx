@@ -115,6 +115,8 @@ function CommentCard({ c, kids, me, isAdmin, onReply, onLike, onPoster, onUser, 
 }) {
   const [replying, setReplying] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [showPoster, setShowPoster] = useState(false);   // 📎 icon revealed the Poster button
+  const [showUser, setShowUser] = useState(false);       // 📁 icon revealed the User button
   const av = avatarFor(c.author);
   const links = c.links || [];
   const likedBy = c.likedBy || [];
@@ -142,8 +144,11 @@ function CommentCard({ c, kids, me, isAdmin, onReply, onLike, onPoster, onUser, 
       <button onClick={() => onLike(c.id)} title={liked ? 'Unlike' : 'Like'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, opacity: liked ? 1 : 0.7 }}>{liked ? '❤️' : '🤍'} {likedBy.length || ''}</button>
       <button onClick={() => setReplying((r) => !r)} title="Reply (a nested comment)" style={{ ...iconBtn, fontSize: 14 }}>💬</button>
       {replies.length > 0 && <button onClick={() => setCollapsed((x) => !x)} title={collapsed ? `Show ${replies.length} repl${replies.length === 1 ? 'y' : 'ies'}` : 'Collapse replies'} style={{ ...iconBtn, fontSize: 13, opacity: 0.75 }}>{collapsed ? '▸' : '▾'}</button>}
-      {canPoster && <button onClick={() => { if (lastPosterIdx >= 0) onRemoveLink(c.id, lastPosterIdx); else onPoster(c.id); }} title={lastPosterIdx >= 0 ? 'Remove the posted file/link' : 'Post a file or link — everyone can open it'} className="btn small ghost">📎 Poster</button>}
-      {canUser && <button onClick={() => { if (myUserLinkIdx >= 0) onRemoveLink(c.id, myUserLinkIdx); else onUser(c.id); }} title={myUserLinkIdx >= 0 ? 'Remove your upload (then upload a new one)' : 'Upload your own document'} className="btn small ghost">📁 User</button>}
+      {/* 📎 / 📁 are just icons; clicking one reveals its "Poster" / "User" button. */}
+      {canPoster && <button onClick={() => setShowPoster((v) => !v)} title={showPoster ? 'Hide the Poster button' : 'Poster attachment'} style={{ ...iconBtn, fontSize: 14, opacity: showPoster ? 1 : 0.85 }}>📎</button>}
+      {canUser && <button onClick={() => setShowUser((v) => !v)} title={showUser ? 'Hide the User button' : 'User attachment'} style={{ ...iconBtn, fontSize: 14, opacity: showUser ? 1 : 0.85 }}>📁</button>}
+      {canPoster && showPoster && <button onClick={() => { if (lastPosterIdx >= 0) onRemoveLink(c.id, lastPosterIdx); else onPoster(c.id); }} title={lastPosterIdx >= 0 ? 'Remove the posted file/link' : 'Post a file or link — everyone can open it'} className="btn small ghost">{lastPosterIdx >= 0 ? '✕ Poster' : 'Poster'}</button>}
+      {canUser && showUser && <button onClick={() => { if (myUserLinkIdx >= 0) onRemoveLink(c.id, myUserLinkIdx); else onUser(c.id); }} title={myUserLinkIdx >= 0 ? 'Remove your upload (then upload a new one)' : 'Upload your own document'} className="btn small ghost">{myUserLinkIdx >= 0 ? '✕ User' : 'User'}</button>}
     </>
   );
   const del = mine ? <button title="Delete comment" style={delIcon} onClick={() => onDelete(c.id)}>🗑</button> : undefined;
@@ -169,6 +174,8 @@ export function CommentSection({ targetType, targetId }: { targetType: 'tool' | 
   const [loaded, setLoaded] = useState(false);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'recent' | 'popular'>('recent');
+  const [page, setPage] = useState(0);
+  const PER_PAGE = 10;
 
   const load = () => API.get(`/api/comments?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(targetId)}`)
     .then((r: any) => { setComments(Array.isArray(r?.comments) ? r.comments : []); setLoaded(true); })
@@ -201,6 +208,20 @@ export function CommentSection({ targetType, targetId }: { targetType: 'tool' | 
     .sort((a, b) => sort === 'popular' ? (b.likedBy?.length || 0) - (a.likedBy?.length || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [comments, idSet, q, sort]);
 
+  // Paginate the TOP-LEVEL comments at 10 per page (replies stay under their
+  // parent). The pager is always shown when there are comments, but its buttons
+  // are inactive while everything fits on one page.
+  const totalPages = Math.max(1, Math.ceil(roots.length / PER_PAGE));
+  useEffect(() => { if (page > totalPages - 1) setPage(0); }, [page, totalPages]);
+  const pageRoots = roots.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+  const pager = roots.length > 0 ? (
+    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', margin: '8px 0' }}>
+      <button className="btn small ghost" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← Prev</button>
+      <span style={{ fontSize: 12, opacity: 0.7 }}>Page {page + 1} of {totalPages}</span>
+      <button className="btn small ghost" disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>Next →</button>
+    </div>
+  ) : null;
+
   return (
     <div className="card alt" style={{ padding: '14px 16px', marginTop: 16, maxWidth: 680, marginInline: 'auto' }}>
       <h4 style={{ margin: '0 0 8px' }}>💬 Comments{loaded ? ` (${comments.length})` : ''}</h4>
@@ -217,11 +238,13 @@ export function CommentSection({ targetType, targetId }: { targetType: 'tool' | 
 
       {comments.length === 0 && loaded && <p style={{ opacity: 0.6, fontSize: 13, margin: 0 }}>No comments yet — be the first.</p>}
       {comments.length > 0 && roots.length === 0 && <p style={{ opacity: 0.6, fontSize: 13, margin: 0 }}>No comments match your search.</p>}
-      {roots.map((c) => (
+      {pager}
+      {pageRoots.map((c) => (
         <CommentCard key={c.id} c={c} kids={kids} me={me} isAdmin={isAdmin}
           onReply={(parentId, body, links) => post(body, parentId, links)}
           onLike={like} onPoster={poster} onUser={userUpload} onRemoveLink={removeLink} onDelete={remove} />
       ))}
+      {pager}
     </div>
   );
 }
