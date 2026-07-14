@@ -190,7 +190,7 @@ function CardView({ card, depth, defaultDisplay, ctx }: {
 }) {
   const { done, toggle } = ctx;
   const isSection = card.kind === 'section';
-  const kids = card.children || [];
+  const kids = (card.children || []).filter((k) => ctx.canEdit || !k.hidden);
   const childDisplay = card.layout || defaultDisplay;
 
   const body = (
@@ -434,8 +434,10 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 // behaviour is exclusive to repo collection cards (not the tool gallery, posts,
 // or homepage).
 function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx; switchToRows?: () => void }) {
-  const kids = card.children || [];
+  // Hidden children vanish for normal viewers; owner/admin still see them greyed.
+  const kids = (card.children || []).filter((k) => ctx.canEdit || !k.hidden);
   const links = card.links || [];
+  const dimmed = !!card.hidden && ctx.canEdit;   // owner/admin preview of a hidden card
   const isFav = !!ctx.favs[card.id];
   const [expanded, setExpanded] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -571,6 +573,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>}
       {ctx.canEdit && <button type="button" title="Add a file/link card inside" style={iconBtn} onClick={() => { ctx.addAttachCard(card.id); setExpanded(true); }}>📁</button>}
       {ctx.canEdit && <button type="button" title="Attach a file or link to this card" style={{ ...iconBtn, opacity: attaching ? 1 : 0.85 }} onClick={() => setAttaching((a) => !a)}>📎</button>}
+      {/* 👁 hide from normal viewers — always last. Owner/admin still see it (greyed). */}
+      {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
     </>
   );
   const del = ctx.canEdit ? (
@@ -582,7 +586,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
       title={editingTitle ? '' : (card.title || 'Untitled')}
       subtitle={editingSub ? ' ' : (card.text || '')}
       thumbnail={isImg(card.image) ? card.image : null}
-      badge={view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined}
+      badge={dimmed ? '🙈 hidden' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined)}
       onOpen={open}
       overlay={imgOverlay} placeholder={imgPlaceholder}
       afterTitle={afterTitle} afterSubtitle={afterSubtitle}
@@ -607,7 +611,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
     </div>
   ) : null;
 
-  const body = <>{shell}{attachForm}</>;
+  // Owner/admin see a hidden card greyed out (normal viewers never get here).
+  const body = <div style={dimmed ? { opacity: 0.5 } : undefined}>{shell}{attachForm}</div>;
 
   // GRID view: a card is shown ALONE — no nested cards beneath it. (Clicking a
   // card with children flips to the rows view, above, to reveal the tree.) Only
@@ -815,7 +820,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"
           bannerKey="collectionBanner" bannerDefault="🗂️ Your saved cards — search by name, favorite them (★ / liked by admin / OP), switch grid ▦ or rows ☰ (the owner can 🔒 lock the layout), and page through. Tap a card to open its attachment."
-          items={cards}
+          items={cards.filter((c) => canEdit || !c.hidden)}
           id={(c: RepoCard) => c.id}
           searchText={(c: RepoCard) => `${c.title || ''} ${c.subtitle || ''} ${c.text || ''}`}
           defaultView={display === 'grid' ? 'grid' : 'row'}
@@ -841,7 +846,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         <div style={display === 'grid'
           ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }
           : { display: 'grid', gap: 12 }}>
-          {cards.map((c) => <CardView key={c.id} card={c} depth={0} defaultDisplay={display} ctx={ctx} />)}
+          {cards.filter((c) => canEdit || !c.hidden).map((c) => <CardView key={c.id} card={c} depth={0} defaultDisplay={display} ctx={ctx} />)}
         </div>
       )}
     </div>

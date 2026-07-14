@@ -118,6 +118,8 @@ export interface RepoCard {
   statuses?: string[];       // when set, owner/admin can move each submission
                              // between these labels (e.g. ["pending","paid"]).
   layout?: 'bars' | 'grid';  // how THIS card's children are arranged (overrides repo default)
+  hidden?: boolean;          // when true, hidden from normal viewers; owner/admin
+                             // still see it (greyed out) and can toggle it back
   children?: RepoCard[];     // nested cards / sections one level deeper
 }
 
@@ -212,6 +214,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   const statuses = (Array.isArray(c.statuses) ? c.statuses : []).map((s: any) => String(s).slice(0, 24).trim()).filter(Boolean).slice(0, 8);
   if (statuses.length) card.statuses = statuses;
   if (c.layout === 'bars' || c.layout === 'grid') card.layout = c.layout;
+  if (c.hidden) card.hidden = true;
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
   if (!title && !subtitle && !text && !image && !links.length && !children.length && !card.completable && !card.collect) return null;
