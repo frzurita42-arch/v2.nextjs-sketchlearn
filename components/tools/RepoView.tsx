@@ -34,8 +34,9 @@ type ViewCtx = {
   canEdit: boolean;
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
   distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
+  distortText: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the description
   addSubcard: (id: string) => void;                                // ⚙️ add a card inside
-  addAttachCard: (id: string) => void;                             // 📁 add a file/link card inside
+  addSibling: (id: string) => void;                                // ➕ add a card at this level
   setIcon: (id: string, patch: Partial<RepoCard>) => void;         // set/clear image & emoji icon
   numberCard: (id: string) => void;                                // 🔢 icon = this card's number
   deleteCard: (id: string) => void;                                // 🗑 delete
@@ -111,6 +112,8 @@ function useDone(slug: string) {
 }
 
 const isImg = (v: any) => isRenderableImage(v);
+// Attachment button labels are capped so a card's button row stays tidy.
+const cap15 = (s: string) => (s.length > 15 ? s.slice(0, 14) + '…' : s);
 
 // Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
 const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
@@ -233,7 +236,7 @@ function CardView({ card, depth, defaultDisplay, ctx }: {
       {!!card.links?.length && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           {card.links.map((l, i) => (
-            <a key={i} className="btn small blue" href={l.url} target="_blank" rel="noreferrer">🔗 {l.label || 'Open'}</a>
+            <a key={i} className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer">🔗 {cap15(l.label || 'Open')}</a>
           ))}
         </div>
       )}
@@ -455,7 +458,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const dimmed = !!card.hidden && ctx.canEdit;   // owner/admin preview of a hidden card
   const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
   const isFav = !!ctx.favs[card.id];
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);   // default: show all nested (Show less)
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingSub, setEditingSub] = useState(false);
   const [titleDraft, setTitleDraft] = useState(card.title || '');
@@ -463,21 +466,29 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [distorting, setDistorting] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
   const [attaching, setAttaching] = useState(false);
+  const [attachColor, setAttachColor] = useState<'blue' | 'green'>('blue');
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [attachBusy, setAttachBusy] = useState(false);
   const editing = editingTitle || editingSub;
 
-  // ---- attachments: the 📎 clip adds a link or an uploaded file to THIS card
-  // (they render as the 🔗 buttons). The 📁 file icon spawns a new card inside
-  // ready to hold a file/link.
+  // ---- attachments: BOTH the 📎 clip and the 📁 folder add a link or uploaded
+  // file to THIS card (they render as the 🔗 buttons). They differ only in the
+  // button colour — clip → blue, folder → green — so you can group attachments.
+  const toggleAttach = (c: 'blue' | 'green') => {
+    if (attaching && attachColor === c) { setAttaching(false); return; }
+    setAttachColor(c); setAttaching(true);
+  };
+  const appendLink = (label: string, url: string) => ctx.editField(card.id, {
+    links: [...(card.links || []), { label: label.slice(0, 15) || 'Link', url, ...(attachColor === 'green' ? { color: 'green' as const } : {}) }],
+  });
   const addLink = () => {
     let url = linkUrl.trim(); if (!url) return;
     // A bare domain like "example.com" is dropped by the server sanitizer (which
     // keeps only http(s):// or /… URLs), which made the button vanish a second
     // after it appeared. Give it a scheme so it sticks.
     if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) url = 'https://' + url;
-    ctx.editField(card.id, { links: [...(card.links || []), { label: linkLabel.trim() || 'Link', url }] });
+    appendLink(linkLabel.trim(), url);
     setLinkLabel(''); setLinkUrl(''); setAttaching(false);
   };
   const attachUpload = async (f: File) => {
@@ -487,7 +498,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       let url = '';
       try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
       if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
-      ctx.editField(card.id, { links: [...(card.links || []), { label: f.name, url }] });
+      appendLink(f.name, url);
       setAttaching(false);
     } catch { alert('Could not attach the file.'); }
     setAttachBusy(false);
@@ -551,6 +562,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const saveTitle = () => { ctx.editField(card.id, { title: titleDraft.trim() || 'Untitled' }); setEditingTitle(false); };
   const saveSub = () => { ctx.editField(card.id, { text: subDraft.trim() }); setEditingSub(false); };
   const distort = async () => { setDistorting(true); try { await ctx.distortTitle(card); } finally { setDistorting(false); } };
+  const distortSub = async () => { setDistorting(true); try { await ctx.distortText(card); } finally { setDistorting(false); } };
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const editorRow = { display: 'inline-flex', gap: 6, marginLeft: 8, verticalAlign: 'middle', alignItems: 'center' } as const;
 
@@ -575,28 +587,34 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </span>
   )) : null;
 
-  // Pencil next to the subtitle (the card's description text).
+  // Pencil (+ palette) next to the DESCRIPTION (the card's subtitle text). The
+  // 🎨 AI-rewords it the same meaning, said differently; typed edits cap at 300.
   const afterSubtitle = ctx.canEdit ? (editingSub ? (
     <span style={editorRow} onClick={stop}>
-      <input autoFocus value={subDraft} placeholder="Subtitle" onChange={(e) => setSubDraft(e.target.value)}
+      <input autoFocus value={subDraft} placeholder="Description" maxLength={300} onChange={(e) => setSubDraft(e.target.value.slice(0, 300))}
         onKeyDown={(e) => { if (e.key === 'Enter') saveSub(); if (e.key === 'Escape') setEditingSub(false); }}
         style={{ fontSize: 13, minWidth: 120 }} onClick={stop} />
       <button className="btn small green" onClick={saveSub}>Save</button>
       <button className="btn small ghost" onClick={() => setEditingSub(false)}>✕</button>
     </span>
   ) : (
-    <button type="button" title="Edit subtitle" style={{ ...iconBtn, marginLeft: 6, verticalAlign: 'middle' }} onClick={openSub}>✎</button>
+    <span style={{ display: 'inline-flex', gap: 6, marginLeft: 6, verticalAlign: 'middle' }}>
+      <button type="button" title="Edit description" style={iconBtn} onClick={openSub}>✎</button>
+      <button type="button" title="Rewrite the description with AI" disabled={distorting} style={{ ...iconBtn, opacity: distorting ? 0.4 : 1 }} onClick={distortSub}>🎨</button>
+    </span>
   )) : null;
 
   const actions = (
     <>
-      {links.map((l, i) => <a key={i} className="btn small blue" href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>🔗 {l.label || 'Open'}</a>)}
+      {links.map((l, i) => <a key={i} className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>🔗 {cap15(l.label || 'Open')}</a>)}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>}
-      {ctx.canEdit && <button type="button" title="Add a file/link card inside" style={iconBtn} onClick={() => { ctx.addAttachCard(card.id); setExpanded(true); }}>📁</button>}
-      {ctx.canEdit && <button type="button" title="Attach a file or link to this card" style={{ ...iconBtn, opacity: attaching ? 1 : 0.85 }} onClick={() => setAttaching((a) => !a)}>📎</button>}
+      {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>➕</button>}
+      {/* 📎 clip → blue attachment button · 📁 folder → green attachment button. */}
+      {ctx.canEdit && <button type="button" title="Attach a file or link (blue button)" style={{ ...iconBtn, opacity: attaching && attachColor === 'blue' ? 1 : 0.85 }} onClick={() => toggleAttach('blue')}>📎</button>}
+      {ctx.canEdit && <button type="button" title="Attach a file or link (green button)" style={{ ...iconBtn, opacity: attaching && attachColor === 'green' ? 1 : 0.85 }} onClick={() => toggleAttach('green')}>📁</button>}
       {/* 👁 hide from normal viewers — always last. Owner/admin still see it (greyed). */}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
     </>
@@ -618,15 +636,15 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       actions={actions} del={del} />
   );
 
-  // The 📎 clip's inline editor: type a link (label + URL) or upload a file. Both
-  // append to the card's links, which show as the 🔗 buttons.
+  // The clip/folder inline editor: type a link (label + URL) or upload a file.
+  // Both append to the card's links (shown as 🔗 buttons) in the chosen colour.
   const attachForm = ctx.canEdit && attaching ? (
     <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>📎 Attach a file or add a link</div>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁' : '📎'} Attach a file or add a link — makes a <span style={{ color: attachColor === 'green' ? '#1f8b4c' : '#2f6fdb' }}>{attachColor}</span> button</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input value={linkLabel} placeholder="Label" onChange={(e) => setLinkLabel(e.target.value)} style={{ flex: '1 1 90px', fontSize: 13 }} />
+        <input value={linkLabel} placeholder="Label (max 15)" maxLength={15} onChange={(e) => setLinkLabel(e.target.value.slice(0, 15))} style={{ flex: '1 1 90px', fontSize: 13 }} />
         <input value={linkUrl} placeholder="https://…" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '2 1 150px', fontSize: 13 }} />
-        <button className="btn small green" onClick={addLink}>Add link</button>
+        <button className={`btn small ${attachColor}`} onClick={addLink}>Add link</button>
         <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file">
           {attachBusy ? 'Uploading…' : '📎 Upload file'}
           <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
@@ -725,9 +743,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // The gear adds a nested card seeded with a generic title AND subtitle, so its
   // ✎ pencils have something to edit right away.
   const addSubcard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
+  // ➕ add a sibling card at the SAME level as this card (a new top-level card when
+  // used on a top card, a new nested sibling when used on a nested card).
+  const addSibling = (id: string) => saveCards(addSiblingAfter(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
   // The 📁 file icon adds a nested card meant for a file or link: generic title +
   // description, ready for the 📎 clip.
-  const addAttachCard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), title: 'New attachment', text: 'Describe this file or link' }));
   // Set/replace the card icon: an uploaded/AI image OR a number emoji (mutually
   // exclusive — the 🔢 button clears the image, an upload clears the emoji).
   const setIcon = (id: string, patch: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...patch })));
@@ -742,8 +762,17 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
       else if (r?.error) alert(r.error);
     } catch { alert('Could not reach the AI.'); }
   };
+  // AI-reword (or generate) the description — same wording, said differently.
+  // Capped to 300 chars to match the typed limit.
+  const distortText = async (card: RepoCard) => {
+    try {
+      const r = await API.post('/api/tools/repo/ai', { slug, op: 'field', field: 'text', current: card.text || '', instruction: 'Keep it under 300 characters.', context });
+      if (r?.text) await saveCards(mapTree(cards, card.id, (c) => ({ ...c, text: String(r.text).slice(0, 300) })));
+      else if (r?.error) alert(r.error);
+    } catch { alert('Could not reach the AI.'); }
+  };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, addSubcard, addAttachCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).

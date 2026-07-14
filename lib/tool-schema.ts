@@ -98,6 +98,7 @@ export interface AppSpec {
 export interface RepoLink {
   label: string;
   url: string;
+  color?: 'blue' | 'green';   // button colour: clip 📎 adds blue, folder 📁 adds green
 }
 
 export interface RepoCard {
@@ -192,10 +193,14 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   const title = String(c.title || '').slice(0, 160);
   const subtitle = String(c.subtitle || '').slice(0, 200);
   const text = String(c.text || '').slice(0, 4000);
-  const links: RepoLink[] = (Array.isArray(c.links) ? c.links : []).slice(0, 12).map((l: any) => ({
-    label: String(l?.label || l?.text || 'Open link').slice(0, 80),
-    url: String(l?.url || l?.href || '').slice(0, 800),
-  })).filter((l: RepoLink) => /^https?:\/\//i.test(l.url) || l.url.startsWith('/'));
+  const links: RepoLink[] = (Array.isArray(c.links) ? c.links : []).slice(0, 12).map((l: any) => {
+    const link: RepoLink = {
+      label: String(l?.label || l?.text || 'Open link').slice(0, 80),
+      url: String(l?.url || l?.href || '').slice(0, 800),
+    };
+    if (l?.color === 'green') link.color = 'green';
+    return link;
+  }).filter((l: RepoLink) => /^https?:\/\//i.test(l.url) || l.url.startsWith('/'));
   const children: RepoCard[] = (Array.isArray(c.children) ? c.children : [])
     .slice(0, 40).map((k: any) => cleanRepoCard(k, depth + 1)).filter(Boolean) as RepoCard[];
   // Keep a stable id so per-user completion toggles survive re-saves.
