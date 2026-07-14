@@ -20,7 +20,7 @@ import { RichText } from '@/components/tools/RichText';
 import { ImageField } from '@/components/tools/ImageField';
 import { isRenderableImage } from '@/lib/img';
 import { buildRepoZip } from '@/lib/lesson-export';
-import { Collection } from '@/components/ui/Collection';
+import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell } from '@/components/ui/CardShell';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
@@ -602,8 +602,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           <p style={{ margin: 0 }}>This repository is empty.{canEdit ? ' Tap ✎ Edit to add your first card.' : ''}</p>
         </div>
       ) : isCollection ? (
-        /* A collection: gallery-style filter toolbar over VERTICAL cards (no grid). */
-        <Collection
+        /* A collection: the shared titled + banner'd + filterable gallery block. */
+        <GallerySection
+          titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"
+          bannerKey="collectionBanner" bannerDefault="🗂️ Your saved cards — search by name, favorite them (★ / liked by admin / OP), switch grid ▦ or rows ☰ (the owner can 🔒 lock the layout), and page through. Tap a card to open its attachment."
           items={cards}
           id={(c: RepoCard) => c.id}
           searchText={(c: RepoCard) => `${c.title || ''} ${c.subtitle || ''} ${c.text || ''}`}
@@ -611,6 +613,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           viewLocked={!!repo.displayLocked}
           canLockView={canEdit}
           onViewLockChange={saveDisplayLock}
+          onRefresh={loadEntries}
+          showCollapse
           storageKey={`sl_repo_view_${slug}`}
           gridMinPx={260}
           perPage={8}

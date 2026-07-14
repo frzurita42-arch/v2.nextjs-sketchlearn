@@ -9,16 +9,16 @@ export const runtime = 'nodejs';
 
 // Which page-copy keys admins may edit (allow-list keeps this from becoming a
 // free-form store). Values are short strings.
-const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle',
+const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle', 'collectionShelfTitle',
   // Section how-to banners (longer text).
-  'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner',
+  'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner',
   // Home-page section visibility ('1' = collapsed/hidden for regular users). The
   // admin's 👁 toggle writes these, so the home layout differs per admin choice.
   'galleryCollapsed', 'toolsCollapsed', 'adminToolsCollapsed',
   // Donation prompt copy (admin-editable, like the section titles). The wallet
   // address + 👁 collapse are per-tool (owner/admin) via /api/tools/donation.
   'donateNudge', 'donateNote'];
-const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner']);
+const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner']);
 
 // GET /api/site-settings -> the editable page copy (any signed-in viewer reads it).
 export async function GET(req: Request) {

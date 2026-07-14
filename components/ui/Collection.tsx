@@ -109,8 +109,10 @@ export function Collection<T>({
   const [view, setView] = useState<'grid' | 'row'>(defaultView);
   const [locked, setLocked] = useState(!!viewLocked);
   useEffect(() => { setLocked(!!viewLocked); }, [viewLocked]);
-  // When locked, everyone sees the owner's chosen (default) view.
-  useEffect(() => { if (locked) setView(defaultView); }, [locked, defaultView]);
+  // Only a SERVER-confirmed lock snaps everyone onto the saved view. (Keying this
+  // on the local `locked` used a stale defaultView, so locking on grid flipped the
+  // display back to the old default even though grid is what got saved.)
+  useEffect(() => { if (viewLocked) setView(defaultView); }, [viewLocked, defaultView]);
   const [page, setPage] = useState(0);
   useEffect(() => {
     if (locked || !storageKey) return;

@@ -7,12 +7,12 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
-import { Collection, type FilterKey } from '@/components/ui/Collection';
+import { type FilterKey } from '@/components/ui/Collection';
+import { GallerySection } from '@/components/ui/GallerySection';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { AdminToolsCarousel } from '@/components/tools/AdminToolsCarousel';
 import { Carousel } from '@/components/ui/Carousel';
 import { InstructionPlank } from '@/components/activities/InstructionPlank';
-import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -104,8 +104,6 @@ export function ToolsView() {
 
   // Admin-editable page copy (heading + subtitle), saved for everyone.
   const isAdmin = app.user?.role === 'admin';
-  // The gallery's section header (editable + AI-distort), persisted for everyone.
-  const galleryHdr = useShelfTitle('galleryShelfTitle', '🖼️ Gallery');
   const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string }>({});
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
@@ -283,9 +281,10 @@ export function ToolsView() {
             {!galleryCollapsed && <div style={{ height: 16 }} />}
             {/* Same shared container as the History feed: small space → title (+
                 buttons) → banner → filter → items. */}
-            <Collection
-              {...galleryHdr} onRefresh={reloadTools}
-              banner={<InstructionPlank settingKey="galleryBanner" defaultText="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool." />}
+            <GallerySection
+              titleKey="galleryShelfTitle" titleFallback="🖼️ Gallery"
+              bannerKey="galleryBanner" bannerDefault="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool."
+              onRefresh={reloadTools}
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
               items={catItems}

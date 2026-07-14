@@ -19,11 +19,10 @@ import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad'
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 import { buildLessonZip } from '@/lib/lesson-export';
-import { Collection, type FilterKey } from '@/components/ui/Collection';
+import { type FilterKey } from '@/components/ui/Collection';
+import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 import { DonationPrompt } from '@/components/tools/DonationPrompt';
-import { InstructionPlank } from '@/components/activities/InstructionPlank';
-import { useShelfTitle } from '@/components/tools/useShelfTitle';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -662,8 +661,6 @@ function AnswerKey({ q }: { q: Q }) {
 
 export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: string; canEdit?: boolean }) {
   const lesson = def?.lesson || {};
-  // The History section header (editable + AI-distort), persisted for everyone.
-  const historyHdr = useShelfTitle('historyShelfTitle', '📖 History');
   // Conversation / journal modes are a growing canvas thread, not a slide deck.
   if (lesson.mode === 'conversation' || lesson.mode === 'journal') {
     return <CanvasConversation def={def} slug={slug} />;
@@ -1218,9 +1215,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             gallery: small space → title (+ buttons) → banner → filter → items.
             Only the title and the banner/handlers differ. (No topic filter — every
             rendition here is the same tool's topic.) */}
-        <Collection
-          {...historyHdr} onRefresh={loadActivities}
-          banner={<InstructionPlank settingKey="historyBanner" defaultText="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order." />}
+        <GallerySection
+          titleKey="historyShelfTitle" titleFallback="📖 History"
+          bannerKey="historyBanner" bannerDefault="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order."
+          onRefresh={loadActivities}
           showCollapse
           items={feedItems}
           id={(e: any) => e.id}
