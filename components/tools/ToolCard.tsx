@@ -97,7 +97,15 @@ export function ToolCard(p: ToolCardProps) {
       meta={(() => {
         let when = '';
         if (t.createdAt) { const d = new Date(t.createdAt); if (!isNaN(d.getTime())) try { when = d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }); } catch { when = d.toLocaleString(); } }
-        return <span style={{ fontSize: 11, opacity: 0.6 }}>@{t.owner}{when ? ` · ${when}` : ''} · {t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>;
+        // Two lines (author+date / visibility+AI) so this stays narrow and the
+        // action buttons keep their place on the row instead of wrapping below
+        // and making the card taller.
+        return (
+          <span style={{ fontSize: 11, opacity: 0.6, display: 'flex', flexDirection: 'column', lineHeight: 1.35, minWidth: 0 }}>
+            <span>@{t.owner}{when ? ` · ${when}` : ''}</span>
+            <span>{t.visibility}{t.aiGenerated ? ' · ✦AI' : ''}</span>
+          </span>
+        );
       })()}
       del={<>{history}{replay}{del}</>}
       actions={p.hideOpen ? null : <button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}

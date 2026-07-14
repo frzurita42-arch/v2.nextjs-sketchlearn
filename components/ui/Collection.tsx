@@ -253,8 +253,11 @@ export function Collection<T>({
         <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyFiltered}</p>
       ) : (
         <div style={view === 'grid'
-          ? { ...wrap, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinPx}px, 1fr))`, gap: 14 }
-          : { ...wrap, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
+          // alignItems:start keeps each card at its own content height — without it
+          // CSS grid stretches every card in a row to the tallest one, so a few
+          // cards look "longer" than a full grid of them.
+          ? { ...wrap, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinPx}px, 1fr))`, gap: 14, alignItems: 'start' }
+          : { ...wrap, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10, alignItems: 'start' }}>
           {shown.map((t) => <div key={id(t)} style={{ minWidth: 0 }}>{view === 'grid' ? renderGrid(t, viewApi) : renderRow(t, viewApi)}</div>)}
         </div>
       )}

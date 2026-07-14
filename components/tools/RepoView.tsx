@@ -516,7 +516,20 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [showImg, setShowImg] = useState(false);       // 🖼️ image popup open
   const [showPoster, setShowPoster] = useState(false); // 📎 emoji revealed the Poster button
   const [showUser, setShowUser] = useState(false);     // 📁 emoji revealed the User button
+  const [copied, setCopied] = useState(false);         // 📋 copy title+description feedback
   const editing = editingTitle || editingSub;
+
+  // Copy this card's title + description to the clipboard (everyone can use it).
+  const copyCard = async () => {
+    const text = `${card.title || 'Untitled'}${card.text ? `\n${card.text}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch { /* ignore */ } ta.remove();
+    }
+    setCopied(true); setTimeout(() => setCopied(false), 1200);
+  };
 
   // PREVIEW mode for a normal viewer: only the name + description, greyed and
   // fully unclickable — nothing else (no image, attachments, actions or nesting).
@@ -650,7 +663,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       <button className="btn small ghost" disabled={imgBusy} onClick={eat(uploadImage)}>📎 Upload</button>
     </span>
   ) : undefined;
-  const openLink = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
+  // Open a URL in a real foreground new tab. Passing a features string (e.g.
+  // 'noopener') makes browsers open a background POPUP window instead — the cause
+  // of "a window appears but you stay on the page" — so pass NO features and null
+  // the opener for the same security.
+  const openInNewTab = (url: string) => { try { const w = window.open(url, '_blank'); if (w) { try { w.opener = null; } catch { /* ignore */ } try { w.focus(); } catch { /* ignore */ } } } catch { /* ignore */ } };
+  const openLink = links[0]?.url ? () => openInNewTab(links[0].url) : undefined;
   // In GRID view a card shows only itself; clicking a card that has nested cards
   // flips the whole section to the horizontal (rows) view so the tree is visible.
   // Elsewhere a click opens the card's first attachment.
@@ -718,7 +736,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const canRemoveLink = (l: RepoLink) => l.color === 'green' && l.by !== ctx.me && ctx.isAdmin;
   const linkBtn = ({ l, i }: { l: RepoLink; i: number }) => (
     <span key={l.url + i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-      <a className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}
+      <a className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none' }}
         title={`${l.color === 'green' ? 'User' : 'Poster'}${l.by ? `: ${l.by}` : ''}${l.label ? ` — ${l.label}` : ''}`}>🔗 {l.color === 'green' ? 'User' : 'Poster'}</a>
       {canRemoveLink(l) && <button type="button" title="Remove this user's upload (admin)" onClick={eat(() => removeLinkAt(i))}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1, opacity: 0.6 }}>✕</button>}
@@ -749,9 +767,15 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
   );
+  // 📋 copy the card's title + description — available to every viewer.
+  const copyBtn = (
+    <button type="button" onClick={eat(copyCard)} title={copied ? 'Copied!' : 'Copy title & description'}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 15, lineHeight: 1, opacity: copied ? 1 : 0.7 }}>{copied ? '✅' : '📋'}</button>
+  );
   const iconGrid = (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 6, justifyItems: 'center', alignItems: 'center', flex: '0 0 auto' }}>
       {favBtn}
+      {copyBtn}
       {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
       {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>}
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>}
