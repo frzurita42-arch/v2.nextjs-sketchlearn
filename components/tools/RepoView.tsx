@@ -35,6 +35,7 @@ type ViewCtx = {
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
   distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
   addSubcard: (id: string) => void;                                // ⚙️ add a card inside
+  addAttachCard: (id: string) => void;                             // 📁 add a file/link card inside
   deleteCard: (id: string) => void;                                // 🗑 delete
 };
 
@@ -443,7 +444,32 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
   const [subDraft, setSubDraft] = useState(card.text || '');
   const [distorting, setDistorting] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
+  const [attaching, setAttaching] = useState(false);
+  const [linkLabel, setLinkLabel] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [attachBusy, setAttachBusy] = useState(false);
   const editing = editingTitle || editingSub;
+
+  // ---- attachments: the 📎 clip adds a link or an uploaded file to THIS card
+  // (they render as the 🔗 buttons). The 📁 file icon spawns a new card inside
+  // ready to hold a file/link.
+  const addLink = () => {
+    const url = linkUrl.trim(); if (!url) return;
+    ctx.editField(card.id, { links: [...(card.links || []), { label: linkLabel.trim() || 'Link', url }] });
+    setLinkLabel(''); setLinkUrl(''); setAttaching(false);
+  };
+  const attachUpload = async (f: File) => {
+    if (f.size > 25_000_000) { alert('Please pick a file under 25 MB.'); return; }
+    setAttachBusy(true);
+    try {
+      let url = '';
+      try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
+      if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
+      ctx.editField(card.id, { links: [...(card.links || []), { label: f.name, url }] });
+      setAttaching(false);
+    } catch { alert('Could not attach the file.'); }
+    setAttachBusy(false);
+  };
 
   // ---- picture controls (same feature as the tool gallery): AI-generate,
   // custom prompt / distort with a palette, or upload — right in the card's image.
@@ -543,6 +569,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
       <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>}
+      {ctx.canEdit && <button type="button" title="Add a file/link card inside" style={iconBtn} onClick={() => { ctx.addAttachCard(card.id); setExpanded(true); }}>📁</button>}
+      {ctx.canEdit && <button type="button" title="Attach a file or link to this card" style={{ ...iconBtn, opacity: attaching ? 1 : 0.85 }} onClick={() => setAttaching((a) => !a)}>📎</button>}
     </>
   );
   const del = ctx.canEdit ? (
@@ -561,16 +589,36 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
       actions={actions} del={del} />
   );
 
+  // The 📎 clip's inline editor: type a link (label + URL) or upload a file. Both
+  // append to the card's links, which show as the 🔗 buttons.
+  const attachForm = ctx.canEdit && attaching ? (
+    <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>📎 Attach a file or add a link</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={linkLabel} placeholder="Label" onChange={(e) => setLinkLabel(e.target.value)} style={{ flex: '1 1 90px', fontSize: 13 }} />
+        <input value={linkUrl} placeholder="https://…" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '2 1 150px', fontSize: 13 }} />
+        <button className="btn small green" onClick={addLink}>Add link</button>
+        <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file">
+          {attachBusy ? 'Uploading…' : '📎 Upload file'}
+          <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
+        </label>
+        <button className="btn small ghost" onClick={() => setAttaching(false)}>✕</button>
+      </div>
+    </div>
+  ) : null;
+
+  const body = <>{shell}{attachForm}</>;
+
   // GRID view: a card is shown ALONE — no nested cards beneath it. (Clicking a
   // card with children flips to the rows view, above, to reveal the tree.) Only
   // the ROWS view draws the nested preview + collapse/expand.
-  if (view === 'grid' || !kids.length) return <div>{shell}</div>;
+  if (view === 'grid' || !kids.length) return <div>{body}</div>;
   // Preview: show just the first nested card; the rest collapse/expand in place.
   const shown = expanded ? kids : kids.slice(0, 1);
   const more = kids.length - 1;
   return (
     <div>
-      {shell}
+      {body}
       <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
         {shown.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} />)}
         {more > 0 && (
@@ -647,6 +695,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // The gear adds a nested card seeded with a generic title AND subtitle, so its
   // ✎ pencils have something to edit right away.
   const addSubcard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
+  // The 📁 file icon adds a nested card meant for a file or link: generic title +
+  // description, ready for the 📎 clip.
+  const addAttachCard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), title: 'New attachment', text: 'Describe this file or link' }));
   const deleteCard = (id: string) => { if (!confirm('Delete this card and everything inside it?')) return; saveCards(removeFromTree(cards, id)); };
   const distortTitle = async (card: RepoCard) => {
     try {
@@ -656,7 +707,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, addSubcard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, addSubcard, addAttachCard, deleteCard };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
