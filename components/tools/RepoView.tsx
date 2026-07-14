@@ -40,6 +40,7 @@ type ViewCtx = {
   distortText: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the description
   addSubcard: (id: string) => void;                                // ⚙️ add a card inside
   addSibling: (id: string) => void;                                // ➕ add a card at this level
+  moveCard: (id: string, delta: number) => void;                   // ▲ / ▼ reorder within its level
   setIcon: (id: string, patch: Partial<RepoCard>) => void;         // set/clear image & emoji icon
   numberCard: (id: string) => void;                                // 🔢 icon = this card's number
   deleteCard: (id: string) => void;                                // 🗑 delete
@@ -789,6 +790,14 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {ctx.canEdit && <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>}
     </div>
   );
+  // ▲ / ▼ reorder this card within its own level (swap with the sibling above /
+  // below). Owner/admin only. A vertical pair, sitting to the side of the card.
+  const moveBtns = ctx.canEdit ? (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1, flex: '0 0 auto', lineHeight: 1 }} onClick={stop}>
+      <button type="button" title="Move this card up (within its level)" style={{ ...iconBtn, fontSize: 12, padding: 0 }} onClick={() => ctx.moveCard(card.id, -1)}>▲</button>
+      <button type="button" title="Move this card down (within its level)" style={{ ...iconBtn, fontSize: 12, padding: 0 }} onClick={() => ctx.moveCard(card.id, 1)}>▼</button>
+    </span>
+  ) : null;
   // Collapse toggle — hides this card's nested cards (the card itself stays). Only
   // meaningful in rows view where the tree is drawn; available to every viewer.
   const collapseBtn = (view === 'row' && kids.length > 0) ? (
@@ -834,6 +843,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   ) : null;
   const actions = (
     <>
+      {moveBtns}
       {linkColumn}
       {roleButtons}
       {imageButtons}
@@ -982,6 +992,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // ⚙️ add a sibling card at the SAME level, appended to the BOTTOM of that level
   // (a new top-level card from a top card, a new nested sibling from a nested one).
   const addSibling = (id: string) => saveCards(addSiblingEnd(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
+  // ▲ / ▼ reorder a card among its siblings (delta -1 = up, +1 = down).
+  const moveCard = (id: string, delta: number) => saveCards(moveInTree(cards, id, delta));
   // The 📁 file icon adds a nested card meant for a file or link: generic title +
   // description, ready for the 📎 clip.
   // Set/replace the card icon: an uploaded/AI image OR a number emoji (mutually
@@ -1008,7 +1020,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
