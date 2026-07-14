@@ -35,6 +35,7 @@ export interface CollectionProps<T> {
   canSaveFilter?: boolean;
   onSaveFilter?: (f: FilterKey) => void;
   defaultView?: 'grid' | 'row';
+  lockView?: 'grid' | 'row';               // force this view and hide the grid/row toggle
   gridMinPx?: number;                      // grid card min width (default 240)
   extra?: ReactNode;                       // section-specific control (e.g. a category select)
   emptyAll?: string;                       // message when there are no items at all
@@ -77,7 +78,7 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 export function Collection<T>({
   items, id, searchText, time, renderGrid, renderRow,
   favs, likedByAdmin, likedByOwner, perPage, storageKey, sortPrefKey,
-  defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid', gridMinPx = 240,
+  defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid', lockView, gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
@@ -102,12 +103,12 @@ export function Collection<T>({
   const [sortMode, setSortMode] = useState<'newest' | 'oldest'>('newest');   // default
   // A random-order seed set by Refresh; overrides the sort until a sort is picked.
   const [shuffle, setShuffle] = useState<number | null>(null);
-  const [view, setView] = useState<'grid' | 'row'>(defaultView);
+  const [view, setView] = useState<'grid' | 'row'>(lockView || defaultView);
   const [page, setPage] = useState(0);
   useEffect(() => {
-    if (!storageKey) return;
+    if (lockView || !storageKey) return;
     try { const v = localStorage.getItem(storageKey); if (v === 'grid' || v === 'row') setView(v); } catch { /* ignore */ }
-  }, [storageKey]);
+  }, [storageKey, lockView]);
   const setViewP = (v: 'grid' | 'row') => { setView(v); if (storageKey) { try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } } };
 
   // Per-user saved sort order (DB) for pages that opt in with sortPrefKey.
@@ -221,10 +222,12 @@ export function Collection<T>({
         {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Liked by admin</button>}
         {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
         {time && <button className="btn small" onClick={cycleSort} title="Sort: newest ↔ oldest">{sortMode === 'newest' ? '↓ Newest' : '↑ Oldest'}</button>}
-        <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
-          <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setViewP('grid')}>▦</button>
-          <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setViewP('row')}>☰</button>
-        </div>
+        {!lockView && (
+          <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
+            <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setViewP('grid')}>▦</button>
+            <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setViewP('row')}>☰</button>
+          </div>
+        )}
       </div>
       <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>
         {filtered.length} item{filtered.length === 1 ? '' : 's'}

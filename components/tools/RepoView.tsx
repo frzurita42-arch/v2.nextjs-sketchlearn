@@ -20,6 +20,7 @@ import { RichText } from '@/components/tools/RichText';
 import { ImageField } from '@/components/tools/ImageField';
 import { isRenderableImage } from '@/lib/img';
 import { buildRepoZip } from '@/lib/lesson-export';
+import { Collection } from '@/components/ui/Collection';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -404,6 +405,8 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
   // each card carries its own "Children as" layout (bars/grid) that cascades to
   // everything inside it, and the repo-wide default lives on the page's Settings.
   const display: 'bars' | 'grid' = repo.display === 'grid' ? 'grid' : 'bars';
+  // Studio "collections" show a gallery-style filter toolbar over vertical cards.
+  const isCollection = (def?.tags || []).includes('collection');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState('');
@@ -520,6 +523,21 @@ export function RepoView({ def, slug, canEdit }: { def: any; slug: string; canEd
         <div className="card alt" style={{ padding: '16px' }}>
           <p style={{ margin: 0 }}>This repository is empty.{canEdit ? ' Tap ✎ Edit to add your first card.' : ''}</p>
         </div>
+      ) : isCollection ? (
+        /* A collection: gallery-style filter toolbar over VERTICAL cards (no grid). */
+        <Collection
+          items={cards}
+          id={(c: RepoCard) => c.id}
+          searchText={(c: RepoCard) => `${c.title || ''} ${c.subtitle || ''} ${c.text || ''}`}
+          lockView="row"
+          perPage={8}
+          maxWidth={900}
+          searchPlaceholder="🔍 search cards"
+          renderGrid={(c: RepoCard) => <CardView card={c} depth={0} defaultDisplay="bars" ctx={ctx} />}
+          renderRow={(c: RepoCard) => <CardView card={c} depth={0} defaultDisplay="bars" ctx={ctx} />}
+          emptyAll="This collection is empty."
+          emptyFiltered="No cards match your search."
+        />
       ) : (
         <div style={display === 'grid'
           ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }

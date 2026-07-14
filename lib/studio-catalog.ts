@@ -280,13 +280,14 @@ export function assembleDefinition(cfg: StudioConfig): any {
       };
     };
     const cards = (cfg.cards || []).filter((c) => (c.name || c.link || c.description || (c.children || []).length)).map(toRepoCard);
-    const layout: 'course' | 'post' = cfg.display === 'list' ? 'post' : 'course';
     return {
       version: 1, archetype: 'repo', title: `Collection — ${title}`.slice(0, 70),
       description: context || `A layered collection of links & resources: ${cfg.subject || title}`,
       tags: ['collection', 'repository', 'studio'], settings: [],
+      // Collections always stack vertically (bars) — no grid — and the page shows a
+      // gallery-style filter toolbar over the cards.
       repo: {
-        layout, display: cfg.display === 'list' ? 'bars' : 'grid',
+        layout: 'post', display: 'bars',
         cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },
     };

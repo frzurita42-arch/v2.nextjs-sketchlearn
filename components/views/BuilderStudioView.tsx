@@ -70,7 +70,6 @@ export function BuilderStudioView() {
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [tone, setTone] = useState('Friendly');
-  const [display, setDisplay] = useState<'cards' | 'list' | 'table'>('cards');
   const [pages, setPages] = useState<StudioPage[]>([newPage()]);
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
@@ -108,7 +107,7 @@ export function BuilderStudioView() {
 
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, context, display, cards: repoCards };
+    : { artifact, title, subject, context, cards: repoCards };
 
   const generate = async () => {
     if (busy) return;
@@ -235,8 +234,7 @@ export function BuilderStudioView() {
               <label className="field"><span>Title</span><input type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} /></label>
               <label className="field"><span>{artifact === 'presentation' ? 'Subject / topic' : 'Collection name'}</span><input type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. My sketchbook'} onChange={(e) => setSubject(e.target.value)} /></label>
               {artifact === 'presentation'
-                ? <label className="field"><span>Tone</span><input type="text" value={tone} onChange={(e) => setTone(e.target.value)} /></label>
-                : <label className="field"><span>Repository type</span><select value={display} onChange={(e) => setDisplay(e.target.value as any)}><option value="cards">Card grid</option><option value="list">List (rows)</option></select></label>}
+                && <label className="field"><span>Tone</span><input type="text" value={tone} onChange={(e) => setTone(e.target.value)} /></label>}
             </div>
           </div>
 
