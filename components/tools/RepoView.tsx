@@ -964,34 +964,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
   return (
     <div>
-      {/* Offline export — available to every viewer unless the owner turned it off. */}
-      {offlineOn && !editing && cards.length > 0 && (
-        <div style={{ textAlign: 'right', marginBottom: 8 }}>
-          <button className="btn small ghost" disabled={zipBusy} onClick={downloadZip}>{zipBusy ? 'Zipping…' : '⬇ Offline copy (.zip)'}</button>
-        </div>
-      )}
-
-      {/* Owner/admin edit bar */}
-      {canEdit && (
-        <div className="card alt" style={{ padding: '8px 12px', marginBottom: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button className={`btn small ${editing ? 'green' : 'blue'}`} onClick={() => setEditing((e) => !e)}>{editing ? '✓ Done editing' : '✎ Edit'}</button>
-          {editing && <button className="btn small green" disabled={saving} onClick={save}>{saving ? 'Saving…' : '💾 Save'}</button>}
-          {editing && <span style={{ fontSize: 11, opacity: 0.6 }}>Each card&apos;s “Children as” controls bars vs grid for what&apos;s inside it.</span>}
-          {saved && <span style={{ fontSize: 12, opacity: 0.75 }}>{saved}</span>}
-        </div>
-      )}
-
-      {/* AI layout chat (edit mode) */}
-      {canEdit && editing && (
-        <div className="card" style={{ padding: '8px 12px', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>🤖 ASK AI TO LAY IT OUT</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <input value={aiInstr} placeholder="e.g. Make a 4-week Python course with units and activity links"
-              onChange={(e) => setAiInstr(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') aiLayout(); }} style={{ flex: '1 1 220px', fontSize: 13 }} />
-            <button className="btn small green" disabled={aiBusy} onClick={aiLayout}>{aiBusy ? 'Thinking…' : 'Generate layout'}</button>
-          </div>
-        </div>
-      )}
 
       {/* Body */}
       {editing ? (

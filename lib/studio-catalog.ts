@@ -287,7 +287,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       // Collections always stack vertically (bars) — no grid — and the page shows a
       // gallery-style filter toolbar over the cards.
       repo: {
-        layout: 'post', display: 'bars',
+        layout: 'post', display: 'bars', offlineExport: false,   // no offline-copy button
         cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },
     };
@@ -362,6 +362,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       paragraphsPerSlide: pages[0]?.paragraphsPerSlide || 1, paragraphLength: pages[0]?.paragraphLength || 'medium',
       language: anyLang ? subject : undefined, translateTo: 'English',
       support: unionSupport, activityTypes: Array.from(unionActs.size ? unionActs : new Set(['mcq'])), style,
+      offlineExport: false,   // presentations don't expose the offline-copy button
       pages,
     },
   };
