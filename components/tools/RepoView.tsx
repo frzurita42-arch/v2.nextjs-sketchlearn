@@ -21,7 +21,7 @@ import { ImageField } from '@/components/tools/ImageField';
 import { isRenderableImage } from '@/lib/img';
 import { buildRepoZip } from '@/lib/lesson-export';
 import { GallerySection } from '@/components/ui/GallerySection';
-import { CardShell } from '@/components/ui/CardShell';
+import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -30,6 +30,12 @@ type ViewCtx = {
   done: Record<string, boolean>; toggle: (id: string) => void;
   entriesByCard: Record<string, any[]>; onAdded: () => void;
   favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
+  // Owner/admin inline card controls on the collection cards (bare icons):
+  canEdit: boolean;
+  editTitle: (id: string, title: string) => void;                   // ✎ rename
+  distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite
+  addSubcard: (id: string) => void;                                // ⚙️ add a card inside
+  deleteCard: (id: string) => void;                                // 🗑 delete
 };
 
 function timeAgo(iso: string): string {
@@ -419,46 +425,77 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 
 // A collection card rendered through the SAME shared CardShell used by the home
 // gallery — adapted to a repo card: title, description, cover image, a favorite
-// ★, and the attachments as footer buttons. Nested cards show ONLY the first as a
-// preview (with a peeking "+N more" card), expandable — this preview behaviour is
-// exclusive to repo collection cards (not the tool gallery, posts, or homepage).
+// ★, and the attachments as footer buttons. Owner/admin get bare inline icons on
+// every card: ✎ rename, 🎨 AI-rewrite the title, ⚙️ add a card inside, 🗑 delete.
+// Nested cards show ONLY the first as a preview and can be collapsed/expanded to
+// reveal the rest — this preview behaviour is exclusive to repo collection cards
+// (not the tool gallery, posts, or homepage).
 function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx }) {
   const kids = card.children || [];
   const links = card.links || [];
   const isFav = !!ctx.favs[card.id];
   const [expanded, setExpanded] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(card.title || '');
+  const [distorting, setDistorting] = useState(false);
   const open = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
+
+  const saveTitle = () => { ctx.editTitle(card.id, titleDraft.trim() || 'Untitled'); setEditingTitle(false); };
+  const distort = async () => { setDistorting(true); try { await ctx.distortTitle(card); } finally { setDistorting(false); } };
+
+  // Owner/admin bare icons (no button box): rename · AI rewrite · add card inside.
+  const editIcons = ctx.canEdit ? (
+    <>
+      <button type="button" title="Edit title" style={iconBtn} onClick={() => { setTitleDraft(card.title || ''); setEditingTitle(true); }}>✎</button>
+      <button type="button" title="Rewrite the title with AI" disabled={distorting} style={{ ...iconBtn, opacity: distorting ? 0.4 : 1 }} onClick={distort}>🎨</button>
+      <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>
+    </>
+  ) : null;
+
   const actions = (
     <>
       {links.map((l, i) => <a key={i} className="btn small blue" href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>🔗 {l.label || 'Open'}</a>)}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
+      {editIcons}
     </>
   );
+  const del = ctx.canEdit ? (
+    <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>
+  ) : undefined;
+
   const shell = (
-    <CardShell view={view} title={card.title || 'Untitled'} subtitle={card.text || undefined}
-      thumbnail={isImg(card.image) ? card.image : null} onOpen={open} actions={actions} />
+    <>
+      {editingTitle && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+          <input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+            style={{ flex: 1, fontSize: 14 }} />
+          <button className="btn small green" onClick={saveTitle}>Save</button>
+          <button className="btn small ghost" onClick={() => setEditingTitle(false)}>✕</button>
+        </div>
+      )}
+      <CardShell view={view} title={card.title || 'Untitled'} subtitle={card.text || undefined}
+        thumbnail={isImg(card.image) ? card.image : null} onOpen={open} actions={actions} del={del} />
+    </>
   );
-  if (!kids.length) return shell;
-  // Preview: always show just the first nested card; the rest hide behind a peeking
-  // "+N more" stacked card that expands in place.
+
+  if (!kids.length) return <div>{shell}</div>;
+  // Preview: show just the first nested card; the rest collapse/expand in place.
   const shown = expanded ? kids : kids.slice(0, 1);
-  const hidden = kids.length - shown.length;
+  const more = kids.length - 1;
   return (
     <div>
       {shell}
       <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
         {shown.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} />)}
-        {hidden > 0 && (
-          // A shallow card peeking below to hint there are more inside.
-          <button onClick={() => setExpanded(true)} title={`Show ${hidden} more inside`}
-            style={{ display: 'block', width: '100%', textAlign: 'left', background: '#fff', border: '2px solid var(--ink)', borderRadius: 10, padding: '7px 12px', marginTop: -2, cursor: 'pointer', fontSize: 12, opacity: 0.75, boxShadow: '0 3px 0 -1px #fff, 0 3px 0 0 var(--ink)' }}>
-            ⋯ +{hidden} more {hidden === 1 ? 'card' : 'cards'} inside — click to expand
+        {more > 0 && (
+          <button type="button" onClick={() => setExpanded((e) => !e)}
+            title={expanded ? 'Collapse' : `Show ${more} more inside`}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textAlign: 'left', fontSize: 12, fontWeight: 700, opacity: 0.7, color: 'var(--ink)', justifySelf: 'start' }}>
+            {expanded ? '▾ Show less' : `▸ Show ${more} more ${more === 1 ? 'card' : 'cards'} inside`}
           </button>
-        )}
-        {expanded && kids.length > 1 && (
-          <button className="btn small ghost" style={{ justifySelf: 'start' }} onClick={() => setExpanded(false)}>▴ Show less</button>
         )}
       </div>
     </div>
@@ -514,7 +551,27 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { /* ignore */ }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav };
+  // Persist a new card tree (used by the inline card icons in collection view).
+  // Optimistically updates, then reconciles with the sanitized server copy.
+  const saveCards = async (next: RepoCard[]) => {
+    setCards(next);
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, cards: next } });
+      if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
+    } catch { /* keep the optimistic copy */ }
+  };
+  const editTitle = (id: string, title: string) => saveCards(mapTree(cards, id, (c) => ({ ...c, title })));
+  const addSubcard = (id: string) => saveCards(addChildTo(cards, id, blankCard('card')));
+  const deleteCard = (id: string) => { if (!confirm('Delete this card and everything inside it?')) return; saveCards(removeFromTree(cards, id)); };
+  const distortTitle = async (card: RepoCard) => {
+    try {
+      const r = await API.post('/api/tools/repo/ai', { slug, op: 'field', field: 'title', current: card.title || '', instruction: '', context });
+      if (r?.text) await saveCards(mapTree(cards, card.id, (c) => ({ ...c, title: r.text })));
+      else if (r?.error) alert(r.error);
+    } catch { alert('Could not reach the AI.'); }
+  };
+
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editTitle, distortTitle, addSubcard, deleteCard };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
