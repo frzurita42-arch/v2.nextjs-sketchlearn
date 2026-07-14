@@ -124,6 +124,7 @@ export interface RepoCard {
 export interface RepoSpec {
   layout?: 'course' | 'post';   // a hint for default styling
   display?: 'bars' | 'grid';    // default arrangement of cards (horizontal bars or a grid)
+  displayLocked?: boolean;      // owner/admin lock: when true viewers can't switch grid/rows
   offlineExport?: boolean;      // show the "download offline copy (.zip)" button (default on)
   cards: RepoCard[];
 }
@@ -239,7 +240,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
     const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
-    repo = { layout, display, offlineExport: r.offlineExport !== false, cards };
+    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);

@@ -295,7 +295,7 @@ export function ToolsView() {
               favs={favs}
               likedByAdmin={(t: any) => !!t.likedByAdmin}
               likedByOwner={(t: any) => !!t.likedByOwner}
-              perPage={9}
+              perPage={6}
               storageKey="sl_tools_view"
               sortPrefKey="gallery"
               defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(site.galleryFilter || '') ? site.galleryFilter : 'all') as FilterKey}

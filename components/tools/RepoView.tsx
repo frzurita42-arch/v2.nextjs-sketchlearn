@@ -467,6 +467,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
   const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav };
 
+  // Display lock: the owner/admin can lock the grid/rows view for a collection so
+  // everyone sees the same layout. Persisted on the repo (display + displayLocked).
+  const saveDisplayLock = async (lockedNext: boolean, viewSel: 'grid' | 'row') => {
+    const nextDisplay: 'bars' | 'grid' = viewSel === 'grid' ? 'grid' : 'bars';
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, cards } });
+      if (r?.repo && def) def.repo = r.repo;
+    } catch { /* ignore */ }
+  };
+
   // Offline export (owner/admin can toggle it off in Settings).
   const offlineOn = repo.offlineExport !== false;
   const [zipBusy, setZipBusy] = useState(false);
@@ -564,7 +574,12 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           items={cards}
           id={(c: RepoCard) => c.id}
           searchText={(c: RepoCard) => `${c.title || ''} ${c.subtitle || ''} ${c.text || ''}`}
-          lockView="row"
+          defaultView={display === 'grid' ? 'grid' : 'row'}
+          viewLocked={!!repo.displayLocked}
+          canLockView={canEdit}
+          onViewLockChange={saveDisplayLock}
+          storageKey={`sl_repo_view_${slug}`}
+          gridMinPx={260}
           perPage={8}
           maxWidth={900}
           searchPlaceholder="🔍 search cards"

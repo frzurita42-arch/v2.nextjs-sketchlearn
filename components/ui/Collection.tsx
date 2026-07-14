@@ -36,7 +36,12 @@ export interface CollectionProps<T> {
   canSaveFilter?: boolean;
   onSaveFilter?: (f: FilterKey) => void;
   defaultView?: 'grid' | 'row';
-  lockView?: 'grid' | 'row';               // force this view and hide the grid/row toggle
+  // A 🔒 lock beside the grid/rows toggle. `viewLocked` disables switching (viewers
+  // are stuck on the current view); only where `canLockView` is set (owner/admin)
+  // is the lock clickable, and toggling it calls `onViewLockChange(locked, view)`.
+  viewLocked?: boolean;
+  canLockView?: boolean;
+  onViewLockChange?: (locked: boolean, view: 'grid' | 'row') => void;
   gridMinPx?: number;                      // grid card min width (default 240)
   extra?: ReactNode;                       // section-specific control (e.g. a category select)
   emptyAll?: string;                       // message when there are no items at all
@@ -79,7 +84,8 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 export function Collection<T>({
   items, id, searchText, time, renderGrid, renderRow,
   favs, likedByAdmin, likedByOwner, perPage, storageKey, sortPrefKey,
-  defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid', lockView, gridMinPx = 240,
+  defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
+  viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
@@ -100,13 +106,18 @@ export function Collection<T>({
   const [sortMode, setSortMode] = useState<'newest' | 'oldest'>('newest');   // default
   // A random-order seed set by Refresh; overrides the sort until a sort is picked.
   const [shuffle, setShuffle] = useState<number | null>(null);
-  const [view, setView] = useState<'grid' | 'row'>(lockView || defaultView);
+  const [view, setView] = useState<'grid' | 'row'>(defaultView);
+  const [locked, setLocked] = useState(!!viewLocked);
+  useEffect(() => { setLocked(!!viewLocked); }, [viewLocked]);
+  // When locked, everyone sees the owner's chosen (default) view.
+  useEffect(() => { if (locked) setView(defaultView); }, [locked, defaultView]);
   const [page, setPage] = useState(0);
   useEffect(() => {
-    if (lockView || !storageKey) return;
+    if (locked || !storageKey) return;
     try { const v = localStorage.getItem(storageKey); if (v === 'grid' || v === 'row') setView(v); } catch { /* ignore */ }
-  }, [storageKey, lockView]);
-  const setViewP = (v: 'grid' | 'row') => { setView(v); if (storageKey) { try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } } };
+  }, [storageKey, locked]);
+  const setViewP = (v: 'grid' | 'row') => { if (locked) return; setView(v); if (storageKey) { try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } } };
+  const toggleLock = () => { const next = !locked; setLocked(next); onViewLockChange?.(next, view); };
 
   // Per-user saved sort order (DB) for pages that opt in with sortPrefKey.
   useEffect(() => {
@@ -198,12 +209,18 @@ export function Collection<T>({
         {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Liked by admin</button>}
         {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
         {time && <button className="btn small" onClick={cycleSort} title="Sort: newest ↔ oldest">{sortMode === 'newest' ? '↓ Newest' : '↑ Oldest'}</button>}
-        {/* Grid / rows toggle. When a view is locked (e.g. repos are rows-only) the
-            OTHER button still shows but is disabled — visibly not an option. */}
+        {/* Grid / rows toggle — both available. When the display is locked the
+            toggle is disabled (viewers stay on the owner's chosen view). */}
         <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
-          <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={lockView === 'row'} title={lockView === 'row' ? 'Grid — not available for this list' : 'Grid'} onClick={() => setViewP('grid')}>▦</button>
-          <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={lockView === 'grid'} title={lockView === 'grid' ? 'Rows — not available for this list' : 'Rows'} onClick={() => setViewP('row')}>☰</button>
+          <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Grid'} onClick={() => setViewP('grid')}>▦</button>
+          <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Rows'} onClick={() => setViewP('row')}>☰</button>
         </div>
+        {/* 🔒 lock — enable/disable switching the display. Owner/admin only. */}
+        {(canLockView || locked) && (
+          <button className="btn small ghost" disabled={!canLockView}
+            title={locked ? (canLockView ? 'Display locked — click to let viewers switch' : 'The display was locked by the owner') : 'Lock the display so viewers can’t switch (owner/admin)'}
+            onClick={toggleLock}>{locked ? '🔒' : '🔓'}</button>
+        )}
       </div>
       <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>
         {filtered.length} item{filtered.length === 1 ? '' : 's'}
