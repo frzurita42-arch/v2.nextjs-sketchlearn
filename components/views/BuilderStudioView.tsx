@@ -383,26 +383,15 @@ export function BuilderStudioView() {
                   <input type="file" accept=".pdf,.txt,.md,.csv,.doc,.docx,.rtf,text/*,application/pdf" style={{ display: 'none' }}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) onConsiderDoc(f); e.currentTarget.value = ''; }} />
                 </label>
-                {docName && <span style={{ fontSize: 12, opacity: 0.75 }}>📄 {docName} <button className="btn small ghost" style={{ padding: '0 6px' }} title="Remove document" onClick={clearDoc}>✕</button></span>}
-                <span style={{ fontSize: 11, opacity: 0.6 }}>A syllabus, program or notes — the AI reads it when you Suggest.</span>
-              </div>
-            )}
-            {artifact === 'repository' && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                 <button type="button" className={`btn small ${withLinks ? 'green' : 'ghost'}`} onClick={() => setWithLinks((v) => !v)}
                   title="When on, Suggest with AI also adds a reference link (website / image / Wikipedia) to each card's Poster button.">
                   🔗 Link suggestion: {withLinks ? 'On' : 'Off'}
                 </button>
-                <span style={{ fontSize: 11, opacity: 0.6 }}>Optional — the AI adds a relevant website / image / Wikipedia link to each card (as a Poster link).</span>
-              </div>
-            )}
-            {artifact === 'repository' && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                 <button type="button" className={`btn small ${suggestImages ? 'green' : 'ghost'}`} onClick={() => setSuggestImages((v) => !v)}
                   title="When on, each published card gets a 🖼️ button — the owner/admin can generate an AI picture of that item; it stays saved for everyone to view.">
                   🖼️ Suggest AI: {suggestImages ? 'On' : 'Off'}
                 </button>
-                <span style={{ fontSize: 11, opacity: 0.6 }}>Optional — adds a 🖼️ picture button to each card. Owner/admin generate an AI image of the item; it&apos;s saved for all viewers (💦 clears it). Toggle it later in the repo&apos;s ⚙️ settings.</span>
+                {docName && <span style={{ fontSize: 12, opacity: 0.75 }}>📄 {docName} <button className="btn small ghost" style={{ padding: '0 6px' }} title="Remove document" onClick={clearDoc}>✕</button></span>}
               </div>
             )}
             {messages.some((m) => m.role === 'user') && <small style={{ fontSize: 11, opacity: 0.65 }}>💬 Your chat answers will also be merged in when you generate.</small>}

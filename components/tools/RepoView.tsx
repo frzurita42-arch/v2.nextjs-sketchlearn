@@ -535,6 +535,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // enforces the permissions.
   const canPoster = ctx.canEdit;              // owner/admin manage the Poster slot
   const canUser = !!ctx.me;                    // any signed-in viewer has a User slot
+  // The single link each role's widget manages: the poster (blue) link, and MY
+  // own user (green) link. The widget turns INTO this link once submitted.
+  const posterLinkIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
+  const myUserLinkIdx = links.findIndex((l) => l.color === 'green' && l.by === ctx.me);
   const toggleAttach = (c: 'blue' | 'green') => {
     if (attaching && attachColor === c) { setAttaching(false); return; }
     setAttachColor(c); setAttaching(true);
@@ -697,8 +701,14 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // download any link. A remove ✕ shows next to a link only for someone allowed
   // to delete it: Poster links → owner/admin; User links → the uploader or admin
   // (the OP cannot remove another user's upload).
-  const blueLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color !== 'green');
-  const greenLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color === 'green');
+  // Links whose ROLE widget manages them are drawn INSIDE that widget (the button
+  // that turns into the link), not here — so hide them from the plain list for the
+  // person who owns that widget: the poster link for owner/admin, and MY own user
+  // link. Everything else (poster link seen by viewers, other users' uploads) still
+  // renders here as a normal clickable link.
+  const widgetOwned = (i: number) => (canPoster && i === posterLinkIdx) || (canUser && i === myUserLinkIdx);
+  const blueLinks = links.map((l, i) => ({ l, i })).filter(({ l, i }) => l.color !== 'green' && !widgetOwned(i));
+  const greenLinks = links.map((l, i) => ({ l, i })).filter(({ l, i }) => l.color === 'green' && !widgetOwned(i));
   const canRemoveLink = (l: RepoLink) => l.color === 'green' ? (l.by === ctx.me || ctx.isAdmin) : ctx.canEdit;
   const linkBtn = ({ l, i }: { l: RepoLink; i: number }) => (
     <span key={l.url + i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
@@ -756,23 +766,39 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={collapsed ? `Expand ${kids.length} card${kids.length === 1 ? '' : 's'} inside` : 'Collapse the cards inside'}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.75, flex: '0 0 auto' }}>{collapsed ? '▸' : '▾'}</button>
   ) : null;
-  // Poster / User role buttons — revealed by the 📎 / 📁 emoji toggles. POSTER
-  // (owner/admin): post a file or link everyone can open. USER (any signed-in
-  // viewer): upload your own document. Clicking the button opens the upload/link
-  // form; removal is via the ✕ on each link (with the per-role permissions).
+  // Poster / User role WIDGETS — revealed by the 📎 / 📁 emoji toggles. Each is a
+  // single self-transforming button:
+  //   • empty  → a coloured "Poster" / "User" button; click it to open the input
+  //     box (type a link or attach a document) and Submit.
+  //   • filled → that SAME button is now the link: click it to open the URL; a ✕
+  //     removes it (start over). Toggling the emoji off hides the widget.
+  // POSTER = owner/admin (blue). USER = any signed-in viewer's own upload (green,
+  // removable by them or an admin — not the OP).
+  const roleWidget = (role: 'poster' | 'user') => {
+    const color: 'blue' | 'green' = role === 'poster' ? 'blue' : 'green';
+    const idx = role === 'poster' ? posterLinkIdx : myUserLinkIdx;
+    const open = attaching && attachColor === color;
+    if (idx >= 0) {
+      const l = links[idx];
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flex: '0 0 auto' }} onClick={stop}>
+          <a className={`btn small ${color}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }} title={`${role === 'poster' ? 'Poster' : 'User'} link — click to open`}>🔗 {cap15(l.label || (role === 'poster' ? 'Poster' : 'User'))}</a>
+          <button type="button" title="Remove (start over)" onClick={eat(() => removeLinkAt(idx))}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1, opacity: 0.6 }}>✕</button>
+        </span>
+      );
+    }
+    return (
+      <button type="button" onClick={eat(() => toggleAttach(color))}
+        title={role === 'poster' ? 'Post a file or link — everyone can open it' : 'Upload your own document'}
+        className={`btn small ${open ? color : 'ghost'}`} style={{ flex: '0 0 auto' }}>{role === 'poster' ? 'Poster' : 'User'}</button>
+    );
+  };
   const roleButtons = (showPoster || showUser) ? (
-    <div style={{ display: 'inline-flex', gap: 6, flex: '0 0 auto' }} onClick={stop}>
-      {showPoster && (
-        <button type="button" onClick={() => toggleAttach('blue')}
-          title="Post a file or link — everyone can open it"
-          className={`btn small ${attaching && attachColor === 'blue' ? 'blue' : 'ghost'}`}>Poster</button>
-      )}
-      {showUser && (
-        <button type="button" onClick={() => toggleAttach('green')}
-          title="Upload your own document"
-          className={`btn small ${attaching && attachColor === 'green' ? 'green' : 'ghost'}`}>User</button>
-      )}
-    </div>
+    <span style={{ display: 'inline-flex', gap: 6, flex: '0 0 auto' }}>
+      {showPoster && roleWidget('poster')}
+      {showUser && roleWidget('user')}
+    </span>
   ) : null;
   // 🖼️ "Suggest AI" picture button (repo-level toggle). Owner/admin generate a
   // picture of the item (saved for all viewers); everyone can view a saved one.
@@ -822,9 +848,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={linkLabel} placeholder="Label (max 15)" maxLength={15} onChange={(e) => setLinkLabel(e.target.value.slice(0, 15))} style={{ flex: '1 1 90px', fontSize: 13 }} />
         <input value={linkUrl} placeholder="https://…" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '2 1 150px', fontSize: 13 }} />
-        <button className={`btn small ${attachColor}`} onClick={addLink}>Add link</button>
+        <button className={`btn small ${attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>✓ Submit</button>
         <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file">
-          {attachBusy ? 'Uploading…' : '📎 Upload file'}
+          {attachBusy ? 'Uploading…' : '📎 Attach a document'}
           <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
         </label>
         <button className="btn small ghost" onClick={() => setAttaching(false)}>✕</button>
