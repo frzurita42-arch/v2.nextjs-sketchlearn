@@ -21,7 +21,7 @@ import { ImageField } from '@/components/tools/ImageField';
 import { isRenderableImage } from '@/lib/img';
 import { buildRepoZip } from '@/lib/lesson-export';
 import { GallerySection } from '@/components/ui/GallerySection';
-import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
+import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -442,7 +442,54 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
   const [titleDraft, setTitleDraft] = useState(card.title || '');
   const [subDraft, setSubDraft] = useState(card.text || '');
   const [distorting, setDistorting] = useState(false);
+  const [imgBusy, setImgBusy] = useState(false);
   const editing = editingTitle || editingSub;
+
+  // ---- picture controls (same feature as the tool gallery): AI-generate,
+  // custom prompt / distort with a palette, or upload — right in the card's image.
+  const genImage = async (instruction?: string) => {
+    setImgBusy(true);
+    try {
+      const r = await API.post('/api/tools/repo/ai', { slug: ctx.slug, op: 'image', instruction: instruction || card.title || card.text || 'icon', title: card.title });
+      if (r?.image) ctx.editField(card.id, { image: r.image });
+      else if (r?.error) alert(r.error);
+    } catch { alert('Image generation failed.'); }
+    setImgBusy(false);
+  };
+  const customImage = () => { const p = window.prompt('Describe the picture to generate:'); if (p && p.trim()) genImage(p.trim()); };
+  const uploadImage = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      if (f.size > 25_000_000) { alert('Please pick a file under 25 MB.'); return; }
+      setImgBusy(true);
+      try {
+        let url = '';
+        try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
+        if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
+        ctx.editField(card.id, { image: url });
+      } catch { alert('Could not upload the picture.'); }
+      setImgBusy(false);
+    };
+    inp.click();
+  };
+  const eat = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
+  // Floated over an existing image (overlay) and inside the empty image box
+  // (placeholder). CardShell only draws these in GRID view, which is what we want.
+  const imgOverlay = ctx.canEdit ? (
+    <span style={{ position: 'absolute', top: 6, right: 8, display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+      <button title="Custom picture — describe what to show" style={overlayIcon} disabled={imgBusy} onClick={eat(customImage)}>✎</button>
+      <button title="Generate / distort the picture with AI" style={overlayIcon} disabled={imgBusy} onClick={eat(() => genImage())}>{imgBusy ? '…' : '🎨'}</button>
+      <button title="Upload a picture" style={overlayIcon} disabled={imgBusy} onClick={eat(uploadImage)}>📎</button>
+    </span>
+  ) : undefined;
+  const imgPlaceholder = ctx.canEdit ? (
+    <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+      <button className="btn small ghost" disabled={imgBusy} onClick={eat(() => genImage())}>{imgBusy ? 'Generating…' : '🎨 Generate'}</button>
+      <button className="btn small ghost" disabled={imgBusy} onClick={eat(customImage)}>✎ Custom</button>
+      <button className="btn small ghost" disabled={imgBusy} onClick={eat(uploadImage)}>📎 Upload</button>
+    </span>
+  ) : undefined;
   const openLink = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
   // In GRID view a card shows only itself; clicking a card that has nested cards
   // flips the whole section to the horizontal (rows) view so the tree is visible.
@@ -509,6 +556,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows }: { card: RepoCard;
       thumbnail={isImg(card.image) ? card.image : null}
       badge={view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined}
       onOpen={open}
+      overlay={imgOverlay} placeholder={imgPlaceholder}
       afterTitle={afterTitle} afterSubtitle={afterSubtitle}
       actions={actions} del={del} />
   );

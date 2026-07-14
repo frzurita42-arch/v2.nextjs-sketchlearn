@@ -183,8 +183,10 @@ export function Collection<T>({
 
   const wrap = { maxWidth, margin: '0 auto' } as const;
   const fullDash = { borderTop: '2px dashed var(--ink)', opacity: 0.5, width: '100%' } as const;
-  // A pager framed by full-page-width dashed rules, top and bottom.
-  const pagerBlock = perPage && pageCount > 1 ? (
+  // A pager framed by full-page-width dashed rules, top and bottom. It shows
+  // whenever pagination is configured — even on a single page (both buttons
+  // disabled) — so it's always visibly there.
+  const pagerBlock = perPage ? (
     <div>
       <div style={fullDash} />
       <div style={{ ...wrap, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '10px 0' }}>
