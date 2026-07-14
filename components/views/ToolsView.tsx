@@ -71,6 +71,16 @@ export function ToolsView() {
     setThumbing(m => { const n = { ...m }; delete n[t.slug]; return n; });
   };
   const openImgPrompt = (t: any) => { setImgPromptText(''); setImgPromptTool(t); };
+  // 🎲 swap the tool's emoji thumbnail for a new random one.
+  const diceThumb = async (t: any) => {
+    setThumbing(m => ({ ...m, [t.slug]: true }));
+    try {
+      const r = await API.post('/api/tools/thumbnail', { slug: t.slug, emoji: 'random' });
+      if (r?.thumbnail) patchTool(t.slug, { thumbnail: r.thumbnail });
+      else if (r?.error) alert(r.error);
+    } catch (e: any) { alert(e?.message || 'Could not change the emoji.'); }
+    setThumbing(m => { const n = { ...m }; delete n[t.slug]; return n; });
+  };
   // Upload a custom image file as the thumbnail (blob store, data-URL fallback).
   const uploadThumb = async (t: any, file: File) => {
     if (!/^image\//.test(file.type)) { alert('Please choose an image file.'); return; }
@@ -210,7 +220,7 @@ export function ToolsView() {
   const card = (t: any, view: 'grid' | 'row', hideOpen?: boolean) => (
     <ToolCard tool={t} view={view} onOpen={open} favs={favs} hideOpen={hideOpen}
       canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
-      onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} thumbing={!!thumbing[t.slug]}
+      onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} onDice={diceThumb} thumbing={!!thumbing[t.slug]}
       canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
   );
 

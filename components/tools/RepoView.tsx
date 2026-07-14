@@ -861,7 +861,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const isGrid = view === 'grid';
   const shell = (
     <CardShell view={view}
-      gridHeight={isGrid ? 300 : undefined}
+      gridHeight={isGrid ? 340 : undefined}
       rowTextLines={2}
       title={editingTitle ? '' : (card.title || 'Untitled')}
       subtitle={editingSub ? ' ' : (card.text || '')}

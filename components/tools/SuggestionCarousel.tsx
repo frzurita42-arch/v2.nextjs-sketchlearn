@@ -78,6 +78,11 @@ export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', 
     catch (e: any) { alert(e?.message || 'Could not generate.'); } finally { setBusyFor(t.slug, false); }
   };
   const thumbPrompt = (t: any) => { const i = window.prompt('Describe the image to generate:', ''); if (i == null) return; genThumb(t, i); };
+  const diceThumb = async (t: any) => {
+    setBusyFor(t.slug, true);
+    try { const r = await API.post('/api/tools/thumbnail', { slug: t.slug, emoji: 'random' }); if (r?.thumbnail) patch(t.slug, { thumbnail: r.thumbnail }); else if (r?.error) alert(r.error); }
+    catch (e: any) { alert(e?.message || 'Could not change the emoji.'); } finally { setBusyFor(t.slug, false); }
+  };
   const uploadThumb = (t: any, file: File) => {
     const reader = new FileReader();
     reader.onload = async () => {
@@ -106,7 +111,7 @@ export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', 
       <ToolCard tool={t} view="grid" onOpen={open} hideOpen
         canEdit={editable} onEdit={editable ? editText : undefined} onRemix={editable ? remixText : undefined} mixing={!!work[p.slug]}
         onGenThumb={editable ? ((x: any) => genThumb(x)) : undefined} onThumbPrompt={editable ? thumbPrompt : undefined}
-        onUploadThumb={editable ? uploadThumb : undefined} thumbing={!!work[p.slug]}
+        onUploadThumb={editable ? uploadThumb : undefined} onDice={editable ? diceThumb : undefined} thumbing={!!work[p.slug]}
         canRemove isExample={isExample(p)} onRemove={remove} />
     );
   };

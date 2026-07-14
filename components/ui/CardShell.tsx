@@ -113,8 +113,11 @@ export function CardShell(p: CardShellProps) {
           // Fixed tiles: the title clamps to two lines and the edit icons + badge
           // sit in a fixed, non-shrinking slot on the SAME row (they never wrap to
           // a new line and push the layout / overflow).
-          ? <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <strong style={{ fontSize: 16, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}</strong>
+          // The title always RESERVES two rows (min-height) and clamps at two, so
+          // every card lines up and a long title can't push the rest down. Items
+          // don't shrink (flexShrink 0) — that's what caused text to overlap.
+          ? <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexShrink: 0 }}>
+              <strong style={{ fontSize: 16, lineHeight: 1.25, minHeight: '2.5em', flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}</strong>
               {(p.editBtns || p.afterTitle) && <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 4, alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>{p.editBtns}{p.afterTitle}</span>}
               {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6, flex: '0 0 auto' }}>{badge}</span>}
             </div>
@@ -127,14 +130,14 @@ export function CardShell(p: CardShellProps) {
           fixed
             // Fixed tiles: clamp the description TEXT to two lines. The edit icons
             // already show next to the title, so they are not repeated here.
-            ? <div style={{ margin: 0, fontSize: 13, opacity: 0.85, display: 'flex', alignItems: 'flex-start', gap: 4, minHeight: 0 }}>
+            ? <div style={{ margin: 0, fontSize: 13, opacity: 0.85, display: 'flex', alignItems: 'flex-start', gap: 4, flexShrink: 0 }}>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}>{subtitle || 'No description.'}</span>
                 {p.afterSubtitle}
               </div>
             : <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>{subtitle || 'No description.'}{p.editBtns}{p.afterSubtitle}</p>
         )}
         {p.tags && p.tags.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
             {p.tags.map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}
           </div>
         )}

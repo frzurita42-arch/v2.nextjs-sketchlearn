@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition, slugify } from '@/lib/tool-schema';
+import { emojiThumb, defaultEmojiFor } from '@/lib/emoji-thumb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { insertTool, getToolBySlug, listTools, deleteTool, getExampleOverrides } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -78,7 +79,12 @@ export async function POST(req: Request) {
     definition: def,
     visibility,
     tags: def.tags || [],
-    thumbnail: null,
+    // Repos & presentations get a default EMOJI thumbnail (a topic-appropriate
+    // pick) so a fresh card is never blank; the owner can swap it (🎲 die / 📎
+    // upload) later. A caller-provided real thumbnail wins.
+    thumbnail: (typeof b.thumbnail === 'string' && b.thumbnail)
+      ? b.thumbnail
+      : ((def.archetype === 'repo' || def.archetype === 'lesson') ? emojiThumb(defaultEmojiFor(`${def.title} ${def.description || ''} ${def.lesson?.subject || ''}`, def.tags)) : null),
     likeCount: 0,
     aiGenerated: !!b.aiGenerated,
     // Stamped for file-storage mode; in DB mode the created_at column default wins.

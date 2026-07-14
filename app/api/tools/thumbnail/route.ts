@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { imageEnabled, geminiEnabled } from '@/src/config';
 import { generateImage } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
+import { emojiThumb, emojiOf, randomEmoji } from '@/lib/emoji-thumb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug, updateTool, setExampleOverride } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -33,6 +34,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Only the owner or an admin can set the thumbnail.' }, { status: 403 });
   }
   const saveThumb = (img: string) => ex ? setExampleOverride(slug, { thumbnail: img }) : updateTool(slug, { thumbnail: img });
+
+  // Set an EMOJI thumbnail (🎲 die / a chosen emoji). No AI needed. 'random' (or
+  // a value equal to the current emoji) picks a fresh one different from now.
+  if (b.emoji !== undefined) {
+    const raw = String(b.emoji || '');
+    const current = emojiOf(tool.thumbnail);
+    const pic = (raw === 'random' || !raw) ? randomEmoji(current) : raw.slice(0, 8);
+    const thumb = emojiThumb(pic);
+    await saveThumb(thumb);
+    return NextResponse.json({ thumbnail: thumb });
+  }
 
   // A user-provided image (an uploaded blob URL, a pasted https URL, or a data
   // URL) — just save it; no AI model needed. Data URLs are offloaded to the blob
