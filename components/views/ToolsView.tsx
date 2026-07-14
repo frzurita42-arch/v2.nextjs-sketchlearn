@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
-import { toolCategory } from '@/lib/tool-category';
 import { CategoryFilter } from '@/components/tools/CategoryFilter';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
@@ -53,6 +52,21 @@ function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void
 // (SPA navigation) shows the same content INSTANTLY and just revalidates in the
 // background — instead of a blank "Loading…" every time.
 let toolsCache: any[] | null = null;
+
+// The gallery keeps its filter simple: just Presentations and Repositories.
+// A tool made with the slides tool (archetype 'lesson') is a Presentation; one
+// made with the repo tool (archetype 'repo') is a Repository. Anything else
+// (apps, generators…) still appears under "All" but has no dedicated chip.
+const GALLERY_CATEGORIES = [
+  { key: 'presentation', label: '📊 Presentations' },
+  { key: 'repository', label: '🗂️ Repositories' },
+];
+const galleryCategory = (t: any): string => {
+  const arch = t?.archetype || t?.definition?.archetype;
+  if (arch === 'lesson') return 'presentation';
+  if (arch === 'repo') return 'repository';
+  return 'other';
+};
 
 export function ToolsView() {
   const app = useApp();
@@ -204,11 +218,11 @@ export function ToolsView() {
   // Category counts (for the filter chips) + the visible subset.
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: tools.length };
-    for (const t of tools) { const k = toolCategory(t); c[k] = (c[k] || 0) + 1; }
+    for (const t of tools) { const k = galleryCategory(t); c[k] = (c[k] || 0) + 1; }
     return c;
   }, [tools]);
   // Category is the section-specific filter; the standard Collection owns the rest.
-  const catItems = filter === 'all' ? tools : tools.filter(t => toolCategory(t) === filter);
+  const catItems = filter === 'all' ? tools : tools.filter(t => galleryCategory(t) === filter);
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
   const isExample = (t: any) => (t.tags || []).includes('example');
@@ -298,7 +312,7 @@ export function ToolsView() {
             {/* The category chips sit right under the Build / Refresh buttons, above
                 the gallery container. They're part of the gallery section, so they
                 collapse with it under the eye — only Build / Refresh stay. */}
-            {!galleryCollapsed && <CategoryFilter value={filter} onChange={setFilter} counts={counts} />}
+            {!galleryCollapsed && <CategoryFilter value={filter} onChange={setFilter} counts={counts} categories={GALLERY_CATEGORIES} />}
             {/* A little breathing room between the category chips and the gallery title. */}
             {!galleryCollapsed && <div style={{ height: 16 }} />}
             {/* Same shared container as the History feed: small space → title (+
