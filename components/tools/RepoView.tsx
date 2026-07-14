@@ -419,12 +419,14 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 
 // A collection card rendered through the SAME shared CardShell used by the home
 // gallery — adapted to a repo card: title, description, cover image, a favorite
-// ★, and the attachments as footer buttons. Nested child cards render indented
-// below (each as its own CardShell), so the layered structure is preserved.
+// ★, and the attachments as footer buttons. Nested cards show ONLY the first as a
+// preview (with a peeking "+N more" card), expandable — this preview behaviour is
+// exclusive to repo collection cards (not the tool gallery, posts, or homepage).
 function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx }) {
   const kids = card.children || [];
   const links = card.links || [];
   const isFav = !!ctx.favs[card.id];
+  const [expanded, setExpanded] = useState(false);
   const open = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
   const actions = (
     <>
@@ -439,11 +441,25 @@ function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' 
       thumbnail={isImg(card.image) ? card.image : null} onOpen={open} actions={actions} />
   );
   if (!kids.length) return shell;
+  // Preview: always show just the first nested card; the rest hide behind a peeking
+  // "+N more" stacked card that expands in place.
+  const shown = expanded ? kids : kids.slice(0, 1);
+  const hidden = kids.length - shown.length;
   return (
     <div>
       {shell}
       <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
-        {kids.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} />)}
+        {shown.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} />)}
+        {hidden > 0 && (
+          // A shallow card peeking below to hint there are more inside.
+          <button onClick={() => setExpanded(true)} title={`Show ${hidden} more inside`}
+            style={{ display: 'block', width: '100%', textAlign: 'left', background: '#fff', border: '2px solid var(--ink)', borderRadius: 10, padding: '7px 12px', marginTop: -2, cursor: 'pointer', fontSize: 12, opacity: 0.75, boxShadow: '0 3px 0 -1px #fff, 0 3px 0 0 var(--ink)' }}>
+            ⋯ +{hidden} more {hidden === 1 ? 'card' : 'cards'} inside — click to expand
+          </button>
+        )}
+        {expanded && kids.length > 1 && (
+          <button className="btn small ghost" style={{ justifySelf: 'start' }} onClick={() => setExpanded(false)}>▴ Show less</button>
+        )}
       </div>
     </div>
   );
