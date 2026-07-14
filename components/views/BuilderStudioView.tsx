@@ -74,33 +74,51 @@ export function BuilderStudioView() {
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
   const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '', children: [] }]);
-  // Build the whole card tree from a course document (PDF/text): units → cards,
-  // subunits → nested cards, each with a description.
+  // "Suggest with AI": a reference document (attached in the "Anything else for
+  // the AI to consider" box, PDF or text) plus the goal + any hand-entered cards
+  // let the AI propose / extend a plan into the editable card fields below.
   const [docName, setDocName] = useState('');
-  const [docText, setDocText] = useState('');
-  const [docBusy, setDocBusy] = useState(false);
-  const mapAiCards = (cards: any[]): RepoCard[] => (Array.isArray(cards) ? cards : []).slice(0, 60).map((c: any) => ({
-    name: String(c?.title || c?.name || '').slice(0, 120), link: '',
+  const [docText, setDocText] = useState('');       // extracted (or pasted) text
+  const [docDataUrl, setDocDataUrl] = useState(''); // binary (PDF etc.) for Gemini
+  const [suggesting, setSuggesting] = useState(false);
+  const [withLinks, setWithLinks] = useState(false);   // "link suggestion" toggle
+  // AI card shape ({title,text,link?,linkLabel?,children}) → builder card shape.
+  // A suggested link fills the card's Link field, so on publish it becomes a
+  // Poster (blue) link viewers can open.
+  const mapAiCards = (cards: any[]): RepoCard[] => (Array.isArray(cards) ? cards : []).slice(0, 20).map((c: any) => ({
+    name: String(c?.title || c?.name || '').slice(0, 120),
+    link: String(c?.link || c?.url || (Array.isArray(c?.links) ? c.links[0]?.url : '') || '').slice(0, 800),
+    linkLabel: String(c?.linkLabel || (Array.isArray(c?.links) ? c.links[0]?.label : '') || '').slice(0, 15),
     description: String(c?.text || c?.subtitle || c?.description || '').slice(0, 2000),
     children: mapAiCards(c?.children || []),
   }));
-  const buildFromDoc = async (payload: { docText?: string; docDataUrl?: string }) => {
-    setDocBusy(true); setErr('');
-    try {
-      const r: any = await API.post('/api/tools/repo/ai', { op: 'fromDoc', title, docText: payload.docText || '', docDataUrl: payload.docDataUrl || '' });
-      const mapped = mapAiCards(r?.cards || []);
-      if (mapped.length) setRepoCards(mapped);
-      else setErr(r?.error || 'The AI did not return any cards. Try pasting the document text.');
-    } catch (e: any) { setErr(e?.message || 'Could not build cards from the document.'); }
-    setDocBusy(false);
-  };
-  const onDocFile = async (f: File) => {
+  // Reverse: only the cards the user actually filled in, sent to the AI as a seed.
+  const cardsToAi = (cards: RepoCard[]): any[] => (cards || [])
+    .filter((c) => (c.name || '').trim() || (c.description || '').trim() || (c.children || []).length)
+    .map((c) => ({ title: c.name || '', text: c.description || '', ...(c.link ? { link: c.link, linkLabel: c.linkLabel || '' } : {}), children: cardsToAi(c.children || []) }));
+  const onConsiderDoc = async (f: File) => {
     if (!f) return;
     if (f.size > 20_000_000) { setErr('Please pick a document under 20 MB.'); return; }
-    setDocName(f.name);
+    setErr(''); setDocName(f.name); setDocText(''); setDocDataUrl('');
     const isText = /text|json|markdown/.test(f.type) || /\.(txt|md|csv)$/i.test(f.name);
-    if (isText) { const text = await f.text(); setDocText(text); await buildFromDoc({ docText: text }); }
-    else { const dataUrl = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); }); await buildFromDoc({ docDataUrl: dataUrl }); }
+    if (isText) setDocText(await f.text());
+    else setDocDataUrl(await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); }));
+  };
+  const clearDoc = () => { setDocName(''); setDocText(''); setDocDataUrl(''); };
+  // AI proposes / extends the plan into the editable card fields (does NOT publish).
+  const suggestWithAI = async () => {
+    if (suggesting || busy) return;
+    setSuggesting(true); setErr('');
+    try {
+      const r: any = await API.post('/api/tools/repo/ai', {
+        op: 'suggest', title, subject, goal: context, withLinks,
+        docText, docDataUrl, cards: cardsToAi(repoCards),
+      }, { retries: 1 });
+      const mapped = mapAiCards(r?.cards || []);
+      if (mapped.length) setRepoCards(mapped);
+      else setErr(r?.error || 'The AI did not return a plan. Add a goal, a document, or a card or two, then try again.');
+    } catch (e: any) { setErr(e?.message || 'Could not build a suggestion.'); }
+    setSuggesting(false);
   };
   const [context, setContext] = useState('');
   const [visibility, setVisibility] = useState('unlisted');
@@ -330,25 +348,6 @@ export function BuilderStudioView() {
                description. Published, they show as cards on the page and viewers can
                add their own. */
             <>
-              {/* Build cards from a course document: units → cards, subunits → nested. */}
-              <div className="card alt" style={{ padding: '12px 14px', margin: '0 0 12px' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.7, marginBottom: 6 }}>📄 Build cards from a course document (AI)</div>
-                <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>Attach a syllabus / program (PDF or text). Each <b>unit</b> becomes a card, each <b>subunit</b> a nested card inside it, and every card gets a description — then review &amp; publish below.</p>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <label className="btn small blue" style={{ cursor: 'pointer' }}>
-                    {docBusy ? 'Reading…' : '📎 Attach document'}
-                    <input type="file" accept=".pdf,.txt,.md,.csv,.doc,.docx,.rtf,text/*,application/pdf" style={{ display: 'none' }}
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) onDocFile(f); e.currentTarget.value = ''; }} />
-                  </label>
-                  {docName && <span style={{ fontSize: 12, opacity: 0.7 }}>{docName}</span>}
-                </div>
-                <details style={{ marginTop: 8 }}>
-                  <summary style={{ fontSize: 12, cursor: 'pointer', opacity: 0.7 }}>…or paste the document text</summary>
-                  <textarea value={docText} placeholder="Paste the syllabus / contents here…" onChange={(e) => setDocText(e.target.value)} style={{ width: '100%', minHeight: 90, marginTop: 6, fontSize: 13 }} />
-                  <button className="btn small green" disabled={docBusy || !docText.trim()} onClick={() => buildFromDoc({ docText })} style={{ marginTop: 6 }}>{docBusy ? 'Generating…' : '✨ Generate cards from text'}</button>
-                </details>
-              </div>
-
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>CARDS ({repoCards.length}) — name · link · description, nest cards inside cards</div>
               </div>
@@ -363,15 +362,39 @@ export function BuilderStudioView() {
                 <button className="btn" onClick={addCard}>＋ Add card</button>
               </div>
               <p style={{ fontSize: 12, opacity: 0.7, textAlign: 'center', margin: '0 0 4px' }}>
-                Each card holds a name, a link/attachment and a description — and can nest more cards inside it. Published, they render as layered cards with link buttons.
+                Each card holds a name, a link/attachment and a description — and can nest more cards inside it. Fill them in by hand, or type a goal below and hit <b>🤖 Suggest with AI</b> to have the AI propose the plan (up to 20 cards) for you to edit.
               </p>
             </>
           )}
 
-          {/* Free context */}
+          {/* Free context — for a repository this is the GOAL box that drives
+              "Suggest with AI", and the document to consider is attached here. */}
           <div className="card alt" style={{ padding: '12px 14px', margin: '12px 0' }}>
-            <label className="field" style={{ gridColumn: '1 / -1' }}><span>Anything else for the AI to consider? (optional)</span>
-              <textarea value={context} placeholder="Extra details, constraints, examples…" onChange={(e) => setContext(e.target.value)} style={{ minHeight: 52 }} /></label>
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>{artifact === 'repository' ? 'What should the plan achieve? / Anything else for the AI to consider (optional)' : 'Anything else for the AI to consider? (optional)'}</span>
+              <textarea value={context}
+                placeholder={artifact === 'repository' ? 'e.g. “A 12-week plan to pass Physics I”, “Steps to launch a podcast”, constraints, your goal…' : 'Extra details, constraints, examples…'}
+                onChange={(e) => setContext(e.target.value)} style={{ minHeight: 52 }} /></label>
+            {artifact === 'repository' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                <label className="btn small blue" style={{ cursor: 'pointer' }}>
+                  {docName ? '📎 Change document' : '📎 Attach a document (optional)'}
+                  <input type="file" accept=".pdf,.txt,.md,.csv,.doc,.docx,.rtf,text/*,application/pdf" style={{ display: 'none' }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) onConsiderDoc(f); e.currentTarget.value = ''; }} />
+                </label>
+                {docName && <span style={{ fontSize: 12, opacity: 0.75 }}>📄 {docName} <button className="btn small ghost" style={{ padding: '0 6px' }} title="Remove document" onClick={clearDoc}>✕</button></span>}
+                <span style={{ fontSize: 11, opacity: 0.6 }}>A syllabus, program or notes — the AI reads it when you Suggest.</span>
+              </div>
+            )}
+            {artifact === 'repository' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                <button type="button" className={`btn small ${withLinks ? 'green' : 'ghost'}`} onClick={() => setWithLinks((v) => !v)}
+                  title="When on, Suggest with AI also adds a reference link (website / image / Wikipedia) to each card's Poster button.">
+                  🔗 Link suggestion: {withLinks ? 'On' : 'Off'}
+                </button>
+                <span style={{ fontSize: 11, opacity: 0.6 }}>Optional — the AI adds a relevant website / image / Wikipedia link to each card (as a Poster link).</span>
+              </div>
+            )}
             {messages.some((m) => m.role === 'user') && <small style={{ fontSize: 11, opacity: 0.65 }}>💬 Your chat answers will also be merged in when you generate.</small>}
           </div>
 
@@ -381,7 +404,12 @@ export function BuilderStudioView() {
               <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
                 <option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>
               </select></label>
-            <button className="btn green" disabled={busy} onClick={generate}>{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
+            {artifact === 'repository' && (
+              <button className="btn blue" disabled={busy || suggesting} onClick={suggestWithAI}
+                title="Let the AI propose or extend the plan into the cards above — then edit them and Generate.">{suggesting ? '🤖 Thinking…' : '🤖 Suggest with AI'}</button>
+            )}
+            <button className="btn green" disabled={busy || suggesting} onClick={generate}
+              title={artifact === 'repository' ? 'Publish exactly what is in the cards above (no AI changes).' : undefined}>{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
           </div>
         </div>
       ) : (

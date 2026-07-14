@@ -13,9 +13,12 @@ export const maxDuration = 45;
 const textAI = () => openrouterEnabled || geminiEnabled || deepseekEnabled;
 
 // POST { slug, op, ... } -> owner/admin AI helpers for a repository.
-//   op 'field'  { field, current, instruction, context } -> { text }
-//   op 'layout' { instruction, cards, layout } -> { cards }   (AI arranges the tree)
-//   op 'image'  { instruction, title }         -> { image }   (data URL icon)
+//   op 'field'   { field, current, instruction, context } -> { text }
+//   op 'layout'  { instruction, cards, layout } -> { cards }   (AI arranges the tree)
+//   op 'image'   { instruction, title }         -> { image }   (data URL icon)
+//   op 'fromDoc' { title, docText, docDataUrl }  -> { cards }  (document → card tree)
+//   op 'suggest' { title, subject, goal, docText, docDataUrl, cards } -> { cards }
+//                (AI proposes/extends a plan, ≤20 top-level cards, keeps user cards)
 export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
@@ -86,6 +89,67 @@ export async function POST(req: Request) {
       return NextResponse.json({ cards: out });
     } catch {
       return NextResponse.json({ error: 'Could not build cards from the document. Try again or paste the text.' }, { status: 200 });
+    }
+  }
+
+  // ---- op: suggest (AI proposes / extends a plan into editable cards) -----
+  // The "Suggest with AI" button in the Studio repository builder. From a GOAL
+  // (what to achieve/understand), an OPTIONAL document, and any cards the user has
+  // already entered by hand, the AI proposes the best learning path / itinerary /
+  // action plan / steps — up to 20 top-level cards, each with a description — and
+  // returns them for the user to review and edit before publishing. It KEEPS and
+  // builds on the user's own cards (so they can type the first few and let the AI
+  // fill in the rest toward the goal).
+  if (op === 'suggest') {
+    const title = String(b.title || '').slice(0, 160);
+    const subject = String(b.subject || '').slice(0, 160);
+    const goal = String(b.goal || b.context || '').slice(0, 4000);
+    const docText = String(b.docText || '').slice(0, 40000);
+    const docDataUrl = String(b.docDataUrl || '');
+    const existing = Array.isArray(b.cards) ? b.cards.slice(0, 40) : [];
+    const withLinks = !!b.withLinks;   // "link suggestion" toggle: add a reference link per card
+    const m = docDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    const isPdfOrDoc = !!m && /pdf|msword|officedocument|text|rtf/i.test(m[1]);
+    const hasSeed = goal.trim() || docText.trim() || isPdfOrDoc || existing.length;
+    if (!hasSeed) return NextResponse.json({ error: 'Add a goal, attach a document, or enter a card or two for the AI to build on.' }, { status: 200 });
+
+    const system = [
+      'You design an ACTIONABLE PLAN as a REPOSITORY: an ordered list of cards. Depending on the request this is a learning path, a study itinerary, an action plan, a curriculum, a catalogue/menu, or the steps to achieve or understand something.',
+      'RULES:',
+      '1. Produce an ORDERED sequence of top-level cards — the steps/weeks/units/items, in a sensible order. AT MOST 20 top-level cards. Use as MANY or as FEW as the goal, document or topic actually needs (a 5-item list is fine; do not pad to 20).',
+      '2. Give each card a clear "title" (e.g. "Week 1 — Foundations", "Step 3: Draft the outline", "Margherita Pizza") and a "text": a 1–2 sentence description. Write in the SAME LANGUAGE as the goal/document.',
+      '3. If a card naturally breaks into sub-items, add them as NESTED child cards (each with its own title + text). Nest at most 3 levels. Keep it light — nesting is optional.',
+      '4. KEEP the user\'s existing cards below and build ON them: preserve their titles/text (you may lightly polish), keep them in order, and ADD the further items needed to reach the goal. The user may have entered only the first few and wants you to figure out the rest.',
+      '5. Base the plan on the attached document / goal — do not invent unrelated content. Ignore document front-matter (course code, bibliography).',
+      withLinks
+        ? '6. LINK SUGGESTIONS ARE ON: for EVERY card add a "link" — a single, relevant reference URL — plus a short "linkLabel" (max 15 chars, e.g. "Wikipedia", "Image", "Website"). Prefer the most RELIABLE URL you can: a real Wikipedia article (https://en.wikipedia.org/wiki/Topic — or the document\'s language, e.g. https://es.wikipedia.org/wiki/…), an official website, or for a visual/product a Wikimedia/Wikipedia page or a Google image search URL (https://www.google.com/search?tbm=isch&q=...+url-encoded). Only include a link you are reasonably confident resolves; if unsure for a card, omit its link. Never fabricate a deep/direct file URL that likely 404s.'
+        : '6. Do NOT add links, code or images.',
+      `Each card is: { "kind": "card", "title": string, "text": string${withLinks ? ', "link"?: string, "linkLabel"?: string' : ''}, "children"?: [ ...cards ] }.`,
+      'Return STRICT JSON: { "cards": [ ...the full ordered plan, at most 20 top-level... ] }.',
+    ].join('\n');
+    const userText = [
+      `Tool title: ${title || '(untitled)'}`,
+      subject ? `Topic / subject: ${subject}` : '',
+      goal ? `Goal — what the plan should achieve or help understand:\n${goal}` : '',
+      existing.length ? `The user has already entered these cards (keep and build on them):\n${JSON.stringify(existing).slice(0, 6000)}` : 'The user has not entered any cards yet.',
+      docText ? `Reference document text:\n${docText}` : (isPdfOrDoc ? 'A reference document is attached — read it.' : ''),
+    ].filter(Boolean).join('\n\n');
+
+    try {
+      let out: any = null;
+      if (m && geminiEnabled) {
+        const r: any = await geminiDoc(system, userText, [{ mimeType: m[1], data: m[2] }], { maxTokens: 5000, temperature: 0.4 });
+        out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+      } else if (textAI()) {
+        const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: userText }], { temperature: 0.4, maxTokens: 3800 });
+        out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+      } else {
+        return NextResponse.json({ error: m ? 'Reading a PDF needs Gemini. Paste the document text instead.' : 'No AI model is configured.' }, { status: 200 });
+      }
+      if (!out) return NextResponse.json({ error: 'The AI could not build a plan. Add a bit more detail and try again.' }, { status: 200 });
+      return NextResponse.json({ cards: out.slice(0, 20) });
+    } catch {
+      return NextResponse.json({ error: 'Could not build a suggestion. Try again or add more detail.' }, { status: 200 });
     }
   }
 

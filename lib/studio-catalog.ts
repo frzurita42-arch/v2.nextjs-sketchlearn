@@ -198,7 +198,7 @@ export function layoutHint(key?: string): string {
 // A repository is a tree of saved link/resource cards. Each card has a name, an
 // attachment / Drive link and a description — and may nest child cards inside it
 // (the same logic, one layer deeper), so the owner can build layered collections.
-export interface RepoCard { name: string; link: string; description: string; children?: RepoCard[]; }
+export interface RepoCard { name: string; link: string; linkLabel?: string; description: string; children?: RepoCard[]; }
 export interface StudioConfig {
   artifact: ArtifactKind;
   title?: string;
@@ -270,7 +270,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
     // the `repo` archetype, RepoView renders the layered cards with link buttons.
     let seq = 0;
     const toRepoCard = (c: RepoCard): any => {
-      const links = c.link && c.link.trim() ? [{ label: 'Attachment', url: c.link.trim() }] : [];
+      const links = c.link && c.link.trim() ? [{ label: (c.linkLabel && c.linkLabel.trim() ? c.linkLabel.trim() : 'Link').slice(0, 15), url: c.link.trim() }] : [];
       const kids = (c.children || []).filter((k) => (k.name || k.link || k.description || (k.children || []).length)).map(toRepoCard);
       return {
         id: `c${(seq++).toString(36)}`, kind: 'card',
