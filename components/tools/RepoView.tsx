@@ -145,6 +145,14 @@ const nextMode = (m?: string): CardMode => MODE_ORDER[(MODE_ORDER.indexOf(modeOf
 
 // Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
 const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
+
+// A curated pool for the 🎲 "random emoji icon" button — expressive, on-theme.
+const RANDOM_EMOJIS = ['📕', '📗', '📘', '📙', '📚', '📝', '✏️', '📌', '🔖', '🗂️', '📁', '📅', '⭐', '🌟', '✨', '🔥', '💡', '🎯', '🚀', '🎨', '🎵', '🎬', '🎓', '🧩', '🧠', '🔬', '🔭', '🧪', '🌍', '🌱', '🌳', '🍎', '☕', '🏆', '🥇', '🎉', '🎁', '💎', '🔑', '🛠️', '📊', '📈', '🗺️', '🧭', '⏰', '📷', '🎥', '💻', '📱', '🐣', '🐱', '🦊', '🐼', '🦉', '🦋', '🐢', '🍀', '🌈', '⚡', '❄️', '🔔', '🎈', '🧸', '🍕', '🍩', '🧁', '🍓', '🥑', '🌺', '🌻', '🍁'];
+const randomEmoji = (exclude?: string) => {
+  let e = RANDOM_EMOJIS[Math.floor(Math.random() * RANDOM_EMOJIS.length)];
+  for (let i = 0; i < 6 && e === exclude; i++) e = RANDOM_EMOJIS[Math.floor(Math.random() * RANDOM_EMOJIS.length)];
+  return e;
+};
 // The number the 🔢 button assigns a card: top-level cards are always 0; cards
 // nested inside another are numbered 1,2,3… by their position among siblings.
 function cardNumber(cards: RepoCard[], id: string, top = true): number | null {
@@ -647,6 +655,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       <button type="button" title="Rewrite the title with AI" disabled={distorting} style={{ ...iconBtn, opacity: distorting ? 0.4 : 1 }} onClick={distort}>🎨</button>
       {/* 🔢 number this card — sets its icon to a number emoji (top card = 0️⃣). */}
       <button type="button" title="Number this card (icon)" style={iconBtn} onClick={() => ctx.numberCard(card.id)}>🔢</button>
+      {/* 🎲 random emoji icon — a fresh suggestion every click. */}
+      <button type="button" title="Random emoji icon — click for a new one" style={iconBtn} onClick={() => ctx.setIcon(card.id, { icon: randomEmoji(card.icon), image: undefined })}>🎲</button>
       {/* 📎 upload an icon image — nested cards only (the first card uses grid view). */}
       {nested && <button type="button" title="Upload an icon image" disabled={imgBusy} style={{ ...iconBtn, opacity: imgBusy ? 0.4 : 1 }} onClick={uploadImage}>📎</button>}
     </span>
