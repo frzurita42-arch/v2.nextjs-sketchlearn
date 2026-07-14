@@ -548,11 +548,22 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   };
   const appendLink = async (label: string, url: string) => { await attachServer({ action: 'add', color: attachColor, link: { label: label.slice(0, 15) || 'Link', url } }); };
   const removeLinkAt = (index: number) => attachServer({ action: 'remove', index });
-  // The 📎 / 📁 emoji icons (in the icon grid) are pure show/hide toggles for the
-  // labeled Poster / User button. Clicking an emoji again hides its button (and
-  // closes its attach form if it was open).
-  const togglePoster = () => setShowPoster((v) => { const nv = !v; if (!nv && attaching && attachColor === 'blue') setAttaching(false); return nv; });
-  const toggleUser = () => setShowUser((v) => { const nv = !v; if (!nv && attaching && attachColor === 'green') setAttaching(false); return nv; });
+  // The 📎 / 📁 emoji icons manage the Poster / User slot. A submitted link shows
+  // AUTOMATICALLY as a button (in the link row), so the icon's job is:
+  //   • if a link already exists → DELETE it (click the icon again removes it);
+  //     the empty add-button is then shown so a new one can be posted.
+  //   • if the slot is empty → reveal the "Poster" / "User" add-button (click it
+  //     to open the input, type a link or attach a file, Submit).
+  const clipAction = () => {
+    if (!canPoster) return;
+    if (posterLinkIdx >= 0) { removeLinkAt(posterLinkIdx); setShowPoster(true); if (attaching && attachColor === 'blue') setAttaching(false); }
+    else setShowPoster((v) => { const nv = !v; if (!nv && attaching && attachColor === 'blue') setAttaching(false); return nv; });
+  };
+  const folderAction = () => {
+    if (!canUser) return;
+    if (myUserLinkIdx >= 0) { removeLinkAt(myUserLinkIdx); setShowUser(true); if (attaching && attachColor === 'green') setAttaching(false); }
+    else setShowUser((v) => { const nv = !v; if (!nv && attaching && attachColor === 'green') setAttaching(false); return nv; });
+  };
   const addLink = () => {
     let url = linkUrl.trim(); if (!url) return;
     // A bare domain like "example.com" is dropped by the server sanitizer (which
@@ -696,25 +707,20 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </span>
   )) : null;
 
-  // Link buttons grouped by colour into a single column with (up to) two rows —
-  // POSTER (blue) links on top, USER (green) links below. Everyone can open/
-  // download any link. A remove ✕ shows next to a link only for someone allowed
-  // to delete it: Poster links → owner/admin; User links → the uploader or admin
-  // (the OP cannot remove another user's upload).
-  // Links whose ROLE widget manages them are drawn INSIDE that widget (the button
-  // that turns into the link), not here — so hide them from the plain list for the
-  // person who owns that widget: the poster link for owner/admin, and MY own user
-  // link. Everything else (poster link seen by viewers, other users' uploads) still
-  // renders here as a normal clickable link.
-  const widgetOwned = (i: number) => (canPoster && i === posterLinkIdx) || (canUser && i === myUserLinkIdx);
-  const blueLinks = links.map((l, i) => ({ l, i })).filter(({ l, i }) => l.color !== 'green' && !widgetOwned(i));
-  const greenLinks = links.map((l, i) => ({ l, i })).filter(({ l, i }) => l.color === 'green' && !widgetOwned(i));
-  const canRemoveLink = (l: RepoLink) => l.color === 'green' ? (l.by === ctx.me || ctx.isAdmin) : ctx.canEdit;
+  // Every submitted link shows here AUTOMATICALLY as a clickable button. A POSTER
+  // (blue) link always reads "Poster" and a USER (green) link "User" — regardless
+  // of the link's own label (including AI-suggested ones) — so viewers know who it
+  // came from. Deletion is done by re-clicking the 📎 / 📁 icon (poster link, and
+  // your own user link), so there is NO ✕ on those. The only ✕ kept is for an
+  // ADMIN removing ANOTHER user's upload (they have no icon for that).
+  const blueLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color !== 'green');
+  const greenLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color === 'green');
+  const canRemoveLink = (l: RepoLink) => l.color === 'green' && l.by !== ctx.me && ctx.isAdmin;
   const linkBtn = ({ l, i }: { l: RepoLink; i: number }) => (
     <span key={l.url + i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
       <a className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}
-        title={l.by ? `${l.color === 'green' ? 'User' : 'Poster'}: ${l.by}` : undefined}>🔗 {cap15(l.label || 'Open')}</a>
-      {canRemoveLink(l) && <button type="button" title="Remove this attachment" onClick={eat(() => removeLinkAt(i))}
+        title={`${l.color === 'green' ? 'User' : 'Poster'}${l.by ? `: ${l.by}` : ''}${l.label ? ` — ${l.label}` : ''}`}>🔗 {l.color === 'green' ? 'User' : 'Poster'}</a>
+      {canRemoveLink(l) && <button type="button" title="Remove this user's upload (admin)" onClick={eat(() => removeLinkAt(i))}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1, opacity: 0.6 }}>✕</button>}
     </span>
   );
@@ -749,10 +755,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
       {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>}
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>}
-      {/* 📎 clip → reveals the "Poster" button · 📁 folder → reveals the "User" button.
-          The emoji stays put; click again to hide its button. */}
-      {canPoster && <button type="button" title={showPoster ? 'Hide the Poster button' : 'Show the Poster button'} style={{ ...iconBtn, opacity: showPoster ? 1 : 0.85 }} onClick={togglePoster}>📎</button>}
-      {canUser && <button type="button" title={showUser ? 'Hide the User button' : 'Show the User button'} style={{ ...iconBtn, opacity: showUser ? 1 : 0.85 }} onClick={toggleUser}>📁</button>}
+      {/* 📎 Poster · 📁 User. If a link exists the icon DELETES it (so a new one can
+          be posted); if empty it reveals the add-button. */}
+      {canPoster && <button type="button" title={posterLinkIdx >= 0 ? 'Delete the Poster link (then post a new one)' : 'Post a Poster link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>}
+      {canUser && <button type="button" title={myUserLinkIdx >= 0 ? 'Delete your link (then upload a new one)' : 'Upload your own document'} style={{ ...iconBtn, opacity: (myUserLinkIdx >= 0 || showUser) ? 1 : 0.85 }} onClick={folderAction}>📁</button>}
       {/* Mode cycle — owner/admin only: Enabled → statuses → Disabled → Preview. */}
       {modeBtn}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
@@ -766,38 +772,26 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={collapsed ? `Expand ${kids.length} card${kids.length === 1 ? '' : 's'} inside` : 'Collapse the cards inside'}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.75, flex: '0 0 auto' }}>{collapsed ? '▸' : '▾'}</button>
   ) : null;
-  // Poster / User role WIDGETS — revealed by the 📎 / 📁 emoji toggles. Each is a
-  // single self-transforming button:
-  //   • empty  → a coloured "Poster" / "User" button; click it to open the input
-  //     box (type a link or attach a document) and Submit.
-  //   • filled → that SAME button is now the link: click it to open the URL; a ✕
-  //     removes it (start over). Toggling the emoji off hides the widget.
-  // POSTER = owner/admin (blue). USER = any signed-in viewer's own upload (green,
-  // removable by them or an admin — not the OP).
-  const roleWidget = (role: 'poster' | 'user') => {
+  // Add-buttons for an EMPTY slot only. A submitted link renders automatically in
+  // the link row above (as "Poster" / "User"); these appear when the slot is empty
+  // and its 📎 / 📁 icon has been clicked, to open the input (type a link or attach
+  // a document, then Submit). POSTER = owner/admin (blue). USER = any signed-in
+  // viewer (green).
+  const addBtn = (role: 'poster' | 'user') => {
     const color: 'blue' | 'green' = role === 'poster' ? 'blue' : 'green';
-    const idx = role === 'poster' ? posterLinkIdx : myUserLinkIdx;
     const open = attaching && attachColor === color;
-    if (idx >= 0) {
-      const l = links[idx];
-      return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flex: '0 0 auto' }} onClick={stop}>
-          <a className={`btn small ${color}`} href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }} title={`${role === 'poster' ? 'Poster' : 'User'} link — click to open`}>🔗 {cap15(l.label || (role === 'poster' ? 'Poster' : 'User'))}</a>
-          <button type="button" title="Remove (start over)" onClick={eat(() => removeLinkAt(idx))}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1, opacity: 0.6 }}>✕</button>
-        </span>
-      );
-    }
     return (
       <button type="button" onClick={eat(() => toggleAttach(color))}
         title={role === 'poster' ? 'Post a file or link — everyone can open it' : 'Upload your own document'}
         className={`btn small ${open ? color : 'ghost'}`} style={{ flex: '0 0 auto' }}>{role === 'poster' ? 'Poster' : 'User'}</button>
     );
   };
-  const roleButtons = (showPoster || showUser) ? (
+  const showPosterAdd = canPoster && showPoster && posterLinkIdx < 0;
+  const showUserAdd = canUser && showUser && myUserLinkIdx < 0;
+  const roleButtons = (showPosterAdd || showUserAdd) ? (
     <span style={{ display: 'inline-flex', gap: 6, flex: '0 0 auto' }}>
-      {showPoster && roleWidget('poster')}
-      {showUser && roleWidget('user')}
+      {showPosterAdd && addBtn('poster')}
+      {showUserAdd && addBtn('user')}
     </span>
   ) : null;
   // 🖼️ "Suggest AI" picture button (repo-level toggle). Owner/admin generate a
