@@ -79,7 +79,15 @@ export function BuilderStudioView() {
   useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
-  const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '', children: [] }]);
+  // The user's HAND-AUTHORED cards, captured once, used as the seed for every AI
+  // suggestion. This is the fix for the "Suggest with AI appends instead of
+  // replacing" bug: we must never feed a previous AI batch back in as the seed
+  // (that made rule 4 "keep + add" grow the list on every click). Instead each
+  // suggest rebuilds a FRESH batch from the same hand-authored baseline. A manual
+  // edit clears it, so the (now edited) cards become the new baseline.
+  const seedCardsRef = useRef<RepoCard[] | null>(null);
+  const markCardsEdited = () => { seedCardsRef.current = null; };
+  const addCard = () => { markCardsEdited(); setRepoCards((cs) => [...cs, { name: '', link: '', description: '', children: [] }]); };
   // "Suggest with AI": one or MORE reference documents (attached in the goal box,
   // PDF or text) plus the goal + any hand-entered cards let the AI propose /
   // extend a plan into the editable card fields below.
@@ -87,6 +95,10 @@ export function BuilderStudioView() {
   const [docs, setDocs] = useState<DocItem[]>([]);
   const [suggesting, setSuggesting] = useState(false);
   const [withLinks, setWithLinks] = useState(false);   // "link suggestion" toggle
+  // "Next card" mode: when ON, Suggest with AI adds a SINGLE next card that
+  // follows the cards already on the page (using the chat, title & description)
+  // instead of regenerating a whole fresh batch of pathways.
+  const [nextCard, setNextCard] = useState(false);
   const [suggestImages, setSuggestImages] = useState(false);   // "Suggest AI" per-card picture button
   // AI card shape ({title,text,link?,linkLabel?,children}) → builder card shape.
   // A suggested link fills the card's Link field, so on publish it becomes a
@@ -114,18 +126,37 @@ export function BuilderStudioView() {
   };
   const removeDoc = (i: number) => setDocs((d) => d.filter((_, j) => j !== i));
   const docsPayload = () => docs.map((d) => ({ text: d.text || '', dataUrl: d.dataUrl || '' }));
-  // AI proposes / extends the plan into the editable card fields (does NOT publish).
+  // AI proposes the plan into the editable card fields (does NOT publish).
+  // Two modes: "Next card" ON adds a SINGLE card that follows what's already on
+  // the page; OFF regenerates a whole fresh batch (replacing the current cards,
+  // built from the user's hand-authored baseline — never from a prior AI batch,
+  // so a second click can't append/grow the list).
   const suggestWithAI = async () => {
     if (suggesting || busy) return;
     setSuggesting(true); setErr('');
     try {
-      const r: any = await API.post('/api/tools/repo/ai', {
-        op: 'suggest', title, subject, goal: context, withLinks, provider,
-        docs: docsPayload(), cards: cardsToAi(repoCards), messages,
-      }, { retries: 1 });
-      const mapped = mapAiCards(r?.cards || []);
-      if (mapped.length) setRepoCards(mapped);
-      else setErr(r?.error || 'The AI did not return a plan. Add a goal, a document, or a card or two, then try again.');
+      if (nextCard) {
+        // ONE next card, based on the chat + title/description + all current cards.
+        const r: any = await API.post('/api/tools/repo/ai', {
+          op: 'suggest', next: true, title, subject, goal: context, withLinks, provider,
+          docs: docsPayload(), cards: cardsToAi(repoCards), messages,
+        }, { retries: 1 });
+        const mapped = mapAiCards(r?.cards || []);
+        if (mapped.length) setRepoCards((cs) => [...cs, ...mapped.slice(0, 1)]);
+        else setErr(r?.error || 'The AI did not return a next card. Add a goal, a card or two, or chat, then try again.');
+      } else {
+        // Fresh batch from the hand-authored baseline (captured once, reused on
+        // every re-suggest so the result replaces rather than appends).
+        const seed = seedCardsRef.current ?? repoCards;
+        seedCardsRef.current = seed;
+        const r: any = await API.post('/api/tools/repo/ai', {
+          op: 'suggest', title, subject, goal: context, withLinks, provider,
+          docs: docsPayload(), cards: cardsToAi(seed), messages,
+        }, { retries: 1 });
+        const mapped = mapAiCards(r?.cards || []);
+        if (mapped.length) setRepoCards(mapped);
+        else setErr(r?.error || 'The AI did not return a plan. Add a goal, a document, or a card or two, then try again.');
+      }
     } catch (e: any) { setErr(e?.message || 'Could not build a suggestion.'); }
     setSuggesting(false);
   };
@@ -385,8 +416,8 @@ export function BuilderStudioView() {
               <div style={{ display: 'grid', gap: 12 }}>
                 {repoCards.map((c, i) => (
                   <RepoCardNode key={i} card={c} depth={0} canRemove={repoCards.length > 1}
-                    onChange={(nc) => setRepoCards((cs) => cs.map((x, j) => (j === i ? nc : x)))}
-                    onRemove={() => setRepoCards((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs))} />
+                    onChange={(nc) => { markCardsEdited(); setRepoCards((cs) => cs.map((x, j) => (j === i ? nc : x))); }}
+                    onRemove={() => { markCardsEdited(); setRepoCards((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs)); }} />
                 ))}
               </div>
               <div style={{ textAlign: 'center', margin: '12px 0' }}>
@@ -434,9 +465,15 @@ export function BuilderStudioView() {
                   title="When on, each published card gets a 🖼️ button — the owner/admin can generate an AI picture of that item; it stays saved for everyone to view.">
                   🖼️ Suggest AI: {suggestImages ? 'On' : 'Off'}
                 </button>
+                <button type="button" className={`btn small ${nextCard ? 'green' : 'ghost'}`} onClick={() => setNextCard((v) => !v)}
+                  title="When ON, Suggest with AI adds ONE next card that follows the cards already on the page (using the chat, title & description). When OFF, it regenerates a whole fresh batch of proposed pathways.">
+                  ➕ Next card: {nextCard ? 'On' : 'Off'}
+                </button>
                 <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={suggestWithAI}
-                  title="Let the AI propose or extend the plan into the cards above — it considers your goal, chat, documents and the cards so far. Then edit them and Post.">
-                  {suggesting ? '🤖 Thinking…' : '🤖 Suggest with AI'}
+                  title={nextCard
+                    ? 'Add ONE next card that follows the cards already on the page — it considers your chat, title & description.'
+                    : 'Let the AI propose a fresh plan into the cards above — it considers your goal, chat, documents and the cards so far. Then edit them and Post.'}>
+                  {suggesting ? '🤖 Thinking…' : (nextCard ? '🤖 Suggest next card' : '🤖 Suggest with AI')}
                 </button>
               </div>
             )}
@@ -444,7 +481,7 @@ export function BuilderStudioView() {
           </div>
 
           {err && <p style={{ color: 'var(--danger,#e4572e)', textAlign: 'center' }}>{err}</p>}
-          <div className="slide-actions" style={{ justifyContent: 'center', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="slide-actions" style={{ justifyContent: 'center', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Visibility</span>
               <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
                 <option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>

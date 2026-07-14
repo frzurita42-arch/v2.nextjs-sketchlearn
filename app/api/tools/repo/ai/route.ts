@@ -107,6 +107,9 @@ export async function POST(req: Request) {
     const goal = String(b.goal || b.context || '').slice(0, 4000);
     const existing = Array.isArray(b.cards) ? b.cards.slice(0, 40) : [];
     const withLinks = !!b.withLinks;   // "link suggestion" toggle: add a reference link per card
+    // "Next card" mode: return a SINGLE new top-level card that follows the ones
+    // already on the page (rather than a whole fresh batch of pathways).
+    const nextOne = !!b.next;
     // Which text model to use ('auto' failover, or a specific configured provider).
     const provider = ['openrouter', 'gemini', 'deepseek', 'moonshot'].includes(String(b.provider)) ? String(b.provider) : 'auto';
     // Documents to consider — an array of { text?, dataUrl? } (plus the legacy
@@ -146,7 +149,12 @@ export async function POST(req: Request) {
       '1. Produce an ORDERED sequence of top-level cards — the steps/weeks/units/categories, in a sensible order. AT MOST 20 top-level cards (this cap is TOP-LEVEL only; nested child cards do not count against it). Use as MANY or as FEW as the content actually needs — do not pad to 20.',
       '2. Give each card a clear "title" (e.g. "Unidad 2: Vectores", "Week 1 — Foundations", "Margherita Pizza") and a "text": a 1–2 sentence description. Write in the SAME LANGUAGE as the goal/document. Preserve the document\'s own numbering/names.',
       '3. When the source lists MULTIPLE sub-topics or items under a heading (e.g. "Representación gráfica y analítica. Componentes de un vector. Suma de vectores. Producto escalar y vectorial." under "Vectores"), create ONE nested child card for EACH of them — never collapse the list into a single child. Nest at most 3 levels.',
-      '4. KEEP the user\'s existing cards below and build ON them: preserve their titles/text (you may lightly polish), keep them in order, and ADD the further items needed to reach the goal. The user may have entered only the first few and wants you to figure out the rest.',
+      nextOne
+        ? '4. RETURN EXACTLY ONE new top-level card — the single NEXT step that logically follows the user\'s existing cards below (do NOT repeat, restate or re-list any of them). It should continue the sequence toward the goal, informed by the chat, title and description. You may give it nested child cards if the step naturally has parts.'
+        : '4. KEEP the user\'s existing cards below and build ON them: preserve their titles/text (you may lightly polish), keep them in order, and ADD the further items needed to reach the goal. The user may have entered only the first few and wants you to figure out the rest.',
+      // The DEEPEST cards feed a separate presentation/lesson generator, so they
+      // must stand on their own — a bare heading is not enough for it to work from.
+      '4b. EVERY LEAF card (a card with no children — the deepest node on each branch) MUST carry BOTH a clear, specific standalone "title" AND a "text" of 1–3 sentences that concretely states what that topic is and names the actual concepts/skills/examples it covers. Write it so a lesson generator that sees ONLY that one card\'s title + text could build a complete, accurate lesson about it — no vague one-word descriptions, no "see above", no relying on the parent card for meaning.',
       '5. Base the plan on the attached document / goal — do not invent unrelated content. Ignore document front-matter (course code, bibliography).',
       withLinks
         ? '6. LINK SUGGESTIONS ARE ON: for EVERY card add a "link" — a single, relevant reference URL — plus a short "linkLabel" (max 15 chars, e.g. "Wikipedia", "MDN", "Recipe", "Image"). PREFER a well-known, popular NICHE authority for the topic when one clearly fits — it is more useful than a generic encyclopedia entry (e.g. MDN for web dev, Investopedia for finance, Khan Academy or a standard textbook site for a school subject, IMDb for films, AllRecipes/Serious Eats for dishes, PubMed/Mayo Clinic for health, official docs for a tool). Otherwise use a real Wikipedia article (https://en.wikipedia.org/wiki/Topic — or the document\'s language, e.g. https://es.wikipedia.org/wiki/…) or an official website; for a visual/product use a Wikimedia/Wikipedia page or a Google image search URL (https://www.google.com/search?tbm=isch&q=...+url-encoded). Only include a link you are reasonably confident resolves at a real, popular site; if unsure for a card, omit its link. Never fabricate a deep/direct file URL that likely 404s.'
@@ -205,7 +213,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: binDocs.length ? 'Reading a PDF needs Gemini. Paste the document text instead.' : 'No AI model is configured.' }, { status: 200 });
       }
       if (!out) return NextResponse.json({ error: 'The AI could not build a plan. Add a bit more detail and try again.' }, { status: 200 });
-      return NextResponse.json({ cards: out.slice(0, 20) });
+      return NextResponse.json({ cards: out.slice(0, nextOne ? 1 : 20) });
     } catch (e: any) {
       // Surface the real reason (truncated JSON, timeout, quota…) so it's fixable.
       console.error('repo suggest failed:', e?.message || e);
