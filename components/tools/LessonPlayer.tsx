@@ -916,8 +916,14 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [addMsg, setAddMsg] = useState('');
   const addToHistory = async (c: Cfg, extra?: Record<string, any>) => {
     const cc: Cfg = { ...c, level: c.level || c.difficulty || levels[0], topic: c.topic || '', category: c.category || defaultCat(), ...extra };
-    try { await API.post('/api/tools/entries', { slug, data: cc }); setAddMsg('Added to the history below ✓'); setTimeout(() => setAddMsg(''), 4000); } catch { /* ignore */ }
-    loadActivities();
+    try {
+      await API.post('/api/tools/entries', { slug, data: cc });
+      setAddMsg('Added to the gallery below ✓'); setTimeout(() => setAddMsg(''), 4000);
+      loadActivities();      // the new card shows in the gallery/history below
+      refreshExample();      // propose a fresh generation to play or add again
+    } catch (e: any) {
+      setAddMsg(e?.message || 'Could not add — please try again.'); setTimeout(() => setAddMsg(''), 5000);
+    }
   };
 
   // Record one answered question (by index) on the current slide; mark the slide

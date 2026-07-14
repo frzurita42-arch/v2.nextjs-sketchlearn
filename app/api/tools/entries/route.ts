@@ -6,9 +6,18 @@ import { requireAuth } from '@/lib/auth-guard';
 const { getToolBySlug, insertEntry, listEntries, setEntryStatus, getEntry, deleteEntry } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { userState } = require('@/src/db/users');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+// Resolve a slug to a real DB tool OR a built-in virtual example/admin tool. The
+// example objects are already tool-shaped (id === slug), so their renditions are
+// keyed by the slug — letting example & admin lessons save/load a History feed too.
+async function resolveTool(slug: string) {
+  return (await getToolBySlug(slug)) || exampleBySlug(slug) || null;
+}
 
 // GET /api/tools/entries?slug=xyz -> entries for an app tool.
 // Non-owners only see 'active'/'approved'; the owner sees everything (incl. pending).
@@ -16,7 +25,7 @@ export async function GET(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const slug = new URL(req.url).searchParams.get('slug') || '';
-  const tool = await getToolBySlug(slug);
+  const tool = await resolveTool(slug);
   if (!tool || !['app', 'lesson', 'repo'].includes(tool.archetype)) return NextResponse.json({ entries: [] });
   const all = await listEntries(tool.id, { limit: 300 });
   const isOwner = tool.owner === a.user.username || a.user.role === 'admin';
@@ -39,7 +48,7 @@ export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const tool = await getToolBySlug(String(b.slug || ''));
+  const tool = await resolveTool(String(b.slug || ""));
   if (!tool || !['app', 'lesson', 'repo'].includes(tool.archetype)) return NextResponse.json({ error: 'Not an app, lesson, or repo tool' }, { status: 400 });
   const data = (b.data && typeof b.data === 'object') ? b.data : {};
   // Guard against oversized payloads (e.g. a huge embedded image data URL).
@@ -63,7 +72,7 @@ export async function PUT(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const tool = await getToolBySlug(String(b.slug || ''));
+  const tool = await resolveTool(String(b.slug || ""));
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (tool.owner !== a.user.username && a.user.role !== 'admin') return NextResponse.json({ error: 'Only the owner or an admin can moderate entries' }, { status: 403 });
   // Repositories carry custom, per-card status labels (e.g. pending → paid /
@@ -81,7 +90,7 @@ export async function DELETE(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const tool = await getToolBySlug(String(b.slug || ''));
+  const tool = await resolveTool(String(b.slug || ""));
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const entry = await getEntry(String(b.entryId || ''));
   if (!entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
