@@ -25,6 +25,8 @@ export interface CardShellProps {
   placeholder?: React.ReactNode;  // buttons shown inside the empty image box
   rowThumbFallback?: React.ReactNode; // 46×46 fallback content for row view
   editBtns?: React.ReactNode;     // inline ✎🎨 next to title / after description
+  afterTitle?: React.ReactNode;   // inline slot right after the TITLE text (per-field edit)
+  afterSubtitle?: React.ReactNode;// inline slot right after the SUBTITLE text (per-field edit)
   badges?: React.ReactNode;       // extra inline badges under/after the title
   tags?: string[];
   meta?: React.ReactNode;         // footer-left meta line
@@ -66,8 +68,9 @@ export function CardShell(p: CardShellProps) {
             {fav && <span style={{ fontSize: 11 }}>★</span>}
             {p.badges}
             {p.editBtns}
+            {p.afterTitle}
           </div>
-          {desc && <div style={{ fontSize: 12, opacity: 0.8 }}>{desc}</div>}
+          {(desc || p.afterSubtitle) && <div style={{ fontSize: 12, opacity: 0.8, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>{desc}{p.afterSubtitle}</div>}
           {p.meta}
         </div>
         <span style={{ display: 'flex', gap: 8, flex: '0 0 auto', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -83,11 +86,11 @@ export function CardShell(p: CardShellProps) {
       {imageBox}
       <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-          <strong style={{ fontSize: 16, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}{p.editBtns}</strong>
+          <strong style={{ fontSize: 16, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}{p.editBtns}{p.afterTitle}</strong>
           {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6 }}>{badge}</span>}
         </div>
         {p.badges && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, opacity: 0.75 }}>{p.badges}</div>}
-        {subtitle !== undefined && <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1 }}>{subtitle || 'No description.'}{p.editBtns}</p>}
+        {(subtitle !== undefined || p.afterSubtitle) && <p style={{ margin: 0, fontSize: 13, opacity: 0.85, flex: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>{subtitle || 'No description.'}{p.editBtns}{p.afterSubtitle}</p>}
         {p.tags && p.tags.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {p.tags.map((tag: string) => <span key={tag} style={{ fontSize: 11, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)' }}>#{tag}</span>)}

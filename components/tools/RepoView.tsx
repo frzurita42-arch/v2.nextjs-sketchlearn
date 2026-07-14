@@ -32,8 +32,8 @@ type ViewCtx = {
   favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
-  editTitle: (id: string, title: string) => void;                   // ✎ rename
-  distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite
+  editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
+  distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
   addSubcard: (id: string) => void;                                // ⚙️ add a card inside
   deleteCard: (id: string) => void;                                // 🗑 delete
 };
@@ -425,32 +425,63 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 
 // A collection card rendered through the SAME shared CardShell used by the home
 // gallery — adapted to a repo card: title, description, cover image, a favorite
-// ★, and the attachments as footer buttons. Owner/admin get bare inline icons on
-// every card: ✎ rename, 🎨 AI-rewrite the title, ⚙️ add a card inside, 🗑 delete.
-// Nested cards show ONLY the first as a preview and can be collapsed/expanded to
-// reveal the rest — this preview behaviour is exclusive to repo collection cards
-// (not the tool gallery, posts, or homepage).
+// ★, and the attachments as footer buttons. Owner/admin edit IN PLACE: a ✎ pencil
+// sits next to the title (with 🎨 to AI-rewrite it) and another ✎ next to the
+// subtitle, so you edit the thing you click. Card-level actions stay small and
+// bare: ⚙️ add a card inside, 🗑 delete. Nested cards show ONLY the first as a
+// preview and can be collapsed/expanded to reveal the rest — this preview
+// behaviour is exclusive to repo collection cards (not the tool gallery, posts,
+// or homepage).
 function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx }) {
   const kids = card.children || [];
   const links = card.links || [];
   const isFav = !!ctx.favs[card.id];
   const [expanded, setExpanded] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingSub, setEditingSub] = useState(false);
   const [titleDraft, setTitleDraft] = useState(card.title || '');
+  const [subDraft, setSubDraft] = useState(card.text || '');
   const [distorting, setDistorting] = useState(false);
+  const editing = editingTitle || editingSub;
   const open = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
 
-  const saveTitle = () => { ctx.editTitle(card.id, titleDraft.trim() || 'Untitled'); setEditingTitle(false); };
+  const openTitle = () => { setTitleDraft(card.title || ''); setEditingSub(false); setEditingTitle(true); };
+  const openSub = () => { setSubDraft(card.text || ''); setEditingTitle(false); setEditingSub(true); };
+  const saveTitle = () => { ctx.editField(card.id, { title: titleDraft.trim() || 'Untitled' }); setEditingTitle(false); };
+  const saveSub = () => { ctx.editField(card.id, { text: subDraft.trim() }); setEditingSub(false); };
   const distort = async () => { setDistorting(true); try { await ctx.distortTitle(card); } finally { setDistorting(false); } };
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const editorRow = { display: 'inline-flex', gap: 6, marginLeft: 8, verticalAlign: 'middle', alignItems: 'center' } as const;
 
-  // Owner/admin bare icons (no button box): rename · AI rewrite · add card inside.
-  const editIcons = ctx.canEdit ? (
-    <>
-      <button type="button" title="Edit title" style={iconBtn} onClick={() => { setTitleDraft(card.title || ''); setEditingTitle(true); }}>✎</button>
+  // Pencil (+ palette) rendered RIGHT NEXT TO the title; when editing, the input
+  // takes its place inline.
+  const afterTitle = ctx.canEdit ? (editingTitle ? (
+    <span style={editorRow} onClick={stop}>
+      <input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+        style={{ fontSize: 14, minWidth: 120 }} onClick={stop} />
+      <button className="btn small green" onClick={saveTitle}>Save</button>
+      <button className="btn small ghost" onClick={() => setEditingTitle(false)}>✕</button>
+    </span>
+  ) : (
+    <span style={{ display: 'inline-flex', gap: 8, marginLeft: 8, verticalAlign: 'middle' }}>
+      <button type="button" title="Edit title" style={iconBtn} onClick={openTitle}>✎</button>
       <button type="button" title="Rewrite the title with AI" disabled={distorting} style={{ ...iconBtn, opacity: distorting ? 0.4 : 1 }} onClick={distort}>🎨</button>
-      <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>
-    </>
-  ) : null;
+    </span>
+  )) : null;
+
+  // Pencil next to the subtitle (the card's description text).
+  const afterSubtitle = ctx.canEdit ? (editingSub ? (
+    <span style={editorRow} onClick={stop}>
+      <input autoFocus value={subDraft} placeholder="Subtitle" onChange={(e) => setSubDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') saveSub(); if (e.key === 'Escape') setEditingSub(false); }}
+        style={{ fontSize: 13, minWidth: 120 }} onClick={stop} />
+      <button className="btn small green" onClick={saveSub}>Save</button>
+      <button className="btn small ghost" onClick={() => setEditingSub(false)}>✕</button>
+    </span>
+  ) : (
+    <button type="button" title="Edit subtitle" style={{ ...iconBtn, marginLeft: 6, verticalAlign: 'middle' }} onClick={openSub}>✎</button>
+  )) : null;
 
   const actions = (
     <>
@@ -458,7 +489,7 @@ function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' 
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
-      {editIcons}
+      {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => { ctx.addSubcard(card.id); setExpanded(true); }}>⚙️</button>}
     </>
   );
   const del = ctx.canEdit ? (
@@ -466,19 +497,13 @@ function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' 
   ) : undefined;
 
   const shell = (
-    <>
-      {editingTitle && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-          <input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
-            style={{ flex: 1, fontSize: 14 }} />
-          <button className="btn small green" onClick={saveTitle}>Save</button>
-          <button className="btn small ghost" onClick={() => setEditingTitle(false)}>✕</button>
-        </div>
-      )}
-      <CardShell view={view} title={card.title || 'Untitled'} subtitle={card.text || undefined}
-        thumbnail={isImg(card.image) ? card.image : null} onOpen={open} actions={actions} del={del} />
-    </>
+    <CardShell view={view}
+      title={editingTitle ? '' : (card.title || 'Untitled')}
+      subtitle={editingSub ? ' ' : (card.text || '')}
+      thumbnail={isImg(card.image) ? card.image : null}
+      onOpen={editing ? undefined : open}
+      afterTitle={afterTitle} afterSubtitle={afterSubtitle}
+      actions={actions} del={del} />
   );
 
   if (!kids.length) return <div>{shell}</div>;
@@ -560,8 +585,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
       if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
     } catch { /* keep the optimistic copy */ }
   };
-  const editTitle = (id: string, title: string) => saveCards(mapTree(cards, id, (c) => ({ ...c, title })));
-  const addSubcard = (id: string) => saveCards(addChildTo(cards, id, blankCard('card')));
+  const editField = (id: string, p: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...p })));
+  // The gear adds a nested card seeded with a generic title AND subtitle, so its
+  // ✎ pencils have something to edit right away.
+  const addSubcard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
   const deleteCard = (id: string) => { if (!confirm('Delete this card and everything inside it?')) return; saveCards(removeFromTree(cards, id)); };
   const distortTitle = async (card: RepoCard) => {
     try {
@@ -571,7 +598,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editTitle, distortTitle, addSubcard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, editField, distortTitle, addSubcard, deleteCard };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
