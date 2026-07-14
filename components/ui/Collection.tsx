@@ -215,11 +215,13 @@ export function Collection<T>({
           <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Grid'} onClick={() => setViewP('grid')}>▦</button>
           <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Rows'} onClick={() => setViewP('row')}>☰</button>
         </div>
-        {/* 🔒 lock — enable/disable switching the display. Owner/admin only. */}
+        {/* 🔒 lock — enable/disable switching the display. Owner/admin only. Just
+            the icon, no button box. */}
         {(canLockView || locked) && (
-          <button className="btn small ghost" disabled={!canLockView}
+          <button disabled={!canLockView}
             title={locked ? (canLockView ? 'Display locked — click to let viewers switch' : 'The display was locked by the owner') : 'Lock the display so viewers can’t switch (owner/admin)'}
-            onClick={toggleLock}>{locked ? '🔒' : '🔓'}</button>
+            onClick={toggleLock}
+            style={{ background: 'none', border: 'none', cursor: canLockView ? 'pointer' : 'default', padding: '0 2px', fontSize: 15, lineHeight: 1, opacity: canLockView ? 1 : 0.55 }}>{locked ? '🔒' : '🔓'}</button>
         )}
       </div>
       <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>

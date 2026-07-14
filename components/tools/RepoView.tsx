@@ -21,6 +21,7 @@ import { ImageField } from '@/components/tools/ImageField';
 import { isRenderableImage } from '@/lib/img';
 import { buildRepoZip } from '@/lib/lesson-export';
 import { Collection } from '@/components/ui/Collection';
+import { CardShell } from '@/components/ui/CardShell';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -416,6 +417,38 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
   );
 }
 
+// A collection card rendered through the SAME shared CardShell used by the home
+// gallery — adapted to a repo card: title, description, cover image, a favorite
+// ★, and the attachments as footer buttons. Nested child cards render indented
+// below (each as its own CardShell), so the layered structure is preserved.
+function RepoCollectionCard({ card, view, ctx }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx }) {
+  const kids = card.children || [];
+  const links = card.links || [];
+  const isFav = !!ctx.favs[card.id];
+  const open = links[0]?.url ? () => { try { window.open(links[0].url, '_blank', 'noopener'); } catch { /* ignore */ } } : undefined;
+  const actions = (
+    <>
+      {links.map((l, i) => <a key={i} className="btn small blue" href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>🔗 {l.label || 'Open'}</a>)}
+      {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
+      <button onClick={() => ctx.toggleFav(card.id)} title={isFav ? 'Unfavorite' : 'Favorite'}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 16, lineHeight: 1, color: isFav ? '#f0a202' : 'var(--ink)', opacity: isFav ? 1 : 0.5 }}>{isFav ? '★' : '☆'}</button>
+    </>
+  );
+  const shell = (
+    <CardShell view={view} title={card.title || 'Untitled'} subtitle={card.text || undefined}
+      thumbnail={isImg(card.image) ? card.image : null} onOpen={open} actions={actions} />
+  );
+  if (!kids.length) return shell;
+  return (
+    <div>
+      {shell}
+      <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
+        {kids.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} />)}
+      </div>
+    </div>
+  );
+}
+
 export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string; canEdit: boolean; owner?: string }) {
   const repo: RepoSpec = def?.repo || { cards: [] };
   const [cards, setCards] = useState<RepoCard[]>(() => repo.cards || []);
@@ -586,8 +619,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}
-          renderGrid={(c: RepoCard) => <CardView card={c} depth={0} defaultDisplay="bars" ctx={ctx} />}
-          renderRow={(c: RepoCard) => <CardView card={c} depth={0} defaultDisplay="bars" ctx={ctx} />}
+          renderGrid={(c: RepoCard) => <RepoCollectionCard card={c} view="grid" ctx={ctx} />}
+          renderRow={(c: RepoCard) => <RepoCollectionCard card={c} view="row" ctx={ctx} />}
           emptyAll="This collection is empty."
           emptyFiltered="No cards match your search."
         />
