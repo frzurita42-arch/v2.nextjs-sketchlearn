@@ -117,16 +117,24 @@ const isImg = (v: any) => isRenderableImage(v);
 // Attachment button labels are capped so a card's button row stays tidy.
 const cap15 = (s: string) => (s.length > 15 ? s.slice(0, 14) + '…' : s);
 
-// Per-card workflow status: a cycle of four, each with a chip colour + label.
-const STATUS_ORDER = ['assigned', 'pending', 'approved', 'rejected'] as const;
-type CardStatus = typeof STATUS_ORDER[number];
-const STATUS_META: Record<CardStatus, { label: string; bg: string }> = {
+// One owner/admin-cycled mode per card. 'enabled' means the field is cleared.
+//   status modes (assigned…rejected): a coloured chip, card stays usable
+//   disabled: greyed + unclickable for viewers (full content still shown)
+//   preview:  viewers see only the name + description, greyed + unclickable
+type CardMode = 'enabled' | 'assigned' | 'pending' | 'approved' | 'rejected' | 'disabled' | 'preview';
+const MODE_ORDER: CardMode[] = ['enabled', 'assigned', 'pending', 'approved', 'rejected', 'disabled', 'preview'];
+const STATUS_META: Record<string, { label: string; bg: string }> = {
   assigned: { label: '📋 Assigned', bg: '#5c80bc' },
   pending: { label: '⏳ Pending', bg: '#f0a202' },
   approved: { label: '✅ Approved', bg: '#1f8b4c' },
   rejected: { label: '⛔ Rejected', bg: '#c0392b' },
 };
-const nextStatus = (s?: string): CardStatus => STATUS_ORDER[((STATUS_ORDER.indexOf(s as CardStatus) + 1) % STATUS_ORDER.length + STATUS_ORDER.length) % STATUS_ORDER.length];
+// The icon + words shown on the owner/admin cycle button for each mode.
+const MODE_BTN: Record<CardMode, string> = {
+  enabled: '🟢', assigned: '📋', pending: '⏳', approved: '✔️', rejected: '⛔', disabled: '🚫', preview: '👁',
+};
+const modeOf = (m?: string): CardMode => (MODE_ORDER.includes(m as CardMode) ? (m as CardMode) : 'enabled');
+const nextMode = (m?: string): CardMode => MODE_ORDER[(MODE_ORDER.indexOf(modeOf(m)) + 1) % MODE_ORDER.length];
 
 // Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
 const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
@@ -469,9 +477,13 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const kids = (card.children || []).filter((k) => ctx.canEdit || !k.hidden);
   const links = card.links || [];
   const dimmed = !!card.hidden && ctx.canEdit;   // owner/admin preview of a hidden card
-  // A disabled card is greyed + fully unclickable for normal viewers; owner/admin
-  // keep full use (so they can re-enable it).
-  const blocked = !!card.disabled && !ctx.canEdit;
+  // The owner/admin-cycled card mode. Disabled/Preview grey the card and block
+  // interaction for normal viewers; Preview additionally hides everything but the
+  // name + description. Owner/admin always see and use the whole card.
+  const mode = modeOf(card.mode);
+  const isStatus = mode === 'assigned' || mode === 'pending' || mode === 'approved' || mode === 'rejected';
+  const blocked = (mode === 'disabled' || mode === 'preview') && !ctx.canEdit;
+  const previewBlocked = mode === 'preview' && !ctx.canEdit;
   const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
   const isFav = !!ctx.favs[card.id];
   const [expanded, setExpanded] = useState(true);   // default: show all nested (Show less)
@@ -487,6 +499,16 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [linkUrl, setLinkUrl] = useState('');
   const [attachBusy, setAttachBusy] = useState(false);
   const editing = editingTitle || editingSub;
+
+  // PREVIEW mode for a normal viewer: only the name + description, greyed and
+  // fully unclickable — nothing else (no image, attachments, actions or nesting).
+  if (previewBlocked) {
+    return (
+      <div style={{ opacity: 0.5, pointerEvents: 'none' }}>
+        <CardShell view={view} title={card.title || 'Untitled'} subtitle={card.text || ''} />
+      </div>
+    );
+  }
 
   // ---- attachments: BOTH the 📎 clip and the 📁 folder add a link or uploaded
   // file to THIS card (they render as the 🔗 buttons). They differ only in the
@@ -654,17 +676,17 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </div>
   ) : null;
 
-  // Status chip — visible to everyone; owner/admin click it to cycle
-  // Assigned → Pending → Approved → Rejected. Shown only once a status is set,
-  // or (for owner/admin) always so they can start the workflow.
-  const stMeta = card.status ? STATUS_META[card.status] : null;
-  const statusChip = (stMeta || ctx.canEdit) ? (
-    <button type="button" disabled={!ctx.canEdit}
-      title={ctx.canEdit ? 'Cycle status: Assigned → Pending → Approved → Rejected' : (stMeta?.label || '')}
-      onClick={ctx.canEdit ? () => ctx.editField(card.id, { status: nextStatus(card.status) }) : undefined}
-      style={{ border: 'none', borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: stMeta ? '#fff' : 'var(--ink)', background: stMeta ? stMeta.bg : 'transparent', boxShadow: stMeta ? 'none' : 'inset 0 0 0 1.5px var(--ink)', cursor: ctx.canEdit ? 'pointer' : 'default', flex: '0 0 auto' }}>
-      {stMeta ? stMeta.label : '＋ Status'}
-    </button>
+  // Status chip — a read-only badge everyone sees when the card is in one of the
+  // four workflow statuses. Owner/admin change it with the mode cycle button.
+  const stMeta = isStatus ? STATUS_META[mode] : null;
+  const statusChip = stMeta ? (
+    <span style={{ borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: '#fff', background: stMeta.bg, flex: '0 0 auto' }}>{stMeta.label}</span>
+  ) : null;
+  // Owner/admin cycle button: Enabled → Assigned → Pending → Approved → Rejected
+  // → Disabled → Preview. Setting it back to Enabled clears the field.
+  const cycleMode = () => { const nm = nextMode(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); };
+  const modeBtn = ctx.canEdit ? (
+    <button type="button" title={`Mode: ${mode} — click to cycle (Enabled → statuses → Disabled → Preview)`} style={{ ...iconBtn, opacity: mode === 'enabled' ? 0.85 : 1 }} onClick={cycleMode}>{MODE_BTN[mode]}</button>
   ) : null;
 
   // The control icons laid out in a tidy 3-per-row grid.
@@ -680,8 +702,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {/* 📎 clip → blue attachment · 📁 folder → green attachment. Second click removes the last one. */}
       {canUseClip && <button type="button" title="Attach a file or link (blue) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'blue' ? 1 : 0.85 }} onClick={clipClick}>📎</button>}
       {canUseFolder && <button type="button" title="Attach a file or link (green) — click again to remove" style={{ ...iconBtn, opacity: attaching && attachColor === 'green' ? 1 : 0.85 }} onClick={folderClick}>📁</button>}
-      {/* Enable/disable — owner/admin only. Disabled ⇒ greyed + unclickable for viewers. */}
-      {ctx.canEdit && <button type="button" title={card.disabled ? 'Disabled for viewers — click to enable' : 'Enabled — click to disable (grey out + block for viewers)'} style={{ ...iconBtn, opacity: card.disabled ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { disabled: !card.disabled })}>{card.disabled ? '🚫' : '✅'}</button>}
+      {/* Mode cycle — owner/admin only: Enabled → statuses → Disabled → Preview. */}
+      {modeBtn}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
       {ctx.canEdit && <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>}
     </div>
@@ -701,7 +723,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={editingTitle ? '' : (card.title || 'Untitled')}
       subtitle={editingSub ? ' ' : (card.text || '')}
       thumbnail={isImg(card.image) ? card.image : null}
-      badge={dimmed ? '🙈 hidden' : (card.disabled && ctx.canEdit ? '🚫 disabled' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined))}
+      badge={dimmed ? '🙈 hidden' : (ctx.canEdit && mode === 'disabled' ? '🚫 disabled' : ctx.canEdit && mode === 'preview' ? '👁 preview' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined))}
       onOpen={open}
       iconNode={iconNode}
       overlay={imgOverlay} placeholder={imgPlaceholder}
