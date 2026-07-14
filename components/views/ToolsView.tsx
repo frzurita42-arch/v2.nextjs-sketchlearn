@@ -49,10 +49,15 @@ function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void
   );
 }
 
+// Module-level cache of the gallery list, so re-visiting the home/Tools page
+// (SPA navigation) shows the same content INSTANTLY and just revalidates in the
+// background — instead of a blank "Loading…" every time.
+let toolsCache: any[] | null = null;
+
 export function ToolsView() {
   const app = useApp();
-  const [tools, setTools] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tools, setTools] = useState<any[]>(() => toolsCache || []);
+  const [loading, setLoading] = useState(() => toolsCache === null);
   const [filter, setFilter] = useState('all');            // category chip (section-specific)
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_tool_likes') || '{}')); } catch { /* ignore */ } }, []);
@@ -167,15 +172,22 @@ export function ToolsView() {
   const loadHidden = (): string[] => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } };
 
   const load = async () => {
-    setLoading(true);
+    // Only show the full-page spinner on the very first load (no cache yet);
+    // otherwise keep the cached list visible and refresh it silently.
+    if (toolsCache === null) setLoading(true);
     try {
       const r = await API.get('/api/tools');
       const hidden = loadHidden();
-      setTools((Array.isArray(r?.tools) ? r.tools : []).filter((t: any) => !hidden.includes(t.slug)));
-    } catch { /* ignore */ }
+      const next = (Array.isArray(r?.tools) ? r.tools : []).filter((t: any) => !hidden.includes(t.slug));
+      toolsCache = next;
+      setTools(next);
+    } catch { /* keep whatever we have */ }
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  // Keep the module cache in step with edits/deletes so a revisit shows the real
+  // current list (not a stale copy) before the background refresh returns.
+  useEffect(() => { if (!loading) toolsCache = tools; }, [tools, loading]);
   // Reload the tools WITHOUT the full-page loading flag, so the carousel (and its
   // Refresh button) stays mounted and just shows the spinner.
   const [refreshingTools, setRefreshingTools] = useState(false);
