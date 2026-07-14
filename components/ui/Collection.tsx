@@ -222,12 +222,12 @@ export function Collection<T>({
         {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Liked by admin</button>}
         {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title="Only tools the creator (OP) favorited">💛 OP favorited</button>}
         {time && <button className="btn small" onClick={cycleSort} title="Sort: newest ↔ oldest">{sortMode === 'newest' ? '↓ Newest' : '↑ Oldest'}</button>}
-        {!lockView && (
-          <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
-            <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Grid" onClick={() => setViewP('grid')}>▦</button>
-            <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} title="Rows" onClick={() => setViewP('row')}>☰</button>
-          </div>
-        )}
+        {/* Grid / rows toggle. When a view is locked (e.g. repos are rows-only) the
+            OTHER button still shows but is disabled — visibly not an option. */}
+        <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
+          <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={lockView === 'row'} title={lockView === 'row' ? 'Grid — not available for this list' : 'Grid'} onClick={() => setViewP('grid')}>▦</button>
+          <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={lockView === 'grid'} title={lockView === 'grid' ? 'Rows — not available for this list' : 'Rows'} onClick={() => setViewP('row')}>☰</button>
+        </div>
       </div>
       <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>
         {filtered.length} item{filtered.length === 1 ? '' : 's'}
