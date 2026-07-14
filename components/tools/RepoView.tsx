@@ -98,6 +98,13 @@ function addSiblingAfter(cards: RepoCard[], id: string, sib: RepoCard): RepoCard
   return inserted ? out : out;
 }
 
+// Append a sibling at the END of the level the id lives on (bottom of that list),
+// so new cards stack in order: Unit 1, Unit 2… / Week 1, Week 2…
+function addSiblingEnd(cards: RepoCard[], id: string, sib: RepoCard): RepoCard[] {
+  if (cards.some((c) => c.id === id)) return [...cards, sib];
+  return cards.map((c) => (c.children?.length ? { ...c, children: addSiblingEnd(c.children, id, sib) } : c));
+}
+
 // ---- per-user completion (localStorage) -----------------------------------
 function useDone(slug: string) {
   const key = 'sl_repo_done';
@@ -850,9 +857,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // The gear adds a nested card seeded with a generic title AND subtitle, so its
   // ✎ pencils have something to edit right away.
   const addSubcard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
-  // ➕ add a sibling card at the SAME level as this card (a new top-level card when
-  // used on a top card, a new nested sibling when used on a nested card).
-  const addSibling = (id: string) => saveCards(addSiblingAfter(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
+  // ⚙️ add a sibling card at the SAME level, appended to the BOTTOM of that level
+  // (a new top-level card from a top card, a new nested sibling from a nested one).
+  const addSibling = (id: string) => saveCards(addSiblingEnd(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
   // The 📁 file icon adds a nested card meant for a file or link: generic title +
   // description, ready for the 📎 clip.
   // Set/replace the card icon: an uploaded/AI image OR a number emoji (mutually
