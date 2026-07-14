@@ -74,6 +74,34 @@ export function BuilderStudioView() {
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
   const addCard = () => setRepoCards((cs) => [...cs, { name: '', link: '', description: '', children: [] }]);
+  // Build the whole card tree from a course document (PDF/text): units → cards,
+  // subunits → nested cards, each with a description.
+  const [docName, setDocName] = useState('');
+  const [docText, setDocText] = useState('');
+  const [docBusy, setDocBusy] = useState(false);
+  const mapAiCards = (cards: any[]): RepoCard[] => (Array.isArray(cards) ? cards : []).slice(0, 60).map((c: any) => ({
+    name: String(c?.title || c?.name || '').slice(0, 120), link: '',
+    description: String(c?.text || c?.subtitle || c?.description || '').slice(0, 2000),
+    children: mapAiCards(c?.children || []),
+  }));
+  const buildFromDoc = async (payload: { docText?: string; docDataUrl?: string }) => {
+    setDocBusy(true); setErr('');
+    try {
+      const r: any = await API.post('/api/tools/repo/ai', { op: 'fromDoc', title, docText: payload.docText || '', docDataUrl: payload.docDataUrl || '' });
+      const mapped = mapAiCards(r?.cards || []);
+      if (mapped.length) setRepoCards(mapped);
+      else setErr(r?.error || 'The AI did not return any cards. Try pasting the document text.');
+    } catch (e: any) { setErr(e?.message || 'Could not build cards from the document.'); }
+    setDocBusy(false);
+  };
+  const onDocFile = async (f: File) => {
+    if (!f) return;
+    if (f.size > 20_000_000) { setErr('Please pick a document under 20 MB.'); return; }
+    setDocName(f.name);
+    const isText = /text|json|markdown/.test(f.type) || /\.(txt|md|csv)$/i.test(f.name);
+    if (isText) { const text = await f.text(); setDocText(text); await buildFromDoc({ docText: text }); }
+    else { const dataUrl = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); }); await buildFromDoc({ docDataUrl: dataUrl }); }
+  };
   const [context, setContext] = useState('');
   const [visibility, setVisibility] = useState('unlisted');
   const [busy, setBusy] = useState(false);
@@ -302,6 +330,25 @@ export function BuilderStudioView() {
                description. Published, they show as cards on the page and viewers can
                add their own. */
             <>
+              {/* Build cards from a course document: units → cards, subunits → nested. */}
+              <div className="card alt" style={{ padding: '12px 14px', margin: '0 0 12px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.7, marginBottom: 6 }}>📄 Build cards from a course document (AI)</div>
+                <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>Attach a syllabus / program (PDF or text). Each <b>unit</b> becomes a card, each <b>subunit</b> a nested card inside it, and every card gets a description — then review &amp; publish below.</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <label className="btn small blue" style={{ cursor: 'pointer' }}>
+                    {docBusy ? 'Reading…' : '📎 Attach document'}
+                    <input type="file" accept=".pdf,.txt,.md,.csv,.doc,.docx,.rtf,text/*,application/pdf" style={{ display: 'none' }}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) onDocFile(f); e.currentTarget.value = ''; }} />
+                  </label>
+                  {docName && <span style={{ fontSize: 12, opacity: 0.7 }}>{docName}</span>}
+                </div>
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ fontSize: 12, cursor: 'pointer', opacity: 0.7 }}>…or paste the document text</summary>
+                  <textarea value={docText} placeholder="Paste the syllabus / contents here…" onChange={(e) => setDocText(e.target.value)} style={{ width: '100%', minHeight: 90, marginTop: 6, fontSize: 13 }} />
+                  <button className="btn small green" disabled={docBusy || !docText.trim()} onClick={() => buildFromDoc({ docText })} style={{ marginTop: 6 }}>{docBusy ? 'Generating…' : '✨ Generate cards from text'}</button>
+                </details>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>CARDS ({repoCards.length}) — name · link · description, nest cards inside cards</div>
               </div>

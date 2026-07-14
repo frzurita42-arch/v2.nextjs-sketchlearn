@@ -170,6 +170,28 @@ async function gemini(messages, { json = true, temperature = 0.8, maxTokens = 40
   throw lastParseErr || new Error('Model returned invalid JSON');
 }
 
+// Gemini with an attached DOCUMENT (a PDF or text file, base64) — Gemini reads
+// the file natively. `system` sets the rules, `userText` frames the ask, and
+// `docs` is [{ mimeType, data(base64) }]. Returns parsed JSON.
+async function geminiDoc(system, userText, docs = [], { maxTokens = 4096, temperature = 0.4 } = {}) {
+  if (!geminiEnabled) throw new Error('GEMINI_API_KEY is not configured.');
+  const parts = [{ text: String(userText || '') }];
+  for (const d of docs) { if (d && d.data && d.mimeType) parts.push({ inlineData: { mimeType: d.mimeType, data: d.data } }); }
+  const body = {
+    contents: [{ role: 'user', parts }],
+    generationConfig: { temperature, maxOutputTokens: Math.min(16384, maxTokens), thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' },
+  };
+  if (system) body.systemInstruction = { parts: [{ text: String(system) }] };
+  const res = await fetchWithTimeout(`${GEMINI_API_BASE}/models/${GEMINI_TEXT_MODEL}:generateContent`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY }, body: JSON.stringify(body),
+  }, 60000, 'Gemini document request');
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Gemini API error ${res.status}: ${t.slice(0, 300)}`); }
+  const data = await res.json();
+  const content = (data.candidates?.[0]?.content?.parts || []).map(p => p.text).filter(Boolean).join('');
+  if (!content) throw new Error('Empty response from Gemini');
+  return parseModelJson(content);
+}
+
 // Gemini vision: send an image (data URL) + a prompt, get back parsed JSON.
 // Used to CHECK a learner's handwriting drawing against a target character.
 // Returns null when Gemini isn't configured (caller falls back to self-check).
@@ -444,7 +466,7 @@ module.exports = {
   deepseek,
   gemini,
   generateText,
-  generateStructured,
+  generateStructured, geminiDoc,
   generateVisionJSON,
   generateImage,
   geminiImage,

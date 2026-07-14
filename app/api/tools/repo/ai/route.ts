@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
-import { generateStructured, generateImage } from '@/src/ai/providers';
+import { generateStructured, generateImage, geminiDoc } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug } = require('@/src/db/platform');
@@ -42,6 +42,50 @@ export async function POST(req: Request) {
       return NextResponse.json({ image: img });
     } catch {
       return NextResponse.json({ error: 'Image generation failed.' }, { status: 200 });
+    }
+  }
+
+  // ---- op: fromDoc (build the whole card tree from a course document) -----
+  // Turns an attached syllabus/program (PDF or pasted text) into a repository:
+  // every UNIT becomes a top-level card, every SUBUNIT a nested child card, and
+  // each card gets a short description. Used by the Studio repository builder.
+  if (op === 'fromDoc') {
+    const title = String(b.title || '').slice(0, 160);
+    const docText = String(b.docText || '').slice(0, 40000);
+    const docDataUrl = String(b.docDataUrl || '');
+    const m = docDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    const isPdfOrDoc = !!m && /pdf|msword|officedocument|text|rtf/i.test(m[1]);
+    if (!docText && !isPdfOrDoc) return NextResponse.json({ error: 'Attach a document (PDF/text) or paste its text.' }, { status: 200 });
+
+    const system = [
+      'You convert a COURSE DOCUMENT (a syllabus / study program) into a REPOSITORY: a nested tree of cards. Read the document carefully and extract its real content.',
+      'RULES:',
+      '1. Every top-level UNIT, topic or theme in the document becomes ONE top-level card. Keep the document\'s own numbering/name in the "title" (e.g. "2. Vectors", "Cinemática de la partícula").',
+      '2. Every SUBUNIT / sub-topic listed under a unit becomes a NESTED child card inside that unit. Split the unit\'s content into its individual items — e.g. under "Vectors" the phrases "Graphic and analytic representation", "Vector components", "Sum of vectors", "Scalar and vector products" each become their own child card.',
+      '3. EVERY card — unit AND subunit — MUST have a "text": a short 1–2 sentence description, written in the SAME LANGUAGE as the document, summarising what that unit/subunit covers. Always write a helpful description even when the document only gives a heading.',
+      '4. If a unit states a suggested time / number of hours, append it to that unit\'s description (e.g. "· Tiempo sugerido: 6 horas").',
+      '5. Preserve the document\'s ORDER. Do NOT invent units or subunits that are not in the document. Ignore front-matter (course code, objectives, methodology, bibliography) — only the CONTENTS/units.',
+      '6. Nest at most 3 levels. No links, no code, no images.',
+      'Each card is: { "kind": "card", "title": string, "text": string, "children"?: [ ...cards ] }.',
+      'Return STRICT JSON: { "cards": [ ...the full tree... ] }.',
+    ].join('\n');
+    const userText = `Course title: ${title || '(untitled)'}\n\n${docText ? 'Document text:\n' + docText : 'The course document is attached — read it.'}`;
+
+    try {
+      let out: any = null;
+      if (m && geminiEnabled) {
+        const r: any = await geminiDoc(system, userText, [{ mimeType: m[1], data: m[2] }], { maxTokens: 5000, temperature: 0.3 });
+        out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+      } else if (docText && textAI()) {
+        const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: userText }], { temperature: 0.3, maxTokens: 3500 });
+        out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
+      } else {
+        return NextResponse.json({ error: m ? 'Reading a PDF needs Gemini. Paste the document text instead.' : 'No AI model is configured.' }, { status: 200 });
+      }
+      if (!out) return NextResponse.json({ error: 'The AI could not read the document. Try pasting its text.' }, { status: 200 });
+      return NextResponse.json({ cards: out });
+    } catch {
+      return NextResponse.json({ error: 'Could not build cards from the document. Try again or paste the text.' }, { status: 200 });
     }
   }
 
