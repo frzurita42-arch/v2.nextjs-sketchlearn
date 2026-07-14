@@ -113,6 +113,10 @@ export interface RepoCard {
   subtitle?: string;
   text?: string;
   image?: string;            // icon/cover image: an uploaded data URL or an https URL
+  genImage?: string;         // an AI-generated picture of this product/service, shown
+                             // in a popup via the 🖼️ frame button (owner/admin request
+                             // it; it stays saved for everyone until 💦 clears it).
+                             // Gated by RepoSpec.imageGen.
   icon?: string;             // an emoji shown as the card icon INSTEAD of an image
                              // (e.g. number keycaps 1️⃣0️⃣); set by the 🔢 button
   links?: RepoLink[];        // each rendered as a button that opens its url
@@ -146,6 +150,9 @@ export interface RepoSpec {
   // (attaching is owner/admin-only).
   clipForAll?: boolean;         // 📎 clip attach available to all users
   folderForAll?: boolean;       // 📁 folder attach available to all users
+  imageGen?: boolean;           // "Suggest AI": show the 🖼️ per-card picture button
+                                // (owner/admin generate an image of the item; it stays
+                                // saved for everyone until cleared). Default off.
   cards: RepoCard[];
 }
 
@@ -224,11 +231,15 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   // Icon/cover image: a data URL (uploaded / AI-generated) or an https URL.
   const rawImg = String(c.image || '').slice(0, 1_500_000);
   const image = (/^data:image\//i.test(rawImg) || /^https?:\/\//i.test(rawImg)) ? rawImg : '';
+  // AI-generated product picture (shown in the 🖼️ popup) — same accepted forms.
+  const rawGen = String(c.genImage || '').slice(0, 2_000_000);
+  const genImage = (/^data:image\//i.test(rawGen) || /^https?:\/\//i.test(rawGen)) ? rawGen : '';
   const card: RepoCard = { id, kind };
   if (title) card.title = title;
   if (subtitle) card.subtitle = subtitle;
   if (text) card.text = text;
   if (image) card.image = image;
+  if (genImage) card.genImage = genImage;
   const icon = String(c.icon || '').slice(0, 40);
   if (icon) card.icon = icon;
   if (links.length) card.links = links;
@@ -269,7 +280,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
     const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
-    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, cards };
+    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, imageGen: !!r.imageGen, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);

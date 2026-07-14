@@ -82,6 +82,7 @@ export function BuilderStudioView() {
   const [docDataUrl, setDocDataUrl] = useState(''); // binary (PDF etc.) for Gemini
   const [suggesting, setSuggesting] = useState(false);
   const [withLinks, setWithLinks] = useState(false);   // "link suggestion" toggle
+  const [suggestImages, setSuggestImages] = useState(false);   // "Suggest AI" per-card picture button
   // AI card shape ({title,text,link?,linkLabel?,children}) → builder card shape.
   // A suggested link fills the card's Link field, so on publish it becomes a
   // Poster (blue) link viewers can open.
@@ -153,7 +154,7 @@ export function BuilderStudioView() {
 
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, context, cards: repoCards };
+    : { artifact, title, subject, context, cards: repoCards, imageGen: suggestImages };
 
   const generate = async () => {
     if (busy) return;
@@ -393,6 +394,15 @@ export function BuilderStudioView() {
                   🔗 Link suggestion: {withLinks ? 'On' : 'Off'}
                 </button>
                 <span style={{ fontSize: 11, opacity: 0.6 }}>Optional — the AI adds a relevant website / image / Wikipedia link to each card (as a Poster link).</span>
+              </div>
+            )}
+            {artifact === 'repository' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                <button type="button" className={`btn small ${suggestImages ? 'green' : 'ghost'}`} onClick={() => setSuggestImages((v) => !v)}
+                  title="When on, each published card gets a 🖼️ button — the owner/admin can generate an AI picture of that item; it stays saved for everyone to view.">
+                  🖼️ Suggest AI: {suggestImages ? 'On' : 'Off'}
+                </button>
+                <span style={{ fontSize: 11, opacity: 0.6 }}>Optional — adds a 🖼️ picture button to each card. Owner/admin generate an AI image of the item; it&apos;s saved for all viewers (💦 clears it). Toggle it later in the repo&apos;s ⚙️ settings.</span>
               </div>
             )}
             {messages.some((m) => m.role === 'user') && <small style={{ fontSize: 11, opacity: 0.65 }}>💬 Your chat answers will also be merged in when you generate.</small>}

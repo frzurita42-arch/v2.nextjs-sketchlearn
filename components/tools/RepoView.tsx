@@ -33,6 +33,7 @@ type ViewCtx = {
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
+  imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
   distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
@@ -511,6 +512,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [attachBusy, setAttachBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);       // 🖼️ AI product-image generation
+  const [showImg, setShowImg] = useState(false);       // 🖼️ image popup open
+  const [showPoster, setShowPoster] = useState(false); // 📎 emoji revealed the Poster button
+  const [showUser, setShowUser] = useState(false);     // 📁 emoji revealed the User button
   const editing = editingTitle || editingSub;
 
   // PREVIEW mode for a normal viewer: only the name + description, greyed and
@@ -530,8 +535,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // enforces the permissions.
   const canPoster = ctx.canEdit;              // owner/admin manage the Poster slot
   const canUser = !!ctx.me;                    // any signed-in viewer has a User slot
-  const myUserLinkIdx = links.findIndex((l) => l.color === 'green' && l.by === ctx.me);
-  const lastPosterIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
   const toggleAttach = (c: 'blue' | 'green') => {
     if (attaching && attachColor === c) { setAttaching(false); return; }
     setAttachColor(c); setAttaching(true);
@@ -541,10 +544,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   };
   const appendLink = async (label: string, url: string) => { await attachServer({ action: 'add', color: attachColor, link: { label: label.slice(0, 15) || 'Link', url } }); };
   const removeLinkAt = (index: number) => attachServer({ action: 'remove', index });
-  // Poster button: post one (form) or remove the posted one. User button: upload
-  // your own or remove yours.
-  const posterClick = () => { if (!canPoster) return; if (lastPosterIdx >= 0) removeLinkAt(lastPosterIdx); else toggleAttach('blue'); };
-  const userClick = () => { if (!canUser) return; if (myUserLinkIdx >= 0) removeLinkAt(myUserLinkIdx); else toggleAttach('green'); };
+  // The 📎 / 📁 emoji icons (in the icon grid) are pure show/hide toggles for the
+  // labeled Poster / User button. Clicking an emoji again hides its button (and
+  // closes its attach form if it was open).
+  const togglePoster = () => setShowPoster((v) => { const nv = !v; if (!nv && attaching && attachColor === 'blue') setAttaching(false); return nv; });
+  const toggleUser = () => setShowUser((v) => { const nv = !v; if (!nv && attaching && attachColor === 'green') setAttaching(false); return nv; });
   const addLink = () => {
     let url = linkUrl.trim(); if (!url) return;
     // A bare domain like "example.com" is dropped by the server sanitizer (which
@@ -579,6 +583,25 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     setImgBusy(false);
   };
   const customImage = () => { const p = window.prompt('Describe the picture to generate:'); if (p && p.trim()) genImage(p.trim()); };
+
+  // ---- 🖼️ "Suggest AI" product picture (separate from the card ICON above).
+  // Owner/admin generate a picture of the item; it is SAVED on the card so every
+  // future viewer sees it, until 💦 clears it. Normal viewers can only VIEW an
+  // already-generated picture — they cannot request one.
+  const hasGen = isImg(card.genImage);
+  const frameClick = async () => {
+    if (hasGen) { setShowImg(true); return; }           // view the saved picture
+    if (!ctx.canEdit) return;                             // only owner/admin generate
+    setGenBusy(true);
+    try {
+      const prompt = `${card.title || 'item'}${card.text ? ' — ' + card.text : ''}`.slice(0, 400);
+      const r = await API.post('/api/tools/repo/ai', { slug: ctx.slug, op: 'image', instruction: prompt, title: card.title });
+      if (r?.image) { ctx.editField(card.id, { genImage: r.image }); setShowImg(true); }
+      else if (r?.error) alert(r.error);
+    } catch { alert('Could not generate a picture.'); }
+    setGenBusy(false);
+  };
+  const splashClick = () => { if (ctx.canEdit && hasGen) ctx.editField(card.id, { genImage: undefined }); };
   const uploadImage = () => {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
     inp.onchange = async () => {
@@ -716,6 +739,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
       {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>}
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>}
+      {/* 📎 clip → reveals the "Poster" button · 📁 folder → reveals the "User" button.
+          The emoji stays put; click again to hide its button. */}
+      {canPoster && <button type="button" title={showPoster ? 'Hide the Poster button' : 'Show the Poster button'} style={{ ...iconBtn, opacity: showPoster ? 1 : 0.85 }} onClick={togglePoster}>📎</button>}
+      {canUser && <button type="button" title={showUser ? 'Hide the User button' : 'Show the User button'} style={{ ...iconBtn, opacity: showUser ? 1 : 0.85 }} onClick={toggleUser}>📁</button>}
       {/* Mode cycle — owner/admin only: Enabled → statuses → Disabled → Preview. */}
       {modeBtn}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
@@ -729,29 +756,43 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={collapsed ? `Expand ${kids.length} card${kids.length === 1 ? '' : 's'} inside` : 'Collapse the cards inside'}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.75, flex: '0 0 auto' }}>{collapsed ? '▸' : '▾'}</button>
   ) : null;
-  // Poster / User role buttons — fixed text labels. POSTER (📎, owner/admin):
-  // post a file or link everyone can open. Click again to remove what you posted.
-  // USER (📁, any signed-in viewer): upload your own document; click again to
-  // remove yours and upload a new one. The OP cannot remove a User's upload, but
-  // an admin can (handled by the endpoint + the ✕ on each link).
-  const roleButtons = (canPoster || canUser) ? (
+  // Poster / User role buttons — revealed by the 📎 / 📁 emoji toggles. POSTER
+  // (owner/admin): post a file or link everyone can open. USER (any signed-in
+  // viewer): upload your own document. Clicking the button opens the upload/link
+  // form; removal is via the ✕ on each link (with the per-role permissions).
+  const roleButtons = (showPoster || showUser) ? (
     <div style={{ display: 'inline-flex', gap: 6, flex: '0 0 auto' }} onClick={stop}>
-      {canPoster && (
-        <button type="button" onClick={posterClick}
-          title={lastPosterIdx >= 0 ? 'Remove the posted file/link' : 'Post a file or link — everyone can open it'}
-          className={`btn small ${attaching && attachColor === 'blue' ? 'blue' : 'ghost'}`}>📎 Poster</button>
+      {showPoster && (
+        <button type="button" onClick={() => toggleAttach('blue')}
+          title="Post a file or link — everyone can open it"
+          className={`btn small ${attaching && attachColor === 'blue' ? 'blue' : 'ghost'}`}>Poster</button>
       )}
-      {canUser && (
-        <button type="button" onClick={userClick}
-          title={myUserLinkIdx >= 0 ? 'Remove your upload (then you can upload a new one)' : 'Upload your own document'}
-          className={`btn small ${attaching && attachColor === 'green' ? 'green' : 'ghost'}`}>📁 User</button>
+      {showUser && (
+        <button type="button" onClick={() => toggleAttach('green')}
+          title="Upload your own document"
+          className={`btn small ${attaching && attachColor === 'green' ? 'green' : 'ghost'}`}>User</button>
       )}
     </div>
+  ) : null;
+  // 🖼️ "Suggest AI" picture button (repo-level toggle). Owner/admin generate a
+  // picture of the item (saved for all viewers); everyone can view a saved one.
+  // 💦 (owner/admin, when a picture exists) clears it.
+  const showFrame = ctx.imageGen && (ctx.canEdit || hasGen);
+  const imageButtons = showFrame ? (
+    <span style={{ display: 'inline-flex', gap: 4, flex: '0 0 auto' }} onClick={stop}>
+      <button type="button" onClick={frameClick} disabled={genBusy}
+        title={hasGen ? 'View the picture' : (ctx.canEdit ? 'Generate an AI picture of this item (saved for everyone)' : 'No picture yet')}
+        className={`btn small ${hasGen ? 'blue' : 'ghost'}`}>{genBusy ? '⏳' : '🖼️'}</button>
+      {ctx.canEdit && hasGen && (
+        <button type="button" onClick={splashClick} title="Delete the generated picture" className="btn small ghost">💦</button>
+      )}
+    </span>
   ) : null;
   const actions = (
     <>
       {linkColumn}
       {roleButtons}
+      {imageButtons}
       {collapseBtn}
       {statusChip}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
@@ -791,9 +832,24 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </div>
   ) : null;
 
+  // 🖼️ picture popup (lightbox) — shown when the frame button is clicked.
+  const imgPopup = (showImg && hasGen) ? (
+    <div onClick={() => setShowImg(false)}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg, #fff)', borderRadius: 12, padding: 12, maxWidth: 'min(92vw, 620px)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <strong style={{ fontSize: 14 }}>🖼️ {card.title || 'Picture'}</strong>
+          <button className="btn small ghost" onClick={() => setShowImg(false)}>✕ Close</button>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={card.genImage} alt={card.title || 'Generated picture'} style={{ maxWidth: '100%', maxHeight: '78vh', objectFit: 'contain', borderRadius: 8 }} />
+      </div>
+    </div>
+  ) : null;
+
   // A disabled card is greyed + unclickable for viewers; a hidden card (owner/
   // admin preview) is just greyed.
-  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{attachForm}</div>;
+  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{attachForm}{imgPopup}</div>;
 
   // GRID view: a card is shown ALONE — no nested cards beneath it (clicking a
   // card with children flips to the rows view to reveal the tree). ROWS view
@@ -820,6 +876,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const display: 'bars' | 'grid' = repo.display === 'grid' ? 'grid' : 'bars';
   // Studio "collections" show a gallery-style filter toolbar over vertical cards.
   const isCollection = (def?.tags || []).includes('collection');
+  // "Suggest AI": the per-card 🖼️ picture button. Owner/admin toggle it here (the
+  // repo's ⚙️ settings strip); persisted on the repo without touching the cards.
+  const [imageGen, setImageGen] = useState(!!repo.imageGen);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState('');
@@ -866,7 +925,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveCards = async (next: RepoCard[]) => {
     setCards(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, cards: next } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, cards: next } });
       if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
     } catch { /* keep the optimistic copy */ }
   };
@@ -905,14 +964,23 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, isAdmin, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, setIcon, numberCard, deleteCard };
+
+  // Persist the "Suggest AI" toggle (imageGen) without touching cards.
+  const saveImageGen = async (next: boolean) => {
+    setImageGen(next);
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, cards } });
+      if (r?.repo && def) def.repo = r.repo;
+    } catch { /* keep the optimistic toggle */ }
+  };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
   const saveDisplayLock = async (lockedNext: boolean, viewSel: 'grid' | 'row') => {
     const nextDisplay: 'bars' | 'grid' = viewSel === 'grid' ? 'grid' : 'bars';
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* ignore */ }
   };
@@ -942,7 +1010,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const save = async () => {
     setSaving(true); setSaved('');
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, cards } });
       if (r?.repo) { setCards(r.repo.cards || []); dirty.current = false; setSaved('Saved ✓'); if (def) def.repo = r.repo; }
       else setSaved(r?.error || 'Could not save.');
     } catch (e: any) { setSaved(e?.message || 'Could not save.'); }
@@ -982,6 +1050,18 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         </div>
       ) : isCollection ? (
        <>
+        {/* ⚙️ Settings — owner/admin only. Toggle the per-card "Suggest AI" picture
+            button on/off for the whole repository. */}
+        {canEdit && (
+          <div className="card" style={{ maxWidth: 900, margin: '0 auto 10px', padding: '10px 14px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <strong style={{ fontSize: 14 }}>⚙️ Settings</strong>
+            <button className={`btn small ${imageGen ? 'green' : 'ghost'}`} onClick={() => saveImageGen(!imageGen)}
+              title="When on, each card gets a 🖼️ button — you generate an AI picture of the item; it stays saved for all viewers (💦 clears it).">
+              🖼️ Suggest AI: {imageGen ? 'On' : 'Off'}
+            </button>
+            <span style={{ fontSize: 11, opacity: 0.55 }}>Only you (owner/admin) can request pictures; everyone can view a saved one.</span>
+          </div>
+        )}
         {/* A collection: the shared titled + banner'd + filterable gallery block. */}
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"

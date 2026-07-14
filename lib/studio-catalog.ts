@@ -207,6 +207,7 @@ export interface StudioConfig {
   pages?: StudioPage[];              // presentation: one entry per slide
   components?: StudioComponent[];    // (legacy) repository item fields
   cards?: RepoCard[];                // repository: the starter link/resource cards
+  imageGen?: boolean;                // repository: "Suggest AI" per-card picture button
   context?: string;
   display?: 'cards' | 'list' | 'table';
 }
@@ -288,6 +289,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       // gallery-style filter toolbar over the cards.
       repo: {
         layout: 'post', display: 'bars', offlineExport: false,   // no offline-copy button
+        imageGen: !!cfg.imageGen,   // "Suggest AI" per-card picture button
         cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },
     };
