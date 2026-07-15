@@ -32,6 +32,7 @@ type ViewCtx = {
   favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
   collapseCmd: { on: boolean; n: number };         // "collapse/expand all" broadcast (n = nonce)
   levelIndex: Record<string, number>;              // each card's 0-based position within its level (default number icon)
+  assignShown: boolean;                            // when true, show the per-card assignment-status toggle button on every card (owner/admin)
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
@@ -782,7 +783,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // Owner/admin cycle button: Enabled → Assigned → Pending → Approved → Rejected
   // → Disabled → Preview. Setting it back to Enabled clears the field.
   const cycleMode = () => { const nm = nextMode(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); };
-  const modeBtn = ctx.canEdit ? (
+  // The assignment-status toggle button — only when the owner/admin has turned on
+  // "Assignment" for the whole repo (the belowToolbar toggle). Hidden otherwise.
+  const modeBtn = (ctx.canEdit && ctx.assignShown) ? (
     <button type="button" title={`Mode: ${mode} — click to cycle (Enabled → statuses → Disabled → Preview)`} style={{ ...iconBtn, opacity: mode === 'enabled' ? 0.85 : 1 }} onClick={cycleMode}>{MODE_BTN[mode]}</button>
   ) : null;
 
@@ -970,6 +973,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // state, `n` a nonce so re-clicking the same state still refires.
   const [collapseCmd, setCollapseCmd] = useState<{ on: boolean; n: number }>({ on: false, n: 0 });
   const collapseAll = (on: boolean) => setCollapseCmd((c) => ({ on, n: c.n + 1 }));
+  // "Assignment" — a repo-wide toggle (owner/admin) that shows/hides the per-card
+  // assignment-status button on ALL cards at once. Starts off.
+  const [assignShown, setAssignShown] = useState(false);
   // Default per-level numbering (recomputed whenever the card tree changes).
   const levelIndex = useMemo(() => buildLevelIndex(cards), [cards]);
   const [editing, setEditing] = useState(false);
@@ -1062,7 +1068,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
@@ -1183,6 +1189,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               {cards.some((c) => (c.children || []).length > 0) && (
                 <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
                   onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
+              )}
+              {canEdit && (
+                <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
+                  title={assignShown ? 'Hide the assignment-status button on all cards' : 'Show the assignment-status button on all cards, so you can set each card’s status'}
+                  onClick={() => setAssignShown((v) => !v)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
               )}
               {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
             </div>
