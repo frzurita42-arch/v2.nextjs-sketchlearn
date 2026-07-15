@@ -567,8 +567,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // their own; only they (or an admin) can remove it (the OP cannot). All changes
   // go through the guarded /api/tools/repo/attach endpoint, which stamps `by` and
   // enforces the permissions.
-  const canPoster = ctx.canEdit;              // owner/admin manage the Poster slot
-  const canUser = !!ctx.me;                    // any signed-in viewer has a User slot
+  const canPoster = ctx.canEdit && !card.posterOff;   // Moderator (poster) slot — off per card
+  const canUser = !!ctx.me && !card.userOff;          // User slot — off per card (set by owner/admin)
   // The single link each role's widget manages: the poster (blue) link, and MY
   // own user (green) link. The widget turns INTO this link once submitted.
   const posterLinkIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
@@ -762,7 +762,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const linkBtn = ({ l, i }: { l: RepoLink; i: number }) => (
     <span key={l.url + i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
       <a className={`btn small ${l.color === 'green' ? 'green' : 'blue'}`} href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none' }}
-        title={`${l.color === 'green' ? 'User' : 'Poster'}${l.by ? `: ${l.by}` : ''}${l.label ? ` — ${l.label}` : ''}`}>🔗 {l.color === 'green' ? 'User' : 'Poster'}</a>
+        title={`${l.color === 'green' ? 'User' : 'Moderator'}${l.by ? `: ${l.by}` : ''}${l.label ? ` — ${l.label}` : ''}`}>🔗 {l.color === 'green' ? 'User' : 'Moderator'}</a>
       {canRemoveLink(l) && <button type="button" title="Remove this user's upload (admin)" onClick={eat(() => removeLinkAt(i))}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1, opacity: 0.6 }}>✕</button>}
     </span>
@@ -806,10 +806,15 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
       {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>}
       {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>}
-      {/* 📎 Poster · 📁 User. If a link exists the icon DELETES it (so a new one can
-          be posted); if empty it reveals the add-button. */}
-      {canPoster && <button type="button" title={posterLinkIdx >= 0 ? 'Delete the Poster link (then post a new one)' : 'Post a Poster link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>}
+      {/* 📎 Moderator · 📁 User. If a link exists the icon DELETES it (so a new one
+          can be posted); if empty it reveals the add-button. Shown only when this
+          card's attach is enabled (repo-wide toggle + per-card override). */}
+      {canPoster && <button type="button" title={posterLinkIdx >= 0 ? 'Delete the Moderator link (then post a new one)' : 'Post a Moderator link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>}
       {canUser && <button type="button" title={myUserLinkIdx >= 0 ? 'Delete your link (then upload a new one)' : 'Upload your own document'} style={{ ...iconBtn, opacity: (myUserLinkIdx >= 0 || showUser) ? 1 : 0.85 }} onClick={folderAction}>📁</button>}
+      {/* Per-card override (owner/admin): turn Moderator / User upload OFF or ON for
+          just this card, regardless of the repo-wide toggle. */}
+      {ctx.canEdit && <button type="button" title={card.posterOff ? 'Moderator upload is OFF for this card — click to enable' : 'Turn OFF Moderator upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.posterOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { posterOff: !card.posterOff })}>{card.posterOff ? '📎🚫' : '📎✓'}</button>}
+      {ctx.canEdit && <button type="button" title={card.userOff ? 'User upload is OFF for this card — click to enable' : 'Turn OFF User upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.userOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>{card.userOff ? '📁🚫' : '📁✓'}</button>}
       {/* Mode cycle — owner/admin only: Enabled → statuses → Disabled → Preview. */}
       {modeBtn}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
@@ -842,7 +847,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     return (
       <button type="button" onClick={eat(() => toggleAttach(color))}
         title={role === 'poster' ? 'Post a file or link — everyone can open it' : 'Upload your own document'}
-        className={`btn small ${open ? color : 'ghost'}`} style={{ flex: '0 0 auto' }}>{role === 'poster' ? 'Poster' : 'User'}</button>
+        className={`btn small ${open ? color : 'ghost'}`} style={{ flex: '0 0 auto' }}>{role === 'poster' ? 'Moderator' : 'User'}</button>
     );
   };
   const showPosterAdd = canPoster && showPoster && posterLinkIdx < 0;
@@ -902,7 +907,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // Both append to the card's links (shown as 🔗 buttons) in the chosen colour.
   const attachForm = attaching ? (
     <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — upload your own document (only you or an admin can remove it)' : '📎 Poster — post a file or link everyone can open'}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — upload your own document (only you or an admin can remove it)' : '📎 Moderator — post a file or link everyone can open'}</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={linkLabel} placeholder="Label (max 15)" maxLength={15} onChange={(e) => setLinkLabel(e.target.value.slice(0, 15))} style={{ flex: '1 1 90px', fontSize: 13 }} />
         <input value={linkUrl} placeholder="https://…" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '2 1 150px', fontSize: 13 }} />
@@ -1034,6 +1039,17 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // A returned repo (from the normal-user attach endpoint) reconciled into state.
   const applyRepo = (nextRepo: RepoSpec) => { if (!nextRepo) return; setCards(nextRepo.cards || []); if (def) def.repo = nextRepo; };
   const editField = (id: string, p: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...p })));
+  // Apply a change to EVERY card in the tree (used by the repo-wide upload toggles).
+  const mapAllCards = (cs: RepoCard[], fn: (c: RepoCard) => RepoCard): RepoCard[] =>
+    cs.map((c) => { const nc = fn(c); return nc.children?.length ? { ...nc, children: mapAllCards(nc.children, fn) } : nc; });
+  const anyCard = (cs: RepoCard[], pred: (c: RepoCard) => boolean): boolean =>
+    cs.some((c) => pred(c) || (c.children?.length ? anyCard(c.children, pred) : false));
+  // Repo-wide upload toggles: if ANY card currently allows it, turn it OFF on all;
+  // otherwise turn it ON everywhere. (Per-card overrides can be set afterwards.)
+  const posterAnyOn = anyCard(cards, (c) => !c.posterOff);
+  const userAnyOn = anyCard(cards, (c) => !c.userOff);
+  const bulkPoster = () => saveCards(mapAllCards(cards, (c) => ({ ...c, posterOff: posterAnyOn ? true : undefined })));
+  const bulkUser = () => saveCards(mapAllCards(cards, (c) => ({ ...c, userOff: userAnyOn ? true : undefined })));
   // The gear adds a nested card seeded with a generic title AND subtitle, so its
   // ✎ pencils have something to edit right away.
   const addSubcard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
@@ -1194,6 +1210,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
                   title={assignShown ? 'Hide the assignment-status button on all cards' : 'Show the assignment-status button on all cards, so you can set each card’s status'}
                   onClick={() => setAssignShown((v) => !v)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
+              )}
+              {canEdit && (
+                <button className={`btn small ${posterAnyOn ? 'blue' : 'ghost'}`}
+                  title={posterAnyOn ? 'Turn OFF Moderator upload on ALL cards (you can re-enable per card)' : 'Turn ON Moderator upload on ALL cards'}
+                  onClick={bulkPoster}>📎 Moderator upload: {posterAnyOn ? 'On' : 'Off'}</button>
+              )}
+              {canEdit && (
+                <button className={`btn small ${userAnyOn ? 'blue' : 'ghost'}`}
+                  title={userAnyOn ? 'Turn OFF User upload on ALL cards (you can re-enable per card)' : 'Turn ON User upload on ALL cards'}
+                  onClick={bulkUser}>📁 User upload: {userAnyOn ? 'On' : 'Off'}</button>
               )}
               {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
             </div>

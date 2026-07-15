@@ -136,6 +136,11 @@ export interface RepoCard {
   //  preview  → normal viewers see ONLY the name + description, greyed + unclickable
   // None of these affect the owner/admin, who always see and use the whole card.
   mode?: 'assigned' | 'pending' | 'approved' | 'rejected' | 'disabled' | 'preview';
+  // Per-card attachment switches (owner/admin). When true, that card hides the
+  // Moderator (poster) / User file-attach control. Set in bulk by the repo's
+  // "Moderator upload" / "User upload" toggles, or per card as an override.
+  posterOff?: boolean;
+  userOff?: boolean;
   children?: RepoCard[];     // nested cards / sections one level deeper
 }
 
@@ -252,6 +257,8 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (c.layout === 'bars' || c.layout === 'grid') card.layout = c.layout;
   if (c.hidden) card.hidden = true;
   if (['assigned', 'pending', 'approved', 'rejected', 'disabled', 'preview'].includes(c.mode)) card.mode = c.mode;
+  if (c.posterOff) card.posterOff = true;
+  if (c.userOff) card.userOff = true;
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
   if (!title && !subtitle && !text && !image && !icon && !links.length && !children.length && !card.completable && !card.collect) return null;
