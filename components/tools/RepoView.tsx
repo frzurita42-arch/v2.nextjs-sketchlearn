@@ -39,6 +39,7 @@ type ViewCtx = {
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
+  preview: boolean;                                // "View as" preview — read-only, no edit persists
   imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
@@ -601,6 +602,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const canPoster = ctx.canEdit && !card.posterOff && (ctx.posterUpload || posterLinkIdx >= 0);
   const canUser = !!ctx.me && !card.userOff && (ctx.userUpload || myUserLinkIdx >= 0);
   const attachServer = async (payload: any) => {
+    if (ctx.preview) return;   // "View as" preview never writes real data
     try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, ...payload }); if (r?.repo) ctx.applyRepo(r.repo); else if (r?.error) alert(r.error); } catch { alert('Could not update the attachment.'); }
   };
   const removeLinkAt = (index: number) => attachServer({ action: 'remove', index });
@@ -817,7 +819,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   //  • Feature OFF, or a normal viewer: a READ-ONLY status chip — but ONLY on cards
   //    that carry a real workflow status. A 'Set status' (enabled) card shows nothing
   //    when the feature is off, so cards left un-assigned simply drop off.
-  const showCycle = ctx.canEdit && ctx.assignShown;
+  const showCycle = ctx.canEdit && ctx.assignShown && !ctx.preview;
   const assignControl = showCycle ? assignBtn : (isStatus ? statusChip : null);
 
   // The control icons laid out in a tidy 3-per-row grid.
@@ -1092,6 +1094,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const me = perms.username;
   const isAdmin = perms.isAdmin;
   const isOwner = canEdit;
+  // "View as" preview (admins looking as a User/Moderator): a look-but-don't-touch
+  // mode. No edit should persist, or testing "how it looks" silently mutates real
+  // data (e.g. cycling a card's status while previewing).
+  const preview = !!perms.preview;
   const [entries, setEntries] = useState<any[]>([]);
   const loadEntries = () => {
     API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`).then((r: any) => setEntries(Array.isArray(r?.entries) ? r.entries : [])).catch(() => { /* ignore */ });
@@ -1122,6 +1128,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // Persist a new card tree (used by the inline card icons in collection view).
   // Optimistically updates, then reconciles with the sanitized server copy.
   const saveCards = async (next: RepoCard[]) => {
+    if (preview) return;   // "View as" preview never writes real data
     setCards(next);
     try {
       const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, cards: next } });
@@ -1192,7 +1199,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
