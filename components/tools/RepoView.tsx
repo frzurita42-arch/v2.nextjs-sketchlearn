@@ -1170,13 +1170,15 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           perPage={8}
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
-          extra={<>
-            {cards.some((c) => (c.children || []).length > 0) && (
-              <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
-                onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
-            )}
-            {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
-          </>}
+          belowToolbar={
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {cards.some((c) => (c.children || []).length > 0) && (
+                <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
+                  onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
+              )}
+              {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
+            </div>
+          }
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}
