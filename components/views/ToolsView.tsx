@@ -333,16 +333,20 @@ export function ToolsView() {
           {isAdmin && <button title="AI tap-mixer — reword the subtitle" disabled={!!headMix.gallerySubtitle} onClick={() => remixHeading('gallerySubtitle')} style={{ ...headIcon, fontSize: 13 }}>{headMix.gallerySubtitle ? '…' : '🎨'}</button>}
         </p>
       )}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
-        <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
-        <button className="btn small" onClick={load}>↻ Refresh</button>
-      </div>
+      {/* "Build a tool" is for admins only (hidden from plain users, and in the
+          User/OP "View as" preview). The top Refresh button was removed for
+          everyone — the gallery's own 🔄 still reshuffles. */}
+      {isAdmin && (
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+          <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
+        </div>
+      )}
 
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
         : tools.length === 0 ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
-            <p style={{ margin: '0 0 10px' }}>No tools yet. Be the first — describe a tool and the AI will assemble it.</p>
-            <button className="btn green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
+            <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>
+            {isAdmin && <button className="btn green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>}
           </div>
         ) : (galleryCollapsed && !isAdmin) ? null : (
           <>
@@ -356,7 +360,7 @@ export function ToolsView() {
                 buttons) → banner → filter → items. */}
             <GallerySection
               titleKey="galleryShelfTitle" titleFallback="🖼️ Gallery"
-              bannerKey="galleryBanner" bannerDefault="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or OP favorited, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool."
+              bannerKey="galleryBanner" bannerDefault="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or Moderators, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool."
               onRefresh={reloadTools}
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
@@ -367,8 +371,8 @@ export function ToolsView() {
               favs={favsById}
               likedByAdmin={(t: any) => !!t.likedByAdmin}
               likedByOwner={(t: any) => !!app.user?.username && t.owner === app.user.username}
-              ownerLabel="💛 OP"
-              ownerTitle="Only tools you created"
+              ownerLabel="💛 Moderators"
+              ownerTitle="Only tools you created (you moderate)"
               perPage={6}
               storageKey="sl_tools_view"
               sortPrefKey="gallery"

@@ -1155,7 +1155,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         {/* A collection: the shared titled + banner'd + filterable gallery block. */}
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"
-          bannerKey="collectionBanner" bannerDefault="🗂️ Your saved cards — search by name, favorite them (★ / liked by admin / OP), switch grid ▦ or rows ☰ (the owner can 🔒 lock the layout), and page through. Tap a card to open its attachment."
+          bannerKey="collectionBanner" bannerDefault="🗂️ Your saved cards — search by name, favorite them (★ / liked by admin / Moderators), switch grid ▦ or rows ☰ (the owner can 🔒 lock the layout), and page through. Tap a card to open its attachment."
           items={cards.filter((c) => canEdit || !c.hidden)}
           id={(c: RepoCard) => c.id}
           searchText={(c: RepoCard) => `${c.title || ''} ${c.subtitle || ''} ${c.text || ''}`}

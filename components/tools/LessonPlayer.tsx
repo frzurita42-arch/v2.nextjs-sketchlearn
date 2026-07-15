@@ -1112,8 +1112,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             <>
               <button style={iconBtn} title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
               {(hasSaved || canEdit) && (
-                <button className="btn small" title={hasSaved ? "View the original poster's results (with answers)" : 'No original results saved yet'}
-                  onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No original results saved yet. Play a run, then tap “Save this as the original deck” on the results screen — it will then show here for everyone.'); }}>📖 OP results</button>
+                <button className="btn small" title={hasSaved ? "View the moderator's results (with answers)" : 'No original results saved yet'}
+                  onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No original results saved yet. Play a run, then tap “Save this as the original deck” on the results screen — it will then show here for everyone.'); }}>📖 Moderator results</button>
               )}
               <button className="btn small green" title="Play a fresh replica (no answers)" onClick={play}>▶ Play</button>
             </>

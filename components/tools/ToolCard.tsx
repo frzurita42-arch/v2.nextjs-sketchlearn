@@ -84,7 +84,7 @@ export function ToolCard(p: ToolCardProps) {
     ? <button style={delIcon} title={p.isExample ? 'Hide this example' : 'Delete'} onClick={() => p.onRemove!(t)}>🗑</button>
     : null;
   const replay = p.onReplay ? <button style={delIcon} title="New generation" onClick={() => p.onReplay!(t)}>♻️</button> : null;
-  const history = p.onHistory ? <button style={delIcon} title="OP history — the first lesson made with this tool" onClick={() => p.onHistory!(t)}>📖</button> : null;
+  const history = p.onHistory ? <button style={delIcon} title="Moderator history — the first lesson made with this tool" onClick={() => p.onHistory!(t)}>📖</button> : null;
 
   // An "emoji:" thumbnail renders as an emoji in the image spot instead of a photo
   // (the default for fresh repos/presentations, swappable with 🎲 die / 📎 upload).

@@ -94,7 +94,7 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 
 export function Collection<T>({
   items, id, searchText, time, renderGrid, renderRow,
-  favs, likedByAdmin, likedByOwner, ownerLabel = '💛 OP', ownerTitle = 'Only tools the creator (OP) favorited', perPage, storageKey, sortPrefKey,
+  favs, likedByAdmin, likedByOwner, ownerLabel = '💛 Moderators', ownerTitle = 'Only tools moderators favorited', perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
   viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
