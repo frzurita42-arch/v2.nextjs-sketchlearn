@@ -819,7 +819,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   //  • Feature OFF, or a normal viewer: a READ-ONLY status chip — but ONLY on cards
   //    that carry a real workflow status. A 'Set status' (enabled) card shows nothing
   //    when the feature is off, so cards left un-assigned simply drop off.
-  const showCycle = ctx.canEdit && ctx.assignShown && !ctx.preview;
+  // Show the cycle button whenever you can edit (your own view OR the Moderators
+  // preview) so the control is always visible. Actual writes are what preview
+  // blocks (saveCards no-ops), so clicking it in a preview role changes nothing.
+  const showCycle = ctx.canEdit && ctx.assignShown;
   const assignControl = showCycle ? assignBtn : (isStatus ? statusChip : null);
 
   // The control icons laid out in a tidy 3-per-row grid.
