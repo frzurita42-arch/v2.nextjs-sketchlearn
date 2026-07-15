@@ -41,6 +41,7 @@ type ViewCtx = {
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
   preview: boolean;                                // "View as" preview — read-only, no edit persists
   docUpload: boolean;                              // 📄 file uploads enabled — the "Attach a document" button is active
+  showDates: boolean;                              // 🕒 show each card's created date/time
   imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
@@ -966,7 +967,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       onOpen={open}
       leading={isGrid ? undefined : collapseBtn}
       iconNode={iconNode}
-      meta={card.createdAt ? <span style={{ fontSize: 10.5, opacity: 0.55 }}>🕒 {new Date(card.createdAt).toLocaleString()}</span> : undefined}
+      meta={card.createdAt && ctx.showDates ? <span style={{ fontSize: 10.5, opacity: 0.55 }}>🕒 {new Date(card.createdAt).toLocaleString()}</span> : undefined}
       overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
       afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}
       actions={isGrid ? (assignControl ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{assignControl}</span> : null) : actions} del={isGrid ? undefined : del} />
@@ -1082,6 +1083,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // 📄 file uploads — persisted. Off by default (link-only); the moderator turns it
   // on to enable the "Attach a document" button in the attach editor.
   const [docUpload, setDocUpload] = useState(!!repo.docUpload);
+  // 🕒 show each card's created date/time — persisted, default on. Owner/admin
+  // toggle with the 👁 dates button.
+  const [showDates, setShowDates] = useState(repo.showDates !== false);
   // PERSISTED repo-wide switches for the Moderator (📎 clip) and User (📁 folder)
   // attach features. When ON, every card offers that upload; when OFF, the icon is
   // hidden EXCEPT on cards that already hold an attachment (which stay viewable /
@@ -1162,7 +1166,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // Persist a new card tree (used by the inline card icons in collection view).
   // Optimistically updates, then reconciles with the sanitized server copy.
   const saveCards = async (next: RepoCard[]) => {
-    if (preview) return;   // "View as" preview never writes real data
+    // Editing is gated by canEdit at the UI level (the User preview has no edit
+    // controls), so both the Admin and Moderators views can persist changes —
+    // a moderator needs to actually set/cycle statuses, not just look.
     setCards(next);
     try {
       const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, cards: next } });
@@ -1233,13 +1239,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
     setImageGen(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, showDates, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1247,7 +1253,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveUploads = async (poster: boolean, user: boolean) => {
     setPosterUpload(poster); setUserUpload(user);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, assignShow: assignShown, docUpload, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, assignShow: assignShown, docUpload, showDates, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1255,7 +1261,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveAssign = async (next: boolean) => {
     setAssignShown(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: next, docUpload, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: next, docUpload, showDates, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1263,7 +1269,15 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveDocUpload = async (next: boolean) => {
     setDocUpload(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload: next, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload: next, showDates, cards } });
+      if (r?.repo && def) def.repo = r.repo;
+    } catch { /* keep the optimistic toggle */ }
+  };
+  // Persist the 🕒 show-dates switch.
+  const saveShowDates = async (next: boolean) => {
+    setShowDates(next);
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, showDates: next, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1273,7 +1287,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveDisplayLock = async (lockedNext: boolean, viewSel: 'grid' | 'row') => {
     const nextDisplay: 'bars' | 'grid' = viewSel === 'grid' ? 'grid' : 'bars';
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, showDates, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* ignore */ }
   };
@@ -1396,6 +1410,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 <button className={`btn small ${docUpload ? 'blue' : 'ghost'}`}
                   title={docUpload ? 'Turn off file uploads — the attach editor becomes link-only' : 'Turn on file uploads — the "📎 Attach a document" button in the attach editor is enabled so users can upload a file, not just paste a link'}
                   onClick={() => saveDocUpload(!docUpload)}>📄 File upload: {docUpload ? 'On' : 'Off'}</button>
+              )}
+              {canEdit && (
+                <button className={`btn small ${showDates ? 'blue' : 'ghost'}`}
+                  title={showDates ? 'Hide each card’s created date & time' : 'Show each card’s created date & time'}
+                  onClick={() => saveShowDates(!showDates)}>{showDates ? '👁 Dates: On' : '🙈 Dates: Off'}</button>
               )}
               {/* Sort order — available to everyone (a personal display preference):
                   cycles Manual → Oldest → Newest → Random. */}

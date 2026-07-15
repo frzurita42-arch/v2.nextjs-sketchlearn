@@ -167,6 +167,8 @@ export interface RepoSpec {
                                 // that already carry a status show a read-only badge.
   docUpload?: boolean;          // 📄 file uploads on: the "Attach a document" button
                                 // in the attach editor is enabled. Off = link-only.
+  showDates?: boolean;          // 🕒 show each card's created date/time (default on).
+                                // Owner/admin toggle it with the 👁 dates button.
   imageGen?: boolean;           // "Suggest AI": show the 🖼️ per-card picture button
                                 // (owner/admin generate an image of the item; it stays
                                 // saved for everyone until cleared). Default off.
@@ -304,7 +306,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
     const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
-    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, assignShow: !!r.assignShow, docUpload: !!r.docUpload, imageGen: !!r.imageGen, cards };
+    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, assignShow: !!r.assignShow, docUpload: !!r.docUpload, showDates: r.showDates !== false, imageGen: !!r.imageGen, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);
