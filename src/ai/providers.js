@@ -381,12 +381,41 @@ async function generateImage(prompt) {
 let lastImageError = '';
 function getLastImageError() { return lastImageError; }
 
-// Gemini native image generation (returns a base64 data URL). Tries the
-// configured model first, then well-known image-capable model ids ("Nano Banana"
-// = gemini-2.5-flash-image), so a stale/unavailable default model name doesn't
-// break generation on keys that only have the 2.5 image model.
+// Ask Gemini which models THIS key can actually use, and pick one that supports
+// image output via generateContent. Cached after the first lookup (including a
+// "none" result) so we don't re-list on every image. This is what makes image
+// generation work regardless of the exact model name — different keys/regions
+// expose different image model ids (gemini-2.5-flash-image, -preview, 3.x, …).
+let _discoveredImageModel;   // undefined = not looked up; null = looked up, none found
+async function discoverImageModel() {
+  if (_discoveredImageModel !== undefined) return _discoveredImageModel;
+  _discoveredImageModel = null;
+  try {
+    const res = await fetch(`${GEMINI_API_BASE}/models?pageSize=1000`, { headers: { 'x-goog-api-key': GEMINI_API_KEY } });
+    if (res.ok) {
+      const data = await res.json();
+      const models = Array.isArray(data.models) ? data.models : [];
+      // Prefer a model whose name says "image" and that supports generateContent.
+      const pick = models.find(m => /image/i.test(m.name || '') && (m.supportedGenerationMethods || []).includes('generateContent'));
+      if (pick?.name) _discoveredImageModel = String(pick.name).replace(/^models\//, '');
+    } else {
+      lastImageError = `models list: ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`;
+    }
+  } catch (e) { /* keep null */ }
+  return _discoveredImageModel;
+}
+
+// Gemini native image generation (returns a base64 data URL). Uses the model the
+// key actually exposes (discovered from its model list), then the configured
+// model, then well-known image model ids as fallbacks — so a stale/unavailable
+// default model name (e.g. gemini-3.1-flash-image) doesn't break generation.
 async function geminiImage(prompt) {
-  const models = [...new Set([GEMINI_IMAGE_MODEL, 'gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview'].filter(Boolean))];
+  const discovered = await discoverImageModel();
+  const models = [...new Set([
+    discovered, GEMINI_IMAGE_MODEL,
+    'gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview',
+    'gemini-2.0-flash-preview-image-generation',
+  ].filter(Boolean))];
   for (const model of models) {
     try {
       const res = await fetch(`${GEMINI_API_BASE}/models/${model}:generateContent`, {

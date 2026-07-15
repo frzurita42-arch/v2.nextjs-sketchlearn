@@ -6,10 +6,11 @@ import { TOOL_CATEGORIES } from '@/lib/tool-category';
 // The row of category filter chips. Defaults to the platform TOOL_CATEGORIES
 // (home gallery) but any list can pass its own `categories` (e.g. a lesson feed's
 // subject categories) to get the identical chip-row filter.
-export function CategoryFilter({ value, onChange, counts, categories, leading }: {
+export function CategoryFilter({ value, onChange, counts, categories, leading, trailing }: {
   value: string; onChange: (k: string) => void; counts: Record<string, number>;
   categories?: { key: string; label: string }[];
-  leading?: React.ReactNode;   // rendered as the first item, to the LEFT of the "All" chip
+  leading?: React.ReactNode;    // rendered as the first item, to the LEFT of the "All" chip
+  trailing?: React.ReactNode;   // rendered as the last item, to the RIGHT of the final chip
 }) {
   const cats = categories || TOOL_CATEGORIES;
   const chip = (key: string, label: string) => {
@@ -27,6 +28,7 @@ export function CategoryFilter({ value, onChange, counts, categories, leading }:
       {leading}
       {chip('all', `All (${counts.all || 0})`)}
       {cats.map(c => chip(c.key, c.label))}
+      {trailing}
     </div>
   );
 }

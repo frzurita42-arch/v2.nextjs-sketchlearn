@@ -354,7 +354,7 @@ export function ToolsView() {
               bottomRule
               belowToolbar={
                 <CategoryFilter value={filter} onChange={setFilter} counts={counts} categories={GALLERY_CATEGORIES}
-                  leading={canBuild ? <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button> : undefined} />
+                  trailing={canBuild ? <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button> : undefined} />
               }
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
