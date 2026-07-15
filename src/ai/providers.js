@@ -6,6 +6,7 @@ const {
   OPENROUTER_API_KEY, OPENROUTER_URL, OPENROUTER_MODEL, OPENROUTER_MODEL_REASON, OPENROUTER_MODEL_VISION, openrouterEnabled,
   MOONSHOT_API_KEY, MOONSHOT_URL, MOONSHOT_MODEL, moonshotEnabled,
   IMAGE_API_KEY, IMAGE_API_URL, IMAGE_API_MODEL,
+  LEONARDO_API_KEY, LEONARDO_API_BASE, LEONARDO_MODEL, LEONARDO_SIZE, leonardoEnabled,
   ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
   ELEVENLABS_API_KEY, ELEVENLABS_API_URL, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled
 } = require('../config');
@@ -355,24 +356,60 @@ async function generateStructured(messages, opts = {}, { attempts = 3 } = {}) {
   throw lastErr || new Error('Could not generate structured JSON');
 }
 
-// Generate one image. Prefers an OpenAI-compatible provider, else Gemini's image model.
+// One attempt at an OpenAI-compatible image API (IMAGE_API_KEY).
+async function openaiCompatImage(prompt) {
+  try {
+    const res = await fetch(IMAGE_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${IMAGE_API_KEY}` },
+      body: JSON.stringify({ model: IMAGE_API_MODEL, prompt, size: '1024x1024', n: 1 })
+    });
+    if (!res.ok) { lastImageError = `image API: ${res.status} ${(await res.text().catch(() => '')).slice(0, 160)}`; return null; }
+    const data = await res.json();
+    const item = data.data && data.data[0];
+    if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+    if (item?.url) return item.url;
+  } catch (e) { lastImageError = `image API: ${e.message}`; }
+  return null;
+}
+
+// Leonardo AI image generation. Async: create a generation job, then poll for the
+// finished image URL. Used as a fallback when Google/Gemini image generation is
+// unavailable. Returns a hosted image URL (renders in <img>) or null.
+async function leonardoImage(prompt) {
+  try {
+    const size = LEONARDO_SIZE;
+    const create = await fetchWithTimeout(`${LEONARDO_API_BASE}/generations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${LEONARDO_API_KEY}` },
+      body: JSON.stringify({ modelId: LEONARDO_MODEL, prompt: String(prompt || '').slice(0, 1400), width: size, height: size, num_images: 1 })
+    }, 30000, 'Leonardo create');
+    if (!create.ok) { lastImageError = `leonardo create: ${create.status} ${(await create.text().catch(() => '')).slice(0, 200)}`; return null; }
+    const cd = await create.json();
+    const genId = cd?.sdGenerationJob?.generationId;
+    if (!genId) { lastImageError = 'leonardo: no generationId returned'; return null; }
+    // Poll — Leonardo renders asynchronously (usually a few seconds).
+    for (let i = 0; i < 18; i++) {
+      await new Promise(r => setTimeout(r, 2500));
+      const gr = await fetchWithTimeout(`${LEONARDO_API_BASE}/generations/${genId}`, { headers: { Accept: 'application/json', Authorization: `Bearer ${LEONARDO_API_KEY}` } }, 20000, 'Leonardo poll').catch(() => null);
+      if (!gr || !gr.ok) continue;
+      const gd = await gr.json();
+      const g = gd?.generations_by_pk;
+      const url = g?.generated_images?.[0]?.url;
+      if (g?.status === 'COMPLETE' && url) return url;
+      if (g?.status === 'FAILED') { lastImageError = 'leonardo: generation failed'; return null; }
+    }
+    lastImageError = 'leonardo: timed out waiting for the image';
+  } catch (e) { lastImageError = `leonardo: ${e.message}`; }
+  return null;
+}
+
+// Generate one image, trying each configured backend and falling through on
+// failure: OpenAI-compatible API → Gemini image models → Leonardo AI.
 async function generateImage(prompt) {
-  if (IMAGE_API_KEY) {
-    try {
-      const res = await fetch(IMAGE_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${IMAGE_API_KEY}` },
-        body: JSON.stringify({ model: IMAGE_API_MODEL, prompt, size: '1024x1024', n: 1 })
-      });
-      if (!res.ok) { console.error('Image API error', res.status, (await res.text().catch(() => '')).slice(0, 200)); return null; }
-      const data = await res.json();
-      const item = data.data && data.data[0];
-      if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
-      if (item?.url) return item.url;
-    } catch (e) { console.error('Image generation failed:', e.message); }
-    return null;
-  }
-  if (geminiEnabled) return geminiImage(prompt);
+  if (IMAGE_API_KEY) { const u = await openaiCompatImage(prompt); if (u) return u; }
+  if (geminiEnabled) { const g = await geminiImage(prompt); if (g) return g; }
+  if (leonardoEnabled) { const l = await leonardoImage(prompt); if (l) return l; }
   return null;
 }
 
@@ -620,6 +657,7 @@ module.exports = {
   generateVisionJSON,
   generateImage,
   geminiImage,
+  leonardoImage,
   generateSvgSketch,
   generateImageOrSketch,
   getLastImageError,

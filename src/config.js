@@ -149,7 +149,18 @@ const moonshotEnabled = !forceFallback && hasConfiguredKey(MOONSHOT_API_KEY);
 const IMAGE_API_KEY = process.env.IMAGE_API_KEY;
 const IMAGE_API_URL = process.env.IMAGE_API_URL || 'https://api.openai.com/v1/images/generations';
 const IMAGE_API_MODEL = process.env.IMAGE_API_MODEL || 'gpt-image-1';
-const imageEnabled = !forceFallback && (hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled);
+
+// Optional: Leonardo AI image generation — a fallback when Google/Gemini image
+// generation is unavailable. Async API (create a job, then poll for the result).
+// Set LEONARDO_API_KEY; the model + size are overridable. Default model is
+// Leonardo Phoenix 1.0.
+const LEONARDO_API_KEY = process.env.LEONARDO_API_KEY;
+const LEONARDO_API_BASE = process.env.LEONARDO_API_URL || 'https://cloud.leonardo.ai/api/rest/v1';
+const LEONARDO_MODEL = process.env.LEONARDO_MODEL || '6b645e3a-d64f-4341-a6d8-7a3690fbf042';   // Leonardo Phoenix 1.0
+const LEONARDO_SIZE = parseInt(process.env.LEONARDO_SIZE, 10) || 512;
+const leonardoEnabled = !forceFallback && hasConfiguredKey(LEONARDO_API_KEY);
+
+const imageEnabled = !forceFallback && (hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled || leonardoEnabled);
 
 // Optional: ElevenLabs text-to-speech / voice generation.
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -225,6 +236,11 @@ module.exports = {
   IMAGE_API_KEY,
   IMAGE_API_URL,
   IMAGE_API_MODEL,
+  LEONARDO_API_KEY,
+  LEONARDO_API_BASE,
+  LEONARDO_MODEL,
+  LEONARDO_SIZE,
+  leonardoEnabled,
   imageEnabled,
   ELEVENLABS_API_KEY,
   ELEVENLABS_API_URL,
