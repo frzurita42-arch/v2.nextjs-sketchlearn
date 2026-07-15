@@ -145,6 +145,9 @@ export interface RepoCard {
   // feature is on, adding a card inside generates an answer from the card + page
   // + this prompt + attachments instead of a blank card.
   aiPrompt?: string;
+  // ISO timestamp stamped when a card is created (manual or AI-generated). Shown
+  // on the card and used by the ascending / descending sort.
+  createdAt?: string;
   children?: RepoCard[];     // nested cards / sections one level deeper
 }
 
@@ -267,6 +270,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (c.posterOff) card.posterOff = true;
   if (c.userOff) card.userOff = true;
   if (c.aiPrompt) card.aiPrompt = String(c.aiPrompt).slice(0, 2000);
+  if (c.createdAt) card.createdAt = String(c.createdAt).slice(0, 40);
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
   if (!title && !subtitle && !text && !image && !icon && !links.length && !children.length && !card.completable && !card.collect) return null;

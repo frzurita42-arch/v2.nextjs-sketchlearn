@@ -46,7 +46,9 @@ type ViewCtx = {
   distortText: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the description
   addSubcard: (id: string) => void;                                // ⚙️ add a card inside
   addAnswerChild: (card: RepoCard) => Promise<void>;               // 🤖 add an AI-answer card inside (when AI feature on + prompt set)
+  addAnswerSibling: (card: RepoCard) => Promise<void>;             // 🤖 add an AI-answer card at THIS level (⚙️ when AI feature on + prompt set)
   addSibling: (id: string) => void;                                // ➕ add a card at this level
+  sortCards: (list: RepoCard[]) => RepoCard[];                     // apply the ascending/descending/random order
   moveCard: (id: string, delta: number) => void;                   // ▲ / ▼ reorder within its level
   setIcon: (id: string, patch: Partial<RepoCard>) => void;         // set/clear image & emoji icon
   numberCard: (id: string) => void;                                // 🔢 icon = this card's number
@@ -63,7 +65,7 @@ function timeAgo(iso: string): string {
 // ---- immutable tree helpers (operate by card id) --------------------------
 let _seq = 0;
 const newId = () => `c${Date.now().toString(36)}${(_seq++).toString(36)}`;
-const blankCard = (kind: 'card' | 'section' = 'card'): RepoCard => ({ id: newId(), kind, title: kind === 'section' ? 'New section' : 'New card', links: [] });
+const blankCard = (kind: 'card' | 'section' = 'card'): RepoCard => ({ id: newId(), kind, title: kind === 'section' ? 'New section' : 'New card', links: [], createdAt: new Date().toISOString() });
 
 function mapTree(cards: RepoCard[], id: string, fn: (c: RepoCard) => RepoCard): RepoCard[] {
   return cards.map((c) => {
@@ -166,6 +168,13 @@ const randomEmoji = (exclude?: string) => {
   let e = RANDOM_EMOJIS[Math.floor(Math.random() * RANDOM_EMOJIS.length)];
   for (let i = 0; i < 6 && e === exclude; i++) e = RANDOM_EMOJIS[Math.floor(Math.random() * RANDOM_EMOJIS.length)];
   return e;
+};
+// A STABLE emoji derived from a seed (a card id) — same card always gets the same
+// emoji across renders. Used for the default icon past the single-digit keycaps.
+const stableEmoji = (seed: string) => {
+  let x = 2166136261;
+  for (let i = 0; i < seed.length; i++) { x ^= seed.charCodeAt(i); x = Math.imul(x, 16777619); }
+  return RANDOM_EMOJIS[(x >>> 0) % RANDOM_EMOJIS.length];
 };
 // The number the 🔢 button assigns a card: top-level cards are always 0; cards
 // nested inside another are numbered 1,2,3… by their position among siblings.
@@ -522,10 +531,13 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const previewBlocked = mode === 'preview' && !ctx.canEdit;
   // Icon precedence: a custom icon the user set wins; otherwise an uploaded card
   // image shows; otherwise the DEFAULT is the card's number within its level
-  // (0, 1, 2 … per level), matching the number-box look.
+  // (0…9 as a single keycap). Past the 9th (index ≥ 10) a two-digit keycap looks
+  // cramped in the box, so we show ONE stable random emoji instead.
+  const levelIdx = ctx.levelIndex[card.id] ?? 0;
+  const defaultIcon = levelIdx < 10 ? toKeycaps(levelIdx) : stableEmoji(card.id);
   const iconNode = card.icon
     ? <span aria-hidden>{card.icon}</span>
-    : (isImg(card.image) ? undefined : <span aria-hidden>{toKeycaps(ctx.levelIndex[card.id] ?? 0)}</span>);
+    : (isImg(card.image) ? undefined : <span aria-hidden>{defaultIcon}</span>);
   const isFav = !!ctx.favs[card.id];
   const [collapsed, setCollapsed] = useState(false);   // hide this card's nested cards
   // Follow the repo-wide "collapse / expand all" broadcast (fires only when the
@@ -870,15 +882,17 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   );
 
   // PERMANENT controls — always available (per role). These never move.
-  // ➕ add a card inside. When the AI feature is on AND this card has a saved 🤖
-  // prompt, it instead GENERATES an answer card from the card + page + prompt +
-  // attachments; otherwise it adds a blank card (the normal behaviour).
-  const aiChild = ctx.aiShown && !!card.aiPrompt;
-  const genAnswer = async () => { setAiBusy(true); try { await ctx.addAnswerChild(card); } finally { setAiBusy(false); } };
+  // ⚙️ add a card at THIS level · ➕ add a card inside. When the AI feature is on
+  // AND this card has a saved 🤖 prompt, each instead GENERATES an answer card
+  // (same level / inside) from the card + page + prompt + attachments; otherwise
+  // it adds a blank card (the normal behaviour).
+  const aiGen = ctx.aiShown && !!card.aiPrompt;
+  const genChild = async () => { setAiBusy(true); try { await ctx.addAnswerChild(card); } finally { setAiBusy(false); } };
+  const genSibling = async () => { setAiBusy(true); try { await ctx.addAnswerSibling(card); } finally { setAiBusy(false); } };
   const permanentControls: React.ReactNode[] = [favBtn, copyBtn];
   if (ctx.canEdit) permanentControls.push(
-    <button key="sib" type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>,
-    <button key="child" type="button" disabled={aiBusy} title={aiChild ? 'Generate an AI answer card inside (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card inside'} style={{ ...iconBtn, opacity: aiBusy ? 0.4 : 1 }} onClick={() => (aiChild ? genAnswer() : ctx.addSubcard(card.id))}>{aiBusy ? '⏳' : (aiChild ? '🤖➕' : '➕')}</button>,
+    <button key="sib" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card at this level (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card at this level'} style={{ ...iconBtn, opacity: aiBusy ? 0.4 : 1 }} onClick={() => (aiGen ? genSibling() : ctx.addSibling(card.id))}>{aiBusy ? '⏳' : (aiGen ? '🤖⚙️' : '⚙️')}</button>,
+    <button key="child" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card inside (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card inside'} style={{ ...iconBtn, opacity: aiBusy ? 0.4 : 1 }} onClick={() => (aiGen ? genChild() : ctx.addSubcard(card.id))}>{aiBusy ? '⏳' : (aiGen ? '🤖➕' : '➕')}</button>,
     <button key="hide" type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>,
     <button key="del" type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>,
   );
@@ -936,6 +950,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       onOpen={open}
       leading={isGrid ? undefined : collapseBtn}
       iconNode={iconNode}
+      meta={card.createdAt ? <span style={{ fontSize: 10.5, opacity: 0.55 }}>🕒 {new Date(card.createdAt).toLocaleString()}</span> : undefined}
       overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
       afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}
       actions={isGrid ? (ctx.assignShown ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{assignBtn}</span> : null) : actions} del={isGrid ? undefined : del} />
@@ -1010,7 +1025,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {body}
       {!collapsed && (
         <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
-          {kids.map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
+          {ctx.sortCards(kids).map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
         </div>
       )}
     </div>
@@ -1044,6 +1059,23 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // prompt icon, and adding a card inside (➕) generates an AI answer from the
   // card + page + prompt + attachments. Off: ➕ makes a blank card as before.
   const [aiShown, setAiShown] = useState(false);
+  // Card ordering — a display toggle everyone can cycle: manual (as arranged) →
+  // ↑ ascending (oldest first) → ↓ descending (newest first) → 🔀 random. The
+  // nonce reshuffles "random" each time you land on it.
+  const [sortMode, setSortMode] = useState<'manual' | 'asc' | 'desc' | 'random'>('manual');
+  const [sortNonce, setSortNonce] = useState(0);
+  const cycleSort = () => { setSortMode((m) => (m === 'manual' ? 'asc' : m === 'asc' ? 'desc' : m === 'desc' ? 'random' : 'manual')); setSortNonce((n) => n + 1); };
+  const sortCards = useMemo(() => (list: RepoCard[]): RepoCard[] => {
+    if (sortMode === 'manual' || list.length < 2) return list;
+    const arr = [...list];
+    if (sortMode === 'random') {
+      const h = (s: string) => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
+      return arr.map((c) => ({ c, k: h(c.id + ':' + sortNonce) })).sort((a, b) => a.k - b.k).map((x) => x.c);
+    }
+    const key = (c: RepoCard) => (c.createdAt ? Date.parse(c.createdAt) || 0 : 0);
+    return arr.sort((a, b) => (sortMode === 'asc' ? key(a) - key(b) : key(b) - key(a)));
+  }, [sortMode, sortNonce]);
+  const SORT_LABEL: Record<typeof sortMode, string> = { manual: '↕ Order: Manual', asc: '↑ Order: Oldest', desc: '↓ Order: Newest', random: '🔀 Order: Random' };
   // Default per-level numbering (recomputed whenever the card tree changes).
   const levelIndex = useMemo(() => buildLevelIndex(cards), [cards]);
   const [editing, setEditing] = useState(false);
@@ -1109,16 +1141,28 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // the wider repository (other cards), the saved prompt, and any attached
   // link/document to the AI, then inserts the returned title+text as a child.
   const flattenTitles = (cs: RepoCard[], depth = 0): string[] => cs.flatMap((c) => [`${'  '.repeat(depth)}• ${c.title || 'Untitled'}${c.text ? ` — ${String(c.text).slice(0, 120)}` : ''}`, ...(c.children ? flattenTitles(c.children, depth + 1) : [])]);
+  // Ask the AI for an answer card built from `card` + the whole page + the card's
+  // prompt + any attached document. Returns a ready-to-insert new card (or null).
+  const generateAnswerCard = async (card: RepoCard): Promise<RepoCard | null> => {
+    const repoContext = flattenTitles(cards).join('\n').slice(0, 3500);
+    const allLinks = card.links || [];
+    const refLinks = allLinks.filter((l) => !/^data:/i.test(l.url || '')).map((l) => ({ label: l.label, url: l.url }));
+    const docLink = allLinks.find((l) => /^data:(application\/pdf|text\/|application\/(msword|vnd\.openxmlformats|vnd\.ms))/i.test(l.url || ''));
+    const r = await API.post('/api/tools/repo/ai', { slug, op: 'answer', cardTitle: card.title || '', cardText: card.text || '', prompt: card.aiPrompt || '', repoTitle: def?.title || '', repoContext, links: refLinks, docDataUrl: docLink?.url || '' });
+    if (r?.text) return { ...blankCard('card'), title: String(r.title || 'Answer').slice(0, 120), text: String(r.text).slice(0, 2000) };
+    if (r?.error) alert(r.error);
+    return null;
+  };
+  // 🤖 Add an AI-answer card INSIDE `card` (the ➕ button when the AI feature is on).
   const addAnswerChild = async (card: RepoCard) => {
-    try {
-      const repoContext = flattenTitles(cards).join('\n').slice(0, 3500);
-      const allLinks = card.links || [];
-      const refLinks = allLinks.filter((l) => !/^data:/i.test(l.url || '')).map((l) => ({ label: l.label, url: l.url }));
-      const docLink = allLinks.find((l) => /^data:(application\/pdf|text\/|application\/(msword|vnd\.openxmlformats|vnd\.ms))/i.test(l.url || ''));
-      const r = await API.post('/api/tools/repo/ai', { slug, op: 'answer', cardTitle: card.title || '', cardText: card.text || '', prompt: card.aiPrompt || '', repoTitle: def?.title || '', repoContext, links: refLinks, docDataUrl: docLink?.url || '' });
-      if (r?.text) await saveCards(addChildTo(cards, card.id, { ...blankCard('card'), title: String(r.title || 'Answer').slice(0, 120), text: String(r.text).slice(0, 2000) }));
-      else if (r?.error) alert(r.error);
-    } catch { alert('Could not generate an answer.'); }
+    try { const nc = await generateAnswerCard(card); if (nc) await saveCards(addChildTo(cards, card.id, nc)); }
+    catch { alert('Could not generate an answer.'); }
+  };
+  // 🤖 Add an AI-answer card at the SAME LEVEL as `card` (the ⚙️ button when the AI
+  // feature is on) — same context, inserted as a sibling.
+  const addAnswerSibling = async (card: RepoCard) => {
+    try { const nc = await generateAnswerCard(card); if (nc) await saveCards(addSiblingEnd(cards, card.id, nc)); }
+    catch { alert('Could not generate an answer.'); }
   };
   // ⚙️ add a sibling card at the SAME level, appended to the BOTTOM of that level
   // (a new top-level card from a top card, a new nested sibling from a nested one).
@@ -1151,7 +1195,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterShown, userShown, aiShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addSibling, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterShown, userShown, aiShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
@@ -1241,7 +1285,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"
           bannerKey="collectionBanner" bannerDefault="🗂️ Your saved cards — search by name, favorite them (★ / liked by admin / Moderators), switch grid ▦ or rows ☰ (the owner can 🔒 lock the layout), and page through. Tap a card to open its attachment."
-          items={cards.filter((c) => canEdit || !c.hidden)}
+          items={sortCards(cards.filter((c) => canEdit || !c.hidden))}
           id={(c: RepoCard) => c.id}
           searchText={(c: RepoCard) => `${c.title || ''} ${c.subtitle || ''} ${c.text || ''}`}
           defaultView={display === 'grid' ? 'grid' : 'row'}
@@ -1286,6 +1330,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   title={imageGen ? 'Turn off card pictures' : 'Turn on card pictures — each card gets a 🖼️ button (beside the clip/folder) to generate an AI picture of the item; a saved picture stays viewable to everyone even after you turn this off'}
                   onClick={() => saveImageGen(!imageGen)}>🖼️ Card picture: {imageGen ? 'On' : 'Off'}</button>
               )}
+              {/* Sort order — available to everyone (a personal display preference):
+                  cycles Manual → Oldest → Newest → Random. */}
+              <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`}
+                title="Sort the cards — click to cycle: Manual (as arranged) → ↑ Oldest first → ↓ Newest first → 🔀 Random"
+                onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
               {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
             </div>
           }
