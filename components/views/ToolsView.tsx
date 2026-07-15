@@ -138,7 +138,7 @@ export function ToolsView() {
   const gEff = app.eff();
   // "Build a tool" is available to Moderators and Admins (not plain users, and
   // not in the User "View as" preview).
-  const canBuild = gEff.isAdmin || gEff.viewAs === 'op';
+  const canBuild = gEff.isAdmin || gEff.isModerator || gEff.viewAs === 'op';
   // Real tools: owner or admin. Built-in examples: an admin may curate them
   // (title/description/thumbnail), saved as an override for everyone.
   const canEditCard = (t: any) => {

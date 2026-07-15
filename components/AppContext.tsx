@@ -17,9 +17,10 @@ export type ViewAs = 'self' | 'user' | 'op' | 'admin' | 'languages' | 'stem';
 // The EFFECTIVE identity a component should gate its UI on, given the page's
 // content owner. Derived from the real user + the current "view as" selection.
 export interface EffPerms {
-  role: 'admin' | 'user';
+  role: 'admin' | 'moderator' | 'user';
   username: string;
-  isAdmin: boolean;   // admin-only powers (e.g. remove others' uploads)
+  isAdmin: boolean;   // admin-only powers (edit the site title/banners/all cards)
+  isModerator: boolean; // moderator powers (create content; edit ONLY own content)
   isOwner: boolean;   // owner powers (edit the tool, see all submissions)
   canEdit: boolean;   // isAdmin || isOwner
   preview: boolean;   // true when not viewing as your real self
@@ -31,15 +32,18 @@ export interface EffPerms {
 export function computeEff(user: SessionUser | null, viewAs: ViewAs, owner?: string): EffPerms {
   const realName = user?.username || '';
   const realAdmin = user?.role === 'admin';
+  const realMod = user?.role === 'moderator';
   const realOwner = !!owner && realName === owner;
-  const mk = (role: 'admin' | 'user', username: string, isAdmin: boolean, isOwner: boolean, preview: boolean): EffPerms =>
-    ({ role, username, isAdmin, isOwner, canEdit: isAdmin || isOwner, preview, viewAs });
+  const mk = (role: 'admin' | 'moderator' | 'user', username: string, isAdmin: boolean, isModerator: boolean, isOwner: boolean, preview: boolean): EffPerms =>
+    ({ role, username, isAdmin, isModerator, isOwner, canEdit: isAdmin || isOwner, preview, viewAs });
   switch (viewAs) {
-    case 'user':  return mk('user', realName, false, false, true);
-    case 'op':    return mk('user', owner || realName, false, true, true);
-    case 'admin': return mk('admin', realName, true, owner ? realName === owner : false, true);
+    case 'user':  return mk('user', realName, false, false, false, true);
+    // The "Moderators" preview: a content creator with owner powers over this
+    // page's content, but no admin (site-chrome) powers.
+    case 'op':    return mk('moderator', owner || realName, false, true, true, true);
+    case 'admin': return mk('admin', realName, true, false, owner ? realName === owner : false, true);
     case 'self':
-    default:      return mk(realAdmin ? 'admin' : 'user', realName, realAdmin, realOwner, false);
+    default:      return mk(realAdmin ? 'admin' : realMod ? 'moderator' : 'user', realName, realAdmin, realMod, realOwner, false);
   }
 }
 

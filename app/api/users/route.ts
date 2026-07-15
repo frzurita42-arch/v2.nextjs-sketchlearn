@@ -25,7 +25,8 @@ export async function POST(req: Request) {
   const { username, password, role } = (await req.json().catch(() => ({}))) || {};
   if (!username || !password) return NextResponse.json({ error: 'Username and password required' }, { status: 400 });
   if (userState.users.some((u: any) => u.username === username)) return NextResponse.json({ error: 'User already exists' }, { status: 409 });
-  userState.users.push(makeUser(username.trim(), password, role === 'admin' ? 'admin' : 'user'));
+  const safeRole = role === 'admin' ? 'admin' : role === 'moderator' ? 'moderator' : 'user';
+  userState.users.push(makeUser(username.trim(), password, safeRole));
   await persistUsers(userState.users);
   return NextResponse.json({ ok: true });
 }

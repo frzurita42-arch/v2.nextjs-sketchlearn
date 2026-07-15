@@ -74,7 +74,7 @@ export function DashboardView() {
           <label className="field"><span>Password</span><input type="text" id="new-pass" value={newPass} onChange={e => setNewPass(e.target.value)} /></label>
           <label className="field"><span>Role</span>
             <select id="new-role" value={newRole} onChange={e => setNewRole(e.target.value)}>
-              <option value="user">user</option><option value="admin">admin</option>
+              <option value="user">user</option><option value="moderator">moderator</option><option value="admin">admin</option>
             </select></label>
         </div>
         <p className="form-error" id="user-err">{userErr}</p>

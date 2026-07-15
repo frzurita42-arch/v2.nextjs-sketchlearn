@@ -16,7 +16,10 @@ export function InstructionPlank({ children, settingKey, defaultText }: {
   defaultText?: string;
 }) {
   const app = useApp();
-  const isAdmin = app.user?.role === 'admin';
+  // Site banners are admin-only chrome. Gate on the EFFECTIVE admin flag so the
+  // controls also disappear when an admin previews the page as a Moderator or a
+  // plain user (a real moderator/user account never sees them either).
+  const isAdmin = app.eff().isAdmin;
   const editable = !!settingKey;
   const [text, setText] = useState(defaultText || '');
   const [editing, setEditing] = useState(false);
