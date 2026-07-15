@@ -820,13 +820,20 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // be posted); if empty it reveals the add-button.
   if (canPoster) activeControls.push(<button key="clip" type="button" title={posterLinkIdx >= 0 ? 'Delete the Moderator link (then post a new one)' : 'Post a Moderator link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>);
   if (canUser) activeControls.push(<button key="folder" type="button" title={myUserLinkIdx >= 0 ? 'Delete your link (then upload a new one)' : 'Upload your own document'} style={{ ...iconBtn, opacity: (myUserLinkIdx >= 0 || showUser) ? 1 : 0.85 }} onClick={folderAction}>📁</button>);
-  // Per-card emoji toggles (owner/admin): turn Moderator / User upload OFF or ON
-  // for just this card (persisted). Shown while that repo-wide control is revealed.
-  if (ctx.canEdit && ctx.posterShown) activeControls.push(<button key="ptog" type="button" title={card.posterOff ? 'Moderator upload is OFF for this card — click to enable' : 'Turn OFF Moderator upload for this card'} style={{ ...iconBtn, fontSize: 13, opacity: card.posterOff ? 0.9 : 0.55 }} onClick={() => ctx.editField(card.id, { posterOff: !card.posterOff })}>{card.posterOff ? '📎🚫' : '📎✓'}</button>);
-  if (ctx.canEdit && ctx.userShown) activeControls.push(<button key="utog" type="button" title={card.userOff ? 'User upload is OFF for this card — click to enable' : 'Turn OFF User upload for this card'} style={{ ...iconBtn, fontSize: 13, opacity: card.userOff ? 0.9 : 0.55 }} onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>{card.userOff ? '📁🚫' : '📁✓'}</button>);
+
+  // 🖼️ picture button — a plain clickable icon (not a framed button). Owner/admin
+  // generate a picture (saved for all viewers); everyone can view a saved one.
+  // Clicking opens the popup (view / regenerate / delete).
+  const showFrame = ctx.imageGen && (ctx.canEdit || hasGen);
+  const imgIcon = showFrame ? (
+    <button key="img" type="button" onClick={eat(frameClick)} disabled={genBusy}
+      title={hasGen ? (ctx.canEdit ? 'View the picture — regenerate or delete it' : 'View the picture') : (ctx.canEdit ? 'Generate an AI picture of this item (saved for everyone)' : 'No picture yet')}
+      style={{ ...iconBtn, opacity: hasGen ? 1 : 0.7 }}>{genBusy ? '⏳' : '🖼️'}</button>
+  ) : null;
 
   // PERMANENT controls — always available (per role). These never move.
   const permanentControls: React.ReactNode[] = [favBtn, copyBtn];
+  if (imgIcon) permanentControls.push(imgIcon);
   if (ctx.canEdit) permanentControls.push(
     <button key="sib" type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>,
     <button key="child" type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>,
@@ -835,12 +842,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   );
 
   // The control cluster: [ active emojis | permanent emojis ], with a vertical
-  // divider between the two groups (only drawn when there are active controls).
-  const vDivider = <span key="vdiv" style={{ alignSelf: 'stretch', borderLeft: '2px solid var(--ink)', opacity: 0.28, margin: '0 2px' }} />;
+  // divider ALWAYS between the two groups (even when no active controls are on).
+  const vDivider = <span key="vdiv" style={{ alignSelf: 'stretch', borderLeft: '2px solid var(--ink)', opacity: 0.28, margin: '0 4px', minHeight: 18 }} />;
   const iconGrid = (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 8px', alignItems: 'center', flex: '0 0 auto' }}>
       {activeControls}
-      {activeControls.length > 0 && vDivider}
+      {vDivider}
       {permanentControls}
     </div>
   );
@@ -881,28 +888,14 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {showUserAdd && addBtn('user')}
     </span>
   ) : null;
-  // 🖼️ "Suggest AI" picture button (repo-level toggle). Owner/admin generate a
-  // picture of the item (saved for all viewers); everyone can view a saved one.
-  // With a picture present, clicking it opens a popup to view — and, for owner/
-  // admin, to Regenerate or Delete it (no separate delete icon).
-  const showFrame = ctx.imageGen && (ctx.canEdit || hasGen);
-  const imageButtons = showFrame ? (
-    <span style={{ display: 'inline-flex', gap: 4, flex: '0 0 auto' }} onClick={stop}>
-      <button type="button" onClick={frameClick} disabled={genBusy}
-        title={hasGen ? (ctx.canEdit ? 'View the picture — regenerate or delete it' : 'View the picture') : (ctx.canEdit ? 'Generate an AI picture of this item (saved for everyone)' : 'No picture yet')}
-        className={`btn small ${hasGen ? 'blue' : 'ghost'}`}>{genBusy ? '⏳' : '🖼️'}</button>
-    </span>
-  ) : null;
   const actions = (
     <>
       {moveBtns}
       {linkColumn}
       {roleButtons}
-      {imageButtons}
-      {collapseBtn}
-      {/* Read-only status badge for viewers. Editors see the labelled assignBtn
-          (which already names the status), so the pill is hidden for them. */}
-      {!assignBtn && statusChip}
+      {/* Read-only status badge for viewers only. Editors see the labelled
+          assignBtn when Assignment is on, and nothing when it's off. */}
+      {!ctx.canEdit && statusChip}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       {iconGrid}
     </>
@@ -922,6 +915,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       thumbnail={isImg(card.image) ? card.image : null}
       badge={dimmed ? '🙈 hidden' : (ctx.canEdit && mode === 'disabled' ? '🚫 disabled' : ctx.canEdit && mode === 'preview' ? '👓 preview' : (view === 'grid' && kids.length ? `📂 ${kids.length} inside` : undefined))}
       onOpen={open}
+      leading={isGrid ? undefined : collapseBtn}
       iconNode={iconNode}
       overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
       afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}

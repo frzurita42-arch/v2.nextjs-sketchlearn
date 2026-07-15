@@ -27,6 +27,7 @@ export interface CardShellProps {
                               // edit icons stay visible.
   onOpen?: () => void;        // click the image or the title to open
 
+  leading?: React.ReactNode;      // ROW view: slot to the LEFT of the logo/thumbnail (e.g. collapse toggle)
   iconNode?: React.ReactNode;     // an emoji/text icon shown in the image spot INSTEAD of a photo
   overlay?: React.ReactNode;      // edit icons floated over the image (top-right)
   placeholder?: React.ReactNode;  // buttons shown inside the empty image box
@@ -74,6 +75,7 @@ export function CardShell(p: CardShellProps) {
       : <div title="No photo" onClick={onOpen} style={{ width: 46, height: 46, borderRadius: 8, border: '2px dashed var(--ink)', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, opacity: 0.6, cursor: onOpen ? 'pointer' : 'default' }}>{p.rowThumbFallback ?? '🖼️'}</div>;
     return (
       <div className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, maxWidth: '100%' }}>
+        {p.leading}
         {rowThumb}
         <div style={{ minWidth: 0, flex: 1, wordBreak: 'break-word' }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
