@@ -47,7 +47,8 @@ function buildReadingInstructions({ language, level, topic, grammarTopic }) {
   return `LANGUAGE READING LESSON. Target language: ${language}. Learner level: ${level} — ${levelGuidance(level)}${symbolNote}${explainInEnglish}` +
     ` Theme for examples: "${topic || 'everyday life'}". Grammar focus: "${grammarTopic || 'general'}".` +
     ` Each slide is a short reading passage sized to the level (Zero: a few short words/sentences; higher levels: more sentences and paragraphs, richer vocabulary and harder interpretation), followed by a comprehension multiple-choice question.` +
-    ` On EVERY slide include exactly one support component that fits the passage — an image, a table (e.g. vocabulary/conjugations), or a code snippet when illustrating a rule/pattern/steps — AND exactly one sticky note whose text is either an encouraging comment on the learner's progress so far, a short level-appropriate quote about the theme, or a quick motivational cheer.` +
+    ` On EVERY slide include exactly one support component that fits the passage — an image or a table (e.g. vocabulary/conjugations) — AND exactly one sticky note whose text is either an encouraging comment on the learner's progress so far, a short level-appropriate quote about the theme, or a quick motivational cheer.` +
+    ` NEVER use a code block/snippet: this is a language lesson, not programming — code boxes are only for STEM (coding, math, algorithms).` +
     ` Keep the lesson oriented to what a ${level} learner actually needs (Zero: survival basics; A1/A2: greetings and daily life; B1/B2: experiences and opinions; C1/C2: negotiation, study, travel, business).`;
 }
 
@@ -92,7 +93,7 @@ function buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slid
   }
   // reading
   return {
-    system: `You are a ${language} reading teacher. Respond ONLY with JSON: {"title": string, "passage": string (a short reading sized to the level — Zero: a few words/short sentences; higher: more sentences/paragraphs), "support": ONE of {"type":"image","prompt":string} | {"type":"table","headers":[string,...],"rows":[[string,...],...],"caption":string} | {"type":"code","language":string,"content":string}, "sticky": {...}, "quiz": {"question": string, "options": [{"text": string, "correct": boolean, "explanation": string}] (4 options, one correct)}}. ${sticky}`,
+    system: `You are a ${language} reading teacher. Respond ONLY with JSON: {"title": string, "passage": string (a short reading sized to the level — Zero: a few words/short sentences; higher: more sentences/paragraphs), "support": ONE of {"type":"image","prompt":string} | {"type":"table","headers":[string,...],"rows":[[string,...],...],"caption":string}, "sticky": {...}, "quiz": {"question": string, "options": [{"text": string, "correct": boolean, "explanation": string}] (4 options, one correct)}}. NEVER output a code block/snippet — this is a language lesson, not programming (code boxes are for STEM only). ${sticky}`,
     user: base,
   };
 }

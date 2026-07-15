@@ -12,6 +12,7 @@ import { Loading } from '@/components/ui/Loading';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { MicButton } from '@/components/ui/MicButton';
 import { langCode } from '@/lib/lang-codes';
+import { matchAnswer, answerHint } from '@/lib/answer-match';
 import { DrawField } from '@/components/tools/MediaFields';
 
 const MAX_SLIDES = 12;
@@ -313,14 +314,17 @@ function VocabInput({ item, onDone, lang }: any) {
   const [tries, setTries] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [solved, setSolved] = useState<null | boolean>(null);
-  const accept: string[] = Array.isArray(item.accept) && item.accept.length ? item.accept : [String(item.answer || '').toLowerCase()];
+  const accept: string[] = [String(item.answer || ''), ...(Array.isArray(item.accept) ? item.accept : [])].filter(Boolean);
   const submit = () => {
-    const guess = val.trim().toLowerCase();
+    const guess = val.trim();
     if (!guess) return;
-    if (accept.includes(guess)) { setSolved(true); setFeedback('✓ Correct!'); return; }
+    // Lenient: a close-enough answer (accents/typos/partial phrase) is accepted;
+    // `close` means it counts but a fuller answer exists.
+    const m = matchAnswer(guess, accept, 'vocab');
+    if (m.accept) { setSolved(true); setFeedback(m.close ? `✓ Accepted! A fuller answer is “${item.answer}”.` : '✓ Correct!'); return; }
     const t = tries + 1; setTries(t);
     if (t >= 3) { setSolved(false); setFeedback(`Not quite. The answer is "${item.answer}".`); }
-    else setFeedback(`Not quite — try again (${3 - t} left).`);
+    else setFeedback(`Not quite — hint: ${answerHint(item.answer, t)} · ${3 - t} left.`);
   };
   return (
     <>
@@ -409,14 +413,16 @@ function SpellInput({ item, onDone, lang }: any) {
   const [tries, setTries] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [solved, setSolved] = useState<null | boolean>(null);
-  const accept: string[] = Array.isArray(item.accept) && item.accept.length ? item.accept : [String(item.answer || '').toLowerCase()];
+  const accept: string[] = [String(item.answer || ''), ...(Array.isArray(item.accept) ? item.accept : [])].filter(Boolean);
   const submit = () => {
-    const guess = val.trim().toLowerCase();
+    const guess = val.trim();
     if (!guess) return;
-    if (accept.includes(guess)) { setSolved(true); setFeedback('✓ Correct!'); return; }
+    // Spelling forgives accents and a small typo, but the letters still matter.
+    const m = matchAnswer(guess, accept, 'spelling');
+    if (m.accept) { setSolved(true); setFeedback(m.close ? `✓ Accepted — the exact spelling is “${item.answer}”.` : '✓ Correct!'); return; }
     const t = tries + 1; setTries(t);
     if (t >= 3) { setSolved(false); setFeedback(`Not quite. The word is “${item.answer}”.`); }
-    else setFeedback(`Not quite — try again (${3 - t} left).`);
+    else setFeedback(`Not quite — hint: ${answerHint(item.answer, t)} · ${3 - t} left.`);
   };
   return (
     <>

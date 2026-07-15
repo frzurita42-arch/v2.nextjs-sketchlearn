@@ -400,10 +400,13 @@ label.field > span { display: block; margin-bottom: 4px; }
   margin-left: auto; color: #f7f3e9; font-family: 'JetBrains Mono', monospace;
   font-size: .8rem; letter-spacing: .04em; text-transform: uppercase;
 }
-.comp-code pre { margin: 0; padding: 14px 16px; overflow-x: auto; }
+/* No HORIZONTAL scrollbar: long lines wrap instead of scrolling sideways.
+   (A tall snippet just grows vertically, which is fine.) */
+.comp-code pre { margin: 0; padding: 14px 16px; overflow-x: hidden; }
 .comp-code code {
   font-family: 'JetBrains Mono', 'Courier New', monospace;
-  font-size: .92rem; line-height: 1.5; color: #f7f3e9; white-space: pre;
+  font-size: .92rem; line-height: 1.5; color: #f7f3e9;
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
 }
 
 /* ---------- AI image, framed for the paper theme ---------- */

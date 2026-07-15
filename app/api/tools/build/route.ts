@@ -239,6 +239,20 @@ they want ("two slides", "3 problems"), set lesson.totalSlides (and the "slides"
 setting default) to exactly that number. Otherwise default to 5 (or 1 for an
 explicit single-page activity). Never override a count the user asked for.
 
+CODE BOXES ARE STEM-ONLY: a code snippet / code support block is only for
+programming, math, algorithms and data. NEVER add code support (support.code) to
+a language, history, art or other humanities lesson — set subjectKind correctly
+and leave code off for those; show grammar/conjugation as a table, not code.
+
+LENIENT GRADING (applies to every generated tool with typed answers): a learner
+who is essentially right must be marked correct even with a spelling slip, a
+grammatical error, missing accents, different capitalisation, a synonym, or a
+partial phrase that covers the key word (e.g. "café" for "una taza de café" is
+correct). For fill-blank/input questions supply a generous "accept" list; never
+demand the exact full wording. When the answer is only close, accept it and note
+how it could be more complete; when it is wrong, offer a hint rather than the
+answer (learners get three tries).
+
 SETTINGS DESIGN (important): keep the settings form MINIMAL and COMPACT so it
 looks good on a tall 9:16 phone screen. For any field that is a choice, use
 "select-or-custom" (it shows a small pencil to type a custom value) instead of a

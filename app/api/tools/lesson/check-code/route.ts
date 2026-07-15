@@ -25,12 +25,13 @@ export async function POST(req: Request) {
   }
 
   const system = [
-    'You are grading a student\'s typed answer to a problem. Be fair, precise and encouraging.',
+    'You are grading a student\'s typed answer to a problem. Be fair, lenient and encouraging.',
     `The task was: "${prompt || 'Solve the problem.'}"`,
     answer ? `The expected/correct solution is: "${answer}".` : 'Judge whether the answer is correct and complete on its own merits.',
     language ? `The answer is written as ${language}.` : '',
-    'Judge on correctness and completeness — accept any equivalent-but-correct solution, not only an exact string match.',
-    'Return STRICT JSON: { "correct": true|false, "score": 0-100, "feedback": "one or two short, specific, encouraging sentences about what was right or what to fix", "fix": "a short model/corrected solution as code or worked steps (plain, no backticks) — empty string if the answer was already fully correct" }.',
+    'LENIENCY (important): mark the answer CORRECT when it is close enough to convey the right idea — do NOT require exact spelling, accents, capitalisation, punctuation or word-for-word wording. A minor spelling slip, a grammatical error, a synonym, a partial-but-on-target phrase, or a differently-worded equivalent all count as correct. Example: if the expected answer is "una taza de café" and the student writes "cafe", that is CORRECT — you may note that a fuller answer would be "una taza de café", but still mark it correct.',
+    'Only mark it INCORRECT when the answer is genuinely wrong, missing, or off-topic. When incorrect, give a HINT that nudges toward the answer WITHOUT revealing it (the student has up to three tries).',
+    'Return STRICT JSON: { "correct": true|false, "score": 0-100, "feedback": "one or two short, specific, encouraging sentences — if correct-but-imperfect, gently note how it could be more complete; if incorrect, a hint that does NOT give the answer away", "fix": "a short model/corrected solution as code or worked steps (plain, no backticks) — empty string if the answer was already acceptable" }.',
   ].filter(Boolean).join('\n');
   const user = `Student's answer:\n${code}`;
 

@@ -49,6 +49,11 @@ export async function POST(req: Request) {
   const mathTopic = /math|physics|calculus|algebra|geometry|trigonometr|equation|formula|theorem|derivative|integral|matrix|vector|probabilit|statistic|arithmetic|number theory|\bproof\b|logic gate|boolean|quantum|mechanics|thermodynam|chemistr|algorithm|computer science|cryptograph|data structure|linear algebra|differential|calculation|electr(o|ical)|circuit/i.test(subjectText);
   const languageOrHumanities = /french|spanish|english|german|italian|portuguese|mandarin|chinese|japanese|korean|arabic|latin|\blanguage\b|grammar|vocabular|conjugat|\bverb\b|\bnoun\b|\btense\b|pronunciat|spelling|history|geograph|\bart\b|music|literature|poetry|philosoph|\blaw\b|politic|culture|religion|anatomy|cooking|writing|essay|social studies/i.test(subjectText);
   const allowLatex = (stemFocus || mathTopic) && !languageOrHumanities;
+  // Code boxes belong to STEM only (math, science, data, and explicitly
+  // programming topics). Humanities/language lessons must NOT render code
+  // snippets — a Spanish or history lesson should never show a code window.
+  const codingTopic = /program|coding|\bcode\b|algorithm|computer science|software|python|javascript|typescript|\bjava\b|c\+\+|\bc#\b|\bsql\b|\bhtml\b|\bcss\b|regex|\bapi\b|data structure|function|compiler|shell script|bash/i.test(subjectText);
+  const allowCode = allowLatex || dataFocus || codingTopic;
   const effectiveProof = proofMode && allowLatex;
   // Prefer commented code snippets over LaTeX wherever a computation, formula,
   // algorithm, statistical method or step-by-step solution can be expressed as code.
@@ -85,7 +90,7 @@ export async function POST(req: Request) {
 
   const system = buildSlideSystemPrompt({
     paraCount, paragraphWords, densityRule, componentStrategy, codeDepth,
-    equationDepth, allowLatex, preferCode, stemAlternation, effectiveProof,
+    equationDepth, allowLatex, allowCode, preferCode, stemAlternation, effectiveProof,
     isTimeTravelActivity, allowModelSvg, settings, level,
     visualPromptRule: visualPlan.promptRule,
   });
@@ -112,6 +117,9 @@ export async function POST(req: Request) {
     }
     if (!visualPlan.allowImages) {
       slide.components = (slide.components || []).filter((c: any) => c?.type !== 'image' && c?.type !== 'svg');
+    }
+    if (!allowCode) {
+      slide.components = (slide.components || []).filter((c: any) => c?.type !== 'code');
     }
     if (visualPlan.allowImages) {
       await fillImages(slide.components || []);
@@ -154,6 +162,11 @@ export async function POST(req: Request) {
     // If the topic is not mathematical, strip any LaTeX the model added anyway.
     if (!allowLatex) {
       slide.components = (slide.components || []).filter((c: any) => c?.type !== 'latex');
+    }
+    // Code boxes are STEM-only: drop any snippet the model slipped into a
+    // language/humanities lesson.
+    if (!allowCode) {
+      slide.components = (slide.components || []).filter((c: any) => c?.type !== 'code');
     }
     // Proof continuity: a well-commented code snippet now satisfies the step too, so
     // only fall back to injecting a LaTeX block when the slide has neither code nor latex.

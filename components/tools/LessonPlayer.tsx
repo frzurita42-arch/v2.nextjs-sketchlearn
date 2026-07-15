@@ -19,6 +19,7 @@ import { AnnotationPad, compositePages } from '@/components/tools/AnnotationPad'
 import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 import { buildLessonZip } from '@/lib/lesson-export';
+import { matchAnswer, answerHint } from '@/lib/answer-match';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
@@ -326,15 +327,19 @@ function ChoiceQuestion({ q, translateTo, subject, onDone }: { q: Q; translateTo
       </div>
     );
   }
-  // fill-blank / input — typed answer. Exact match is instant; otherwise the AI
-  // judges whether the free-text answer is valid (accepts the learner's own
-  // wording / paraphrases), then we move on. 3 tries before revealing.
-  const accept = (q.accept && q.accept.length ? q.accept : [q.answer || '']).map(s => String(s).toLowerCase());
+  // fill-blank / input — typed answer. A close-enough answer (accents, typos,
+  // paraphrase, partial phrase) is accepted instantly; otherwise the AI judges
+  // it (also leniently), then we move on. 3 tries with hints before revealing.
+  const accept = [String(q.answer || ''), ...(q.accept || [])].filter(Boolean);
   const check = async () => {
     if (aiBusy) return;
     const v = val.trim();
-    if (accept.includes(v.toLowerCase())) { finish(true, { prompt: q.prompt, your: v, answer: q.answer || '', correct: true }); return; }
-    // Ask the AI whether this free-text answer is acceptable.
+    const m = matchAnswer(v, accept, 'vocab');
+    if (m.accept) {
+      finish(true, { prompt: q.prompt, your: v, answer: q.answer || '', correct: true, feedback: m.close ? `Accepted — a fuller answer is “${q.answer}”.` : '' });
+      return;
+    }
+    // Ask the AI whether this free-text answer is acceptable (lenient grading).
     if (v && q.answer) {
       setAiBusy(true); setAiNote('');
       try {
@@ -347,6 +352,7 @@ function ChoiceQuestion({ q, translateTo, subject, onDone }: { q: Q; translateTo
     }
     const t = tries + 1; setTries(t);
     if (t >= 3) finish(false, { prompt: q.prompt, your: v || '(no answer)', answer: q.answer || '', correct: false });
+    else if (!aiNote) setAiNote(`Hint: ${answerHint(String(q.answer || ''), t)}`);
   };
   return (
     <div style={{ textAlign: 'center' }}>

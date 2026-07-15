@@ -8,7 +8,7 @@
 //   isTimeTravelActivity, allowModelSvg, settings, level, visualPromptRule
 function buildSlideSystemPrompt({
   paraCount, paragraphWords, densityRule, componentStrategy, codeDepth,
-  equationDepth, allowLatex, preferCode, stemAlternation, effectiveProof,
+  equationDepth, allowLatex, allowCode, preferCode, stemAlternation, effectiveProof,
   isTimeTravelActivity, allowModelSvg, settings, level, visualPromptRule
 }) {
   return `You are an expert teacher generating ONE slide of an adaptive learning presentation. Respond ONLY with JSON in this schema:
@@ -54,6 +54,9 @@ Rules:
 - SUBJECT GATE FOR LATEX (hard rule): ${allowLatex
   ? 'This concept is mathematical/technical, so LaTeX formulas and derivations are appropriate where symbols clarify the reasoning.'
   : 'This concept is NOT mathematical (e.g. a language, history, art or other humanities topic). Do NOT use LaTeX, formulas, equations or symbolic notation anywhere — not even to lay out generic "logical steps". Never render a slide as a bare list of generic steps. Instead teach with prose PLUS real support material: a generated image, a table (conjugations, comparisons, timelines), an SVG diagram, a chart when there is real data, and sticky notes for rules/examples/mnemonics/anecdotes.'}
+- SUBJECT GATE FOR CODE (hard rule): ${allowCode
+  ? 'A code/snippet component is appropriate here (STEM: math, science, data, or programming) when it works through a computation, algorithm or step.'
+  : 'This is NOT a STEM/coding topic (it is a language, history, art or other humanities subject). NEVER output a "code" component/snippet — code windows are for programming, math, algorithms and data only. Explain with prose, images, tables, svg diagrams, charts (only for real data) and sticky notes instead.'}
 - ${allowLatex ? 'Express derivations and worked steps as a commented code snippet by default; only fall back to a displayed LaTeX block for a symbolic result that cannot be shown as code.' : 'Do not use LaTeX for this topic.'}
 - Across slides, vary representation naturally: include some text-only consolidation slides when a repeated formula would add little, and use formula slides only when symbols clarify a new step.
 - Never repeat the exact same displayed LaTeX block on consecutive slides; continue by adding or refining a different step.
@@ -61,7 +64,7 @@ Rules:
 - IMAGE POLICY (adaptive): ${visualPromptRule}
 - If including an image component, use a precise educational prompt that names the concept and the exact element to visualize. Avoid decorative prompts.
 - Any formula/proof/code explanation should be as substantial as the selected paragraph length setting; avoid tiny token examples for long-form settings.
-- ${allowLatex ? `${stemAlternation} For this STEM-heavy concept, include a well-commented code snippet showing the computation/derivation (plus textual explanation tying it to the idea); use a LaTeX block only for a symbolic result that cannot be code.` : 'Do NOT use LaTeX to explain this non-technical concept; use images, tables, svg diagrams and sticky notes. A short commented code snippet is fine only if a small computation or simulation genuinely clarifies an analytical point.'}
+- ${allowLatex ? `${stemAlternation} For this STEM-heavy concept, include a well-commented code snippet showing the computation/derivation (plus textual explanation tying it to the idea); use a LaTeX block only for a symbolic result that cannot be code.` : `Do NOT use LaTeX to explain this non-technical concept; use images, tables, svg diagrams and sticky notes.${allowCode ? ' A short commented code snippet is fine only if a small computation or simulation genuinely clarifies an analytical point.' : ' Do NOT use a code snippet either — code windows are for STEM/coding only.'}`}
 - ${effectiveProof ? 'PROOF MODE: maintain continuity across slides, advancing or repairing ONE step at a time. Show each step as a commented code snippet that computes/derives it (preferred); use a displayed LaTeX block only for a purely symbolic step that cannot be expressed as code. Occasional text-only consolidation is allowed.' : ''}
 - ${isTimeTravelActivity
   ? 'This is a Time Travel activity slide: keep the explanation timeline-aware and use a table only if it genuinely clarifies the progression.'

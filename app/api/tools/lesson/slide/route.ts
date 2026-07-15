@@ -17,10 +17,10 @@ const ACTIVITY_MENU = `Menu of activities you can draw on (mix formats FREELY be
 - Fill in the blank: a sentence containing "____" where the learner types the missing word.
 - Typed short answer / spelling: the learner types a term, definition, or word.
 Information display you may attach to a slide (pick what fits the idea; vary it slide to slide):
-- a reading passage, an image, a table (vocabulary/conjugations/data/comparisons), a code snippet, a formula, or a Wolfram Alpha computation.
+- a reading passage, an image, a table (vocabulary/conjugations/data/comparisons), and — for STEM only — a code snippet, a formula, or a Wolfram Alpha computation.
 - MATH/quantitative ideas: explain with a formula, a Wolfram computation, and/or a code snippet — mix them when useful.
-- GRAMMAR/syntax ideas: a code snippet is great for showing the syntax pattern/conjugation logic.
 - PROGRAMMING ideas: prefer real code snippets and tables.
+- CODE BOXES ARE STEM-ONLY: never attach a code snippet to a language, grammar, history, art or other humanities lesson — show grammar/conjugation with a TABLE or prose, not a code window.
 You are free to combine ANY evaluation type with ANY display type; keep everything level-appropriate.`;
 
 export const dynamic = 'force-dynamic';
@@ -198,8 +198,10 @@ export async function POST(req: Request) {
   const supportPlan: string[] = [];
   if (!pureWriting) {
     if (support.images) supportPlan.push('image');
-    // Code snippets: for programming, AND for language grammar (show syntax logic as code).
-    if (support.code || kind === 'programming' || kind === 'language') supportPlan.push('code');
+    // Code snippets are STEM-only: programming lessons, or when the author
+    // explicitly enabled the code toggle — NEVER for a language lesson (a
+    // Spanish/French lesson should show grammar as a table, not a code window).
+    if ((support.code || kind === 'programming') && kind !== 'language') supportPlan.push('code');
     if (support.tables) supportPlan.push('table');
     if (support.formulas || mathish) {
       // Prefer a real Wolfram step-by-step computation when the key is present.
@@ -251,6 +253,7 @@ export async function POST(req: Request) {
       ? 'For THIS slide, teach one idea, then produce these specific questions IN THIS ORDER (still applying the freedom above to vary content):'
       : 'This slide has NO questions — just teach with clear "content". Return "questions": [].',
     qSpec,
+    'LENIENT ANSWERS: for fill-blank/input questions, the player accepts close-enough answers (it ignores accents, capitalisation, punctuation and minor typos, and accepts a partial phrase that covers the key word). Provide a generous "accept" list — include no-accent forms, common synonyms, and shorter acceptable phrasings — so a learner who is essentially right is marked correct. Do NOT require the exact full wording.',
     'Do NOT include any support/diagram/table/formula material — that is generated separately. Just write the teaching text and the questions.',
     'OUTPUT RULES (critical): return ONE JSON object with EXACTLY these top-level keys: title, content, translation, questions.',
     '"content" MUST be plain, human-readable teaching text (a sentence or short paragraph) — NEVER JSON, never a nested object, never quoted JSON, never code. Put questions ONLY in the "questions" array. Do not wrap the whole object in a string or another object.',
