@@ -32,7 +32,9 @@ export interface CollectionProps<T> {
   renderRow: (t: T, view?: CollectionViewApi) => ReactNode;   // one card in rows mode
   favs?: Record<string, boolean>;          // provide to show the ★ favorites filter
   likedByAdmin?: (t: T) => boolean;        // provide to show the 🛡️ liked-by-admin filter
-  likedByOwner?: (t: T) => boolean;        // provide to show the 💛 OP-favorited filter
+  likedByOwner?: (t: T) => boolean;        // provide to show the 💛 OP filter
+  ownerLabel?: string;                     // override the 💛 OP button label
+  ownerTitle?: string;                     // override the 💛 OP button tooltip
   perPage?: number;                        // provide to paginate
   storageKey?: string;                     // localStorage key to persist the view mode
   sortPrefKey?: string;                    // when set, the sort order is saved per-user (DB) under this key
@@ -92,7 +94,7 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 
 export function Collection<T>({
   items, id, searchText, time, renderGrid, renderRow,
-  favs, likedByAdmin, likedByOwner, perPage, storageKey, sortPrefKey,
+  favs, likedByAdmin, likedByOwner, ownerLabel = '💛 OP', ownerTitle = 'Only tools the creator (OP) favorited', perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
   viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
   extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
@@ -221,7 +223,7 @@ export function Collection<T>({
         {(favs || likedByAdmin || likedByOwner) && <button className={`btn small ${activeFilter === 'all' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('all')} title="Show everything">All</button>}
         {favs && <button className={`btn small ${activeFilter === 'fav' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('fav')} title="Only your favorites">★ Favorites</button>}
         {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Admin</button>}
-        {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title="Only tools the creator (OP) favorited">💛 OP</button>}
+        {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title={ownerTitle}>{ownerLabel}</button>}
         {time && <button className="btn small" onClick={cycleSort} title="Sort: newest ↔ oldest">{sortMode === 'newest' ? '↓ Newest' : '↑ Oldest'}</button>}
         {/* Grid / rows toggle — both available. When the display is locked the
             toggle is disabled (viewers stay on the owner's chosen view). */}

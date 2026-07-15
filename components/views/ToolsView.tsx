@@ -86,6 +86,9 @@ export function ToolsView() {
       if (nowFav) next[slug] = true; else delete next[slug];
       try { localStorage.setItem('sl_tool_likes', JSON.stringify(next)); } catch { /* ignore */ }
       API.post('/api/tools/like', { slug, liked: nowFav }).catch(() => { /* ignore */ });
+      // When an admin favorites, reflect it in the 🛡️ Admin filter immediately
+      // (the server likedByAdmin flag only refreshes on the next list fetch).
+      if (app.user?.role === 'admin') setTools(ts => ts.map(x => x.slug === slug ? { ...x, likedByAdmin: nowFav } : x));
       return next;
     });
   };
@@ -238,6 +241,16 @@ export function ToolsView() {
   // Category is the section-specific filter; the standard Collection owns the rest.
   const catItems = filter === 'all' ? tools : tools.filter(t => galleryCategory(t) === filter);
 
+  // The Collection's ★ Favorites filter keys by the item id (t.id), but our
+  // favorites store (sl_tool_likes, shared with the tool page + the per-card star)
+  // is keyed by SLUG. Remap slug→id so the filter actually matches — this is why
+  // the Favorites filter was showing an empty gallery.
+  const favsById = useMemo(() => {
+    const m: Record<string, boolean> = {};
+    for (const t of tools) if (favs[t.slug]) m[t.id] = true;
+    return m;
+  }, [tools, favs]);
+
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
   const isExample = (t: any) => (t.tags || []).includes('example');
   const mineToDelete = (t: any) => !isExample(t) && (app.user?.role === 'admin' || app.user?.username === t.owner);
@@ -341,9 +354,11 @@ export function ToolsView() {
               id={(t: any) => t.id}
               searchText={(t: any) => `${t.title || ''} ${t.owner || ''}`}
               time={(t: any) => new Date(t.createdAt || 0).getTime()}
-              favs={favs}
+              favs={favsById}
               likedByAdmin={(t: any) => !!t.likedByAdmin}
-              likedByOwner={(t: any) => !!t.likedByOwner}
+              likedByOwner={(t: any) => !!app.user?.username && t.owner === app.user.username}
+              ownerLabel="💛 OP"
+              ownerTitle="Only tools you created"
               perPage={6}
               storageKey="sl_tools_view"
               sortPrefKey="gallery"
