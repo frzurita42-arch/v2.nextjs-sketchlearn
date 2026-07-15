@@ -858,15 +858,16 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const clearAi = () => { ctx.editField(card.id, { aiPrompt: undefined }); setAiDraft(''); setAiOpen(false); };
   if (ctx.canEdit && ctx.aiShown) activeControls.push(<button key="robot" type="button" title={card.aiPrompt ? 'Edit the AI question for this card' : 'Add an AI question for this card (guides the answer when you ➕ add a card inside)'} style={attachIcon(!!card.aiPrompt)} onClick={eat(() => { setAiDraft(card.aiPrompt || ''); setAiOpen((o) => !o); })}>🤖</button>);
 
-  // 🖼️ picture button — a plain clickable icon (not a framed button). Owner/admin
-  // generate a picture (saved for all viewers); everyone can view a saved one.
-  // Clicking opens the popup (view / regenerate / delete).
-  const showFrame = ctx.imageGen && (ctx.canEdit || hasGen);
-  const imgIcon = showFrame ? (
+  // 🖼️ card picture — lives in the ACTIVE group (beside the clip/folder), shown to
+  // a moderator when the repo-wide "Card picture" toggle is on (to generate) and to
+  // ANYONE once a picture exists (to view). A green underline marks that a picture
+  // is saved. Clicking opens the popup (view; regenerate/delete for owner/admin).
+  const showFrame = (ctx.canEdit && ctx.imageGen) || hasGen;
+  if (showFrame) activeControls.push(
     <button key="img" type="button" onClick={eat(frameClick)} disabled={genBusy}
       title={hasGen ? (ctx.canEdit ? 'View the picture — regenerate or delete it' : 'View the picture') : (ctx.canEdit ? 'Generate an AI picture of this item (saved for everyone)' : 'No picture yet')}
-      style={{ ...iconBtn, opacity: hasGen ? 1 : 0.7 }}>{genBusy ? '⏳' : '🖼️'}</button>
-  ) : null;
+      style={attachIcon(hasGen)}>{genBusy ? '⏳' : '🖼️'}</button>
+  );
 
   // PERMANENT controls — always available (per role). These never move.
   // ➕ add a card inside. When the AI feature is on AND this card has a saved 🤖
@@ -875,7 +876,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const aiChild = ctx.aiShown && !!card.aiPrompt;
   const genAnswer = async () => { setAiBusy(true); try { await ctx.addAnswerChild(card); } finally { setAiBusy(false); } };
   const permanentControls: React.ReactNode[] = [favBtn, copyBtn];
-  if (imgIcon) permanentControls.push(imgIcon);
   if (ctx.canEdit) permanentControls.push(
     <button key="sib" type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>,
     <button key="child" type="button" disabled={aiBusy} title={aiChild ? 'Generate an AI answer card inside (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card inside'} style={{ ...iconBtn, opacity: aiBusy ? 0.4 : 1 }} onClick={() => (aiChild ? genAnswer() : ctx.addSubcard(card.id))}>{aiBusy ? '⏳' : (aiChild ? '🤖➕' : '➕')}</button>,
@@ -1237,18 +1237,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         </div>
       ) : isCollection ? (
        <>
-        {/* ⚙️ Settings — owner/admin only. Toggle the per-card "Suggest AI" picture
-            button on/off for the whole repository. */}
-        {canEdit && (
-          <div className="card" style={{ maxWidth: 900, margin: '0 auto 10px', padding: '10px 14px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <strong style={{ fontSize: 14 }}>⚙️ Settings</strong>
-            <button className={`btn small ${imageGen ? 'green' : 'ghost'}`} onClick={() => saveImageGen(!imageGen)}
-              title="When on, each card gets a 🖼️ button — you generate an AI picture of the item; it stays saved for all viewers (💦 clears it).">
-              🖼️ Suggest AI: {imageGen ? 'On' : 'Off'}
-            </button>
-            <span style={{ fontSize: 11, opacity: 0.55 }}>Only you (owner/admin) can request pictures; everyone can view a saved one.</span>
-          </div>
-        )}
         {/* A collection: the shared titled + banner'd + filterable gallery block. */}
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"
@@ -1292,6 +1280,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 <button className={`btn small ${aiShown ? 'blue' : 'ghost'}`}
                   title={aiShown ? 'Turn off the AI question feature' : 'Turn on the AI question feature — each card gets a 🤖 prompt, and adding a card inside (➕) generates an AI answer from the card, page, prompt and attachments'}
                   onClick={() => setAiShown((v) => !v)}>🤖 AI question: {aiShown ? 'On' : 'Off'}</button>
+              )}
+              {canEdit && (
+                <button className={`btn small ${imageGen ? 'blue' : 'ghost'}`}
+                  title={imageGen ? 'Turn off card pictures' : 'Turn on card pictures — each card gets a 🖼️ button (beside the clip/folder) to generate an AI picture of the item; a saved picture stays viewable to everyone even after you turn this off'}
+                  onClick={() => saveImageGen(!imageGen)}>🖼️ Card picture: {imageGen ? 'On' : 'Off'}</button>
               )}
               {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
             </div>

@@ -101,7 +101,6 @@ export function BuilderStudioView() {
   // follows the cards already on the page (using the chat, title & description)
   // instead of regenerating a whole fresh batch of pathways.
   const [nextCard, setNextCard] = useState(false);
-  const [suggestImages, setSuggestImages] = useState(false);   // "Suggest AI" per-card picture button
   // AI card shape ({title,text,link?,linkLabel?,children}) → builder card shape.
   // A suggested link fills the card's Link field, so on publish it becomes a
   // Poster (blue) link viewers can open.
@@ -177,7 +176,7 @@ export function BuilderStudioView() {
       const mapped = mapAiCards(r?.cards || []);
       const finalCards = mapped.length ? mapped : repoCards;
       setRepoCards(finalCards);
-      const def = assembleDefinition({ artifact: 'repository', title, subject, context, cards: finalCards, imageGen: suggestImages });
+      const def = assembleDefinition({ artifact: 'repository', title, subject, context, cards: finalCards, imageGen: false });
       const pub = await API.post('/api/tools', { definition: def, visibility, aiGenerated: true });
       const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
       if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
@@ -217,7 +216,7 @@ export function BuilderStudioView() {
 
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, context, cards: repoCards, imageGen: suggestImages };
+    : { artifact, title, subject, context, cards: repoCards, imageGen: false };
 
   const generate = async () => {
     if (busy) return;
@@ -462,10 +461,6 @@ export function BuilderStudioView() {
                 <button type="button" className={`btn small ${withLinks ? 'green' : 'ghost'}`} onClick={() => setWithLinks((v) => !v)}
                   title="When on, Suggest with AI also adds a reference link (website / image / Wikipedia) to each card's Poster button.">
                   🔗 Link suggestion: {withLinks ? 'On' : 'Off'}
-                </button>
-                <button type="button" className={`btn small ${suggestImages ? 'green' : 'ghost'}`} onClick={() => setSuggestImages((v) => !v)}
-                  title="When on, each published card gets a 🖼️ button — the owner/admin can generate an AI picture of that item; it stays saved for everyone to view.">
-                  🖼️ Suggest AI: {suggestImages ? 'On' : 'Off'}
                 </button>
                 <button type="button" className={`btn small ${nextCard ? 'green' : 'ghost'}`} onClick={() => setNextCard((v) => !v)}
                   title="When ON, Suggest with AI adds ONE next card that follows the cards already on the page (using the chat, title & description). When OFF, it regenerates a whole fresh batch of proposed pathways.">
