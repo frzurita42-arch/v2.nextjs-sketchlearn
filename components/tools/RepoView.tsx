@@ -554,6 +554,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [attachColor, setAttachColor] = useState<'blue' | 'green'>('blue');
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [attachBusy, setAttachBusy] = useState(false); // 📎 file upload in progress
   const [genBusy, setGenBusy] = useState(false);       // 🖼️ AI product-image generation
   const [showImg, setShowImg] = useState(false);       // 🖼️ image popup open
   const [copied, setCopied] = useState(false);         // 📋 copy title+description feedback
@@ -650,6 +651,20 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) url = 'https://' + url;
     commitLink(linkLabel.trim(), url);
     setLinkLabel(''); setLinkUrl(''); setAttaching(false);
+  };
+  // 📎 attach a real file: upload to blob storage (falls back to a data: URL),
+  // then save it into the slot just like a link.
+  const attachUpload = async (f: File) => {
+    if (f.size > 25_000_000) { alert('Please pick a file under 25 MB.'); return; }
+    setAttachBusy(true);
+    try {
+      let url = '';
+      try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
+      if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
+      await commitLink(f.name, url);
+      setLinkLabel(''); setLinkUrl(''); setAttaching(false);
+    } catch { alert('Could not attach the file.'); }
+    setAttachBusy(false);
   };
 
   // ---- picture controls (same feature as the tool gallery): AI-generate,
@@ -959,21 +974,28 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // The clip/folder inline editor — opened straight from the 📎 / 📁 icon. Type a
   // link (label + URL) or attach a file; either REPLACES what the slot holds. When
   // the slot already has an attachment the editor is pre-filled and shows Delete.
-  const editingExisting = attaching && slotIdx() >= 0;
-  // Open the link currently saved in this slot (the 🔗 Link button, and what a
-  // viewer's icon opens) — always the latest value, so a replaced link opens the
-  // new destination.
-  const openCurrentSlot = () => { const idx = slotIdx(); if (idx >= 0) openInNewTab(links[idx].url); };
+  // ONE consistent editor whether you're adding or already have something saved:
+  // paste a link OR attach a document, then Submit. 🔗 Link opens what's saved and
+  // 🗑 Delete removes it (both disabled until a slot actually holds an attachment,
+  // so the form looks identical the first time and every time after).
+  const hasSlot = attaching && slotIdx() >= 0;
+  const curSlotUrl = hasSlot ? links[slotIdx()].url : '';
   const attachForm = attaching ? (
     <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — your own link (only you or an admin can remove it)' : '📎 Moderator — a link everyone can open'}{editingExisting ? ' · editing' : ''}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — your own link or document (only you or an admin can remove it)' : '📎 Moderator — a link or document everyone can open'}</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input value={linkUrl} placeholder="Paste a link (https://…)" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '3 1 240px', fontSize: 13 }} />
-        <button className={`btn small ${attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>{editingExisting ? '✓ Replace' : '✓ Submit'}</button>
-        {/* 🔗 Link — open the saved link (owner/admin viewing while editing); they
-            can still paste a new URL above and Replace to change it. */}
-        {editingExisting && <button className="btn small blue" onClick={eat(openCurrentSlot)} title="Open the current link in a new tab">🔗 Link</button>}
-        {editingExisting && <button className="btn small ghost" onClick={eat(deleteSlot)} title="Delete this link">🗑 Delete</button>}
+        <input value={linkUrl} placeholder="Paste a link (https://…)" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '3 1 220px', fontSize: 13 }} />
+        <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file from your device">
+          {attachBusy ? 'Uploading…' : '📎 Attach a document'}
+          <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
+        </label>
+        <button className={`btn small ${attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>{hasSlot ? '✓ Replace' : '✓ Submit'}</button>
+        {/* 🔗 Link — a REAL anchor (not window.open, which browsers block for
+            uploaded data: files) so it reliably opens/downloads what's saved. */}
+        {hasSlot
+          ? <a className="btn small blue" href={curSlotUrl} target="_blank" rel="noopener noreferrer" download title="Open the saved link / document in a new tab" onClick={stop} style={{ textDecoration: 'none' }}>🔗 Link</a>
+          : <button className="btn small blue" disabled title="Save a link or document first">🔗 Link</button>}
+        <button className="btn small ghost" disabled={!hasSlot} onClick={eat(deleteSlot)} title="Delete the saved attachment">🗑 Delete</button>
         <button className="btn small ghost" onClick={() => setAttaching(false)}>✕</button>
       </div>
     </div>
