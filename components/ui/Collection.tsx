@@ -56,6 +56,8 @@ export interface CollectionProps<T> {
   gridMinPx?: number;                      // grid card min width (default 240)
   extra?: ReactNode;                       // section-specific control (e.g. a category select)
   belowToolbar?: ReactNode;                // content on its own row directly BELOW the filter toolbar
+  showRefresh?: boolean;                   // show the header 🔄 shuffle button (default true)
+  bottomRule?: boolean;                    // draw a dashed rule BELOW the bottom pager (closes the section)
   emptyAll?: string;                       // message when there are no items at all
   emptyFiltered?: string;                  // message when filters hide everything
   searchPlaceholder?: string;
@@ -98,7 +100,7 @@ export function Collection<T>({
   favs, likedByAdmin, likedByOwner, ownerLabel = '💛 Moderators', ownerTitle = 'Only tools moderators favorited', perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
   viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
-  extra, belowToolbar, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
+  extra, belowToolbar, showRefresh = true, bottomRule, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
   banner, showCollapse, collapsed, onToggleCollapse,
@@ -196,10 +198,11 @@ export function Collection<T>({
     </div>
   ) : null;
   // The TOP pager is framed by dashed rules on both sides (it sits between the
-  // count and the items). The BOTTOM pager omits its trailing rule so it doesn't
+  // count and the items). The BOTTOM pager gets a trailing rule too when
+  // `bottomRule` is set (closing the section); otherwise it omits it so it doesn't
   // double up with whatever section divider follows it below.
   const pagerTop = pagerRow ? (<div><div style={fullDash} />{pagerRow}<div style={fullDash} /></div>) : null;
-  const pagerBottom = pagerRow ? (<div><div style={fullDash} />{pagerRow}</div>) : null;
+  const pagerBottom = pagerRow ? (<div><div style={fullDash} />{pagerRow}{bottomRule && <div style={fullDash} />}</div>) : null;
 
   return (
     <div>
@@ -209,7 +212,7 @@ export function Collection<T>({
       {title && (
         <SectionHeader title={title} maxWidth={maxWidth}
           canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
-          onRefresh={doRefresh} refreshing={refreshing} refreshTitle="Shuffle into a fresh random order"
+          onRefresh={showRefresh ? doRefresh : undefined} refreshing={refreshing} refreshTitle="Shuffle into a fresh random order"
           showCollapse={showCollapse} collapsed={collapsed} onToggleCollapse={onToggleCollapse} />
       )}
       {collapsed ? null : (<>

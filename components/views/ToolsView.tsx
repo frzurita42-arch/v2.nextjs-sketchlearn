@@ -350,11 +350,11 @@ export function ToolsView() {
             <GallerySection
               titleKey="galleryShelfTitle" titleFallback="🖼️ Gallery"
               bannerKey="galleryBanner" bannerDefault="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or Moderators, switch grid or rows, sort newest/oldest, and page through. Tap a card to open its tool."
+              showRefresh={false}
+              bottomRule
               belowToolbar={
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                  {canBuild && <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>}
-                  <CategoryFilter value={filter} onChange={setFilter} counts={counts} categories={GALLERY_CATEGORIES} />
-                </div>
+                <CategoryFilter value={filter} onChange={setFilter} counts={counts} categories={GALLERY_CATEGORIES}
+                  leading={canBuild ? <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button> : undefined} />
               }
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}

@@ -81,8 +81,7 @@ h3 { font-size: 1.5rem; }
 .view-title {
   text-align: center;
   margin: 4px 0 6px;
-  border-top: 3px dashed var(--ink);
-  padding-top: 20px;
+  padding-top: 6px;
 }
 /* Dashed divider above each activity's title, so the home feed reads as clear
    divisions — one line above every section (Learning path, Suggested topic,
