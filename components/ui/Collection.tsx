@@ -60,6 +60,7 @@ export interface CollectionProps<T> {
   bottomRule?: boolean;                    // draw a dashed rule BELOW the bottom pager (closes the section)
   emptyAll?: string;                       // message when there are no items at all
   emptyFiltered?: string;                  // message when filters hide everything
+  loading?: boolean;                       // items still loading — show skeleton cards in the item area (title + banner + toolbar stay visible)
   searchPlaceholder?: string;
   maxWidth?: number;
   // A carousel-style section header (emoji + title, left-aligned) shown atop the
@@ -100,7 +101,7 @@ export function Collection<T>({
   favs, likedByAdmin, likedByOwner, ownerLabel = '💛 Moderators', ownerTitle = 'Only tools moderators favorited', perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
   viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
-  extra, belowToolbar, showRefresh = true, bottomRule, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
+  extra, belowToolbar, showRefresh = true, bottomRule, loading = false, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
   banner, showCollapse, collapsed, onToggleCollapse,
@@ -256,7 +257,17 @@ export function Collection<T>({
       {pagerTop && <div style={{ marginBottom: 12 }}>{pagerTop}</div>}
 
       {/* Items */}
-      {items.length === 0 ? (
+      {loading && items.length === 0 ? (
+        // Skeleton cards while the data loads — the title, banner and toolbar above
+        // are already on screen, so only this area shows a loading shimmer.
+        <div style={view === 'grid'
+          ? { ...wrap, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinPx}px, 1fr))`, gap: 14, alignItems: 'start' }
+          : { ...wrap, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
+          {Array.from({ length: view === 'grid' ? 6 : 3 }).map((_, i) => (
+            <div key={i} className="card sl-skeleton" aria-hidden style={{ height: view === 'grid' ? 300 : 74, borderRadius: 12 }} />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
         <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyAll}</p>
       ) : shown.length === 0 ? (
         <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyFiltered}</p>

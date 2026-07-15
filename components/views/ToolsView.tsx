@@ -335,13 +335,12 @@ export function ToolsView() {
           {isAdmin && <button title="AI tap-mixer — reword the subtitle" disabled={!!headMix.gallerySubtitle} onClick={() => remixHeading('gallerySubtitle')} style={{ ...headIcon, fontSize: 13 }}>{headMix.gallerySubtitle ? '…' : '🎨'}</button>}
         </p>
       )}
-      {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
-        : tools.length === 0 ? (
+      {(!loading && tools.length === 0) ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>
             {isAdmin && <button className="btn green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>}
           </div>
-        ) : (galleryCollapsed && !isAdmin) ? null : (
+        ) : (!loading && galleryCollapsed && !isAdmin) ? null : (
           <>
             {/* Same shared container as the History feed: title → banner → filter →
                 [Build a tool + category chips] → items. Build a tool and the
@@ -358,7 +357,8 @@ export function ToolsView() {
               }
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
-              items={catItems}
+              loading={loading}
+              items={loading ? [] : catItems}
               id={(t: any) => t.id}
               searchText={(t: any) => `${t.title || ''} ${t.owner || ''}`}
               time={(t: any) => new Date(t.createdAt || 0).getTime()}

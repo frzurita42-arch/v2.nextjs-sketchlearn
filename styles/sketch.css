@@ -633,3 +633,26 @@ input.ll-count::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0;
   .slide-actions .btn { flex: 1; text-align: center; }
   table.sketch { min-width: 1180px; }
 }
+
+/* Loading skeleton — a soft shimmer placeholder shown in a gallery's card area
+   while data loads, so the title + banner + toolbar stay on screen and only the
+   cards read as "loading". */
+.sl-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(45, 42, 38, 0.06);
+  border-style: dashed !important;
+  opacity: 0.9;
+}
+.sl-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: sl-shimmer 1.25s ease-in-out infinite;
+}
+@keyframes sl-shimmer { 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .sl-skeleton::after { animation: none; }
+}
