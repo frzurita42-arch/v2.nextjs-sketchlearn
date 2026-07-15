@@ -895,7 +895,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       iconNode={iconNode}
       overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
       afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}
-      actions={isGrid ? null : actions} del={isGrid ? undefined : del} />
+      actions={isGrid ? (ctx.assignShown ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{statusChip}{modeBtn}</span> : null) : actions} del={isGrid ? undefined : del} />
   );
 
   // The clip/folder inline editor: type a link (label + URL) or upload a file.
@@ -1177,7 +1177,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           viewLocked={!!repo.displayLocked}
           canLockView={canEdit}
           onViewLockChange={saveDisplayLock}
-          onRefresh={loadEntries}
+          showRefresh={false}
           showCollapse
           storageKey={`sl_repo_view_${slug}`}
           gridMinPx={260}
