@@ -470,6 +470,37 @@ async function geminiImage(prompt) {
   return null;
 }
 
+// A TEXT-model fallback "image": ask the configured text model (Gemini/Kimi/
+// DeepSeek/OpenRouter — whatever works for this deployment) to draw a friendly
+// hand-sketched SVG of the subject, returned as an image data URL. This lets the
+// 🎨 / 🖼️ buttons still produce a picture on keys that have text but NO image
+// model (e.g. where Gemini image generation is unavailable). Renders in <img>.
+async function generateSvgSketch(brief) {
+  if (!(openrouterEnabled || geminiEnabled || deepseekEnabled || moonshotEnabled)) return null;
+  const system = 'You are an illustrator. You reply with ONLY a single self-contained <svg>…</svg> and nothing else.';
+  const user = `Draw a clean, friendly hand-sketched SVG illustration that represents: "${String(brief || 'a learning tool').slice(0, 400)}".
+Requirements:
+- Return ONLY the <svg>...</svg> markup — no prose, no code fences, no markdown.
+- One <svg> with viewBox "0 0 400 300". No <script>, no external images, no <foreignObject>, no href except "#".
+- Hand-sketched style: stroke="#2d2a26" stroke-width="2.5" stroke-linecap="round", slightly irregular strokes. Fills ONLY from this palette: #f9a03f orange, #7fb069 green, #5c80bc blue, #e4572e red, #f7f3e9 paper, #fadf63 yellow.
+- Depict the idea with real objects or a gentle visual metaphor — warm, uplifting, readable small. A few <text> labels (font-size 14+) are fine; keep it mostly visual.`;
+  try {
+    // json:false — we want the raw SVG text back, not JSON-parsed.
+    const text = await generateText([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 2200, json: false });
+    const svg = sanitizeSvg(String(text || ''));
+    if (!svg || !/<svg[\s>]/i.test(svg)) return null;
+    return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
+  } catch { return null; }
+}
+
+// Best-effort picture: a real generated image if an image model is available,
+// otherwise a text-model SVG sketch. Always the same shape (data URL or null).
+async function generateImageOrSketch(prompt, brief) {
+  const img = await generateImage(prompt);
+  if (img) return img;
+  return generateSvgSketch(brief || prompt);
+}
+
 // Turn any {type:"image", prompt} components into real images; drop ones that fail.
 async function fillImages(components) {
   for (const c of components) {
@@ -589,6 +620,8 @@ module.exports = {
   generateVisionJSON,
   generateImage,
   geminiImage,
+  generateSvgSketch,
+  generateImageOrSketch,
   getLastImageError,
   fillImages,
   generateSvgWithClaude,

@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled, imageEnabled } from '@/src/config';
-import { generateStructured, generateImage, geminiDoc, getLastImageError } from '@/src/ai/providers';
+import { generateStructured, generateImage, generateSvgSketch, geminiDoc, getLastImageError } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug } = require('@/src/db/platform');
@@ -38,10 +38,14 @@ export async function POST(req: Request) {
 
   // ---- op: image (AI-generated card icon) -------------------------------
   if (op === 'image') {
-    if (!imageEnabled && !geminiEnabled) return NextResponse.json({ error: 'No image model is configured. Upload an image instead.' }, { status: 200 });
+    // Need EITHER an image model OR any text model (for the SVG-sketch fallback).
+    if (!imageEnabled && !geminiEnabled && !openrouterEnabled && !deepseekEnabled && !moonshotEnabled) return NextResponse.json({ error: 'No image model is configured. Upload an image instead.' }, { status: 200 });
     const instruction = String(b.instruction || b.title || 'a simple icon').slice(0, 400);
     try {
-      const img = await generateImage(`A clean, simple flat icon illustration for a course/repository card: ${instruction}. Centered, minimal, friendly, no text.`);
+      let img = await generateImage(`A clean, simple flat icon illustration for a course/repository card: ${instruction}. Centered, minimal, friendly, no text.`);
+      // No image model available — fall back to a text-model SVG sketch so the
+      // 🖼️ button still produces a picture instead of erroring.
+      if (!img) img = await generateSvgSketch(instruction);
       if (!img) {
         const why = (typeof getLastImageError === 'function' && getLastImageError()) || '';
         return NextResponse.json({ error: why ? `Could not generate an image. ${why.slice(0, 400)}` : 'Could not generate an image. Upload an image instead.' }, { status: 200 });

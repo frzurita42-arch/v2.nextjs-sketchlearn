@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { imageEnabled, geminiEnabled } from '@/src/config';
-import { generateImage } from '@/src/ai/providers';
+import { imageEnabled, geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled } from '@/src/config';
+import { generateImage, generateSvgSketch, getLastImageError } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 import { emojiThumb, emojiOf, randomEmoji } from '@/lib/emoji-thumb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -69,7 +69,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ thumbnail: img });
   }
 
-  if (!imageEnabled && !geminiEnabled) {
+  // Need EITHER an image model OR any text model (for the SVG-sketch fallback).
+  if (!imageEnabled && !geminiEnabled && !openrouterEnabled && !deepseekEnabled && !moonshotEnabled) {
     return NextResponse.json({ error: 'No image model is configured.' }, { status: 200 });
   }
 
@@ -119,7 +120,14 @@ export async function POST(req: Request) {
 
   try {
     let img = await generateImage(prompt);
-    if (!img) return NextResponse.json({ error: 'Could not generate an image — try again.' }, { status: 200 });
+    // No image model available (e.g. Gemini image generation is unreachable) —
+    // fall back to a hand-drawn SVG illustration via the TEXT model, so the 🎨
+    // button still produces a picture instead of erroring.
+    if (!img) img = await (generateSvgSketch as any)(instruction ? `${theme} — ${instruction}` : theme);
+    if (!img) {
+      const why = (typeof getLastImageError === 'function' && getLastImageError()) || '';
+      return NextResponse.json({ error: why ? `Could not generate an image. ${String(why).slice(0, 400)}` : 'Could not generate an image — try again.' }, { status: 200 });
+    }
 
     // Offload a data: URL to the blob store so we don't store megabytes in the DB
     // and ship them in the gallery list. Fall back to the data URL if no blob.
