@@ -563,6 +563,31 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [aiOpen, setAiOpen] = useState(false);         // 🤖 AI-question prompt editor open
   const [aiDraft, setAiDraft] = useState('');          // 🤖 prompt draft
   const [aiBusy, setAiBusy] = useState(false);         // 🤖 generating an answer child
+  // 🔀 per-card order for THIS card's nested cards: manual → ascending → descending
+  // → random (a nonce reshuffles "random"). Falls back to the repo-wide order when
+  // manual, so the global toggle still governs cards left on manual.
+  const [childSort, setChildSort] = useState<'manual' | 'asc' | 'desc' | 'random'>('manual');
+  const [childSortN, setChildSortN] = useState(0);
+  // Cycle this card's own order: manual → ascending → descending → random → manual.
+  // "random" reshuffles every time it lands back on random (bump the nonce).
+  const cycleChildSort = () => {
+    setChildSort((m) => (m === 'manual' ? 'asc' : m === 'asc' ? 'desc' : m === 'desc' ? 'random' : 'manual'));
+    setChildSortN((n) => n + 1);
+  };
+  // Order THIS card's nested cards. Manual defers to the repo-wide order so the
+  // global toggle still governs cards left on manual; otherwise sort by creation
+  // date (oldest/newest) or a stable per-nonce shuffle.
+  const sortKids = (list: RepoCard[]): RepoCard[] => {
+    if (childSort === 'manual') return ctx.sortCards(list);
+    if (list.length < 2) return list;
+    const arr = [...list];
+    if (childSort === 'random') {
+      const h = (s: string) => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
+      return arr.map((c) => ({ c, k: h(c.id + ':' + childSortN) })).sort((a, b) => a.k - b.k).map((x) => x.c);
+    }
+    const key = (c: RepoCard) => (c.createdAt ? Date.parse(c.createdAt) || 0 : 0);
+    return arr.sort((a, b) => (childSort === 'asc' ? key(a) - key(b) : key(b) - key(a)));
+  };
   const editing = editingTitle || editingSub;
 
   // Copy this card's title + description to the clipboard (everyone can use it).
@@ -909,6 +934,24 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const genChild = async () => { setAiBusy(true); try { await ctx.addAnswerChild(card); } finally { setAiBusy(false); } };
   const genSibling = async () => { setAiBusy(true); try { await ctx.addAnswerSibling(card); } finally { setAiBusy(false); } };
   const permanentControls: React.ReactNode[] = [favBtn, copyBtn];
+  // 🔀 Order this card's own nested cards. One button whose BOTTOM line changes
+  // colour per mode (manual = none, ascending = green, descending = blue,
+  // random = orange); the hover title spells out each state. Shown only when
+  // there is more than one nested card to reorder.
+  if (kids.length > 1) {
+    const CS_COLOR: Record<typeof childSort, string> = { manual: 'transparent', asc: '#2e9e57', desc: '#5c80bc', random: '#f0a202' };
+    const CS_TIP: Record<typeof childSort, string> = {
+      manual: 'Order of nested cards: Manual (as arranged) — click to sort',
+      asc: 'Order of nested cards: Oldest first (green) — click for Newest',
+      desc: 'Order of nested cards: Newest first (blue) — click for Random',
+      random: 'Order of nested cards: Random (orange) — click for Manual',
+    };
+    permanentControls.push(
+      <button key="csort" type="button" title={CS_TIP[childSort]}
+        style={{ ...iconBtn, borderBottom: `3px solid ${CS_COLOR[childSort]}`, borderRadius: 3, paddingBottom: 1 }}
+        onClick={eat(cycleChildSort)}>🔀</button>,
+    );
+  }
   // When an AI prompt is set (aiGen), the ⚙️ / ➕ keep their plain emoji but gain a
   // green underline — the same "there's something here" cue as the robot, clip and
   // folder — so there aren't two emojis crammed onto one button.
@@ -1057,7 +1100,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {body}
       {!collapsed && (
         <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
-          {ctx.sortCards(kids).map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
+          {sortKids(kids).map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested />)}
         </div>
       )}
     </div>
