@@ -74,8 +74,10 @@ export function BuilderStudioView() {
   const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
   const [title, setTitle] = useState(seed?.title || '');
   const [subject, setSubject] = useState(seed?.subject || '');
-  const [tone, setTone] = useState('Friendly');
-  const [pages, setPages] = useState<StudioPage[]>([newPage()]);
+  const [tone, setTone] = useState(seed?.tone || 'Friendly');
+  // A topic pick can hand us an AI-designed slide plan (seed.pages) to prefill the
+  // Studio so the user reviews/edits the preset slides before generating.
+  const [pages, setPages] = useState<StudioPage[]>(seed?.pages && seed.pages.length ? (seed.pages as StudioPage[]) : [newPage()]);
   useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
@@ -160,7 +162,7 @@ export function BuilderStudioView() {
     } catch (e: any) { setErr(e?.message || 'Could not build a suggestion.'); }
     setSuggesting(false);
   };
-  const [context, setContext] = useState('');
+  const [context, setContext] = useState(seed?.context || '');
   // "Generate the tool" for a repository: let the AI build the plan from
   // everything (goal, chat, document, current cards, toggles) AND publish it in
   // one step. (The plain "Post" button publishes the current cards untouched.)

@@ -12,7 +12,6 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { Carousel } from '@/components/ui/Carousel';
 import { CardShell, overlayIcon } from '@/components/ui/CardShell';
-import { assembleDefinition } from '@/lib/studio-catalog';
 
 type Topic = { topic: string; emoji: string; blurb: string; image?: string };
 
@@ -69,30 +68,33 @@ export function TopicSuggestions({ repoSlug, repoTitle }: { repoSlug: string; re
     inp.click();
   };
 
-  // Pressing a topic pick DESIGNS a full multi-slide lesson for it and opens it to
-  // play. The AI lays out several slides (teach → practise → check) using the
-  // platform's components, adapted to the subject (STEM practice vs. humanities /
-  // arts reading & reflection), then we assemble + publish it and open the tool.
-  // If anything fails, we fall back to seeding the builder so the user can still
-  // generate it by hand.
+  // Pressing a topic pick asks the AI to DESIGN a full multi-slide lesson plan
+  // (teach → practise → check) adapted to the subject, then opens the Studio
+  // builder PREFILLED with those preset slides so the user can review and edit
+  // them before generating/publishing — it does not build the lesson on its own.
+  const mkUid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const build = async (t: Topic, i: number) => {
     if (building !== null) return;
     setBuilding(i);
     const where = repoTitle ? `Part of the "${repoTitle}" repository${unit ? `, unit "${unit}"` : ''}. ` : '';
     const context = `${where}An engaging, comprehension-checking lesson about "${t.topic}" that helps someone understand it.`;
+    let pages: any[] | undefined;
     try {
       const d: any = await API.post('/api/tools/studio-design', { subject: t.topic, title: t.topic, context }, { retries: 1 });
-      const pages = Array.isArray(d?.pages) && d.pages.length ? d.pages : undefined;
-      const def = assembleDefinition({ artifact: 'presentation', title: t.topic, subject: t.topic, tone: 'Friendly', context, pages } as any);
-      const pub = await API.post('/api/tools', { definition: def, visibility: 'unlisted', aiGenerated: true });
-      const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
-      if (one?.tool) { appState.activeTool = one.tool; setBuilding(null); app.nav('tool'); return; }
-      setBuilding(null); app.nav('tools');
-    } catch {
-      // Fall back to the seeded builder so the topic is never a dead end.
-      appState.builderSeed = { artifact: 'presentation', subject: t.topic, title: t.topic, context };
-      setBuilding(null); app.nav('toolbuilder');
-    }
+      // Turn the designer's per-slide component ids into editable Studio pages
+      // (one layout block per slide, each component with a unique placement id).
+      if (Array.isArray(d?.pages) && d.pages.length) {
+        pages = d.pages.map((pg: any) => ({
+          layouts: [{ template: 'auto', components: (Array.isArray(pg?.components) ? pg.components : []).map((c: any) => ({ id: typeof c === 'string' ? c : c?.id, uid: mkUid() })).filter((c: any) => c.id) }],
+          length: ['brief', 'medium', 'detailed'].includes(pg?.length) ? pg.length : 'medium',
+          paragraphs: Math.max(1, Math.min(4, parseInt(pg?.paragraphs, 10) || 1)),
+        }));
+      }
+    } catch { /* fall through with no preset pages */ }
+    // Seed the builder (presentation artifact, prefilled slides) and open it.
+    appState.builderSeed = { artifact: 'presentation', subject: t.topic, title: t.topic, tone: 'Friendly', context, pages };
+    setBuilding(null);
+    app.nav('toolbuilder');
   };
 
   const onSelectUnit = (u: string) => { setUnit(u); load(u); };
@@ -114,7 +116,7 @@ export function TopicSuggestions({ repoSlug, repoTitle }: { repoSlug: string; re
         iconNode={t.image ? undefined : <span aria-hidden>{t.emoji || '💡'}</span>}
         overlay={overlay}
         onOpen={() => build(t, i)}
-        actions={<button className="btn small green" disabled={building !== null} onClick={() => build(t, i)}>{building === i ? '⏳ Building…' : '✨ Make a lesson →'}</button>} />
+        actions={<button className="btn small green" disabled={building !== null} onClick={() => build(t, i)}>{building === i ? '⏳ Designing…' : '✨ Make a lesson →'}</button>} />
     );
   };
 

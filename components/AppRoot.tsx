@@ -259,8 +259,11 @@ export default function AppRoot() {
         <button className="btn small" style={backBtnStyle} onClick={back}>{backLabel}</button>
       </div>
       {/* key={view} remounts only on a view switch (fresh state per view, like
-          the legacy SPA); in-view rerender() updates in place. */}
-      <main id="app" key={view}>
+          the legacy SPA); in-view rerender() updates in place. For the tool view
+          the key also carries the active tool's slug, so opening a DIFFERENT tool
+          while already on a tool page (e.g. "Make a lesson" from a repo's topic
+          shelf) remounts the runner onto the new tool instead of staying put. */}
+      <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}>
         <ErrorBoundary onHome={() => nav('tools')}>{views[view]}</ErrorBoundary>
       </main>
       {/* A second Back button at the very bottom, above the footer. */}
