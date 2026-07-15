@@ -602,7 +602,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const canPoster = ctx.canEdit && !card.posterOff && (ctx.posterUpload || posterLinkIdx >= 0);
   const canUser = !!ctx.me && !card.userOff && (ctx.userUpload || myUserLinkIdx >= 0);
   const attachServer = async (payload: any) => {
-    if (ctx.preview) return;   // "View as" preview never writes real data
+    // NOTE: uploads are a real user action (turning in a document), so they work
+    // even while an admin is previewing as a User/Moderator — that's how you test
+    // the submission flow. Only moderator edits (status cycle, card content) are
+    // held read-only in preview, via saveCards.
     try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, ...payload }); if (r?.repo) ctx.applyRepo(r.repo); else if (r?.error) alert(r.error); } catch { alert('Could not update the attachment.'); }
   };
   const removeLinkAt = (index: number) => attachServer({ action: 'remove', index });
