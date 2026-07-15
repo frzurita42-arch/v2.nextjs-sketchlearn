@@ -75,6 +75,20 @@ export function ToolsView() {
   const [filter, setFilter] = useState('all');            // category chip (section-specific)
   const [favs, setFavs] = useState<Record<string, boolean>>({});
   useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_tool_likes') || '{}')); } catch { /* ignore */ } }, []);
+  // Favorite / unfavorite a tool straight from its gallery card. Kept in the same
+  // `sl_tool_likes` store the tool page uses, so the ★ Favorites filter and the
+  // per-card star stay in sync everywhere, and the like is recorded server-side.
+  const toggleFav = (t: any) => {
+    const slug = t.slug;
+    setFavs(prev => {
+      const next = { ...prev };
+      const nowFav = !next[slug];
+      if (nowFav) next[slug] = true; else delete next[slug];
+      try { localStorage.setItem('sl_tool_likes', JSON.stringify(next)); } catch { /* ignore */ }
+      API.post('/api/tools/like', { slug, liked: nowFav }).catch(() => { /* ignore */ });
+      return next;
+    });
+  };
   const [editTool, setEditTool] = useState<any>(null);    // card being edited (title+desc)
   const [mixing, setMixing] = useState<Record<string, boolean>>({});   // per-slug remix spinner
   const [thumbing, setThumbing] = useState<Record<string, boolean>>({});  // per-slug thumbnail spinner
@@ -244,7 +258,7 @@ export function ToolsView() {
   // One card via the shared ToolCard, wired with this view's owner/admin handlers.
   // `hideOpen` (used in the carousel) drops the Open button — image + title open it.
   const card = (t: any, view: 'grid' | 'row', hideOpen?: boolean) => (
-    <ToolCard tool={t} view={view} onOpen={open} favs={favs} hideOpen={hideOpen}
+    <ToolCard tool={t} view={view} onOpen={open} favs={favs} onToggleFav={toggleFav} hideOpen={hideOpen}
       canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
       onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} onDice={diceThumb} thumbing={!!thumbing[t.slug]}
       canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />

@@ -30,6 +30,7 @@ type ViewCtx = {
   done: Record<string, boolean>; toggle: (id: string) => void;
   entriesByCard: Record<string, any[]>; onAdded: () => void;
   favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
+  collapseCmd: { on: boolean; n: number };         // "collapse/expand all" broadcast (n = nonce)
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
@@ -502,6 +503,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
   const isFav = !!ctx.favs[card.id];
   const [collapsed, setCollapsed] = useState(false);   // hide this card's nested cards
+  // Follow the repo-wide "collapse / expand all" broadcast (fires only when the
+  // nonce changes, so a user's own per-card toggle afterwards is preserved).
+  useEffect(() => { setCollapsed(ctx.collapseCmd.on); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [ctx.collapseCmd.n]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingSub, setEditingSub] = useState(false);
   const [titleDraft, setTitleDraft] = useState(card.title || '');
@@ -939,6 +943,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // "Suggest AI": the per-card 🖼️ picture button. Owner/admin toggle it here (the
   // repo's ⚙️ settings strip); persisted on the repo without touching the cards.
   const [imageGen, setImageGen] = useState(!!repo.imageGen);
+  // "Collapse / expand all" — a broadcast every card follows. `on` is the target
+  // state, `n` a nonce so re-clicking the same state still refires.
+  const [collapseCmd, setCollapseCmd] = useState<{ on: boolean; n: number }>({ on: false, n: 0 });
+  const collapseAll = (on: boolean) => setCollapseCmd((c) => ({ on, n: c.n + 1 }));
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState('');
@@ -1026,7 +1034,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
@@ -1142,7 +1150,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           perPage={8}
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
-          extra={canEdit ? <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button> : undefined}
+          extra={<>
+            {cards.some((c) => (c.children || []).length > 0) && (
+              <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
+                onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
+            )}
+            {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
+          </>}
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}

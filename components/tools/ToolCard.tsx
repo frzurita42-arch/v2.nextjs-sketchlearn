@@ -15,6 +15,7 @@ export interface ToolCardProps {
   view: 'grid' | 'row';
   onOpen: (t: any) => void;
   favs?: Record<string, boolean>;
+  onToggleFav?: (t: any) => void;     // ★/☆ favorite toggle (everyone, not just owner)
   // Owner/admin text controls (title + description):
   canEdit?: boolean;
   onEdit?: (t: any) => void;
@@ -123,7 +124,11 @@ export function ToolCard(p: ToolCardProps) {
         );
       })()}
       del={<>{history}{replay}{del}</>}
-      actions={p.hideOpen ? null : <button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}
+      actions={<>
+        {p.onToggleFav && <button style={{ ...iconBtn, fontSize: 17, color: fav ? '#f5b301' : undefined, opacity: fav ? 1 : 0.55 }}
+          title={fav ? 'Unfavorite' : 'Favorite'} aria-pressed={fav} onClick={stop(() => p.onToggleFav!(t))}>{fav ? '★' : '☆'}</button>}
+        {!p.hideOpen && <button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}
+      </>}
     />
   );
 }
