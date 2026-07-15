@@ -807,13 +807,18 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // Owner/admin cycle button: Enabled → Assigned → Pending → Approved → Rejected
   // → Disabled → Preview. Setting it back to Enabled clears the field.
   const cycleMode = () => { const nm = nextMode(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); };
-  // The assignment-status button — a clearly LABELLED button (emoji + word) so it
-  // reads the same on every card, not just a bare dot. Shown only when the owner/
-  // admin has turned on "Assignment" for the whole repo (belowToolbar toggle).
-  const assignBtn = (ctx.canEdit && ctx.assignShown) ? (
+  // The assignment-status CYCLE button — a clearly LABELLED button (emoji + word).
+  const assignBtn = (
     <button type="button" title={`Assignment status: ${mode} — click to cycle (Set status → Assigned → Pending → Approved → Rejected → Disabled → Preview)`}
       onClick={cycleMode} className={`btn small ${isStatus ? 'blue' : 'ghost'}`} style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}>{MODE_BTN[mode]} {MODE_LABEL[mode]}</button>
-  ) : null;
+  );
+  // What the card shows for assignment:
+  //  • Feature ON (owner/admin): the cycling button on EVERY card (incl. Set status).
+  //  • Feature OFF, or a normal viewer: a READ-ONLY status chip — but ONLY on cards
+  //    that carry a real workflow status. A 'Set status' (enabled) card shows nothing
+  //    when the feature is off, so cards left un-assigned simply drop off.
+  const showCycle = ctx.canEdit && ctx.assignShown;
+  const assignControl = showCycle ? assignBtn : (isStatus ? statusChip : null);
 
   // The control icons laid out in a tidy 3-per-row grid.
   const favBtn = (
@@ -829,7 +834,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // repo-wide toggle on (Assignment / Moderator upload / User upload). These are
   // the "live" emojis. A vertical line separates them from the permanent set.
   const activeControls: React.ReactNode[] = [];
-  if (assignBtn) activeControls.push(<span key="assign">{assignBtn}</span>);
+  if (assignControl) activeControls.push(<span key="assign">{assignControl}</span>);
   // 📎 Moderator · 📁 User. The icon IS the whole control. For someone who may
   // EDIT the slot it's a button that opens the inline editor; for a viewer who can
   // only open/download the attachment it's a real <a> download link (a plain
@@ -915,9 +920,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     <>
       {moveBtns}
       {linkColumn}
-      {/* Read-only status badge for viewers only. Editors see the labelled
-          assignBtn when Assignment is on, and nothing when it's off. */}
-      {!ctx.canEdit && statusChip}
+      {/* Assignment control/chip lives in the icon cluster (activeControls). */}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       {iconGrid}
     </>
@@ -942,7 +945,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       meta={card.createdAt ? <span style={{ fontSize: 10.5, opacity: 0.55 }}>🕒 {new Date(card.createdAt).toLocaleString()}</span> : undefined}
       overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
       afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}
-      actions={isGrid ? (ctx.assignShown ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{assignBtn}</span> : null) : actions} del={isGrid ? undefined : del} />
+      actions={isGrid ? (assignControl ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{assignControl}</span> : null) : actions} del={isGrid ? undefined : del} />
   );
 
   // The clip/folder inline editor — opened straight from the 📎 / 📁 icon. Type a
@@ -1039,9 +1042,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // state, `n` a nonce so re-clicking the same state still refires.
   const [collapseCmd, setCollapseCmd] = useState<{ on: boolean; n: number }>({ on: false, n: 0 });
   const collapseAll = (on: boolean) => setCollapseCmd((c) => ({ on, n: c.n + 1 }));
-  // "Assignment" — a repo-wide toggle (owner/admin) that shows/hides the per-card
-  // assignment-status button on ALL cards at once. Starts off.
-  const [assignShown, setAssignShown] = useState(false);
+  // "Assignment" — a PERSISTED repo-wide toggle (owner/admin). On: the status
+  // cycle button shows on every card. Off: cards keep any status already set (shown
+  // as a read-only badge to everyone), and un-assigned cards drop the control.
+  const [assignShown, setAssignShown] = useState(!!repo.assignShow);
   // PERSISTED repo-wide switches for the Moderator (📎 clip) and User (📁 folder)
   // attach features. When ON, every card offers that upload; when OFF, the icon is
   // hidden EXCEPT on cards that already hold an attachment (which stay viewable /
@@ -1120,7 +1124,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveCards = async (next: RepoCard[]) => {
     setCards(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, cards: next } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, cards: next } });
       if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
     } catch { /* keep the optimistic copy */ }
   };
@@ -1194,7 +1198,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveImageGen = async (next: boolean) => {
     setImageGen(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1202,7 +1206,15 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveUploads = async (poster: boolean, user: boolean) => {
     setPosterUpload(poster); setUserUpload(user);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, assignShow: assignShown, cards } });
+      if (r?.repo && def) def.repo = r.repo;
+    } catch { /* keep the optimistic toggle */ }
+  };
+  // Persist the 🏷️ Assignment feature switch.
+  const saveAssign = async (next: boolean) => {
+    setAssignShown(next);
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: next, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1212,7 +1224,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveDisplayLock = async (lockedNext: boolean, viewSel: 'grid' | 'row') => {
     const nextDisplay: 'bars' | 'grid' = viewSel === 'grid' ? 'grid' : 'bars';
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* ignore */ }
   };
@@ -1308,8 +1320,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               )}
               {canEdit && (
                 <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
-                  title={assignShown ? 'Hide the assignment-status button on all cards' : 'Show the assignment-status button on all cards, so you can set each card’s status'}
-                  onClick={() => setAssignShown((v) => !v)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
+                  title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'}
+                  onClick={() => saveAssign(!assignShown)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
               )}
               {canEdit && (
                 <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`}

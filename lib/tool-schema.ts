@@ -162,6 +162,9 @@ export interface RepoSpec {
   // (attaching is owner/admin-only).
   clipForAll?: boolean;         // 📎 clip attach available to all users
   folderForAll?: boolean;       // 📁 folder attach available to all users
+  assignShow?: boolean;         // 🏷️ assignment feature on: owner/admin see the status
+                                // cycle button on every card. When off, only cards
+                                // that already carry a status show a read-only badge.
   imageGen?: boolean;           // "Suggest AI": show the 🖼️ per-card picture button
                                 // (owner/admin generate an image of the item; it stays
                                 // saved for everyone until cleared). Default off.
@@ -299,7 +302,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
     const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
-    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, imageGen: !!r.imageGen, cards };
+    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, assignShow: !!r.assignShow, imageGen: !!r.imageGen, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);

@@ -44,6 +44,7 @@ export async function POST(req: Request) {
   const visit = (cards: RepoCard[]): RepoCard[] => cards.map((c) => {
     if (c.id === cardId) {
       const links = Array.isArray(c.links) ? [...c.links] : [];
+      let removedGreen = false;
       if (action === 'add') {
         if (color === 'blue' && !isOwnerAdmin) { denied = true; return c; }   // only OP/admin post
         let url = String(b.link?.url || '').trim();
@@ -62,9 +63,19 @@ export async function POST(req: Request) {
         const canRemove = isUser ? (target.by === me || isAdmin) : isOwnerAdmin;
         if (!canRemove) { denied = true; return c; }
         links.splice(index, 1);
+        removedGreen = isUser;
         touched = true;
       }
-      return { ...c, links };
+      // Auto-status: a user (green) upload moves an ASSIGNED card to PENDING (a
+      // submission awaiting review); removing the last user upload moves a PENDING
+      // card back to ASSIGNED. Other statuses (approved/rejected/…) are left alone.
+      let mode = (c as any).mode;
+      const greenLeft = links.some((l: any) => l.color === 'green');
+      if (action === 'add' && color === 'green' && mode === 'assigned') mode = 'pending';
+      else if (action === 'remove' && removedGreen && !greenLeft && mode === 'pending') mode = 'assigned';
+      const next: any = { ...c, links };
+      if (mode !== (c as any).mode) { if (mode) next.mode = mode; else delete next.mode; }
+      return next;
     }
     if (c.children?.length) return { ...c, children: visit(c.children) };
     return c;
