@@ -33,6 +33,8 @@ type ViewCtx = {
   collapseCmd: { on: boolean; n: number };         // "collapse/expand all" broadcast (n = nonce)
   levelIndex: Record<string, number>;              // each card's 0-based position within its level (default number icon)
   assignShown: boolean;                            // when true, show the per-card assignment-status toggle button on every card (owner/admin)
+  posterShown: boolean;                            // ephemeral show/hide of the Moderator attach controls (owner/admin view)
+  userShown: boolean;                              // ephemeral show/hide of the User attach controls (owner/admin view)
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
@@ -567,8 +569,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // their own; only they (or an admin) can remove it (the OP cannot). All changes
   // go through the guarded /api/tools/repo/attach endpoint, which stamps `by` and
   // enforces the permissions.
-  const canPoster = ctx.canEdit && !card.posterOff;   // Moderator (poster) slot — off per card
-  const canUser = !!ctx.me && !card.userOff;          // User slot — off per card (set by owner/admin)
+  // Per-card persisted flags (posterOff/userOff) govern actual availability for
+  // everyone; the repo-wide posterShown/userShown are an EPHEMERAL show/hide for
+  // the owner/admin's own view (they don't change any saved state).
+  const canPoster = ctx.canEdit && ctx.posterShown && !card.posterOff;
+  const canUser = !!ctx.me && !card.userOff && (ctx.canEdit ? ctx.userShown : true);
   // The single link each role's widget manages: the poster (blue) link, and MY
   // own user (green) link. The widget turns INTO this link once submitted.
   const posterLinkIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
@@ -811,10 +816,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
           card's attach is enabled (repo-wide toggle + per-card override). */}
       {canPoster && <button type="button" title={posterLinkIdx >= 0 ? 'Delete the Moderator link (then post a new one)' : 'Post a Moderator link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>}
       {canUser && <button type="button" title={myUserLinkIdx >= 0 ? 'Delete your link (then upload a new one)' : 'Upload your own document'} style={{ ...iconBtn, opacity: (myUserLinkIdx >= 0 || showUser) ? 1 : 0.85 }} onClick={folderAction}>📁</button>}
-      {/* Per-card override (owner/admin): turn Moderator / User upload OFF or ON for
-          just this card, regardless of the repo-wide toggle. */}
-      {ctx.canEdit && <button type="button" title={card.posterOff ? 'Moderator upload is OFF for this card — click to enable' : 'Turn OFF Moderator upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.posterOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { posterOff: !card.posterOff })}>{card.posterOff ? '📎🚫' : '📎✓'}</button>}
-      {ctx.canEdit && <button type="button" title={card.userOff ? 'User upload is OFF for this card — click to enable' : 'Turn OFF User upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.userOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>{card.userOff ? '📁🚫' : '📁✓'}</button>}
+      {/* Per-card emoji toggles (owner/admin): turn Moderator / User upload OFF or
+          ON for just this card (persisted). Shown while that repo-wide control is
+          revealed. These are the real per-card enable/disable. */}
+      {ctx.canEdit && ctx.posterShown && <button type="button" title={card.posterOff ? 'Moderator upload is OFF for this card — click to enable' : 'Turn OFF Moderator upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.posterOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { posterOff: !card.posterOff })}>{card.posterOff ? '📎🚫' : '📎✓'}</button>}
+      {ctx.canEdit && ctx.userShown && <button type="button" title={card.userOff ? 'User upload is OFF for this card — click to enable' : 'Turn OFF User upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.userOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>{card.userOff ? '📁🚫' : '📁✓'}</button>}
       {/* Mode cycle — owner/admin only: Enabled → statuses → Disabled → Preview. */}
       {modeBtn}
       {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
@@ -981,6 +987,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // "Assignment" — a repo-wide toggle (owner/admin) that shows/hides the per-card
   // assignment-status button on ALL cards at once. Starts off.
   const [assignShown, setAssignShown] = useState(false);
+  // Ephemeral show/hide (owner/admin view) of the Moderator / User attach controls
+  // on all cards — a pure display toggle, NOT a change to any card's saved state.
+  const [posterShown, setPosterShown] = useState(false);
+  const [userShown, setUserShown] = useState(false);
   // Default per-level numbering (recomputed whenever the card tree changes).
   const levelIndex = useMemo(() => buildLevelIndex(cards), [cards]);
   const [editing, setEditing] = useState(false);
@@ -1039,17 +1049,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // A returned repo (from the normal-user attach endpoint) reconciled into state.
   const applyRepo = (nextRepo: RepoSpec) => { if (!nextRepo) return; setCards(nextRepo.cards || []); if (def) def.repo = nextRepo; };
   const editField = (id: string, p: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...p })));
-  // Apply a change to EVERY card in the tree (used by the repo-wide upload toggles).
-  const mapAllCards = (cs: RepoCard[], fn: (c: RepoCard) => RepoCard): RepoCard[] =>
-    cs.map((c) => { const nc = fn(c); return nc.children?.length ? { ...nc, children: mapAllCards(nc.children, fn) } : nc; });
-  const anyCard = (cs: RepoCard[], pred: (c: RepoCard) => boolean): boolean =>
-    cs.some((c) => pred(c) || (c.children?.length ? anyCard(c.children, pred) : false));
-  // Repo-wide upload toggles: if ANY card currently allows it, turn it OFF on all;
-  // otherwise turn it ON everywhere. (Per-card overrides can be set afterwards.)
-  const posterAnyOn = anyCard(cards, (c) => !c.posterOff);
-  const userAnyOn = anyCard(cards, (c) => !c.userOff);
-  const bulkPoster = () => saveCards(mapAllCards(cards, (c) => ({ ...c, posterOff: posterAnyOn ? true : undefined })));
-  const bulkUser = () => saveCards(mapAllCards(cards, (c) => ({ ...c, userOff: userAnyOn ? true : undefined })));
   // The gear adds a nested card seeded with a generic title AND subtitle, so its
   // ✎ pencils have something to edit right away.
   const addSubcard = (id: string) => saveCards(addChildTo(cards, id, { ...blankCard('card'), text: 'New subtitle' }));
@@ -1084,7 +1083,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterShown, userShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
@@ -1212,14 +1211,14 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   onClick={() => setAssignShown((v) => !v)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
               )}
               {canEdit && (
-                <button className={`btn small ${posterAnyOn ? 'blue' : 'ghost'}`}
-                  title={posterAnyOn ? 'Turn OFF Moderator upload on ALL cards (you can re-enable per card)' : 'Turn ON Moderator upload on ALL cards'}
-                  onClick={bulkPoster}>📎 Moderator upload: {posterAnyOn ? 'On' : 'Off'}</button>
+                <button className={`btn small ${posterShown ? 'blue' : 'ghost'}`}
+                  title="Show / hide the Moderator upload button on all cards (a display toggle — doesn’t change each card’s saved setting; use the per-card 📎 toggle for that)"
+                  onClick={() => setPosterShown((v) => !v)}>📎 Moderator upload: {posterShown ? 'On' : 'Off'}</button>
               )}
               {canEdit && (
-                <button className={`btn small ${userAnyOn ? 'blue' : 'ghost'}`}
-                  title={userAnyOn ? 'Turn OFF User upload on ALL cards (you can re-enable per card)' : 'Turn ON User upload on ALL cards'}
-                  onClick={bulkUser}>📁 User upload: {userAnyOn ? 'On' : 'Off'}</button>
+                <button className={`btn small ${userShown ? 'blue' : 'ghost'}`}
+                  title="Show / hide the User upload button on all cards (a display toggle — doesn’t change each card’s saved setting; use the per-card 📁 toggle for that)"
+                  onClick={() => setUserShown((v) => !v)}>📁 User upload: {userShown ? 'On' : 'Off'}</button>
               )}
               {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
             </div>
