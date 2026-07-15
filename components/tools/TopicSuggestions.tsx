@@ -12,6 +12,7 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { Carousel } from '@/components/ui/Carousel';
 import { CardShell, overlayIcon } from '@/components/ui/CardShell';
+import { assembleDefinition } from '@/lib/studio-catalog';
 
 type Topic = { topic: string; emoji: string; blurb: string; image?: string };
 
@@ -33,6 +34,7 @@ export function TopicSuggestions({ repoSlug, repoTitle }: { repoSlug: string; re
   const [units, setUnits] = useState<string[]>(() => unitsCache.get(repoSlug) || []);
   const [unit, setUnit] = useState('');            // '' = whole repository
   const [busy, setBusy] = useState(false);
+  const [building, setBuilding] = useState<number | null>(null);  // index of the card being turned into a lesson
 
   // `force` bypasses the cache (Refresh / Recommend 10) and replaces the cached
   // set with the new one; otherwise a cached set is used with no AI call.
@@ -67,15 +69,30 @@ export function TopicSuggestions({ repoSlug, repoTitle }: { repoSlug: string; re
     inp.click();
   };
 
-  // Open the presentation builder seeded with this topic (+ a framing hint so the
-  // AI-suggested lesson fits what the repository is about).
-  const build = (t: Topic) => {
+  // Pressing a topic pick DESIGNS a full multi-slide lesson for it and opens it to
+  // play. The AI lays out several slides (teach → practise → check) using the
+  // platform's components, adapted to the subject (STEM practice vs. humanities /
+  // arts reading & reflection), then we assemble + publish it and open the tool.
+  // If anything fails, we fall back to seeding the builder so the user can still
+  // generate it by hand.
+  const build = async (t: Topic, i: number) => {
+    if (building !== null) return;
+    setBuilding(i);
     const where = repoTitle ? `Part of the "${repoTitle}" repository${unit ? `, unit "${unit}"` : ''}. ` : '';
-    appState.builderSeed = {
-      artifact: 'presentation', subject: t.topic, title: t.topic,
-      context: `${where}Make an engaging presentation lesson about "${t.topic}" that helps someone understand it.`,
-    };
-    app.nav('toolbuilder');
+    const context = `${where}An engaging, comprehension-checking lesson about "${t.topic}" that helps someone understand it.`;
+    try {
+      const d: any = await API.post('/api/tools/studio-design', { subject: t.topic, title: t.topic, context }, { retries: 1 });
+      const pages = Array.isArray(d?.pages) && d.pages.length ? d.pages : undefined;
+      const def = assembleDefinition({ artifact: 'presentation', title: t.topic, subject: t.topic, tone: 'Friendly', context, pages } as any);
+      const pub = await API.post('/api/tools', { definition: def, visibility: 'unlisted', aiGenerated: true });
+      const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
+      if (one?.tool) { appState.activeTool = one.tool; setBuilding(null); app.nav('tool'); return; }
+      setBuilding(null); app.nav('tools');
+    } catch {
+      // Fall back to the seeded builder so the topic is never a dead end.
+      appState.builderSeed = { artifact: 'presentation', subject: t.topic, title: t.topic, context };
+      setBuilding(null); app.nav('toolbuilder');
+    }
   };
 
   const onSelectUnit = (u: string) => { setUnit(u); load(u); };
@@ -96,8 +113,8 @@ export function TopicSuggestions({ repoSlug, repoTitle }: { repoSlug: string; re
         thumbnail={t.image || null}
         iconNode={t.image ? undefined : <span aria-hidden>{t.emoji || '💡'}</span>}
         overlay={overlay}
-        onOpen={() => build(t)}
-        actions={<button className="btn small green" onClick={() => build(t)}>✨ Make a lesson →</button>} />
+        onOpen={() => build(t, i)}
+        actions={<button className="btn small green" disabled={building !== null} onClick={() => build(t, i)}>{building === i ? '⏳ Building…' : '✨ Make a lesson →'}</button>} />
     );
   };
 
