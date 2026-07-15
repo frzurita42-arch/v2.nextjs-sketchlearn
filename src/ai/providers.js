@@ -376,24 +376,41 @@ async function generateImage(prompt) {
   return null;
 }
 
-// Gemini native image generation (returns a base64 data URL).
+// The last image-generation failure reason (status + message), so callers can
+// surface WHY instead of a generic "could not generate".
+let lastImageError = '';
+function getLastImageError() { return lastImageError; }
+
+// Gemini native image generation (returns a base64 data URL). Tries the
+// configured model first, then well-known image-capable model ids ("Nano Banana"
+// = gemini-2.5-flash-image), so a stale/unavailable default model name doesn't
+// break generation on keys that only have the 2.5 image model.
 async function geminiImage(prompt) {
-  try {
-    const res = await fetch(`${GEMINI_API_BASE}/models/${GEMINI_IMAGE_MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
-      })
-    });
-    if (!res.ok) { console.error('Gemini image error', res.status, (await res.text().catch(() => '')).slice(0, 200)); return null; }
-    const data = await res.json();
-    const parts = data.candidates?.[0]?.content?.parts || [];
-    const img = parts.find(p => p.inlineData?.data || p.inline_data?.data);
-    const inline = img && (img.inlineData || img.inline_data);
-    if (inline?.data) return `data:${inline.mimeType || inline.mime_type || 'image/png'};base64,${inline.data}`;
-  } catch (e) { console.error('Gemini image generation failed:', e.message); }
+  const models = [...new Set([GEMINI_IMAGE_MODEL, 'gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview'].filter(Boolean))];
+  for (const model of models) {
+    try {
+      const res = await fetch(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
+        })
+      });
+      if (!res.ok) {
+        const body = (await res.text().catch(() => '')).slice(0, 200);
+        lastImageError = `${model}: ${res.status} ${body}`.slice(0, 200);
+        console.error('Gemini image error', res.status, model, body);
+        continue;   // try the next candidate model
+      }
+      const data = await res.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const img = parts.find(p => p.inlineData?.data || p.inline_data?.data);
+      const inline = img && (img.inlineData || img.inline_data);
+      if (inline?.data) return `data:${inline.mimeType || inline.mime_type || 'image/png'};base64,${inline.data}`;
+      lastImageError = `${model}: response had no image (the model may not support image output)`;
+    } catch (e) { lastImageError = `${model}: ${e.message}`; console.error('Gemini image generation failed:', model, e.message); }
+  }
   return null;
 }
 
@@ -516,6 +533,7 @@ module.exports = {
   generateVisionJSON,
   generateImage,
   geminiImage,
+  getLastImageError,
   fillImages,
   generateSvgWithClaude,
   illustrateWithClaude,

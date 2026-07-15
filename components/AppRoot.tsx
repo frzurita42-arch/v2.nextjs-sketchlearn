@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API, type SessionUser } from '@/lib/api';
 import { appState } from '@/lib/app-state';
-import { AppContext, type ViewName } from '@/components/AppContext';
+import { AppContext, computeEff, type ViewName, type ViewAs } from '@/components/AppContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -48,6 +48,10 @@ export default function AppRoot() {
   const [view, setViewState] = useState<ViewName>('tools');   // Tools is the home page
   const [tick, setTick] = useState(0);
   const [demo, setDemo] = useState(false);
+  // "View as" preview (admins only) — render pages as a plain user / the OP / an
+  // admin would see them, without changing the real session. Resets to self on
+  // navigation so a preview never silently leaks across pages.
+  const [viewAs, setViewAs] = useState<ViewAs>('self');
 
   // The in-app navigation trail — the reliable fallback for "Back" that does not
   // depend on the browser's history (which Next.js also manages). Each `nav`
@@ -110,6 +114,7 @@ export default function AppRoot() {
       if (navStack.current.length > 50) navStack.current.shift();
     }
     if (next !== 'activity') appState.game = null;
+    if (next !== cur) setViewAs('self');   // never carry a preview across pages
     setView(next);
     window.scrollTo(0, 0);
     // PUSH a browser history entry too so the native Back button also walks back.
@@ -209,7 +214,7 @@ export default function AppRoot() {
 
   if (!user) {
     return (
-      <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout }}>
+      <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner) }}>
         <main id="app"><LoginView /></main>
       </AppContext.Provider>
     );
@@ -239,8 +244,21 @@ export default function AppRoot() {
   };
 
   return (
-    <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout }}>
+    <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner) }}>
       <Header />
+      {/* "View as" preview bar — admins can render any page as a plain user, the
+          creator (OP), or an admin would see it (client-side preview only; server
+          permissions are unchanged). Resets to "You" when you change pages. */}
+      {user?.role === 'admin' && (
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', margin: '6px 0 0', fontSize: 12 }}>
+          <span style={{ opacity: 0.6, fontWeight: 700 }}>👁 View as</span>
+          {([['self', 'You'], ['user', 'User'], ['op', 'OP'], ['admin', 'Admin']] as [ViewAs, string][]).map(([v, label]) => (
+            <button key={v} className={`btn small ${viewAs === v ? 'blue' : 'ghost'}`} style={{ padding: '2px 10px' }} onClick={() => setViewAs(v)}
+              title={v === 'self' ? 'Your real view' : v === 'user' ? 'As a plain signed-in visitor' : v === 'op' ? 'As the creator (owner) of this content' : 'As an administrator'}>{label}</button>
+          ))}
+          {viewAs !== 'self' && <span style={{ opacity: 0.7, fontStyle: 'italic' }}>· previewing — controls reflect this role</span>}
+        </div>
+      )}
       {demo && (
         <div id="demo-banner" className="demo-banner">
           <span><b>Demo mode</b> — no AI provider is connected, so lessons, charts and suggestions use built-in placeholder content. Set <b>GEMINI_API_KEY</b> or <b>DEEPSEEK_API_KEY</b> in your deployment for real AI lessons.</span>

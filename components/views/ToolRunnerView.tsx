@@ -243,7 +243,10 @@ export function ToolRunnerView() {
 
   const authorAv = avatarFor(tool.owner);
   const created = tool.createdAt ? new Date(tool.createdAt).toLocaleString() : '';
-  const canEdit = !(tool.tags || []).includes('example') && (app.user?.role === 'admin' || app.user?.username === tool.owner);
+  // Effective permissions honour the admin "View as" preview (self / user / OP /
+  // admin) so the whole page re-renders as that role would see it.
+  const perms = app.eff(tool.owner);
+  const canEdit = !(tool.tags || []).includes('example') && perms.canEdit;
 
   const saveTitle = async (t: string) => {
     setEditField(null);
@@ -318,7 +321,7 @@ export function ToolRunnerView() {
         <button className="btn small ghost" onClick={toggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
         {tool.visibility !== 'private' && <SharePanel slug={tool.slug} title={tool.title} />}
         {/* Studio-made repositories & presentations don't expose Settings. */}
-        {!(tool.tags || []).includes('example') && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && (app.user?.role === 'admin' || app.user?.username === tool.owner) && (
+        {!(tool.tags || []).includes('example') && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && perms.canEdit && (
           <button className="btn small ghost" onClick={() => app.nav('toolsettings')}>⚙️ Settings</button>
         )}
         <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>
@@ -389,7 +392,7 @@ export function ToolRunnerView() {
                 renderGrid={(e: any) => entryCard(e, false)}
                 renderRow={(e: any) => entryCard(e, true)}
               />
-              {isOwner && def.app?.review && asArray(entries).some((e: any) => e.status === 'pending') && (
+              {(perms.preview ? perms.isOwner : isOwner) && def.app?.review && asArray(entries).some((e: any) => e.status === 'pending') && (
                 <div className="card" style={{ padding: '12px 14px', marginTop: 12 }}>
                   <h4 style={{ margin: '0 0 8px' }}>Review queue (owner)</h4>
                   {asArray(entries).filter((e: any) => e.status === 'pending').map((e: any) => (

@@ -31,6 +31,7 @@ type ViewCtx = {
   entriesByCard: Record<string, any[]>; onAdded: () => void;
   favs: Record<string, boolean>; toggleFav: (id: string) => void;   // per-card favorites
   collapseCmd: { on: boolean; n: number };         // "collapse/expand all" broadcast (n = nonce)
+  levelIndex: Record<string, number>;              // each card's 0-based position within its level (default number icon)
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
@@ -165,6 +166,15 @@ function cardNumber(cards: RepoCard[], id: string, top = true): number | null {
     if (c.children?.length) { const r = cardNumber(c.children, id, false); if (r != null) return r; }
   }
   return null;
+}
+
+// Each card's position WITHIN ITS OWN LEVEL (0-based, matching the number-box
+// look the user asked for), for every level of the tree. Used as the DEFAULT
+// icon so cards read 0, 1, 2 … per level without anyone pressing 🔢; a custom
+// icon or an uploaded image still wins, and reordering re-numbers automatically.
+function buildLevelIndex(cards: RepoCard[], out: Record<string, number> = {}): Record<string, number> {
+  cards.forEach((c, i) => { out[c.id] = i; if (c.children?.length) buildLevelIndex(c.children, out); });
+  return out;
 }
 
 // ---- user contributions on a "collect" card ------------------------------
@@ -500,7 +510,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const isStatus = mode === 'assigned' || mode === 'pending' || mode === 'approved' || mode === 'rejected';
   const blocked = (mode === 'disabled' || mode === 'preview') && !ctx.canEdit;
   const previewBlocked = mode === 'preview' && !ctx.canEdit;
-  const iconNode = card.icon ? <span aria-hidden>{card.icon}</span> : undefined;   // number emoji, if set
+  // Icon precedence: a custom icon the user set wins; otherwise an uploaded card
+  // image shows; otherwise the DEFAULT is the card's number within its level
+  // (0, 1, 2 … per level), matching the number-box look.
+  const iconNode = card.icon
+    ? <span aria-hidden>{card.icon}</span>
+    : (isImg(card.image) ? undefined : <span aria-hidden>{toKeycaps(ctx.levelIndex[card.id] ?? 0)}</span>);
   const isFav = !!ctx.favs[card.id];
   const [collapsed, setCollapsed] = useState(false);   // hide this card's nested cards
   // Follow the repo-wide "collapse / expand all" broadcast (fires only when the
@@ -947,6 +962,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // state, `n` a nonce so re-clicking the same state still refires.
   const [collapseCmd, setCollapseCmd] = useState<{ on: boolean; n: number }>({ on: false, n: 0 });
   const collapseAll = (on: boolean) => setCollapseCmd((c) => ({ on, n: c.n + 1 }));
+  // Default per-level numbering (recomputed whenever the card tree changes).
+  const levelIndex = useMemo(() => buildLevelIndex(cards), [cards]);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState('');
@@ -958,8 +975,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
   // User contributions (collect cards): load entries and group them by card id.
   const app = useApp();
-  const me = app.user?.username || '';
-  const isAdmin = app.user?.role === 'admin';
+  // Honour the admin "View as" preview: identity + admin/owner powers reflect the
+  // selected role (canEdit is already passed preview-aware from ToolRunnerView).
+  const perms = app.eff(owner);
+  const me = perms.username;
+  const isAdmin = perms.isAdmin;
   const isOwner = canEdit;
   const [entries, setEntries] = useState<any[]>([]);
   const loadEntries = () => {
@@ -1034,7 +1054,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addSibling, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {

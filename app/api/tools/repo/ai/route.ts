@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled, imageEnabled } from '@/src/config';
-import { generateStructured, generateImage, geminiDoc } from '@/src/ai/providers';
+import { generateStructured, generateImage, geminiDoc, getLastImageError } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug } = require('@/src/db/platform');
@@ -42,7 +42,10 @@ export async function POST(req: Request) {
     const instruction = String(b.instruction || b.title || 'a simple icon').slice(0, 400);
     try {
       const img = await generateImage(`A clean, simple flat icon illustration for a course/repository card: ${instruction}. Centered, minimal, friendly, no text.`);
-      if (!img) return NextResponse.json({ error: 'Could not generate an image.' }, { status: 200 });
+      if (!img) {
+        const why = (typeof getLastImageError === 'function' && getLastImageError()) || '';
+        return NextResponse.json({ error: why ? `Could not generate an image (${why.slice(0, 140)}). Check GEMINI_IMAGE_MODEL or upload an image instead.` : 'Could not generate an image. Upload an image instead.' }, { status: 200 });
+      }
       return NextResponse.json({ image: img });
     } catch {
       return NextResponse.json({ error: 'Image generation failed.' }, { status: 200 });

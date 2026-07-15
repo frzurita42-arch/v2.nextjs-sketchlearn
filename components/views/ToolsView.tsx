@@ -133,9 +133,18 @@ export function ToolsView() {
     setThumbing(m => { const n = { ...m }; delete n[t.slug]; return n; });
   };
   const patchTool = (slug: string, patch: any) => setTools(ts => ts.map(t => t.slug === slug ? { ...t, ...patch } : t));
+  // The gallery lists many owners, so the admin "View as" preview maps to: an
+  // owner-less effective admin flag (gEff), plus each card's REAL ownership —
+  // suppressed in the plain-"user" preview so a visitor edits nothing.
+  const gEff = app.eff();
   // Real tools: owner or admin. Built-in examples: an admin may curate them
   // (title/description/thumbnail), saved as an override for everyone.
-  const canEditCard = (t: any) => (t.tags || []).includes('example') ? app.user?.role === 'admin' : (app.user?.role === 'admin' || app.user?.username === t.owner);
+  const canEditCard = (t: any) => {
+    const example = (t.tags || []).includes('example');
+    const realOwner = !!app.user?.username && app.user.username === t.owner;
+    if (example) return gEff.isAdmin;
+    return gEff.isAdmin || (gEff.viewAs !== 'user' && realOwner);
+  };
   const remix = async (t: any) => {
     setMixing(m => ({ ...m, [t.slug]: true }));
     try {
@@ -148,8 +157,9 @@ export function ToolsView() {
     setMixing(m => { const n = { ...m }; delete n[t.slug]; return n; });
   };
 
-  // Admin-editable page copy (heading + subtitle), saved for everyone.
-  const isAdmin = app.user?.role === 'admin';
+  // Admin-editable page copy (heading + subtitle), saved for everyone. Follows
+  // the "View as" preview so an admin can see the non-admin gallery.
+  const isAdmin = gEff.isAdmin;
   const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string }>({});
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
