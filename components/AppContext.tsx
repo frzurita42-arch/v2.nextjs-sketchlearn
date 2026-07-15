@@ -10,7 +10,9 @@ export type ViewName = 'home' | 'path' | 'settings' | 'activity' | 'language' | 
 //   user  — a plain signed-in viewer (no owner/admin powers)
 //   op    — the content's creator (owner powers, but not admin-only ones)
 //   admin — an administrator
-export type ViewAs = 'self' | 'user' | 'op' | 'admin';
+// 'languages' is a placeholder view (shown in the bar, wired up later); it falls
+// through to neutral behaviour for now so it changes nothing yet.
+export type ViewAs = 'self' | 'user' | 'op' | 'admin' | 'languages';
 
 // The EFFECTIVE identity a component should gate its UI on, given the page's
 // content owner. Derived from the real user + the current "view as" selection.
