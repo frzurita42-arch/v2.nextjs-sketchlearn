@@ -40,6 +40,7 @@ type ViewCtx = {
   canEdit: boolean;
   isAdmin: boolean;                                // admin can remove any User upload; the OP cannot
   preview: boolean;                                // "View as" preview — read-only, no edit persists
+  docUpload: boolean;                              // 📄 file uploads enabled — the "Attach a document" button is active
   imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
@@ -985,10 +986,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — your own link or document (only you or an admin can remove it)' : '📎 Moderator — a link or document everyone can open'}</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={linkUrl} placeholder="Paste a link (https://…)" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '3 1 220px', fontSize: 13 }} />
-        <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file from your device">
-          {attachBusy ? 'Uploading…' : '📎 Attach a document'}
-          <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
-        </label>
+        {ctx.docUpload
+          ? <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file from your device">
+              {attachBusy ? 'Uploading…' : '📎 Attach a document'}
+              <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
+            </label>
+          : <button className="btn small ghost" disabled title="File uploads are off for this repository — paste a link instead (a moderator can enable file uploads)">📎 Attach a document</button>}
         <button className={`btn small ${attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>{hasSlot ? '✓ Replace' : '✓ Submit'}</button>
         {/* 🔗 Link — a REAL anchor (not window.open, which browsers block for
             uploaded data: files) so it reliably opens/downloads what's saved. */}
@@ -1076,6 +1079,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // cycle button shows on every card. Off: cards keep any status already set (shown
   // as a read-only badge to everyone), and un-assigned cards drop the control.
   const [assignShown, setAssignShown] = useState(!!repo.assignShow);
+  // 📄 file uploads — persisted. Off by default (link-only); the moderator turns it
+  // on to enable the "Attach a document" button in the attach editor.
+  const [docUpload, setDocUpload] = useState(!!repo.docUpload);
   // PERSISTED repo-wide switches for the Moderator (📎 clip) and User (📁 folder)
   // attach features. When ON, every card offers that upload; when OFF, the icon is
   // hidden EXCEPT on cards that already hold an attachment (which stay viewable /
@@ -1159,7 +1165,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     if (preview) return;   // "View as" preview never writes real data
     setCards(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, cards: next } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, cards: next } });
       if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
     } catch { /* keep the optimistic copy */ }
   };
@@ -1227,13 +1233,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
     setImageGen(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1241,7 +1247,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveUploads = async (poster: boolean, user: boolean) => {
     setPosterUpload(poster); setUserUpload(user);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, assignShow: assignShown, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, assignShow: assignShown, docUpload, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1249,7 +1255,15 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveAssign = async (next: boolean) => {
     setAssignShown(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: next, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: next, docUpload, cards } });
+      if (r?.repo && def) def.repo = r.repo;
+    } catch { /* keep the optimistic toggle */ }
+  };
+  // Persist the 📄 file-upload (Attach a document) switch.
+  const saveDocUpload = async (next: boolean) => {
+    setDocUpload(next);
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload: next, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1259,7 +1273,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveDisplayLock = async (lockedNext: boolean, viewSel: 'grid' | 'row') => {
     const nextDisplay: 'bars' | 'grid' = viewSel === 'grid' ? 'grid' : 'bars';
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* ignore */ }
   };
@@ -1377,6 +1391,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 <button className={`btn small ${imageGen ? 'blue' : 'ghost'}`}
                   title={imageGen ? 'Turn off card pictures' : 'Turn on card pictures — each card gets a 🖼️ button (beside the clip/folder) to generate an AI picture of the item; a saved picture stays viewable to everyone even after you turn this off'}
                   onClick={() => saveImageGen(!imageGen)}>🖼️ Card picture: {imageGen ? 'On' : 'Off'}</button>
+              )}
+              {canEdit && (
+                <button className={`btn small ${docUpload ? 'blue' : 'ghost'}`}
+                  title={docUpload ? 'Turn off file uploads — the attach editor becomes link-only' : 'Turn on file uploads — the "📎 Attach a document" button in the attach editor is enabled so users can upload a file, not just paste a link'}
+                  onClick={() => saveDocUpload(!docUpload)}>📄 File upload: {docUpload ? 'On' : 'Off'}</button>
               )}
               {/* Sort order — available to everyone (a personal display preference):
                   cycles Manual → Oldest → Newest → Random. */}
