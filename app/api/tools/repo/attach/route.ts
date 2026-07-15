@@ -48,7 +48,9 @@ export async function POST(req: Request) {
         if (color === 'blue' && !isOwnerAdmin) { denied = true; return c; }   // only OP/admin post
         let url = String(b.link?.url || '').trim();
         if (!url) return c;
-        if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) url = 'https://' + url;
+        // A bare domain gets a scheme so it resolves — but NEVER an uploaded file
+        // (data: URL) or a site-relative path, or we corrupt it into "https://data:…".
+        if (!/^https?:\/\//i.test(url) && !/^data:/i.test(url) && !url.startsWith('/')) url = 'https://' + url;
         const label = String(b.link?.label || 'Link').slice(0, 15) || 'Link';
         links.push(color === 'green' ? { label, url, color: 'green', by: me } : { label, url, by: me });
         touched = true;
