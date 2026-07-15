@@ -637,8 +637,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // future viewer sees it, until 💦 clears it. Normal viewers can only VIEW an
   // already-generated picture — they cannot request one.
   const hasGen = isImg(card.genImage);
-  const frameClick = async () => {
-    if (hasGen) { setShowImg(true); return; }           // view the saved picture
+  // Generate (or regenerate) the AI "Suggest AI" picture (genImage) for this card.
+  const genFramePicture = async () => {
     if (!ctx.canEdit) return;                             // only owner/admin generate
     setGenBusy(true);
     try {
@@ -649,7 +649,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     } catch { alert('Could not generate a picture.'); }
     setGenBusy(false);
   };
-  const splashClick = () => { if (ctx.canEdit && hasGen) ctx.editField(card.id, { genImage: undefined }); };
+  // Click the 🖼️ button: if a picture exists, open the popup (view it, and — for
+  // owner/admin — Regenerate or Delete it there). If none exists, generate one.
+  const frameClick = () => { if (hasGen) { setShowImg(true); return; } genFramePicture(); };
+  const deleteImage = () => { if (ctx.canEdit) { ctx.editField(card.id, { genImage: undefined }); setShowImg(false); } };
+  const regenImage = async () => { setShowImg(false); await genFramePicture(); };
   const uploadImage = () => {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
     inp.onchange = async () => {
@@ -848,16 +852,14 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   ) : null;
   // 🖼️ "Suggest AI" picture button (repo-level toggle). Owner/admin generate a
   // picture of the item (saved for all viewers); everyone can view a saved one.
-  // 💦 (owner/admin, when a picture exists) clears it.
+  // With a picture present, clicking it opens a popup to view — and, for owner/
+  // admin, to Regenerate or Delete it (no separate delete icon).
   const showFrame = ctx.imageGen && (ctx.canEdit || hasGen);
   const imageButtons = showFrame ? (
     <span style={{ display: 'inline-flex', gap: 4, flex: '0 0 auto' }} onClick={stop}>
       <button type="button" onClick={frameClick} disabled={genBusy}
-        title={hasGen ? 'View the picture' : (ctx.canEdit ? 'Generate an AI picture of this item (saved for everyone)' : 'No picture yet')}
+        title={hasGen ? (ctx.canEdit ? 'View the picture — regenerate or delete it' : 'View the picture') : (ctx.canEdit ? 'Generate an AI picture of this item (saved for everyone)' : 'No picture yet')}
         className={`btn small ${hasGen ? 'blue' : 'ghost'}`}>{genBusy ? '⏳' : '🖼️'}</button>
-      {ctx.canEdit && hasGen && (
-        <button type="button" onClick={splashClick} title="Delete the generated picture" className="btn small ghost">💦</button>
-      )}
     </span>
   ) : null;
   const actions = (
@@ -916,9 +918,15 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     <div onClick={() => setShowImg(false)}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg, #fff)', borderRadius: 12, padding: 12, maxWidth: 'min(92vw, 620px)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <strong style={{ fontSize: 14 }}>🖼️ {card.title || 'Picture'}</strong>
-          <button className="btn small ghost" onClick={() => setShowImg(false)}>✕ Close</button>
+          <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+            {/* Owner/admin manage the picture from here — regenerate a fresh one or
+                delete it (this replaces the old 💦 splash delete icon). */}
+            {ctx.canEdit && <button className="btn small blue" disabled={genBusy} onClick={regenImage}>{genBusy ? '⏳ …' : '🔄 Regenerate'}</button>}
+            {ctx.canEdit && <button className="btn small ghost" disabled={genBusy} onClick={deleteImage}>🗑 Delete</button>}
+            <button className="btn small ghost" onClick={() => setShowImg(false)}>✕ Close</button>
+          </span>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={card.genImage} alt={card.title || 'Generated picture'} style={{ maxWidth: '100%', maxHeight: '78vh', objectFit: 'contain', borderRadius: 8 }} />
