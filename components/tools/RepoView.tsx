@@ -990,7 +990,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   ) : null;
   const actions = (
     <>
-      {moveBtns}
       {linkColumn}
       {/* Assignment control/chip lives in the icon cluster (activeControls). */}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
@@ -1089,7 +1088,16 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
 
   // A disabled card is greyed + unclickable for viewers; a hidden card (owner/
   // admin preview) is just greyed.
-  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{attachForm}{aiForm}{imgPopup}</div>;
+  // The ▲ / ▼ reorder arrows sit OUTSIDE the card, to its right (row view only),
+  // so they don't crowd the in-card icon cluster. The card takes the remaining
+  // width; the arrows hug the right edge, aligned to the top of the card.
+  const cardRow = (view === 'row' && moveBtns) ? (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+      <div style={{ flex: '1 1 auto', minWidth: 0 }}>{shell}</div>
+      {moveBtns}
+    </div>
+  ) : shell;
+  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{cardRow}{attachForm}{aiForm}{imgPopup}</div>;
 
   // GRID view: a card is shown ALONE — no nested cards beneath it (clicking a
   // card with children flips to the rows view to reveal the tree). ROWS view
