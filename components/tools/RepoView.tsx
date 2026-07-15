@@ -805,7 +805,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 15, lineHeight: 1, opacity: copied ? 1 : 0.7 }}>{copied ? '✅' : '📋'}</button>
   );
   const iconGrid = (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 6, justifyItems: 'center', alignItems: 'center', flex: '0 0 auto' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '6px 8px', justifyItems: 'center', alignItems: 'center', flex: '0 0 auto' }}>
       {favBtn}
       {copyBtn}
       {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
