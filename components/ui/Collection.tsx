@@ -55,6 +55,7 @@ export interface CollectionProps<T> {
   onViewLockChange?: (locked: boolean, view: 'grid' | 'row') => void;
   gridMinPx?: number;                      // grid card min width (default 240)
   extra?: ReactNode;                       // section-specific control (e.g. a category select)
+  belowToolbar?: ReactNode;                // content on its own row directly BELOW the filter toolbar
   emptyAll?: string;                       // message when there are no items at all
   emptyFiltered?: string;                  // message when filters hide everything
   searchPlaceholder?: string;
@@ -97,7 +98,7 @@ export function Collection<T>({
   favs, likedByAdmin, likedByOwner, ownerLabel = '💛 Moderators', ownerTitle = 'Only tools moderators favorited', perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
   viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
-  extra, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
+  extra, belowToolbar, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
   banner, showCollapse, collapsed, onToggleCollapse,
@@ -240,6 +241,9 @@ export function Collection<T>({
             style={{ background: 'none', border: 'none', cursor: canLockView ? 'pointer' : 'default', padding: '0 2px', fontSize: 15, lineHeight: 1, opacity: canLockView ? 1 : 0.55 }}>{locked ? '🔒' : '🔓'}</button>
         )}
       </div>
+      {/* An optional row directly below the filter toolbar (e.g. Build a tool +
+          category chips), before the item count. */}
+      {belowToolbar && <div style={{ ...wrap, marginBottom: 8 }}>{belowToolbar}</div>}
       <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>
         {filtered.length} item{filtered.length === 1 ? '' : 's'}
         {canSaveFilter && (favs || likedByAdmin || likedByOwner) && <span style={{ marginLeft: 6, fontStyle: 'italic' }}>· your filter is saved as this page&apos;s default</span>}

@@ -54,18 +54,17 @@ function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void
 let toolsCache: any[] | null = null;
 
 // The gallery keeps its filter simple: just Presentations and Repositories.
-// A tool made with the slides tool (archetype 'lesson') is a Presentation; one
-// made with the repo tool (archetype 'repo') is a Repository. Anything else
-// (apps, generators…) still appears under "All" but has no dedicated chip.
+// Every tool is bucketed into exactly one of two categories so no card is left
+// uncategorised: a slide deck (archetype 'lesson') is a Presentation; EVERYTHING
+// else (repo, app, generator…) is a Repository. So Presentations + Repositories
+// always equals the full count.
 const GALLERY_CATEGORIES = [
   { key: 'presentation', label: '📊 Presentations' },
   { key: 'repository', label: '🗂️ Repositories' },
 ];
 const galleryCategory = (t: any): string => {
   const arch = t?.archetype || t?.definition?.archetype;
-  if (arch === 'lesson') return 'presentation';
-  if (arch === 'repo') return 'repository';
-  return 'other';
+  return arch === 'lesson' ? 'presentation' : 'repository';
 };
 
 export function ToolsView() {
@@ -137,6 +136,9 @@ export function ToolsView() {
   // owner-less effective admin flag (gEff), plus each card's REAL ownership —
   // suppressed in the plain-"user" preview so a visitor edits nothing.
   const gEff = app.eff();
+  // "Build a tool" is available to Moderators and Admins (not plain users, and
+  // not in the User "View as" preview).
+  const canBuild = gEff.isAdmin || gEff.viewAs === 'op';
   // Real tools: owner or admin. Built-in examples: an admin may curate them
   // (title/description/thumbnail), saved as an override for everyone.
   const canEditCard = (t: any) => {
@@ -333,15 +335,6 @@ export function ToolsView() {
           {isAdmin && <button title="AI tap-mixer — reword the subtitle" disabled={!!headMix.gallerySubtitle} onClick={() => remixHeading('gallerySubtitle')} style={{ ...headIcon, fontSize: 13 }}>{headMix.gallerySubtitle ? '…' : '🎨'}</button>}
         </p>
       )}
-      {/* "Build a tool" is for admins only (hidden from plain users, and in the
-          User/OP "View as" preview). The top Refresh button was removed for
-          everyone — the gallery's own 🔄 still reshuffles. */}
-      {isAdmin && (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
-          <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>
-        </div>
-      )}
-
       {loading ? <p style={{ textAlign: 'center', opacity: 0.7 }}>Loading…</p>
         : tools.length === 0 ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
@@ -350,18 +343,19 @@ export function ToolsView() {
           </div>
         ) : (galleryCollapsed && !isAdmin) ? null : (
           <>
-            {/* The category chips sit right under the Build / Refresh buttons, above
-                the gallery container. They're part of the gallery section, so they
-                collapse with it under the eye — only Build / Refresh stay. */}
-            {!galleryCollapsed && <CategoryFilter value={filter} onChange={setFilter} counts={counts} categories={GALLERY_CATEGORIES} />}
-            {/* A little breathing room between the category chips and the gallery title. */}
-            {!galleryCollapsed && <div style={{ height: 16 }} />}
-            {/* Same shared container as the History feed: small space → title (+
-                buttons) → banner → filter → items. */}
+            {/* Same shared container as the History feed: title → banner → filter →
+                [Build a tool + category chips] → items. Build a tool and the
+                All/Presentations/Repositories chips now sit on their own row BELOW
+                the filter toolbar (via belowToolbar). */}
             <GallerySection
               titleKey="galleryShelfTitle" titleFallback="🖼️ Gallery"
-              bannerKey="galleryBanner" bannerDefault="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or Moderators, switch grid or rows, sort newest/oldest, and page through. Refresh shuffles into a random order. Tap a card to open its tool."
-              onRefresh={reloadTools}
+              bannerKey="galleryBanner" bannerDefault="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or Moderators, switch grid or rows, sort newest/oldest, and page through. Tap a card to open its tool."
+              belowToolbar={
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  {canBuild && <button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>}
+                  <CategoryFilter value={filter} onChange={setFilter} counts={counts} categories={GALLERY_CATEGORIES} />
+                </div>
+              }
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
               items={catItems}
