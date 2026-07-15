@@ -13,7 +13,7 @@
  * typing OR regenerating it with AI, add/remove links, upload/AI an icon, and an
  * AI chat that lays out the whole tree. Saving persists for everyone; the
  * completion ✓ toggles are per-user (kept in localStorage). */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
 import { RichText } from '@/components/tools/RichText';
@@ -146,6 +146,11 @@ const STATUS_META: Record<string, { label: string; bg: string }> = {
 // The icon + words shown on the owner/admin cycle button for each mode.
 const MODE_BTN: Record<CardMode, string> = {
   enabled: '🟢', assigned: '📋', pending: '⏳', approved: '✔️', rejected: '⛔', disabled: '🚫', preview: '👓',
+};
+// Short label shown next to the emoji on the assignment-status button, so every
+// card reads clearly (not just a bare dot) when Assignment is On.
+const MODE_LABEL: Record<CardMode, string> = {
+  enabled: 'Set status', assigned: 'Assigned', pending: 'Pending', approved: 'Approved', rejected: 'Rejected', disabled: 'Disabled', preview: 'Preview',
 };
 const modeOf = (m?: string): CardMode => (MODE_ORDER.includes(m as CardMode) ? (m as CardMode) : 'enabled');
 const nextMode = (m?: string): CardMode => MODE_ORDER[(MODE_ORDER.indexOf(modeOf(m)) + 1) % MODE_ORDER.length];
@@ -788,10 +793,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // Owner/admin cycle button: Enabled → Assigned → Pending → Approved → Rejected
   // → Disabled → Preview. Setting it back to Enabled clears the field.
   const cycleMode = () => { const nm = nextMode(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); };
-  // The assignment-status toggle button — only when the owner/admin has turned on
-  // "Assignment" for the whole repo (the belowToolbar toggle). Hidden otherwise.
-  const modeBtn = (ctx.canEdit && ctx.assignShown) ? (
-    <button type="button" title={`Mode: ${mode} — click to cycle (Enabled → statuses → Disabled → Preview)`} style={{ ...iconBtn, opacity: mode === 'enabled' ? 0.85 : 1 }} onClick={cycleMode}>{MODE_BTN[mode]}</button>
+  // The assignment-status button — a clearly LABELLED button (emoji + word) so it
+  // reads the same on every card, not just a bare dot. Shown only when the owner/
+  // admin has turned on "Assignment" for the whole repo (belowToolbar toggle).
+  const assignBtn = (ctx.canEdit && ctx.assignShown) ? (
+    <button type="button" title={`Assignment status: ${mode} — click to cycle (Set status → Assigned → Pending → Approved → Rejected → Disabled → Preview)`}
+      onClick={cycleMode} className={`btn small ${isStatus ? 'blue' : 'ghost'}`} style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}>{MODE_BTN[mode]} {MODE_LABEL[mode]}</button>
   ) : null;
 
   // The control icons laid out in a tidy 3-per-row grid.
@@ -804,27 +811,37 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     <button type="button" onClick={eat(copyCard)} title={copied ? 'Copied!' : 'Copy title & description'}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 15, lineHeight: 1, opacity: copied ? 1 : 0.7 }}>{copied ? '✅' : '📋'}</button>
   );
+  // ACTIVE controls — the ones that only appear when the owner/admin flips a
+  // repo-wide toggle on (Assignment / Moderator upload / User upload). These are
+  // the "live" emojis. A vertical line separates them from the permanent set.
+  const activeControls: React.ReactNode[] = [];
+  if (assignBtn) activeControls.push(<span key="assign">{assignBtn}</span>);
+  // 📎 Moderator · 📁 User. If a link exists the icon DELETES it (so a new one can
+  // be posted); if empty it reveals the add-button.
+  if (canPoster) activeControls.push(<button key="clip" type="button" title={posterLinkIdx >= 0 ? 'Delete the Moderator link (then post a new one)' : 'Post a Moderator link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>);
+  if (canUser) activeControls.push(<button key="folder" type="button" title={myUserLinkIdx >= 0 ? 'Delete your link (then upload a new one)' : 'Upload your own document'} style={{ ...iconBtn, opacity: (myUserLinkIdx >= 0 || showUser) ? 1 : 0.85 }} onClick={folderAction}>📁</button>);
+  // Per-card emoji toggles (owner/admin): turn Moderator / User upload OFF or ON
+  // for just this card (persisted). Shown while that repo-wide control is revealed.
+  if (ctx.canEdit && ctx.posterShown) activeControls.push(<button key="ptog" type="button" title={card.posterOff ? 'Moderator upload is OFF for this card — click to enable' : 'Turn OFF Moderator upload for this card'} style={{ ...iconBtn, fontSize: 13, opacity: card.posterOff ? 0.9 : 0.55 }} onClick={() => ctx.editField(card.id, { posterOff: !card.posterOff })}>{card.posterOff ? '📎🚫' : '📎✓'}</button>);
+  if (ctx.canEdit && ctx.userShown) activeControls.push(<button key="utog" type="button" title={card.userOff ? 'User upload is OFF for this card — click to enable' : 'Turn OFF User upload for this card'} style={{ ...iconBtn, fontSize: 13, opacity: card.userOff ? 0.9 : 0.55 }} onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>{card.userOff ? '📁🚫' : '📁✓'}</button>);
+
+  // PERMANENT controls — always available (per role). These never move.
+  const permanentControls: React.ReactNode[] = [favBtn, copyBtn];
+  if (ctx.canEdit) permanentControls.push(
+    <button key="sib" type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>,
+    <button key="child" type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>,
+    <button key="hide" type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>,
+    <button key="del" type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>,
+  );
+
+  // The control cluster: [ active emojis | permanent emojis ], with a vertical
+  // divider between the two groups (only drawn when there are active controls).
+  const vDivider = <span key="vdiv" style={{ alignSelf: 'stretch', borderLeft: '2px solid var(--ink)', opacity: 0.28, margin: '0 2px' }} />;
   const iconGrid = (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '6px 8px', justifyItems: 'center', alignItems: 'center', flex: '0 0 auto' }}>
-      {favBtn}
-      {copyBtn}
-      {/* ⚙️ gear → a new card at THIS level (a sibling); ➕ plus → a card INSIDE (nested). */}
-      {ctx.canEdit && <button type="button" title="Add a card at this level" style={iconBtn} onClick={() => ctx.addSibling(card.id)}>⚙️</button>}
-      {ctx.canEdit && <button type="button" title="Add a card inside" style={iconBtn} onClick={() => ctx.addSubcard(card.id)}>➕</button>}
-      {/* 📎 Moderator · 📁 User. If a link exists the icon DELETES it (so a new one
-          can be posted); if empty it reveals the add-button. Shown only when this
-          card's attach is enabled (repo-wide toggle + per-card override). */}
-      {canPoster && <button type="button" title={posterLinkIdx >= 0 ? 'Delete the Moderator link (then post a new one)' : 'Post a Moderator link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>}
-      {canUser && <button type="button" title={myUserLinkIdx >= 0 ? 'Delete your link (then upload a new one)' : 'Upload your own document'} style={{ ...iconBtn, opacity: (myUserLinkIdx >= 0 || showUser) ? 1 : 0.85 }} onClick={folderAction}>📁</button>}
-      {/* Per-card emoji toggles (owner/admin): turn Moderator / User upload OFF or
-          ON for just this card (persisted). Shown while that repo-wide control is
-          revealed. These are the real per-card enable/disable. */}
-      {ctx.canEdit && ctx.posterShown && <button type="button" title={card.posterOff ? 'Moderator upload is OFF for this card — click to enable' : 'Turn OFF Moderator upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.posterOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { posterOff: !card.posterOff })}>{card.posterOff ? '📎🚫' : '📎✓'}</button>}
-      {ctx.canEdit && ctx.userShown && <button type="button" title={card.userOff ? 'User upload is OFF for this card — click to enable' : 'Turn OFF User upload for this card'} style={{ ...iconBtn, fontSize: 12, opacity: card.userOff ? 0.9 : 0.5 }} onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>{card.userOff ? '📁🚫' : '📁✓'}</button>}
-      {/* Mode cycle — owner/admin only: Enabled → statuses → Disabled → Preview. */}
-      {modeBtn}
-      {ctx.canEdit && <button type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>}
-      {ctx.canEdit && <button type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 8px', alignItems: 'center', flex: '0 0 auto' }}>
+      {activeControls}
+      {activeControls.length > 0 && vDivider}
+      {permanentControls}
     </div>
   );
   // ▲ / ▼ reorder this card within its own level (swap with the sibling above /
@@ -883,7 +900,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       {roleButtons}
       {imageButtons}
       {collapseBtn}
-      {statusChip}
+      {/* Read-only status badge for viewers. Editors see the labelled assignBtn
+          (which already names the status), so the pill is hidden for them. */}
+      {!assignBtn && statusChip}
       {card.completable && <button className={`btn small ${ctx.done[card.id] ? 'green' : 'ghost'}`} onClick={() => ctx.toggle(card.id)}>{ctx.done[card.id] ? '✓ Done' : '○ Mark done'}</button>}
       {iconGrid}
     </>
@@ -906,7 +925,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       iconNode={iconNode}
       overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
       afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}
-      actions={isGrid ? (ctx.assignShown ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{statusChip}{modeBtn}</span> : null) : actions} del={isGrid ? undefined : del} />
+      actions={isGrid ? (ctx.assignShown ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{assignBtn}</span> : null) : actions} del={isGrid ? undefined : del} />
   );
 
   // The clip/folder inline editor: type a link (label + URL) or upload a file.
