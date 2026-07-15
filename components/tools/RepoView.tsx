@@ -909,9 +909,13 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const genChild = async () => { setAiBusy(true); try { await ctx.addAnswerChild(card); } finally { setAiBusy(false); } };
   const genSibling = async () => { setAiBusy(true); try { await ctx.addAnswerSibling(card); } finally { setAiBusy(false); } };
   const permanentControls: React.ReactNode[] = [favBtn, copyBtn];
+  // When an AI prompt is set (aiGen), the ⚙️ / ➕ keep their plain emoji but gain a
+  // green underline — the same "there's something here" cue as the robot, clip and
+  // folder — so there aren't two emojis crammed onto one button.
+  const aiIcon = (on: boolean) => ({ ...iconBtn, borderBottom: `3px solid ${on ? '#2e9e57' : 'transparent'}`, borderRadius: 3, paddingBottom: 1, opacity: aiBusy ? 0.4 : 1 });
   if (ctx.canEdit) permanentControls.push(
-    <button key="sib" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card at this level (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card at this level'} style={{ ...iconBtn, opacity: aiBusy ? 0.4 : 1 }} onClick={() => (aiGen ? genSibling() : ctx.addSibling(card.id))}>{aiBusy ? '⏳' : (aiGen ? '🤖⚙️' : '⚙️')}</button>,
-    <button key="child" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card inside (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card inside'} style={{ ...iconBtn, opacity: aiBusy ? 0.4 : 1 }} onClick={() => (aiGen ? genChild() : ctx.addSubcard(card.id))}>{aiBusy ? '⏳' : (aiGen ? '🤖➕' : '➕')}</button>,
+    <button key="sib" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card at this level (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card at this level'} style={aiIcon(aiGen)} onClick={() => (aiGen ? genSibling() : ctx.addSibling(card.id))}>{aiBusy ? '⏳' : '⚙️'}</button>,
+    <button key="child" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card inside (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card inside'} style={aiIcon(aiGen)} onClick={() => (aiGen ? genChild() : ctx.addSubcard(card.id))}>{aiBusy ? '⏳' : '➕'}</button>,
     <button key="hide" type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>,
     <button key="del" type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>,
   );
