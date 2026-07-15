@@ -33,8 +33,8 @@ type ViewCtx = {
   collapseCmd: { on: boolean; n: number };         // "collapse/expand all" broadcast (n = nonce)
   levelIndex: Record<string, number>;              // each card's 0-based position within its level (default number icon)
   assignShown: boolean;                            // when true, show the per-card assignment-status toggle button on every card (owner/admin)
-  posterShown: boolean;                            // ephemeral show/hide of the Moderator attach controls (owner/admin view)
-  userShown: boolean;                              // ephemeral show/hide of the User attach controls (owner/admin view)
+  posterUpload: boolean;                           // persisted: the Moderator (📎 clip) upload feature is enabled repo-wide
+  userUpload: boolean;                             // persisted: the User (📁 folder) upload feature is enabled repo-wide
   aiShown: boolean;                                // 🤖 "AI question" feature on: show the robot prompt icon; ➕ generates an answer
   // Owner/admin inline card controls on the collection cards (bare icons):
   canEdit: boolean;
@@ -588,15 +588,18 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // their own; only they (or an admin) can remove it (the OP cannot). All changes
   // go through the guarded /api/tools/repo/attach endpoint, which stamps `by` and
   // enforces the permissions.
-  // Per-card persisted flags (posterOff/userOff) govern actual availability for
-  // everyone; the repo-wide posterShown/userShown are an EPHEMERAL show/hide for
-  // the owner/admin's own view (they don't change any saved state).
-  const canPoster = ctx.canEdit && ctx.posterShown && !card.posterOff;
-  const canUser = !!ctx.me && !card.userOff && (ctx.canEdit ? ctx.userShown : true);
   // The single link each role's widget manages: the poster (blue) link, and MY
   // own user (green) link. The widget turns INTO this link once submitted.
   const posterLinkIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
   const myUserLinkIdx = links.findIndex((l) => l.color === 'green' && l.by === ctx.me);
+  // Who may EDIT each slot (open the editor to add / replace / delete):
+  //  • 📎 clip = the Moderator's shared link — owner/admin only. They may add when
+  //    the repo-wide feature is on, and may always manage one that already exists.
+  //  • 📁 folder = a user's OWN link — any signed-in person. They may add when the
+  //    feature is on, and may always manage their own existing one.
+  // A per-card override (posterOff / userOff) can turn a slot off for one card.
+  const canPoster = ctx.canEdit && !card.posterOff && (ctx.posterUpload || posterLinkIdx >= 0);
+  const canUser = !!ctx.me && !card.userOff && (ctx.userUpload || myUserLinkIdx >= 0);
   const attachServer = async (payload: any) => {
     try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, ...payload }); if (r?.repo) ctx.applyRepo(r.repo); else if (r?.error) alert(r.error); } catch { alert('Could not update the attachment.'); }
   };
@@ -1039,10 +1042,12 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // "Assignment" — a repo-wide toggle (owner/admin) that shows/hides the per-card
   // assignment-status button on ALL cards at once. Starts off.
   const [assignShown, setAssignShown] = useState(false);
-  // Ephemeral show/hide (owner/admin view) of the Moderator / User attach controls
-  // on all cards — a pure display toggle, NOT a change to any card's saved state.
-  const [posterShown, setPosterShown] = useState(false);
-  const [userShown, setUserShown] = useState(false);
+  // PERSISTED repo-wide switches for the Moderator (📎 clip) and User (📁 folder)
+  // attach features. When ON, every card offers that upload; when OFF, the icon is
+  // hidden EXCEPT on cards that already hold an attachment (which stay viewable /
+  // manageable). Stored on the repo as clipForAll / folderForAll.
+  const [posterUpload, setPosterUpload] = useState(!!repo.clipForAll);
+  const [userUpload, setUserUpload] = useState(!!repo.folderForAll);
   // "AI question" — a repo-wide toggle (owner/admin). On: every card gets a 🤖
   // prompt icon, and adding a card inside (➕) generates an AI answer from the
   // card + page + prompt + attachments. Off: ➕ makes a blank card as before.
@@ -1115,7 +1120,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveCards = async (next: RepoCard[]) => {
     setCards(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, cards: next } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, cards: next } });
       if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
     } catch { /* keep the optimistic copy */ }
   };
@@ -1183,13 +1188,21 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterShown, userShown, aiShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => {
     setImageGen(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, cards } });
+      if (r?.repo && def) def.repo = r.repo;
+    } catch { /* keep the optimistic toggle */ }
+  };
+  // Persist the Moderator (📎 clip) / User (📁 folder) upload switches.
+  const saveUploads = async (poster: boolean, user: boolean) => {
+    setPosterUpload(poster); setUserUpload(user);
+    try {
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* keep the optimistic toggle */ }
   };
@@ -1199,7 +1212,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveDisplayLock = async (lockedNext: boolean, viewSel: 'grid' | 'row') => {
     const nextDisplay: 'bars' | 'grid' = viewSel === 'grid' ? 'grid' : 'bars';
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, cards } });
+      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, cards } });
       if (r?.repo && def) def.repo = r.repo;
     } catch { /* ignore */ }
   };
@@ -1299,14 +1312,14 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   onClick={() => setAssignShown((v) => !v)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
               )}
               {canEdit && (
-                <button className={`btn small ${posterShown ? 'blue' : 'ghost'}`}
-                  title="Show / hide the Moderator upload button on all cards (a display toggle — doesn’t change each card’s saved setting; use the per-card 📎 toggle for that)"
-                  onClick={() => setPosterShown((v) => !v)}>📎 Moderator upload: {posterShown ? 'On' : 'Off'}</button>
+                <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`}
+                  title="Enable the Moderator 📎 link on every card. When off, the clip only stays on cards that already have a link (viewers can still open those)."
+                  onClick={() => saveUploads(!posterUpload, userUpload)}>📎 Moderator upload: {posterUpload ? 'On' : 'Off'}</button>
               )}
               {canEdit && (
-                <button className={`btn small ${userShown ? 'blue' : 'ghost'}`}
-                  title="Show / hide the User upload button on all cards (a display toggle — doesn’t change each card’s saved setting; use the per-card 📁 toggle for that)"
-                  onClick={() => setUserShown((v) => !v)}>📁 User upload: {userShown ? 'On' : 'Off'}</button>
+                <button className={`btn small ${userUpload ? 'blue' : 'ghost'}`}
+                  title="Let users add their own 📁 link on every card. When off, the folder only stays on cards where a user already has one (they can still open/manage theirs)."
+                  onClick={() => saveUploads(posterUpload, !userUpload)}>📁 User upload: {userUpload ? 'On' : 'Off'}</button>
               )}
               {canEdit && (
                 <button className={`btn small ${aiShown ? 'blue' : 'ghost'}`}
