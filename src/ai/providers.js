@@ -381,65 +381,92 @@ async function generateImage(prompt) {
 let lastImageError = '';
 function getLastImageError() { return lastImageError; }
 
-// Ask Gemini which models THIS key can actually use, and pick one that supports
-// image output via generateContent. Cached after the first lookup (including a
-// "none" result) so we don't re-list on every image. This is what makes image
-// generation work regardless of the exact model name — different keys/regions
-// expose different image model ids (gemini-2.5-flash-image, -preview, 3.x, …).
-let _discoveredImageModel;   // undefined = not looked up; null = looked up, none found
-async function discoverImageModel() {
-  if (_discoveredImageModel !== undefined) return _discoveredImageModel;
-  _discoveredImageModel = null;
+// Ask Gemini which models THIS key can actually use and collect the image-capable
+// ones (Gemini "*image*" via generateContent, and Imagen "*imagen*" via predict).
+// Cached after the first lookup. Different keys/regions expose different image
+// model ids, so we discover instead of hard-coding a name.
+let _imageModelInfo;   // undefined = not looked up; { generate:[], imagen:[], all:[] }
+async function discoverImageModels() {
+  if (_imageModelInfo !== undefined) return _imageModelInfo;
+  _imageModelInfo = { generate: [], imagen: [], all: [] };
   try {
     const res = await fetch(`${GEMINI_API_BASE}/models?pageSize=1000`, { headers: { 'x-goog-api-key': GEMINI_API_KEY } });
-    if (res.ok) {
-      const data = await res.json();
-      const models = Array.isArray(data.models) ? data.models : [];
-      // Prefer a model whose name says "image" and that supports generateContent.
-      const pick = models.find(m => /image/i.test(m.name || '') && (m.supportedGenerationMethods || []).includes('generateContent'));
-      if (pick?.name) _discoveredImageModel = String(pick.name).replace(/^models\//, '');
-    } else {
-      lastImageError = `models list: ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`;
+    if (!res.ok) { lastImageError = `models list: ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`; return _imageModelInfo; }
+    const data = await res.json();
+    const models = Array.isArray(data.models) ? data.models : [];
+    for (const m of models) {
+      const name = String(m.name || '').replace(/^models\//, '');
+      const methods = m.supportedGenerationMethods || [];
+      const looksImage = /image/i.test(name) || /image/i.test(m.displayName || '') || /image/i.test(m.description || '');
+      if (!looksImage) continue;
+      _imageModelInfo.all.push(name);
+      if (/imagen/i.test(name) || methods.includes('predict')) _imageModelInfo.imagen.push(name);
+      if (methods.includes('generateContent') || (!methods.length && !/imagen/i.test(name))) _imageModelInfo.generate.push(name);
     }
-  } catch (e) { /* keep null */ }
-  return _discoveredImageModel;
+  } catch (e) { lastImageError = `models list error: ${e.message}`; }
+  return _imageModelInfo;
 }
 
-// Gemini native image generation (returns a base64 data URL). Uses the model the
-// key actually exposes (discovered from its model list), then the configured
-// model, then well-known image model ids as fallbacks — so a stale/unavailable
-// default model name (e.g. gemini-3.1-flash-image) doesn't break generation.
+// One attempt at Gemini's native image generation (generateContent). Returns a
+// data URL or null (setting lastImageError).
+async function geminiGenerateContentImage(model, prompt) {
+  try {
+    const res = await fetch(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } })
+    });
+    if (!res.ok) { lastImageError = `${model}: ${res.status} ${(await res.text().catch(() => '')).slice(0, 180)}`; return null; }
+    const data = await res.json();
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const inline = (parts.find(p => p.inlineData?.data || p.inline_data?.data) || {});
+    const d = inline.inlineData || inline.inline_data;
+    if (d?.data) return `data:${d.mimeType || d.mime_type || 'image/png'};base64,${d.data}`;
+    lastImageError = `${model}: response had no image`;
+  } catch (e) { lastImageError = `${model}: ${e.message}`; }
+  return null;
+}
+
+// One attempt at an Imagen model (the :predict endpoint, different request shape).
+async function imagenPredictImage(model, prompt) {
+  try {
+    const res = await fetch(`${GEMINI_API_BASE}/models/${model}:predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+      body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1 } })
+    });
+    if (!res.ok) { lastImageError = `${model}: ${res.status} ${(await res.text().catch(() => '')).slice(0, 180)}`; return null; }
+    const data = await res.json();
+    const pred = (data.predictions || [])[0] || {};
+    const b64 = pred.bytesBase64Encoded || pred.image?.bytesBase64Encoded;
+    if (b64) return `data:${pred.mimeType || 'image/png'};base64,${b64}`;
+    lastImageError = `${model}: predict response had no image`;
+  } catch (e) { lastImageError = `${model}: ${e.message}`; }
+  return null;
+}
+
+// Gemini image generation (returns a base64 data URL). Tries the models the key
+// actually exposes (discovered from its model list) using the right endpoint for
+// each (generateContent for gemini-*-image, predict for imagen-*), then a few
+// well-known ids as fallbacks. On total failure the error lists the image models
+// the key DOES expose, so the exact name to set in GEMINI_IMAGE_MODEL is visible.
 async function geminiImage(prompt) {
-  const discovered = await discoverImageModel();
-  const models = [...new Set([
-    discovered, GEMINI_IMAGE_MODEL,
-    'gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview',
-    'gemini-2.0-flash-preview-image-generation',
-  ].filter(Boolean))];
-  for (const model of models) {
-    try {
-      const res = await fetch(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
-        })
-      });
-      if (!res.ok) {
-        const body = (await res.text().catch(() => '')).slice(0, 200);
-        lastImageError = `${model}: ${res.status} ${body}`.slice(0, 200);
-        console.error('Gemini image error', res.status, model, body);
-        continue;   // try the next candidate model
-      }
-      const data = await res.json();
-      const parts = data.candidates?.[0]?.content?.parts || [];
-      const img = parts.find(p => p.inlineData?.data || p.inline_data?.data);
-      const inline = img && (img.inlineData || img.inline_data);
-      if (inline?.data) return `data:${inline.mimeType || inline.mime_type || 'image/png'};base64,${inline.data}`;
-      lastImageError = `${model}: response had no image (the model may not support image output)`;
-    } catch (e) { lastImageError = `${model}: ${e.message}`; console.error('Gemini image generation failed:', model, e.message); }
+  const info = await discoverImageModels();
+  // generateContent candidates: discovered first, then configured + known ids.
+  const gcModels = [...new Set([...info.generate, GEMINI_IMAGE_MODEL, 'gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview', 'gemini-2.0-flash-preview-image-generation'].filter(Boolean))];
+  for (const model of gcModels) {
+    const url = await geminiGenerateContentImage(model, prompt);
+    if (url) return url;
   }
+  // Imagen candidates (predict endpoint): discovered first, then known ids.
+  const imagenModels = [...new Set([...info.imagen, 'imagen-3.0-generate-002', 'imagen-4.0-generate-preview-06-06'].filter(Boolean))];
+  for (const model of imagenModels) {
+    const url = await imagenPredictImage(model, prompt);
+    if (url) return url;
+  }
+  // Nothing worked — help the caller by naming what the key actually has.
+  if (info.all.length) lastImageError = `${lastImageError} | image models available to your key: ${info.all.join(', ')} — set GEMINI_IMAGE_MODEL to one of these`;
+  else lastImageError = `${lastImageError || 'no image model'} | your Gemini key exposes no image models — enable image generation / Imagen on the key, or upload images`;
   return null;
 }
 

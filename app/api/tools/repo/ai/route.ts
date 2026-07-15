@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       const img = await generateImage(`A clean, simple flat icon illustration for a course/repository card: ${instruction}. Centered, minimal, friendly, no text.`);
       if (!img) {
         const why = (typeof getLastImageError === 'function' && getLastImageError()) || '';
-        return NextResponse.json({ error: why ? `Could not generate an image (${why.slice(0, 140)}). Check GEMINI_IMAGE_MODEL or upload an image instead.` : 'Could not generate an image. Upload an image instead.' }, { status: 200 });
+        return NextResponse.json({ error: why ? `Could not generate an image. ${why.slice(0, 400)}` : 'Could not generate an image. Upload an image instead.' }, { status: 200 });
       }
       return NextResponse.json({ image: img });
     } catch {
