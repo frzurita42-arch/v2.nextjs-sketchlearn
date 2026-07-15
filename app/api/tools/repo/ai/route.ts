@@ -288,5 +288,51 @@ export async function POST(req: Request) {
     }
   }
 
+  // ---- op: answer (generate a child card that answers a question) --------
+  // Powers the 🤖 "AI question" feature: from a card's own title/description, the
+  // wider repository, a saved prompt, and any attached document, produce ONE new
+  // child card (title + text) that answers the question.
+  if (op === 'answer') {
+    const cardTitle = String(b.cardTitle || '').slice(0, 300);
+    const cardText = String(b.cardText || '').slice(0, 3000);
+    const prompt = String(b.prompt || '').slice(0, 2000);
+    const repoTitle = String(b.repoTitle || '').slice(0, 200);
+    const repoContext = String(b.repoContext || '').slice(0, 4000);
+    const links = Array.isArray(b.links) ? b.links.slice(0, 8) : [];
+    const linkList = links.map((l: any) => `- ${String(l?.label || 'link')}: ${String(l?.url || '')}`).join('\n').slice(0, 1500);
+    const docDataUrl = String(b.docDataUrl || '');
+    const mm = docDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    const isDoc = !!mm && /pdf|msword|officedocument|text|rtf/i.test(mm[1]);
+    const system = [
+      'You answer a QUESTION about one card in a learning repository, and return the answer as a NEW child card (a "title" and a "text").',
+      'Use ALL the context you are given: the card\'s own title and description, the wider repository/page, any attached document, and the question itself.',
+      'Write in the SAME LANGUAGE as the card / question. Be clear, accurate and self-contained; light markdown is fine.',
+      'The "title" is a short label for the answer (max ~10 words). The "text" is the full answer — a few sentences up to a couple of short paragraphs.',
+      'Return STRICT JSON: { "title": string, "text": string }.',
+    ].join('\n');
+    const userText = [
+      repoTitle ? `Repository: ${repoTitle}` : '',
+      repoContext ? `Repository context (other cards on the page):\n${repoContext}` : '',
+      `Card title: ${cardTitle || '(untitled)'}`,
+      cardText ? `Card description:\n${cardText}` : '',
+      linkList ? `Attached links / documents on this card:\n${linkList}` : '',
+      `Question to answer:\n${prompt || 'Explain this card in more depth.'}`,
+    ].filter(Boolean).join('\n\n');
+    try {
+      let r: any = null;
+      if (isDoc && geminiEnabled) {
+        r = await geminiDoc(system, userText, [{ mimeType: mm![1], data: mm![2] }], { maxTokens: 1500, temperature: 0.5 });
+      } else {
+        r = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: userText }], { temperature: 0.5, maxTokens: 1200 });
+      }
+      const title = String(r?.title || '').slice(0, 200);
+      const text = String(r?.text || '').slice(0, 4000);
+      if (!text) return NextResponse.json({ error: 'The AI could not produce an answer. Try rephrasing the question.' }, { status: 200 });
+      return NextResponse.json({ title: title || 'Answer', text });
+    } catch {
+      return NextResponse.json({ error: 'Could not generate an answer. Try again.' }, { status: 200 });
+    }
+  }
+
   return NextResponse.json({ error: 'Unknown operation.' }, { status: 400 });
 }

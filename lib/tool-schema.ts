@@ -141,6 +141,10 @@ export interface RepoCard {
   // "Moderator upload" / "User upload" toggles, or per card as an override.
   posterOff?: boolean;
   userOff?: boolean;
+  // 🤖 "AI question" — a prompt the owner/admin saves on the card. When the AI
+  // feature is on, adding a card inside generates an answer from the card + page
+  // + this prompt + attachments instead of a blank card.
+  aiPrompt?: string;
   children?: RepoCard[];     // nested cards / sections one level deeper
 }
 
@@ -259,6 +263,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (['assigned', 'pending', 'approved', 'rejected', 'disabled', 'preview'].includes(c.mode)) card.mode = c.mode;
   if (c.posterOff) card.posterOff = true;
   if (c.userOff) card.userOff = true;
+  if (c.aiPrompt) card.aiPrompt = String(c.aiPrompt).slice(0, 2000);
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
   if (!title && !subtitle && !text && !image && !icon && !links.length && !children.length && !card.completable && !card.collect) return null;
