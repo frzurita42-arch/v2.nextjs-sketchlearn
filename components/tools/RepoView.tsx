@@ -542,8 +542,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [attachBusy, setAttachBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);       // 🖼️ AI product-image generation
   const [showImg, setShowImg] = useState(false);       // 🖼️ image popup open
-  const [showPoster, setShowPoster] = useState(false); // 📎 emoji revealed the Poster button
-  const [showUser, setShowUser] = useState(false);     // 📁 emoji revealed the User button
   const [copied, setCopied] = useState(false);         // 📋 copy title+description feedback
   const editing = editingTitle || editingSub;
 
@@ -583,38 +581,50 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // own user (green) link. The widget turns INTO this link once submitted.
   const posterLinkIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
   const myUserLinkIdx = links.findIndex((l) => l.color === 'green' && l.by === ctx.me);
-  const toggleAttach = (c: 'blue' | 'green') => {
-    if (attaching && attachColor === c) { setAttaching(false); return; }
-    setAttachColor(c); setAttaching(true);
-  };
   const attachServer = async (payload: any) => {
     try { const r = await API.post('/api/tools/repo/attach', { slug: ctx.slug, cardId: card.id, ...payload }); if (r?.repo) ctx.applyRepo(r.repo); else if (r?.error) alert(r.error); } catch { alert('Could not update the attachment.'); }
   };
-  const appendLink = async (label: string, url: string) => { await attachServer({ action: 'add', color: attachColor, link: { label: label.slice(0, 15) || 'Link', url } }); };
   const removeLinkAt = (index: number) => attachServer({ action: 'remove', index });
-  // The 📎 / 📁 emoji icons manage the Poster / User slot. A submitted link shows
-  // AUTOMATICALLY as a button (in the link row), so the icon's job is:
-  //   • if a link already exists → DELETE it (click the icon again removes it);
-  //     the empty add-button is then shown so a new one can be posted.
-  //   • if the slot is empty → reveal the "Poster" / "User" add-button (click it
-  //     to open the input, type a link or attach a file, Submit).
+  // The slot the inline editor is currently managing (blue = the Moderator link,
+  // green = MY own upload).
+  const slotIdx = () => (attachColor === 'green' ? myUserLinkIdx : posterLinkIdx);
+  // Save a link/file into the current slot: if it already holds one, REPLACE it
+  // (remove the old, add the new) so a slot only ever carries a single attachment.
+  const commitLink = async (label: string, url: string) => {
+    const idx = slotIdx();
+    if (idx >= 0) await attachServer({ action: 'remove', index: idx });
+    await attachServer({ action: 'add', color: attachColor, link: { label: label.slice(0, 15) || 'Link', url } });
+  };
+  // Open the inline editor for a role — pre-filled with the existing values when
+  // editing. Clicking the same role's icon again closes it.
+  const openAttach = (color: 'blue' | 'green', existingIdx: number) => {
+    if (attaching && attachColor === color) { setAttaching(false); return; }
+    setAttachColor(color);
+    if (existingIdx >= 0) { setLinkLabel(links[existingIdx].label || ''); setLinkUrl(links[existingIdx].url || ''); }
+    else { setLinkLabel(''); setLinkUrl(''); }
+    setAttaching(true);
+  };
+  // 📎 clip = the Moderator slot. A moderator opens the editor (add / replace /
+  // delete). A viewer with a posted attachment opens it directly.
   const clipAction = () => {
-    if (!canPoster) return;
-    if (posterLinkIdx >= 0) { removeLinkAt(posterLinkIdx); setShowPoster(true); if (attaching && attachColor === 'blue') setAttaching(false); }
-    else setShowPoster((v) => { const nv = !v; if (!nv && attaching && attachColor === 'blue') setAttaching(false); return nv; });
+    if (canPoster) openAttach('blue', posterLinkIdx);
+    else if (posterLinkIdx >= 0) openInNewTab(links[posterLinkIdx].url);
   };
+  // 📁 folder = the current user's own upload. The uploader opens the editor
+  // (add / replace / delete); anyone else with the link opens it directly.
   const folderAction = () => {
-    if (!canUser) return;
-    if (myUserLinkIdx >= 0) { removeLinkAt(myUserLinkIdx); setShowUser(true); if (attaching && attachColor === 'green') setAttaching(false); }
-    else setShowUser((v) => { const nv = !v; if (!nv && attaching && attachColor === 'green') setAttaching(false); return nv; });
+    if (canUser) openAttach('green', myUserLinkIdx);
+    else if (myUserLinkIdx >= 0) openInNewTab(links[myUserLinkIdx].url);
   };
+  // 🗑 delete the attachment in the currently-open slot (from inside the editor).
+  const deleteSlot = async () => { const idx = slotIdx(); if (idx >= 0) await attachServer({ action: 'remove', index: idx }); setLinkLabel(''); setLinkUrl(''); setAttaching(false); };
   const addLink = () => {
     let url = linkUrl.trim(); if (!url) return;
     // A bare domain like "example.com" is dropped by the server sanitizer (which
     // keeps only http(s):// or /… URLs), which made the button vanish a second
     // after it appeared. Give it a scheme so it sticks.
     if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) url = 'https://' + url;
-    appendLink(linkLabel.trim(), url);
+    commitLink(linkLabel.trim(), url);
     setLinkLabel(''); setLinkUrl(''); setAttaching(false);
   };
   const attachUpload = async (f: File) => {
@@ -624,7 +634,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       let url = '';
       try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
       if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
-      appendLink(f.name, url);
+      await commitLink(f.name, url);
       setAttaching(false);
     } catch { alert('Could not attach the file.'); }
     setAttachBusy(false);
@@ -760,14 +770,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </span>
   )) : null;
 
-  // Every submitted link shows here AUTOMATICALLY as a clickable button. A POSTER
-  // (blue) link always reads "Poster" and a USER (green) link "User" — regardless
-  // of the link's own label (including AI-suggested ones) — so viewers know who it
-  // came from. Deletion is done by re-clicking the 📎 / 📁 icon (poster link, and
-  // your own user link), so there is NO ✕ on those. The only ✕ kept is for an
-  // ADMIN removing ANOTHER user's upload (they have no icon for that).
-  const blueLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color !== 'green');
-  const greenLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color === 'green');
+  // The Moderator link (blue) and the current user's OWN upload (green) are now
+  // reached through the 📎 / 📁 icons themselves (which carry a green underline
+  // when set), so they no longer render as separate buttons. Only OTHER users'
+  // uploads still show here — so everyone can open them and an admin can remove
+  // one (the ✕).
+  const otherGreenLinks = links.map((l, i) => ({ l, i })).filter(({ l }) => l.color === 'green' && l.by !== ctx.me);
   const canRemoveLink = (l: RepoLink) => l.color === 'green' && l.by !== ctx.me && ctx.isAdmin;
   const linkBtn = ({ l, i }: { l: RepoLink; i: number }) => (
     <span key={l.url + i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
@@ -777,10 +785,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1, opacity: 0.6 }}>✕</button>}
     </span>
   );
-  const linkColumn = links.length > 0 ? (
+  const linkColumn = otherGreenLinks.length > 0 ? (
     <div style={{ display: 'grid', gap: 4, flex: '0 0 auto' }}>
-      {blueLinks.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{blueLinks.map(linkBtn)}</div>}
-      {greenLinks.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{greenLinks.map(linkBtn)}</div>}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{otherGreenLinks.map(linkBtn)}</div>
     </div>
   ) : null;
 
@@ -816,10 +823,16 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // the "live" emojis. A vertical line separates them from the permanent set.
   const activeControls: React.ReactNode[] = [];
   if (assignBtn) activeControls.push(<span key="assign">{assignBtn}</span>);
-  // 📎 Moderator · 📁 User. If a link exists the icon DELETES it (so a new one can
-  // be posted); if empty it reveals the add-button.
-  if (canPoster) activeControls.push(<button key="clip" type="button" title={posterLinkIdx >= 0 ? 'Delete the Moderator link (then post a new one)' : 'Post a Moderator link'} style={{ ...iconBtn, opacity: (posterLinkIdx >= 0 || showPoster) ? 1 : 0.85 }} onClick={clipAction}>📎</button>);
-  if (canUser) activeControls.push(<button key="folder" type="button" title={myUserLinkIdx >= 0 ? 'Delete your link (then upload a new one)' : 'Upload your own document'} style={{ ...iconBtn, opacity: (myUserLinkIdx >= 0 || showUser) ? 1 : 0.85 }} onClick={folderAction}>📁</button>);
+  // 📎 Moderator · 📁 User. Clicking the icon IS the whole control: it opens the
+  // inline editor (for whoever may edit that slot) or opens the attachment (for a
+  // viewer). A green underline marks the icon when its slot holds an attachment.
+  // Shown to a moderator whenever the repo-wide toggle is on, and to a viewer
+  // whenever a link exists to open.
+  const attachIcon = (has: boolean) => ({ ...iconBtn, borderBottom: `3px solid ${has ? '#2e9e57' : 'transparent'}`, borderRadius: 3, paddingBottom: 1 });
+  const showClip = canPoster || (posterLinkIdx >= 0 && !card.posterOff);
+  const showFolder = canUser || myUserLinkIdx >= 0;
+  if (showClip) activeControls.push(<button key="clip" type="button" title={canPoster ? (posterLinkIdx >= 0 ? 'Edit or delete the Moderator attachment' : 'Add a Moderator link or document') : 'Open the Moderator attachment'} style={attachIcon(posterLinkIdx >= 0)} onClick={eat(clipAction)}>📎</button>);
+  if (showFolder) activeControls.push(<button key="folder" type="button" title={canUser ? (myUserLinkIdx >= 0 ? 'Edit or delete your document' : 'Upload your own document') : 'Open the document'} style={attachIcon(myUserLinkIdx >= 0)} onClick={eat(folderAction)}>📁</button>);
 
   // 🖼️ picture button — a plain clickable icon (not a framed button). Owner/admin
   // generate a picture (saved for all viewers); everyone can view a saved one.
@@ -866,33 +879,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       title={collapsed ? `Expand ${kids.length} card${kids.length === 1 ? '' : 's'} inside` : 'Collapse the cards inside'}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, opacity: 0.75, flex: '0 0 auto' }}>{collapsed ? '▸' : '▾'}</button>
   ) : null;
-  // Add-buttons for an EMPTY slot only. A submitted link renders automatically in
-  // the link row above (as "Poster" / "User"); these appear when the slot is empty
-  // and its 📎 / 📁 icon has been clicked, to open the input (type a link or attach
-  // a document, then Submit). POSTER = owner/admin (blue). USER = any signed-in
-  // viewer (green).
-  const addBtn = (role: 'poster' | 'user') => {
-    const color: 'blue' | 'green' = role === 'poster' ? 'blue' : 'green';
-    const open = attaching && attachColor === color;
-    return (
-      <button type="button" onClick={eat(() => toggleAttach(color))}
-        title={role === 'poster' ? 'Post a file or link — everyone can open it' : 'Upload your own document'}
-        className={`btn small ${open ? color : 'ghost'}`} style={{ flex: '0 0 auto' }}>{role === 'poster' ? 'Moderator' : 'User'}</button>
-    );
-  };
-  const showPosterAdd = canPoster && showPoster && posterLinkIdx < 0;
-  const showUserAdd = canUser && showUser && myUserLinkIdx < 0;
-  const roleButtons = (showPosterAdd || showUserAdd) ? (
-    <span style={{ display: 'inline-flex', gap: 6, flex: '0 0 auto' }}>
-      {showPosterAdd && addBtn('poster')}
-      {showUserAdd && addBtn('user')}
-    </span>
-  ) : null;
   const actions = (
     <>
       {moveBtns}
       {linkColumn}
-      {roleButtons}
       {/* Read-only status badge for viewers only. Editors see the labelled
           assignBtn when Assignment is on, and nothing when it's off. */}
       {!ctx.canEdit && statusChip}
@@ -922,19 +912,22 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       actions={isGrid ? (ctx.assignShown ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{assignBtn}</span> : null) : actions} del={isGrid ? undefined : del} />
   );
 
-  // The clip/folder inline editor: type a link (label + URL) or upload a file.
-  // Both append to the card's links (shown as 🔗 buttons) in the chosen colour.
+  // The clip/folder inline editor — opened straight from the 📎 / 📁 icon. Type a
+  // link (label + URL) or attach a file; either REPLACES what the slot holds. When
+  // the slot already has an attachment the editor is pre-filled and shows Delete.
+  const editingExisting = attaching && slotIdx() >= 0;
   const attachForm = attaching ? (
     <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — upload your own document (only you or an admin can remove it)' : '📎 Moderator — post a file or link everyone can open'}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — your own document (only you or an admin can remove it)' : '📎 Moderator — a file or link everyone can open'}{editingExisting ? ' · editing' : ''}</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={linkLabel} placeholder="Label (max 15)" maxLength={15} onChange={(e) => setLinkLabel(e.target.value.slice(0, 15))} style={{ flex: '1 1 90px', fontSize: 13 }} />
         <input value={linkUrl} placeholder="https://…" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '2 1 150px', fontSize: 13 }} />
-        <button className={`btn small ${attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>✓ Submit</button>
+        <button className={`btn small ${attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>{editingExisting ? '✓ Replace' : '✓ Submit'}</button>
         <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file">
           {attachBusy ? 'Uploading…' : '📎 Attach a document'}
           <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
         </label>
+        {editingExisting && <button className="btn small ghost" onClick={eat(deleteSlot)} title="Delete this attachment">🗑 Delete</button>}
         <button className="btn small ghost" onClick={() => setAttaching(false)}>✕</button>
       </div>
     </div>
