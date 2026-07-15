@@ -150,7 +150,7 @@ const STATUS_META: Record<string, { label: string; bg: string }> = {
 };
 // The icon + words shown on the owner/admin cycle button for each mode.
 const MODE_BTN: Record<CardMode, string> = {
-  enabled: '🟢', assigned: '📋', pending: '⏳', approved: '✔️', rejected: '⛔', disabled: '🚫', preview: '👓',
+  enabled: '🟢', assigned: '📋', pending: '⏳', approved: '✅', rejected: '⛔', disabled: '🚫', preview: '👓',
 };
 // Short label shown next to the emoji on the assignment-status button, so every
 // card reads clearly (not just a bare dot) when Assignment is On.
