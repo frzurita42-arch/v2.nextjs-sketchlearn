@@ -66,13 +66,19 @@ export async function POST(req: Request) {
         removedGreen = isUser;
         touched = true;
       }
-      // Auto-status: a user (green) upload moves an ASSIGNED card to PENDING (a
-      // submission awaiting review); removing the last user upload moves a PENDING
-      // card back to ASSIGNED. Other statuses (approved/rejected/…) are left alone.
+      // Auto-status (only when the repo's Assignment feature is on, so plain
+      // resource repos aren't touched): a user (green) upload moves a card that is
+      // ASSIGNED — or has no status set yet — to PENDING (a submission awaiting
+      // review). Removing the last user upload moves a PENDING card back to
+      // ASSIGNED. Statuses the moderator set deliberately (approved/rejected/
+      // disabled/preview) are left alone.
       let mode = (c as any).mode;
-      const greenLeft = links.some((l: any) => l.color === 'green');
-      if (action === 'add' && color === 'green' && mode === 'assigned') mode = 'pending';
-      else if (action === 'remove' && removedGreen && !greenLeft && mode === 'pending') mode = 'assigned';
+      if ((repo as any).assignShow) {
+        const greenLeft = links.some((l: any) => l.color === 'green');
+        const unset = mode == null || mode === 'enabled';
+        if (action === 'add' && color === 'green' && (mode === 'assigned' || unset)) mode = 'pending';
+        else if (action === 'remove' && removedGreen && !greenLeft && mode === 'pending') mode = 'assigned';
+      }
       const next: any = { ...c, links };
       if (mode !== (c as any).mode) { if (mode) next.mode = mode; else delete next.mode; }
       return next;
