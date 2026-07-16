@@ -5,6 +5,8 @@ import { requireAdmin } from '@/lib/auth-guard';
 const { listTools, listRecentEntries } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listUsage } = require('@/src/db/usage');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { EXAMPLE_USAGE } = require('@/src/tools/example-usage');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -58,8 +60,11 @@ export async function GET(req: Request) {
     })
     .filter((r: any) => r.archetype === 'lesson' || r.score !== null);
 
-  // AI token / cost usage — per event + a per-user roll-up for profitability.
-  const rawUsage: any[] = await listUsage({ limit: 500 });
+  // AI token / cost usage — per event + a per-user roll-up for profitability. Real
+  // logged rows lead; a few clearly-marked EXAMPLE rows backfill so the tables and
+  // charts are never empty before real generations accrue.
+  const realUsage: any[] = await listUsage({ limit: 500 });
+  const rawUsage: any[] = [...realUsage, ...EXAMPLE_USAGE];
   const usage = rawUsage.map((u: any) => ({
     id: u.id, user: u.username || 'anon', kind: u.kind || '', provider: u.provider || '',
     promptTokens: u.promptTokens || 0, completionTokens: u.completionTokens || 0, totalTokens: u.totalTokens || 0,
