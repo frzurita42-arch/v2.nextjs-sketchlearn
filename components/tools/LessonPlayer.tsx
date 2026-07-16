@@ -830,7 +830,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   };
   const refreshExample = async () => {
     setExBusy(true);
-    try { const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, avoid: example?.topic || '', hint: exHint.trim() }); setExample(r); } catch { /* ignore */ }
+    try { const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, title: def?.title, avoid: example?.topic || '', hint: exHint.trim() }); setExample(r); } catch { /* ignore */ }
     setExBusy(false);
   };
   // Fetch 5 suggested topics for this course (the create form's topic dropdown).
@@ -1200,11 +1200,11 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
                     thumbnail={null}
                     iconNode={<span aria-hidden>{defaultEmojiFor(`${example.topic || ''} ${example.level || ''} ${lesson.subject || ''}`, def?.tags)}</span>}
                     meta={<span style={{ fontSize: 11, opacity: 0.6 }}>📄 {slideCountOf(form)} slides · 🕒 {new Date().toLocaleString()}</span>}
-                    onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}
+                    onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}
                     actions={
                       <>
-                        <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>▶ Play</button>
-                        <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
+                        <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>▶ Play</button>
+                        <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
                       </>
                     }
                   />

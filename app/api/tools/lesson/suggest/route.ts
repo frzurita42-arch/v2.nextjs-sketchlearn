@@ -22,6 +22,12 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const lesson = b.lesson || {};
   const subject = String(lesson.subject || 'the subject').slice(0, 80);
+  // The tool's own identity, so a suggestion is a VARIATION of THIS lesson (a
+  // different topic/level/tone within the same subject) — never a different tool.
+  const subjectKind = String(lesson.subjectKind || '').slice(0, 30);
+  const style = String(lesson.style || '').slice(0, 300);
+  const toolTitle = String(b.title || lesson.title || '').slice(0, 100);
+  const identity = [`This tool teaches "${subject}"`, subjectKind ? `(a ${subjectKind} lesson)` : '', toolTitle ? `titled "${toolTitle}"` : '', style ? `. Its brief: ${style}` : ''].filter(Boolean).join(' ');
   const levels: string[] = Array.isArray(b.levels) && b.levels.length ? b.levels.map(String) : ['Beginner', 'A1', 'A2', 'B1', 'B2', 'C1'];
   const avoid = String(b.avoid || '').slice(0, 200);
   const hint = String(b.hint || '').slice(0, 200);
@@ -53,13 +59,14 @@ export async function POST(req: Request) {
   if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json(fallback());
   try {
     const r: any = await generateStructured(
-      [{ role: 'system', content: `Recommend ONE fresh, engaging example run for a "${subject}" lesson tool. Pick a level from: ${levels.join(', ')}. ${hint ? `Focus the topic on: ${hint}.` : ''} ${avoid ? `Avoid something like: ${avoid}.` : ''} Return STRICT JSON.` },
-       { role: 'user', content: `{ "level": "one of the levels", "topic": "a specific, interesting topic", "why": "one short reason it's worth trying" }` }],
-      { temperature: 0.9, maxTokens: 300 }
+      [{ role: 'system', content: `${identity}. Recommend ONE fresh example RUN of THIS SAME lesson — i.e. a different way to set it up. The topic MUST be squarely about "${subject}" (a concrete sub-topic within it); NEVER drift to a different subject or a different kind of tool (no apps, no unrelated projects). Pick a level from: ${levels.join(', ')}, and a fitting tone. ${hint ? `Focus the topic on: ${hint}.` : ''} ${avoid ? `Avoid something like: ${avoid}.` : ''} Return STRICT JSON.` },
+       { role: 'user', content: `{ "topic": "a specific sub-topic of ${subject}", "level": "one of the levels", "tone": "a short tone e.g. Friendly/Formal/Playful", "why": "one short reason it's worth trying" }` }],
+      { temperature: 0.85, maxTokens: 300 }
     );
     const level = levels.includes(r?.level) ? r.level : (r?.level || levels[0]);
     const topic = String(r?.topic || '').slice(0, 120) || TOPIC_POOL[0];
-    return NextResponse.json({ level, topic, why: String(r?.why || '').slice(0, 200), fallback: false });
+    const tone = String(r?.tone || '').slice(0, 40);
+    return NextResponse.json({ level, topic, tone, why: String(r?.why || '').slice(0, 200), fallback: false });
   } catch {
     return NextResponse.json(fallback());
   }

@@ -66,6 +66,7 @@ export async function POST(req: Request) {
   if (!textAI()) return NextResponse.json({ ...fallback, title: title || subject, subject });
 
   const palette = [
+    'IMPORTANT — these are COMPONENT-BASED slides: every slide is BUILT ONLY from the components below. You do not write free-form pages; you compose each slide by picking and ordering these components deliberately, so be very aware of the toolbox you have to build each slide from.',
     'You lay out each SLIDE by choosing an ordered list of components. Each component is either an id string, or { "id": string, "instr": short note of exactly what to teach/ask there }. Use only these ids:',
     '• reading — a reading passage / explanation of the concept.',
     '• note — a hidden instruction telling the slide generator exactly what to teach or show here (explanations, worked examples, tooltips, definitions).',
