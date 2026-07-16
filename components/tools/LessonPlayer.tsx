@@ -1233,7 +1233,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     prefetch(cur + 1);
   };
 
-  const goBack = () => { if (cur > 0) { setCur(cur - 1); prefetch(cur); } };
   const goToSlide = async (nxt: number) => {
     if (nxt >= total()) return;
     // Usually prefetched -> instant. Otherwise wait for the in-flight prefetch.
@@ -1346,6 +1345,23 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       } catch { /* ignore */ }
       setSuggestingField((m) => { const n = { ...m }; delete n[id]; return n; });
     };
+    // 🎨 Suggest a preset value (Theme / Text density / Image style) with AI, using
+    // the tool context + the author's other settings to choose a fitting option.
+    const suggestPreset = async (id: string, label: string, options: string[]) => {
+      setSuggestingField((m) => ({ ...m, [id]: true }));
+      try {
+        const r = await API.post('/api/tools/lesson/suggest-field', { lesson, field: { id, label, options }, values: form });
+        if (r?.value !== undefined && String(r.value) !== '') setForm((s) => ({ ...s, [id]: r.value }));
+      } catch { /* ignore */ }
+      setSuggestingField((m) => { const n = { ...m }; delete n[id]; return n; });
+    };
+    // The small 🎨 "suggest with AI" control shared by the preset dropdowns.
+    const suggestBtn = (id: string, label: string, options: string[]) => (
+      <button type="button" title="Suggest with AI (from your settings & the lesson context)" disabled={!!suggestingField[id]}
+        onClick={() => suggestPreset(id, label, options)} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: suggestingField[id] ? 'wait' : 'pointer', fontSize: 13 }}>
+        {suggestingField[id] ? '…' : '🎨'}
+      </button>
+    );
     // Every rendition here is the same tool's topic, so there's no topic filter —
     // the standard Collection owns search / favorites / by-admin / rows / sort /
     // count / pagination.
@@ -1475,36 +1491,32 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} />}
           {/* Content theme + image art style presets for this lesson. */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
-            <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme</span>
+            <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme{suggestBtn('theme', 'Theme', [...LESSON_THEMES])}</span>
               <select value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
                 {LESSON_THEMES.map((th) => <option key={th} value={th}>{th === 'Any' ? 'Any (AI picks)' : th}</option>)}
               </select>
             </label>
-            <label className="field" style={{ maxWidth: 240 }}><span>📏 Text density</span>
+            <label className="field" style={{ maxWidth: 240 }}><span>📏 Text density{suggestBtn('density', 'Text density', PARA_DENSITIES)}</span>
               <select value={(form as any).density || ''} onChange={(e) => setForm(s => ({ ...s, density: e.target.value }))}
                 title="How much text to show — independent of the level's vocabulary difficulty">
                 <option value="">Auto (match the level)</option>
                 {PARA_DENSITIES.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </label>
-            <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style</span>
-              {(() => {
-                const cur = (form as any).imageStyle || 'Any';
-                const isPreset = (IMAGE_STYLES as readonly string[]).includes(cur);
-                const showCustom = customImg || !isPreset;
-                return <>
-                  <select value={showCustom ? '__custom__' : cur} onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === '__custom__') { setCustomImg(true); if (isPreset) setForm(s => ({ ...s, imageStyle: '' })); }
-                    else { setCustomImg(false); setForm(s => ({ ...s, imageStyle: v })); }
-                  }}>
+            <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style
+              {/* ✎ pencil flips the dropdown to a free-text box (and back). */}
+              <button type="button" title={customImg ? 'Pick from the list' : 'Type a custom style'}
+                onClick={() => { const goingCustom = !customImg; setCustomImg(goingCustom); if (!goingCustom && !(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle)) setForm(s => ({ ...s, imageStyle: 'Any' })); }}
+                style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{customImg ? '▾' : '✎'}</button>
+              {suggestBtn('imageStyle', 'Image style', [...IMAGE_STYLES])}
+            </span>
+              {customImg
+                ? <input type="text" placeholder="Describe your image style…" value={(form as any).imageStyle || ''}
+                    onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))} />
+                : <select value={(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle) ? (form as any).imageStyle : 'Any'}
+                    onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
                     {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
-                    <option value="__custom__">✍️ Custom…</option>
-                  </select>
-                  {showCustom && <input type="text" placeholder="Describe your image style…" value={(form as any).imageStyle || ''}
-                    onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))} style={{ marginTop: 6 }} />}
-                </>;
-              })()}
+                  </select>}
             </label>
             <label className="field" style={{ maxWidth: 240 }}><span>🔌 Image API</span>
               <select value={(form as any).imageProvider || ''} onChange={(e) => setForm(s => ({ ...s, imageProvider: e.target.value }))}
@@ -1721,7 +1733,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // when they're all answered (a slide with no questions is complete on arrival).
   const allAnswered = qList.length === 0 || answeredCount >= qList.length;
   const isLast = cur >= tot - 1;
-  const canBack = cur > 0 && !genBusy;
   const canNext = allAnswered && !isLast && !genBusy;
   const canFinish = allAnswered && isLast && !genBusy;
   const padSize = (Array.isArray(lesson.pages) && lesson.pages[cur]?.padSize) || 'large';
@@ -1880,7 +1891,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
 
           {/* The single, clear navigation bar — one place, always the same order. */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, borderTop: '1.5px solid rgba(0,0,0,0.12)', paddingTop: 14 }}>
-            <button className="btn" disabled={!canBack} onClick={goBack}>← Back</button>
             <button className="btn blue" disabled={!canNext} onClick={() => goToSlide(cur + 1)}>{genBusy && curSlide ? <><Spinner />Loading…</> : 'Next →'}</button>
             <button className="btn green" disabled={!canFinish} onClick={() => setPhase('done')}>🏁 Finish</button>
           </div>
