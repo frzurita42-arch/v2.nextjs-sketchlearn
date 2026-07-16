@@ -105,9 +105,12 @@ function printPost(title: string, entry: any, fields: any[], author: string) {
 
 // Edit a tool's title or description — type it manually, OR ask the AI to write
 // it from the tool's context (its type, subject, what it generates). Owner/admin.
-function AiEditPopup({ field, slug, initial, onSave, onClose }: {
+function AiEditPopup({ field, slug, initial, mode = 'both', onSave, onClose }: {
   field: 'title' | 'description'; slug: string; initial: string;
-  onSave: (v: string) => void; onClose: () => void;
+  // 'manual' = type it yourself (no AI); 'ai' = the ✎ opens straight into an AI
+  // suggestion drawn from the page content (auto-generated, then editable); 'both'
+  // = the combined editor (used by the description pencil).
+  mode?: 'manual' | 'ai' | 'both'; onSave: (v: string) => void; onClose: () => void;
 }) {
   const [text, setText] = useState(initial);
   const [instr, setInstr] = useState('');
@@ -122,24 +125,30 @@ function AiEditPopup({ field, slug, initial, onSave, onClose }: {
     setBusy(false);
   };
   const isTitle = field === 'title';
+  // AI mode: generate a suggestion from the page content the moment it opens (no
+  // instruction needed) so the 🎨 palette immediately proposes something.
+  useEffect(() => { if (mode === 'ai') { gen(); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  const showAI = mode !== 'manual';
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: '100%', padding: '16px 18px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <b>Edit {isTitle ? 'title' : 'description'}</b>
+          <b>{mode === 'ai' ? `🎨 AI-suggest ${isTitle ? 'title' : 'description'}` : `Edit ${isTitle ? 'title' : 'description'}`}</b>
           <button className="btn small ghost" onClick={onClose}>✕</button>
         </div>
         {isTitle
-          ? <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a title…" style={{ width: '100%', fontSize: 15, marginBottom: 8 }} />
+          ? <input value={text} onChange={(e) => setText(e.target.value)} placeholder={mode === 'ai' && busy ? 'Thinking…' : 'Type a title…'} style={{ width: '100%', fontSize: 15, marginBottom: 8 }} />
           : <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a description…" style={{ width: '100%', minHeight: 70, fontSize: 14, marginBottom: 8 }} />}
-        <div style={{ borderTop: '1.5px dashed var(--ink)', paddingTop: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>✦ OR WRITE IT WITH AI</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <input value={instr} onChange={(e) => setInstr(e.target.value)} placeholder={isTitle ? 'e.g. make it catchy and short' : 'e.g. friendly, mention who it helps'} onKeyDown={(e) => { if (e.key === 'Enter') gen(); }} style={{ flex: '1 1 180px', fontSize: 13 }} />
-            <button className="btn small blue" disabled={busy} onClick={gen}>{busy ? '…' : '✦ Write with AI'}</button>
+        {showAI && (
+          <div style={{ borderTop: '1.5px dashed var(--ink)', paddingTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>✦ {mode === 'ai' ? 'REFINE THE SUGGESTION' : `OR WRITE THE ${isTitle ? 'TITLE' : 'DESCRIPTION'} WITH AI`}</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input value={instr} onChange={(e) => setInstr(e.target.value)} placeholder={isTitle ? 'e.g. make it catchy and short' : 'e.g. friendly, mention who it helps'} onKeyDown={(e) => { if (e.key === 'Enter') gen(); }} style={{ flex: '1 1 180px', fontSize: 13 }} />
+              <button className="btn small blue" disabled={busy} onClick={gen}>{busy ? '…' : mode === 'ai' ? '🎨 Regenerate' : '✦ Write with AI'}</button>
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.55, marginTop: 3 }}>The AI writes from what this tool actually does — not just the prompt.</div>
           </div>
-          <div style={{ fontSize: 11, opacity: 0.55, marginTop: 3 }}>The AI writes from what this tool actually does — not just the prompt.</div>
-        </div>
+        )}
         {err && <p style={{ color: 'var(--danger,#e4572e)', fontSize: 12, margin: '6px 0 0' }}>{err}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
           <button className="btn small ghost" onClick={onClose}>Cancel</button>
@@ -196,6 +205,9 @@ export function ToolRunnerView() {
   };
   const [detail, setDetail] = useState<any>(null);   // entry opened as a post
   const [editField, setEditField] = useState<null | 'title' | 'description'>(null);
+  // How the open editor was launched: the ✎ pencil = manual typing only; the 🎨
+  // palette = an AI suggestion drawn from the page content.
+  const [editMode, setEditMode] = useState<'manual' | 'ai' | 'both'>('both');
   const [descDraft, setDescDraft] = useState<string>(def?.description || '');
 
   // Like state (platform chrome): count from the tool, per-user liked flag in localStorage.
@@ -307,11 +319,12 @@ export function ToolRunnerView() {
     <>
       {!immersive && (
         <h1 className="view-title">{tool.title}
-          {canEdit && <button title="Edit title (type or AI)" onClick={() => setEditField('title')} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
+          {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
+          {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
         </h1>
       )}
       {editField && (
-        <AiEditPopup field={editField} slug={tool.slug} initial={editField === 'title' ? tool.title : (descDraft || def.description || '')}
+        <AiEditPopup field={editField} slug={tool.slug} mode={editField === 'title' ? editMode : 'both'} initial={editField === 'title' ? tool.title : (descDraft || def.description || '')}
           onSave={editField === 'title' ? saveTitle : saveDesc} onClose={() => setEditField(null)} />
       )}
 
