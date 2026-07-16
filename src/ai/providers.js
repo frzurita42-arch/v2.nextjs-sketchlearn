@@ -527,7 +527,10 @@ async function pollinationsImage(prompt) {
 // Replicate (Flux) → Leonardo → Gemini (Nano Banana) → Pollinations (free, keyless)
 // LAST. Pass opts.provider ('openai'|'grok'|'replicate'|'leonardo'|'gemini'|
 // 'pollinations') to TRY that backend first (it still falls back to the others).
-async function generateImage(prompt, opts = {}) {
+// Like generateImage but also reports WHICH backend produced the image, so the UI
+// can show "made by <provider>" (and reveal when a fallback kicked in). Returns
+// { url, provider } — provider is null when nothing worked.
+async function generateImageWithMeta(prompt, opts = {}) {
   const backends = {
     openai: () => (IMAGE_API_KEY ? openaiCompatImage(prompt) : null),
     grok: () => (grokEnabled ? grokImage(prompt) : null),
@@ -541,9 +544,14 @@ async function generateImage(prompt, opts = {}) {
   const order = (pick && backends[pick]) ? [pick, ...defaultOrder.filter((p) => p !== pick)] : defaultOrder;
   for (const p of order) {
     const u = await backends[p]();
-    if (u) return u;
+    if (u) return { url: u, provider: p };
   }
-  return null;
+  return { url: null, provider: null };
+}
+
+async function generateImage(prompt, opts = {}) {
+  const r = await generateImageWithMeta(prompt, opts);
+  return r.url;
 }
 
 // The last image-generation failure reason (status + message), so callers can
@@ -790,6 +798,7 @@ module.exports = {
   generateStructured, geminiDoc,
   generateVisionJSON,
   generateImage,
+  generateImageWithMeta,
   geminiImage,
   grokImage,
   leonardoImage,

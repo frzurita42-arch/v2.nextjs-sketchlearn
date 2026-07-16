@@ -152,10 +152,30 @@ function GeoGebra({ commands, caption }: { commands: string[]; caption?: string 
   );
 }
 
+// Friendly name for the image backend that produced a slide's picture, shown in
+// small text under it so you can tell which model ran (and spot a fallback).
+const IMAGE_MODEL_LABELS: Record<string, string> = {
+  openai: 'OpenAI · gpt-image-1', grok: 'xAI Grok', replicate: 'Replicate · Flux',
+  leonardo: 'Leonardo', gemini: 'Google Gemini · Nano Banana', pollinations: 'Pollinations · free',
+  placeholder: 'placeholder sketch (no AI image model available)',
+};
+const imageModelLabel = (by?: string) => (by ? (IMAGE_MODEL_LABELS[by] || by) : '');
+
 function Support({ s }: { s: any }) {
   if (!s) return null;
   if (s.type === 'geogebra' && Array.isArray(s.commands)) return <GeoGebra commands={s.commands} caption={s.caption} />;
-  if (s.type === 'image' && s.url) return <img src={s.url} alt={s.caption || ''} style={{ width: '100%', maxWidth: 360, borderRadius: 8, border: '2px solid var(--ink)', margin: '8px auto', display: 'block' }} />;
+  if (s.type === 'image' && s.url) return (
+    <figure style={{ margin: '8px auto', maxWidth: 360 }}>
+      <img src={s.url} alt={s.caption || ''} style={{ width: '100%', borderRadius: 8, border: '2px solid var(--ink)', display: 'block' }} />
+      {(s.caption || s.by) && (
+        <figcaption style={{ fontSize: 11, opacity: 0.6, marginTop: 3, textAlign: 'center', lineHeight: 1.3 }}>
+          {s.caption && <span>{s.caption}</span>}
+          {s.caption && s.by && <br />}
+          {s.by && <span title="The image model that generated this picture">🖼 {imageModelLabel(s.by)}</span>}
+        </figcaption>
+      )}
+    </figure>
+  );
   if (s.type === 'code') return <pre style={{ background: '#2d2a26', color: '#f7f3e9', padding: 12, borderRadius: 8, overflowX: 'auto', overflowY: 'auto', maxHeight: 320, fontSize: 13, margin: '8px 0' }}><code>{s.code}</code></pre>;
   if (s.type === 'table') return (
     <div style={{ overflowX: 'auto', margin: '8px 0' }}>
