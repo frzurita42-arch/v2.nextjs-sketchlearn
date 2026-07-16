@@ -101,6 +101,9 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const type = ['grammar', 'vocabulary', 'reading', 'listening', 'spelling', 'writing'].includes(b.type) ? b.type : 'reading';
   const { language = 'Spanish', level = 'A1', topic = 'everyday life', grammarTopic = '', slideNumber = 1, totalSlides = 1, priorSummary = '' } = b;
+  // Content the learner has already been shown — passed so the model never
+  // repeats a question, option or answer it (or an earlier slide) already used.
+  const avoid: string[] = (Array.isArray(b.avoid) ? b.avoid : []).map((s: any) => String(s || '').trim()).filter(Boolean).slice(0, 40);
 
   const fb = (ty: string) => ty === 'grammar' ? fbGrammar(topic) : ty === 'vocabulary' ? fbVocab(topic) : ty === 'listening' ? fbListening(topic) : ty === 'spelling' ? fbSpelling(topic) : ty === 'writing' ? fbWriting(topic) : fbReading(topic);
   const useFallback = !openrouterEnabled && !geminiEnabled && !deepseekEnabled;
@@ -110,7 +113,7 @@ export async function POST(req: Request) {
     slide = fb(type);
   } else {
     try {
-      const p = buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slideNumber, totalSlides, priorSummary });
+      const p = buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slideNumber, totalSlides, priorSummary, avoid });
       const r = await generateStructured([{ role: 'system', content: p.system }, { role: 'user', content: p.user }], { temperature: 0.8, maxTokens: 4096 });
       slide = { ...r, type };
       slide.sticky = cleanSticky(slide.sticky);

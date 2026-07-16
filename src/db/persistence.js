@@ -152,10 +152,15 @@ async function initDatabase() {
   // Rows created BY a tool at runtime (storage-system items, journal notes,
   // calendar events, contest/payment submissions...). `data` is schema-shaped
   // per tool; `status` supports review-queue state machines (pending/approved).
+  // NOTE: tool_id is intentionally NOT a foreign key. Entries may belong to a
+  // VIRTUAL built-in tool (the example/admin lessons like "Language Learning")
+  // that has no row in `tools`; a FK would reject those inserts and the run
+  // would silently vanish. Orphan cleanup on real-tool deletion is done in app
+  // code (deleteTool) instead of via ON DELETE CASCADE.
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS entries (
       id TEXT PRIMARY KEY,
-      tool_id TEXT NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+      tool_id TEXT NOT NULL,
       username TEXT,
       status TEXT NOT NULL DEFAULT 'active',
       data JSONB NOT NULL,
@@ -163,6 +168,9 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Existing databases created with the old foreign key: drop it so virtual-tool
+  // entries persist. The constraint name is Postgres's default for this column.
+  await dbQuery('ALTER TABLE entries DROP CONSTRAINT IF EXISTS entries_tool_id_fkey');
   await dbQuery('CREATE INDEX IF NOT EXISTS idx_entries_tool_created ON entries(tool_id, created_at DESC)');
 
   // ---------- platform: feed posts (Twitter-style micro-posts) ----------

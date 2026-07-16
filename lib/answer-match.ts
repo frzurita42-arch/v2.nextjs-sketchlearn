@@ -47,6 +47,16 @@ function contentWords(s: string): string[] {
   return normalize(s).split(' ').filter((w) => w && !STOP.has(w));
 }
 
+// Numbers in a string, normalized (thousands separators dropped, decimals kept).
+function numbersOf(s: string): string[] {
+  return (String(s || '').match(/\d+(?:[.,]\d+)?/g) || []).map((x) => x.replace(/,(?=\d{3}\b)/g, '').replace(',', '.'));
+}
+function sameNumbers(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort(); const sb = [...b].sort();
+  return sa.every((v, i) => v === sb[i]);
+}
+
 export type MatchResult = { accept: boolean; close: boolean };
 
 // Decide whether `guess` should be accepted against any of `accepted`.
@@ -62,11 +72,18 @@ export function matchAnswer(
 ): MatchResult {
   const g = normalize(guess);
   if (!g) return { accept: false, close: false };
-  const norms = accepted.map(normalize).filter(Boolean);
-  if (norms.includes(g)) return { accept: true, close: false };
+  // Pair each accepted answer with its raw form so we can check numbers exactly.
+  const cands = accepted.map((raw) => ({ raw, norm: normalize(raw) })).filter((c) => c.norm);
+  const gNums = numbersOf(guess);
 
-  for (const a of norms) {
+  for (const { raw, norm: a } of cands) {
     if (!a) continue;
+    // NUMBERS MUST BE EXACT: if either side has numbers, they must match exactly
+    // (so "11" is never accepted for "12", and "$12.50" needs the right figure).
+    // A grammar/spelling slip in the words is still fine.
+    const aNums = numbersOf(raw);
+    if ((aNums.length || gNums.length) && !sameNumbers(aNums, gNums)) continue;
+    if (a === g) return { accept: true, close: false };
     const d = lev(g, a);
     if (mode === 'spelling') {
       if (d <= 1) return { accept: true, close: false };

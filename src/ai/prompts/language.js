@@ -53,12 +53,17 @@ function buildReadingInstructions({ language, level, topic, grammarTopic }) {
 }
 
 // One interactive language slide of a given type (grammar | vocabulary | reading).
-function buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slideNumber, totalSlides, priorSummary }) {
+function buildLangSlidePrompt({ type, language, level, topic, grammarTopic, slideNumber, totalSlides, priorSummary, avoid = /** @type {string[]} */ ([]) }) {
   const guide = levelGuidance(level);
   const inEnglish = ['Zero', 'Beginner', 'A1'].includes(level)
     ? 'Explain in clear English and translate every target-language example.'
     : 'Use mostly the target language, with brief English glosses only where needed.';
-  const base = `Target language: ${language}. Learner level: ${level} — ${guide} ${inEnglish} Lesson theme: "${topic || 'everyday life'}". Grammar focus: "${grammarTopic || 'general'}". Slide ${slideNumber} of ${totalSlides}.${priorSummary ? ` Progress so far: ${priorSummary}.` : ''} Make distractors tempting but wrong on a precise point, and RANDOMIZE which option is correct (do not always put it first).`;
+  // Memory of what's already been shown, so nothing repeats across the lesson.
+  const avoidClause = avoid.length
+    ? ` ALREADY USED — do NOT reuse or closely paraphrase any of these questions, options, words or answers; every question, option and answer on this slide must be NEW and different from them: ${avoid.slice(0, 40).map((s) => `"${s}"`).join(', ')}.`
+    : '';
+  const noRepeat = ' NO REPEATS (critical): within this slide every question must be about a DIFFERENT word/point, every option text must be UNIQUE, and the correct answers of two questions must never be the same or near-duplicates. Do not restate the same idea twice.';
+  const base = `Target language: ${language}. Learner level: ${level} — ${guide} ${inEnglish} Lesson theme: "${topic || 'everyday life'}". Grammar focus: "${grammarTopic || 'general'}". Slide ${slideNumber} of ${totalSlides}.${priorSummary ? ` Progress so far: ${priorSummary}.` : ''} Make distractors tempting but wrong on a precise point, and RANDOMIZE which option is correct (do not always put it first).${noRepeat}${avoidClause}`;
   const sticky = `Include "sticky": {"color": "yellow"|"pink"|"blue"|"green"|"orange", "title": short, "note": a short encouraging comment on progress OR a level-appropriate quote about the theme OR a quick motivational cheer}.`;
 
   if (type === 'grammar') {

@@ -142,12 +142,23 @@ async function updateTool(slug, patch) {
 async function deleteTool(slug) {
   if (!db.pool) {
     const tools = readJSON('tools.json', []);
+    const doomed = tools.find(t => t.slug === slug);
     const next = tools.filter(t => t.slug !== slug);
     if (next.length === tools.length) return false;
     writeJSON('tools.json', next);
+    // entries no longer cascade at the DB level — clean up the tool's entries too.
+    if (doomed) {
+      const entries = readJSON('entries.json', []);
+      writeJSON('entries.json', entries.filter(e => e.toolId !== doomed.id));
+    }
     return true;
   }
   try {
+    // The tool_id FK/cascade was removed (so virtual-tool entries can persist),
+    // so delete the tool's entries explicitly before the tool row.
+    const { rows } = await withDbTimeout(dbQuery('SELECT id FROM tools WHERE slug = $1', [slug]), 8000, 'Find tool');
+    const toolId = rows[0] && rows[0].id;
+    if (toolId) await withDbTimeout(dbQuery('DELETE FROM entries WHERE tool_id = $1', [toolId]), 8000, 'Delete tool entries');
     const { rowCount } = await withDbTimeout(dbQuery('DELETE FROM tools WHERE slug = $1', [slug]), 8000, 'Delete tool');
     return rowCount > 0;
   } catch (e) {

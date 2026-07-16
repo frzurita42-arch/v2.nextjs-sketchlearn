@@ -821,7 +821,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   };
 
   const loadActivities = async () => {
-    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`); setActivities(shuffle(Array.isArray(r?.entries) ? r.entries : [])); } catch { /* ignore */ }
+    // Keep the server's newest-first order (do NOT shuffle) so a run the learner
+    // just played reliably shows at the top of the gallery / first page, instead
+    // of being scattered somewhere in the pagination.
+    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`); setActivities(Array.isArray(r?.entries) ? r.entries : []); } catch { /* ignore */ }
   };
   const refreshExample = async () => {
     setExBusy(true);

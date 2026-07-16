@@ -61,11 +61,17 @@ export function LanguageGameView() {
 
   const genSlide = useCallback((idx: number) => {
     const gg = g.current;
+    // What the learner has already been shown, so the model never repeats a
+    // question/answer it (or an earlier slide) already used.
+    const avoid = Array.from(new Set(
+      (gg.answers || []).flatMap((a: any) => [a.question, a.chosen]).map((s: any) => String(s || '').trim()).filter(Boolean),
+    )).slice(-40);
     return API.post('/api/ai/language/slide', {
       gameId: gg.id, type: gg.plan[idx], language: gg.language, level: gg.level,
       topic: gg.topic, grammarTopic: gg.grammarTopic,
       slideNumber: idx + 1, totalSlides: gg.plan.length,
       priorSummary: gg.total ? `${gg.correct}/${gg.total} correct so far` : '',
+      avoid,
     });
   }, []);
 
@@ -111,6 +117,9 @@ export function LanguageGameView() {
     appState.game = null;
     setResults({ language: gg.language, level: gg.level, topic: gg.topic, correct: gg.correct, total: gg.total, rec, saveNote, stickies: gg.stickies });
     setUi('results');
+    // Land the reader at the TOP of the results, not wherever the last slide was
+    // scrolled to, so they see their score without scrolling up.
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
   }, []);
 
   const advance = useCallback(async (res: SlideResult) => {
