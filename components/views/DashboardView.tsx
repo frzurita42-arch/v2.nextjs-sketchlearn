@@ -3,7 +3,10 @@
  * — created slide tools, created repositories, saved presentation runs (grades by
  * user), users (with add/edit), and the built-in game statistics. The storage stays
  * normalised (separate tools / entries / users tables); the dashboard just joins
- * and groups what it needs to display. */
+ * and groups what it needs to display.
+ *
+ * Every table shows at most 4 rows and paginates; any cell longer than 100 chars is
+ * clipped with an 👁 button that opens the full text in a popup. */
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
@@ -12,6 +15,57 @@ import { Loading } from '@/components/ui/Loading';
 
 const fmtDate = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }); };
 const fmtDay = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(); };
+
+const ROWS_PER_PAGE = 4;
+const CELL_LIMIT = 100;
+// A cell is plain text/number, or a { node } for interactive content (buttons).
+type Cell = string | number | null | undefined | { node: React.ReactNode };
+
+// A table that shows ROWS_PER_PAGE rows at a time (with Prev/Next) and clips any
+// text cell over CELL_LIMIT chars, revealing the full value in a popup via 👁.
+function PagedTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][]; empty: string }) {
+  const [page, setPage] = useState(0);
+  const [view, setView] = useState<{ title: string; text: string } | null>(null);
+  const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+  const p = Math.min(page, pages - 1);
+  const slice = rows.slice(p * ROWS_PER_PAGE, p * ROWS_PER_PAGE + ROWS_PER_PAGE);
+  return (
+    <>
+      <div className="table-wrap"><table className="sketch"><tbody>
+        <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
+        {slice.length ? slice.map((r, ri) => (
+          <tr key={ri}>
+            {r.map((c, ci) => {
+              if (c && typeof c === 'object' && 'node' in c) return <td key={ci}>{c.node}</td>;
+              const s = String(c ?? '');
+              if (s.length > CELL_LIMIT) return (
+                <td key={ci}>{s.slice(0, CELL_LIMIT)}…{' '}
+                  <button className="btn small ghost" style={{ padding: '0 5px' }} title="Show the full text" onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
+                </td>
+              );
+              return <td key={ci}>{s || '—'}</td>;
+            })}
+          </tr>
+        )) : <tr><td colSpan={headers.length}>{empty}</td></tr>}
+      </tbody></table></div>
+      {pages > 1 && (
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+          <button className="btn small ghost" disabled={p <= 0} onClick={() => setPage(p - 1)}>‹ Prev</button>
+          <span style={{ fontSize: 12, opacity: 0.7 }}>Page {p + 1} / {pages} · {rows.length} rows</span>
+          <button className="btn small ghost" disabled={p >= pages - 1} onClick={() => setPage(p + 1)}>Next ›</button>
+        </div>
+      )}
+      {view && (
+        <div onClick={() => setView(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, width: '100%', padding: '16px 18px', maxHeight: '80vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><b>{view.title || 'Full text'}</b><button className="btn small ghost" onClick={() => setView(null)}>✕</button></div>
+            <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontSize: 14, lineHeight: 1.5 }}>{view.text}</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export function DashboardView() {
   const app = useApp();
@@ -34,8 +88,6 @@ export function DashboardView() {
     return () => { cancelled = true; };
   }, [reload, app]);
 
-  // Split the tool list into the two galleries' kinds: slide decks vs. everything
-  // else (repositories / apps / generators).
   const slideTools = useMemo(() => (dash?.tools || []).filter((t: any) => t.archetype === 'lesson'), [dash]);
   const repoTools = useMemo(() => (dash?.tools || []).filter((t: any) => t.archetype !== 'lesson'), [dash]);
   const runs = dash?.runs || [];
@@ -60,7 +112,6 @@ export function DashboardView() {
     try { await API.del(`/api/users/${encodeURIComponent(username)}`); setReload(n => n + 1); }
     catch (e: any) { alert(e.message); }
   };
-  // Download any of the dashboard tables as its own CSV.
   const exportRows = (name: string, headers: string[], rows: (string | number)[][]) => {
     const esc = (v: any) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n');
@@ -70,111 +121,75 @@ export function DashboardView() {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   };
 
+  // ---- table data (plain string rows: reused for both the table and CSV) ----
+  const slideHeaders = ['Title', 'Owner', 'Visibility', 'Slides', 'Saved deck', 'AI', 'Created'];
+  const slideRows: (string | number)[][] = slideTools.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.slideCount || '—', t.hasSavedDeck ? '📖 yes' : '—', t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+
+  const repoHeaders = ['Title', 'Owner', 'Visibility', 'Cards', 'Kind', 'AI', 'Created'];
+  const repoRows: (string | number)[][] = repoTools.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.cardCount || '—', t.archetype, t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+
+  const runHeaders = ['User', 'Presentation', 'Topic', 'Level', 'Theme', 'Slides', 'Grade', 'Date'];
+  const runRows: (string | number)[][] = runs.map((r: any) => [`@${r.user}`, r.toolTitle, r.topic || '—', r.level || '—', r.theme || '—', r.slides || '—', r.score == null ? '—' : `${r.score}%`, fmtDate(r.createdAt)]);
+
+  const gameHeaders = ['User', 'Date', 'Topic', 'Concept', 'Level', 'Score', 'Time'];
+  const gameRows: (string | number)[][] = games.slice().reverse().map((g: any) => [g.username, fmtDate(g.finishedAt), g.topic, g.concept, g.level, `${g.correct}/${g.total}`, `${Math.floor(g.durationSec / 60)}:${String(g.durationSec % 60).padStart(2, '0')}`]);
+
+  const userHeaders = ['Username', 'Role', 'Created', 'Games', 'Actions'];
+  const userRows: Cell[][] = usersList.map((u: any) => [u.username, u.role, fmtDay(u.createdAt), u.gamesPlayed, {
+    node: <>
+      <button className="btn small" onClick={() => setPassword(u.username)}>Set password</button>
+      {u.username !== app.user?.username && <button className="btn small ghost" onClick={() => delUser(u.username)}>✘ delete</button>}
+    </>,
+  }]);
+
+  const sectionHead = (title: string, count: number, onCsv?: () => void) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <h3 style={{ margin: 0 }}>{title} <span style={{ opacity: 0.5, fontWeight: 400 }}>({count})</span></h3>
+      {onCsv && count > 0 && <button className="btn small" onClick={onCsv}>⬇ CSV</button>}
+    </div>
+  );
+
   return (
     <>
       <h1 className="view-title">Teacher’s <span className="scribble-underline">dashboard</span></h1>
-      <p className="view-sub" style={{ textAlign: 'center' }}>Every group of data on the platform, in its own table.</p>
+      <p className="view-sub" style={{ textAlign: 'center' }}>Every group of data on the platform, in its own table (4 rows per page).</p>
 
-      {/* 🎞️ Created slide tools (presentations) */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0 }}>🎞️ Created slide tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({slideTools.length})</span></h3>
-          {slideTools.length > 0 && <button className="btn small" onClick={() => exportRows('slide-tools', ['Title', 'Owner', 'Visibility', 'Slides', 'Saved deck', 'AI', 'Created'], slideTools.map((t: any) => [t.title, t.owner, t.visibility, t.slideCount, t.hasSavedDeck ? 'yes' : 'no', t.aiGenerated ? 'yes' : 'no', fmtDate(t.createdAt)]))}>⬇ CSV</button>}
-        </div>
-        <div className="table-wrap"><table className="sketch"><tbody>
-          <tr><th>Title</th><th>Owner</th><th>Visibility</th><th>Slides</th><th>Saved deck</th><th>AI</th><th>Created</th></tr>
-          {slideTools.length ? slideTools.map((t: any) => (
-            <tr key={t.id}>
-              <td>{t.title}</td><td>@{t.owner}</td><td>{t.visibility}</td><td>{t.slideCount || '—'}</td>
-              <td>{t.hasSavedDeck ? '📖 yes' : '—'}</td><td>{t.aiGenerated ? '✦' : '—'}</td><td>{fmtDate(t.createdAt)}</td>
-            </tr>
-          )) : <tr><td colSpan={7}>No slide tools yet.</td></tr>}
-        </tbody></table></div>
+        {sectionHead('🎞️ Created slide tools', slideTools.length, () => exportRows('slide-tools', slideHeaders, slideRows))}
+        <PagedTable headers={slideHeaders} rows={slideRows} empty="No slide tools yet." />
       </div>
 
-      {/* 🗂️ Created repositories */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0 }}>🗂️ Created repositories <span style={{ opacity: 0.5, fontWeight: 400 }}>({repoTools.length})</span></h3>
-          {repoTools.length > 0 && <button className="btn small" onClick={() => exportRows('repositories', ['Title', 'Owner', 'Visibility', 'Cards', 'AI', 'Created'], repoTools.map((t: any) => [t.title, t.owner, t.visibility, t.cardCount, t.aiGenerated ? 'yes' : 'no', fmtDate(t.createdAt)]))}>⬇ CSV</button>}
-        </div>
-        <div className="table-wrap"><table className="sketch"><tbody>
-          <tr><th>Title</th><th>Owner</th><th>Visibility</th><th>Cards</th><th>Kind</th><th>AI</th><th>Created</th></tr>
-          {repoTools.length ? repoTools.map((t: any) => (
-            <tr key={t.id}>
-              <td>{t.title}</td><td>@{t.owner}</td><td>{t.visibility}</td><td>{t.cardCount || '—'}</td>
-              <td>{t.archetype}</td><td>{t.aiGenerated ? '✦' : '—'}</td><td>{fmtDate(t.createdAt)}</td>
-            </tr>
-          )) : <tr><td colSpan={7}>No repositories yet.</td></tr>}
-        </tbody></table></div>
+        {sectionHead('🗂️ Created repositories', repoTools.length, () => exportRows('repositories', repoHeaders, repoRows))}
+        <PagedTable headers={repoHeaders} rows={repoRows} empty="No repositories yet." />
       </div>
 
-      {/* 📊 Saved presentation runs — the grades, by user */}
       <div className="card alt">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0 }}>📊 Presentation runs — grades by user <span style={{ opacity: 0.5, fontWeight: 400 }}>({runs.length})</span></h3>
-          {runs.length > 0 && <button className="btn small" onClick={() => exportRows('presentation-runs', ['User', 'Presentation', 'Topic', 'Level', 'Theme', 'Slides', 'Grade', 'Date'], runs.map((r: any) => [r.user, r.toolTitle, r.topic, r.level, r.theme, r.slides, r.score == null ? '' : `${r.score}%`, fmtDate(r.createdAt)]))}>⬇ CSV</button>}
-        </div>
-        <div className="table-wrap"><table className="sketch"><tbody>
-          <tr><th>User</th><th>Presentation</th><th>Topic</th><th>Level</th><th>Theme</th><th>Slides</th><th>Grade</th><th>Date</th></tr>
-          {runs.length ? runs.map((r: any) => (
-            <tr key={r.id}>
-              <td>@{r.user}</td><td>{r.toolTitle}</td><td>{r.topic || '—'}</td><td>{r.level || '—'}</td>
-              <td>{r.theme || '—'}</td><td>{r.slides || '—'}</td>
-              <td>{r.score == null ? '—' : <b>{r.score}%</b>}</td><td>{fmtDate(r.createdAt)}</td>
-            </tr>
-          )) : <tr><td colSpan={8}>No saved runs yet — a moderator plays a presentation to the end and it lands here.</td></tr>}
-        </tbody></table></div>
+        {sectionHead('📊 Presentation runs — grades by user', runs.length, () => exportRows('presentation-runs', runHeaders, runRows))}
+        <PagedTable headers={runHeaders} rows={runRows} empty="No saved runs yet — a moderator plays a presentation to the end and it lands here." />
       </div>
 
-      {/* 👥 Users + add/edit */}
       <div className="card">
-        <h3>👥 Users <span style={{ opacity: 0.5, fontWeight: 400 }}>({usersList.length})</span></h3>
-        <div className="table-wrap"><table className="sketch">
-          <tbody>
-            <tr><th>Username</th><th>Role</th><th>Created</th><th>Games</th><th>Actions</th></tr>
-            {usersList.map((u: any) => (
-              <tr key={u.username}>
-                <td>{u.username}</td><td>{u.role}</td>
-                <td>{fmtDay(u.createdAt)}</td><td>{u.gamesPlayed}</td>
-                <td>
-                  <button className="btn small" data-pass={u.username} onClick={() => setPassword(u.username)}>Set password</button>
-                  {u.username !== app.user?.username && <button className="btn small ghost" data-del={u.username} onClick={() => delUser(u.username)}>✘ delete</button>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+        {sectionHead('👥 Users', usersList.length)}
+        <PagedTable headers={userHeaders} rows={userRows} empty="No users." />
         <h3 style={{ marginTop: 18 }}>➕ Add a user</h3>
         <div className="settings-grid" style={{ marginTop: 8 }}>
-          <label className="field"><span>Username</span><input type="text" id="new-user" value={newUser} onChange={e => setNewUser(e.target.value)} /></label>
-          <label className="field"><span>Password</span><input type="text" id="new-pass" value={newPass} onChange={e => setNewPass(e.target.value)} /></label>
+          <label className="field"><span>Username</span><input type="text" value={newUser} onChange={e => setNewUser(e.target.value)} /></label>
+          <label className="field"><span>Password</span><input type="text" value={newPass} onChange={e => setNewPass(e.target.value)} /></label>
           <label className="field"><span>Role</span>
-            <select id="new-role" value={newRole} onChange={e => setNewRole(e.target.value)}>
+            <select value={newRole} onChange={e => setNewRole(e.target.value)}>
               <option value="user">user</option><option value="moderator">moderator</option><option value="admin">admin</option>
             </select></label>
         </div>
-        <p className="form-error" id="user-err">{userErr}</p>
-        <button className="btn green" id="add-user-btn" disabled={!newUser.trim() || !newPass} onClick={addUser}>Add user</button>
+        <p className="form-error">{userErr}</p>
+        <button className="btn green" disabled={!newUser.trim() || !newPass} onClick={addUser}>Add user</button>
       </div>
 
-      {/* 📈 Built-in activity (game) statistics */}
       <div className="card alt">
-        <h3>📈 Activity statistics <span style={{ opacity: 0.5, fontWeight: 400 }}>({games.length})</span></h3>
-        <div className="table-wrap"><table className="sketch">
-          <tbody>
-            <tr><th>User</th><th>Date</th><th>Topic</th><th>Concept</th><th>Level</th><th>Score</th><th>Time</th></tr>
-            {games.length ? games.slice().reverse().map((g: any, i: number) => (
-              <tr key={g.id || i}>
-                <td>{g.username}</td><td>{fmtDate(g.finishedAt)}</td>
-                <td>{g.topic}</td><td>{g.concept}</td><td>{g.level}</td>
-                <td>{g.correct}/{g.total}</td><td>{Math.floor(g.durationSec / 60)}:{String(g.durationSec % 60).padStart(2, '0')}</td>
-              </tr>
-            )) : <tr><td colSpan={7}>No games played yet.</td></tr>}
-          </tbody>
-        </table></div>
-        <div className="slide-actions" style={{ justifyContent: 'flex-start' }}>
-          <button className="btn small" id="dash-export" onClick={downloadCsv}>⬇ Export all as CSV</button>
+        {sectionHead('📈 Activity statistics', games.length)}
+        <PagedTable headers={gameHeaders} rows={gameRows} empty="No games played yet." />
+        <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
+          <button className="btn small" onClick={downloadCsv}>⬇ Export all as CSV</button>
         </div>
       </div>
     </>
