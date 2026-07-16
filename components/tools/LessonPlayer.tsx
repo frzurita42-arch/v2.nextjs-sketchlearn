@@ -20,7 +20,7 @@ import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 import { buildLessonZip } from '@/lib/lesson-export';
 import { matchAnswer, answerHint } from '@/lib/answer-match';
-import { emojiOf, defaultEmojiFor } from '@/lib/emoji-thumb';
+import { defaultEmojiFor, randomEmoji } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 import { IMAGE_STYLES } from '@/lib/image-styles';
 import { type FilterKey } from '@/components/ui/Collection';
@@ -816,6 +816,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [slideImgStyle, setSlideImgStyle] = useState<Record<number, string>>({});
   const [imgStyleOpen, setImgStyleOpen] = useState(false);
   const [supportNonce, setSupportNonce] = useState(0);
+  // A random emoji per rendition card that has no real image, picked ONCE per page
+  // load (kept in a ref keyed by entry id) so cards with no picture keep shuffling
+  // to a new random emoji on every refresh, but stay stable while you browse.
+  const randEmojis = useRef<Record<string, string>>({});
   // Refs let the background prefetch read the latest state without stale closures.
   const slidesRef = useRef<(Slide | null)[]>([]);
   const cfgRef = useRef<Cfg>({});
@@ -1178,13 +1182,14 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       const editable = canEditEntry(e);
       const title = e.data?.title || label(e.data || {});
       const subtitle = e.data?.subtitle || (e.data?.why || '');
-      // Same emoji fallback as the front-page gallery cards: use a stored
-      // "emoji:" thumbnail, else derive a default emoji from the lesson's
-      // topic/subject so a freshly-generated lesson always shows an icon (never
-      // a blank card) — like the other cards on the front page.
+      // Show a REAL uploaded/AI image if the card has one; otherwise a RANDOM
+      // emoji, picked once per page load and re-shuffled on each refresh. A stored
+      // "emoji:" default (creation default / 🎲) is intentionally NOT treated as a
+      // set image, so the emoji keeps changing until a real picture is attached.
       const thumb = e.data?.thumbnail;
-      const emoji = emojiOf(thumb)
-        || (isRenderableImage(thumb) ? '' : defaultEmojiFor(`${title} ${subtitle} ${lesson.subject || ''} ${e.data?.topic || ''}`, def?.tags));
+      const hasImg = isRenderableImage(thumb);
+      if (!hasImg && !randEmojis.current[e.id]) randEmojis.current[e.id] = randomEmoji();
+      const emoji = hasImg ? '' : randEmojis.current[e.id];
       const play = () => recordAndPlay(e.data || {}, { replica: true });
       const editIcons = editable ? (
         <span style={{ display: 'inline-flex', gap: 6, marginLeft: 5, verticalAlign: 'middle' }}>

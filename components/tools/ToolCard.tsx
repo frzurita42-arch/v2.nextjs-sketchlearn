@@ -8,7 +8,7 @@
  * their handlers are supplied. Delete is a small plain icon, not a boxed button. */
 import { useState } from 'react';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { randomEmojiFor } from '@/lib/emoji-thumb';
+import { randomEmoji } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 
 export interface ToolCardProps {
@@ -98,7 +98,7 @@ export function ToolCard(p: ToolCardProps) {
   // the same face) but stays stable while you browse. A stored "emoji:" thumbnail
   // (creation default / 🎲) is intentionally NOT treated as a set image, so the
   // emoji keeps shuffling until a picture is attached.
-  const [randEmoji] = useState(() => randomEmojiFor(`${t.title || ''} ${t.description || ''} ${t.definition?.lesson?.subject || ''}`, t.tags));
+  const [randEmoji] = useState(() => randomEmoji());
   const emoji = isRenderableImage(t.thumbnail) ? '' : randEmoji;
   return (
     <CardShell
