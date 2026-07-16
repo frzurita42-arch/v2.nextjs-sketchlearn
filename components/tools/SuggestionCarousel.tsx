@@ -54,8 +54,12 @@ export function SuggestionCarousel({ likeSlug, title = '✨ Top picks for you', 
   };
 
   // Owner/admin editing — same actions as the gallery, kept self-contained here.
+  // viewAs-aware: no owner editing in the downgraded User/Moderators previews.
+  const gEff = app.eff();
   const isExample = (t: any) => (t.tags || []).includes('example');
-  const canEdit = (t: any) => isExample(t) ? app.user?.role === 'admin' : (app.user?.role === 'admin' || app.user?.username === t.owner);
+  const canEdit = (t: any) => isExample(t)
+    ? gEff.isAdmin
+    : (gEff.isAdmin || ((gEff.viewAs === 'self' || gEff.viewAs === 'admin') && app.user?.username === t.owner));
 
   const editText = (t: any) => {
     const titleV = window.prompt('Title:', t.title); if (titleV == null) return;

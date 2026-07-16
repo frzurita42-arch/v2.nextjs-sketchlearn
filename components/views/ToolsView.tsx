@@ -145,7 +145,12 @@ export function ToolsView() {
     const example = (t.tags || []).includes('example');
     const realOwner = !!app.user?.username && app.user.username === t.owner;
     if (example) return gEff.isAdmin;
-    return gEff.isAdmin || (gEff.viewAs !== 'user' && realOwner);
+    // Owner editing applies only in your REAL view (or the Admin preview) — never
+    // in the downgraded User / Moderators previews, where you're simulating
+    // someone who does NOT own this content. So the Moderators view shows a
+    // moderator's real experience: no edit controls on cards they didn't create.
+    const ownerCanEdit = (gEff.viewAs === 'self' || gEff.viewAs === 'admin') && realOwner;
+    return gEff.isAdmin || ownerCanEdit;
   };
   const remix = async (t: any) => {
     setMixing(m => ({ ...m, [t.slug]: true }));

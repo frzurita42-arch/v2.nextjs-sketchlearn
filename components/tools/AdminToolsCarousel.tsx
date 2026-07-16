@@ -34,7 +34,10 @@ export function AdminToolsCarousel({ title = '🛠️ Admin\'s Made Tools', max 
   }, [max]);
   useEffect(() => { load(); }, [load]);
 
-  const isAdmin = app.user?.role === 'admin';
+  // Effective admin (viewAs-aware): these built-in tools are admin-curated, so
+  // the edit controls must disappear in the Moderators / User previews (and for
+  // a real moderator or user account) — only a real admin sees them.
+  const isAdmin = app.eff().isAdmin;
   const patch = (slug: string, p: any) => setTools(list => list.map(x => x.slug === slug ? { ...x, ...p, definition: { ...(x.definition || {}), ...(p.title ? { title: p.title } : {}), ...(p.description ? { description: p.description } : {}) } } : x));
   const setBusyFor = (slug: string, v: boolean) => setWork(w => { const n = { ...w }; if (v) n[slug] = true; else delete n[slug]; return n; });
 
