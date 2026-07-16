@@ -30,6 +30,7 @@ import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 import { DonationPrompt } from '@/components/tools/DonationPrompt';
+import { SharePanel } from '@/components/tools/SharePanel';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -1109,12 +1110,16 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const intentDone = useRef(false);
   useEffect(() => {
     if (intentDone.current) return;
+    // A shared "results" link (?results=1) opens straight on the saved results page,
+    // so anyone with the link sees the finished run without hunting for the 📖 card.
+    let urlResults = false;
+    try { urlResults = new URLSearchParams(window.location.search).get('results') === '1'; } catch { /* ignore */ }
     const intent = appState.openIntent;
-    if (!intent) return;
+    if (!intent && !urlResults) return;
     intentDone.current = true; appState.openIntent = null;
-    if (intent.action === 'results') { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } }
-    else if (intent.action === 'replay') { recordAndPlay(intent.config || {}, { replica: true }); }
-    else if (intent.action === 'generate') { recordAndPlay(intent.config && Object.keys(intent.config).length ? intent.config : form); }
+    if (urlResults || intent?.action === 'results') { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } }
+    else if (intent?.action === 'replay') { recordAndPlay(intent.config || {}, { replica: true }); }
+    else if (intent?.action === 'generate') { recordAndPlay(intent.config && Object.keys(intent.config).length ? intent.config : form); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1317,7 +1322,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
           <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
-          {canPlay && viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Play a replica</button>}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Share THIS results page — the link opens the tool straight on this
+                results view (?results=1) so anyone can see the finished run. */}
+            {appState.activeTool?.visibility !== 'private' && <SharePanel slug={slug} title={savedDeck?.config ? label(savedDeck.config) : lesson.subject} query={{ results: '1' }} label="🔗 Share results" />}
+            {canPlay && viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Play a replica</button>}
+          </div>
         </div>
 
         {/* Start at the ENDING: a results/summary header with navigation tools. */}

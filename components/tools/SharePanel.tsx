@@ -5,17 +5,26 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 
-export function SharePanel({ slug, title }: { slug: string; title?: string }) {
+export function SharePanel({ slug, title, query, label }: {
+  slug: string; title?: string;
+  // Extra query params to append to the share URL (e.g. { results: '1' } to open
+  // straight on a lesson's results page). Also swaps the button label when set.
+  query?: Record<string, string>; label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [qr, setQr] = useState('');
 
   useEffect(() => {
     if (!open) return;
-    const u = `${window.location.origin}/?tool=${encodeURIComponent(slug)}`;
-    setUrl(u);
-    QRCode.toDataURL(u, { width: 320, margin: 2, errorCorrectionLevel: 'M' }).then(setQr).catch(() => setQr(''));
-  }, [open, slug]);
+    const u = new URL(`${window.location.origin}/`);
+    u.searchParams.set('tool', slug);
+    for (const [k, v] of Object.entries(query || {})) u.searchParams.set(k, v);
+    const s = u.toString();
+    setUrl(s);
+    QRCode.toDataURL(s, { width: 320, margin: 2, errorCorrectionLevel: 'M' }).then(setQr).catch(() => setQr(''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, slug, JSON.stringify(query || {})]);
 
   const copy = () => navigator.clipboard?.writeText(url).then(
     () => { /* copied */ },
@@ -24,7 +33,7 @@ export function SharePanel({ slug, title }: { slug: string; title?: string }) {
 
   return (
     <>
-      <button className="btn small blue" onClick={() => setOpen(true)}>🔗 Share / QR</button>
+      <button className="btn small blue" onClick={() => setOpen(true)}>{label || '🔗 Share / QR'}</button>
       {open && (
         <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, width: '100%', padding: '16px 18px', textAlign: 'center' }}>
