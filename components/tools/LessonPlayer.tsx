@@ -73,6 +73,18 @@ function Spinner() {
   return <span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sl-spin 0.7s linear infinite', verticalAlign: '-1px', marginRight: 6 }} />;
 }
 
+// A little ✏️ that "writes" — glides across leaving a growing underline — shown
+// while a slide or its image is being generated, so loading feels like the lesson
+// is being hand-written. `em`-based, so it scales with the surrounding font size.
+function WritingPencil() {
+  return (
+    <span className="sl-pencil" aria-hidden>
+      <span className="sl-pencil__line" />
+      <span className="sl-pencil__tip">✏️</span>
+    </span>
+  );
+}
+
 // The slide-generation progress bar. It SLOWLY fills up like a loader but eases to
 // a stop just short of the target slide's checkpoint (it never "completes" on its
 // own — the bar disappears the instant the real slide arrives). Checkpoint ticks
@@ -99,7 +111,7 @@ function GenProgress({ target, total }: { target: number; total: number }) {
         ))}
       </div>
       <p style={{ opacity: 0.75, marginTop: 8, fontSize: 13 }}>
-        <Spinner />Loading slide {target} of {total}{left > 0 ? ` · ${left} slide${left === 1 ? '' : 's'} left until the end` : ' · last slide'}
+        <WritingPencil />Writing slide {target} of {total}{left > 0 ? ` · ${left} slide${left === 1 ? '' : 's'} left until the end` : ' · last slide'}
       </p>
     </div>
   );
@@ -186,7 +198,7 @@ function SupportSkeleton({ type }: { type: string }) {
   const label = ({ image: 'illustration', code: 'code snippet', table: 'table', formula: 'formula', wolfram: 'step-by-step solution', geogebra: 'interactive graph' } as Record<string, string>)[type] || 'material';
   return (
     <div style={{ margin: '8px 0', padding: '14px 16px', border: '1.5px dashed var(--ink)', borderRadius: 8, textAlign: 'center', opacity: 0.7, fontSize: 13 }}>
-      <Spinner />Sketching {label}…
+      <WritingPencil />Sketching {label}…
     </div>
   );
 }

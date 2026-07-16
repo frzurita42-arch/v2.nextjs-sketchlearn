@@ -659,3 +659,53 @@ input.ll-count::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0;
 @media (prefers-reduced-motion: reduce) {
   .sl-skeleton::after { animation: none; }
 }
+
+/* A little pencil that "writes" while a lesson / image is loading: it glides left
+   to right with a gentle up-down bob (as if forming letters), leaving a line that
+   grows underneath, then jumps back to start a new line. */
+.sl-pencil {
+  display: inline-block;
+  position: relative;
+  width: 3.2em;
+  height: 1.5em;
+  vertical-align: -0.35em;
+  margin-right: 0.35em;
+}
+.sl-pencil__tip {
+  position: absolute;
+  left: 0;
+  bottom: 0.15em;
+  font-size: 1.15em;
+  line-height: 1;
+  transform-origin: bottom left;
+  animation: sl-write-move 1.5s ease-in-out infinite;
+}
+.sl-pencil__line {
+  position: absolute;
+  left: 0.15em;
+  bottom: 0.1em;
+  height: 2.5px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.55;
+  animation: sl-write-line 1.5s ease-in-out infinite;
+}
+@keyframes sl-write-move {
+  0%   { transform: translateX(0)      translateY(0)      rotate(-14deg); }
+  14%  { transform: translateX(0.32em) translateY(-0.12em) rotate(-8deg); }
+  28%  { transform: translateX(0.64em) translateY(0)      rotate(-14deg); }
+  42%  { transform: translateX(0.96em) translateY(-0.12em) rotate(-8deg); }
+  56%  { transform: translateX(1.28em) translateY(0)      rotate(-14deg); }
+  70%  { transform: translateX(1.6em)  translateY(-0.12em) rotate(-8deg); }
+  84%  { transform: translateX(1.9em)  translateY(0)      rotate(-14deg); }
+  100% { transform: translateX(0)      translateY(0)      rotate(-14deg); }
+}
+@keyframes sl-write-line {
+  0%   { width: 0; opacity: 0.15; }
+  84%  { width: 2.1em; opacity: 0.6; }
+  86%  { width: 0; opacity: 0; }
+  100% { width: 0; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-pencil__tip, .sl-pencil__line { animation: none; }
+}
