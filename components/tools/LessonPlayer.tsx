@@ -882,6 +882,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [themeBusy, setThemeBusy] = useState(false);
   // The create form's image-style picker is in "custom" mode (a typed style).
   const [customImg, setCustomImg] = useState(false);
+  // Whether the create/settings card is EXPANDED. Collapsed (the default) shows
+  // only the essentials — topic, level, slides + Play; expanded shows every knob.
+  // The choice is remembered across visits (localStorage), shared by all tools.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => { try { setSettingsOpen(localStorage.getItem('sl_lesson_settings_open') === '1'); } catch { /* ignore */ } }, []);
+  const toggleSettings = () => setSettingsOpen((o) => { const n = !o; try { localStorage.setItem('sl_lesson_settings_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   // Available image backends (from /api/config) + the run's chosen one's dropdown.
   const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
   const [providerOpen, setProviderOpen] = useState(false);
@@ -1381,6 +1387,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       // A free-text box for anything else the author wants woven into the lesson.
       { id: 'custom', label: 'Custom instructions (optional)', type: 'text', placeholder: 'e.g. focus on real-world examples, add a fun fact each slide…' },
     ];
+    // The essentials shown when the settings card is COLLAPSED: topic, level and
+    // slide count only (in that order), each pulled from the full field list so
+    // they keep their dropdown/suggest behavior.
+    const ESSENTIAL_IDS = ['topic', 'level', 'difficulty', 'slides'];
+    const collapsedFields = ESSENTIAL_IDS
+      .map((id) => formFields.find((f: any) => f.id === id))
+      .filter(Boolean) as any[];
     // 🎨 Suggest ONE field's value with AI, reading the author's other settings and
     // (especially) the Custom instructions box so the suggestion stays consistent.
     const suggestField = async (id: string) => {
@@ -1568,11 +1581,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         {showGenerate && (
         <div className="card alt" style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <h4 style={{ margin: '0 0 8px' }}>Create a {lesson.subject || 'lesson'} activity</h4>
+            <h4 style={{ margin: '0 0 8px', cursor: 'pointer', userSelect: 'none' }} onClick={toggleSettings}
+              title={settingsOpen ? 'Collapse — show only the essentials' : 'Expand — show every setting'}>
+              <span style={{ display: 'inline-block', width: 16, opacity: 0.6 }}>{settingsOpen ? '▾' : '▸'}</span>
+              Create a {lesson.subject || 'lesson'} activity
+            </h4>
             <button className="btn small ghost" onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
           </div>
-          {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} />}
-          {/* Content theme + image art style presets for this lesson. */}
+          {/* Collapsed (default) shows only topic / level / slides; expanded shows all. */}
+          {settings.length > 0 && <ToolFields fields={settingsOpen ? formFields : collapsedFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} />}
+          {/* Content theme + image art style presets for this lesson (expanded only). */}
+          {settingsOpen && (
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
             <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme{suggestBtn('theme', 'Theme', [...LESSON_THEMES])}</span>
               <select value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
@@ -1616,6 +1635,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </select>
             </label>
           </div>
+          )}
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
             {canPlay
               ? <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
