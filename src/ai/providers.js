@@ -8,6 +8,7 @@ const {
   GROK_API_KEY, GROK_URL, GROK_MODEL, GROK_IMAGE_URL, GROK_IMAGE_MODEL, grokEnabled,
   IMAGE_API_KEY, IMAGE_API_URL, IMAGE_API_MODEL,
   LEONARDO_API_KEY, LEONARDO_API_BASE, LEONARDO_MODEL, LEONARDO_SIZE, leonardoEnabled,
+  REPLICATE_API_TOKEN, REPLICATE_MODEL, replicateEnabled,
   POLLINATIONS_BASE, POLLINATIONS_MODEL, pollinationsEnabled,
   ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
   ELEVENLABS_API_KEY, ELEVENLABS_API_URL, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled
@@ -464,6 +465,44 @@ async function leonardoImage(prompt) {
   return null;
 }
 
+// Replicate.com image generation. Create a prediction on the chosen model (default
+// Flux Schnell) with `Prefer: wait` for a near-synchronous result, then poll if it
+// isn't done yet. The output is a hosted URL, which we fetch and return as a data
+// URL so it stays valid after Replicate's temporary link expires.
+async function replicateImage(prompt) {
+  try {
+    const model = String(REPLICATE_MODEL || 'black-forest-labs/flux-schnell');
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${REPLICATE_API_TOKEN}` };
+    const create = await fetchWithTimeout(`https://api.replicate.com/v1/models/${model}/predictions`, {
+      method: 'POST',
+      headers: { ...headers, Prefer: 'wait' },
+      body: JSON.stringify({ input: { prompt: String(prompt || '').slice(0, 1600) } }),
+    }, 60000, 'Replicate create');
+    if (!create.ok) { lastImageError = `replicate: ${create.status} ${(await create.text().catch(() => '')).slice(0, 160)}`; return null; }
+    let data = await create.json();
+    // Poll if the synchronous wait didn't finish it.
+    for (let i = 0; i < 20 && data && data.status && !['succeeded', 'failed', 'canceled'].includes(data.status); i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const get = data.urls && data.urls.get;
+      if (!get) break;
+      const gr = await fetchWithTimeout(get, { headers }, 20000, 'Replicate poll').catch(() => null);
+      if (!gr || !gr.ok) continue;
+      data = await gr.json();
+    }
+    if (!data || data.status === 'failed' || data.status === 'canceled') { lastImageError = `replicate: ${(data && (data.error || data.status)) || 'failed'}`; return null; }
+    const out = data.output;
+    const url = Array.isArray(out) ? out[0] : (typeof out === 'string' ? out : (out && out[0]));
+    if (!url) { lastImageError = 'replicate: no output image'; return null; }
+    // Fetch the bytes and inline as a data URL (Replicate URLs are temporary).
+    const img = await fetchWithTimeout(String(url), {}, 30000, 'Replicate fetch').catch(() => null);
+    if (!img || !img.ok) return String(url);
+    const ct = img.headers.get('content-type') || 'image/png';
+    if (!/^image\//i.test(ct)) return String(url);
+    const buf = Buffer.from(await img.arrayBuffer());
+    return buf.length ? `data:${ct};base64,${buf.toString('base64')}` : String(url);
+  } catch (e) { lastImageError = `replicate: ${e.message}`; return null; }
+}
+
 // Pollinations.ai — a FREE, keyless image generator: a plain GET to
 // image.pollinations.ai/prompt/<url-encoded prompt> returns the image bytes. We
 // fetch them and return a data URL so it's stable (not re-generated on each view).
@@ -485,18 +524,19 @@ async function pollinationsImage(prompt) {
 
 // Generate one image. Each backend is tried in order, falling through on failure.
 // Default order: OpenAI-compatible API (gpt-image-1, real photos) → Grok →
-// Leonardo → Gemini (Nano Banana) → Pollinations (free, keyless) LAST. Pass
-// opts.provider ('openai'|'grok'|'leonardo'|'gemini'|'pollinations') to TRY that
-// backend first (it still falls back to the others if it fails / isn't configured).
+// Replicate (Flux) → Leonardo → Gemini (Nano Banana) → Pollinations (free, keyless)
+// LAST. Pass opts.provider ('openai'|'grok'|'replicate'|'leonardo'|'gemini'|
+// 'pollinations') to TRY that backend first (it still falls back to the others).
 async function generateImage(prompt, opts = {}) {
   const backends = {
     openai: () => (IMAGE_API_KEY ? openaiCompatImage(prompt) : null),
     grok: () => (grokEnabled ? grokImage(prompt) : null),
+    replicate: () => (replicateEnabled ? replicateImage(prompt) : null),
     leonardo: () => (leonardoEnabled ? leonardoImage(prompt) : null),
     gemini: () => (geminiEnabled ? geminiImage(prompt) : null),
     pollinations: () => (pollinationsEnabled ? pollinationsImage(prompt) : null),
   };
-  const defaultOrder = ['openai', 'grok', 'leonardo', 'gemini', 'pollinations'];
+  const defaultOrder = ['openai', 'grok', 'replicate', 'leonardo', 'gemini', 'pollinations'];
   const pick = opts && opts.provider;
   const order = (pick && backends[pick]) ? [pick, ...defaultOrder.filter((p) => p !== pick)] : defaultOrder;
   for (const p of order) {
@@ -753,6 +793,7 @@ module.exports = {
   geminiImage,
   grokImage,
   leonardoImage,
+  replicateImage,
   pollinationsImage,
   generateSvgSketch,
   generateImageOrSketch,

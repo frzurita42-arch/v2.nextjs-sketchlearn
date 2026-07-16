@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled, grokEnabled, leonardoEnabled, pollinationsEnabled, IMAGE_API_KEY } from '@/src/config';
+import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled, grokEnabled, leonardoEnabled, replicateEnabled, pollinationsEnabled, IMAGE_API_KEY } from '@/src/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,6 +27,7 @@ export async function GET() {
       imageProviders: [
         hasConfiguredKey(IMAGE_API_KEY) && { id: 'openai', label: 'OpenAI · photos' },
         grokEnabled && { id: 'grok', label: 'Grok' },
+        replicateEnabled && { id: 'replicate', label: 'Replicate · Flux' },
         leonardoEnabled && { id: 'leonardo', label: 'Leonardo' },
         geminiEnabled && { id: 'gemini', label: 'Gemini · Nano Banana' },
         pollinationsEnabled && { id: 'pollinations', label: 'Pollinations · free' },

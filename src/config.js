@@ -174,6 +174,13 @@ const LEONARDO_MODEL = process.env.LEONARDO_MODEL || '6b645e3a-d64f-4341-a6d8-7a
 const LEONARDO_SIZE = parseInt(process.env.LEONARDO_SIZE, 10) || 512;
 const leonardoEnabled = !forceFallback && hasConfiguredKey(LEONARDO_API_KEY);
 
+// Replicate.com — hosted image models (default Flux Schnell — fast & high quality).
+// Set REPLICATE_API_TOKEN. Model is overridable (owner/model slug). Async: create
+// a prediction (with Prefer: wait) then poll for the output image URL.
+const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
+const REPLICATE_MODEL = process.env.REPLICATE_MODEL || 'black-forest-labs/flux-schnell';
+const replicateEnabled = !forceFallback && hasConfiguredKey(REPLICATE_API_TOKEN);
+
 // Pollinations.ai — a free, keyless image generator (a plain GET to
 // image.pollinations.ai/prompt/<text>). Enabled by default so image generation
 // ALWAYS has a working fallback even with no other provider configured; set
@@ -182,7 +189,7 @@ const POLLINATIONS_BASE = process.env.POLLINATIONS_API_URL || 'https://image.pol
 const POLLINATIONS_MODEL = process.env.POLLINATIONS_MODEL || 'flux';
 const pollinationsEnabled = !forceFallback && !/^(1|true|yes)$/i.test(String(process.env.POLLINATIONS_DISABLE || '').trim());
 
-const imageEnabled = !forceFallback && (grokEnabled || hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled || leonardoEnabled || pollinationsEnabled);
+const imageEnabled = !forceFallback && (grokEnabled || hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled || leonardoEnabled || replicateEnabled || pollinationsEnabled);
 
 // Optional: ElevenLabs text-to-speech / voice generation.
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -270,6 +277,9 @@ module.exports = {
   LEONARDO_MODEL,
   LEONARDO_SIZE,
   leonardoEnabled,
+  REPLICATE_API_TOKEN,
+  REPLICATE_MODEL,
+  replicateEnabled,
   POLLINATIONS_BASE,
   POLLINATIONS_MODEL,
   pollinationsEnabled,
