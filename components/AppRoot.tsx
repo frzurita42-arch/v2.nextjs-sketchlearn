@@ -31,15 +31,6 @@ import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 // refresh on those returns home instead of showing a broken screen.
 const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 'feed', 'tools', 'tool', 'toolbuilder'];
 
-// Friendly names for the "← Back to X" fallback button (the previous page in the
-// series, e.g. Tools → Tool → Activity).
-const VIEW_LABELS: Record<ViewName, string> = {
-  home: 'Home', tools: 'Tools', tool: 'the tool', toolbuilder: 'the Studio',
-  stats: 'My Stats', dashboard: 'Dashboard', chat: 'the Coach', feed: 'the Feed',
-  cspath: 'the CS Path', path: 'the lesson', settings: 'Settings',
-  activity: 'the activity', language: 'the activity', toolsettings: 'Tool Settings',
-};
-
 type NavEntry = { view: ViewName; tool: string | null };
 
 export default function AppRoot() {
@@ -87,21 +78,6 @@ export default function AppRoot() {
     return url.toString();
   };
 
-  // Land on an entry (view, and reload its tool if it was a tool page). Does NOT
-  // touch the nav stack — shared by back() and the browser popstate handler.
-  const restore = useCallback((entry: NavEntry) => {
-    appState.game = null;
-    if (entry.tool) {
-      API.get(`/api/tools?slug=${encodeURIComponent(entry.tool)}`).then((r: any) => {
-        if (r?.tool) { appState.activeTool = r.tool; setView('tool'); }
-      }).catch(() => { /* ignore */ });
-    } else {
-      setView(RESTORABLE.includes(entry.view) ? entry.view : 'tools');
-    }
-    window.scrollTo(0, 0);
-    try { window.history.pushState(entry, '', urlFor(entry.view)); } catch { /* ignore */ }
-  }, [setView]);
-
   const nav = useCallback((next: ViewName) => {
     if (appState.game && !appState.game.finished && next !== 'activity' &&
         !window.confirm('Leave the current activity? Your progress will be lost.')) return;
@@ -123,15 +99,6 @@ export default function AppRoot() {
       window.history.pushState(state, '', urlFor(next));
     } catch { /* ignore */ }
   }, [setView]);
-
-  // The Back button: go to the previous page in the series via the in-app stack
-  // (reliable regardless of the browser). Falls back to Tools when the trail is empty.
-  const back = useCallback(() => {
-    if (appState.game && !appState.game.finished &&
-        !window.confirm('Leave the current activity? Your progress will be lost.')) return;
-    const prev = navStack.current.pop() || { view: 'tools' as ViewName, tool: null };
-    restore(prev);
-  }, [restore]);
 
   // Browser Back/Forward: restore the view the history entry points at. Also pop
   // our in-app stack so the two stay roughly in sync.
@@ -220,12 +187,6 @@ export default function AppRoot() {
     );
   }
 
-  const backBtnStyle = { background: '#f9a03f', color: 'var(--ink)', borderColor: 'var(--ink)', fontWeight: 700 } as const;
-  // "← Back to <previous page in the series>" — read live from the stack. (Stack
-  // mutations are paired with a setView, so this recomputes each render.)
-  const peek = navStack.current[navStack.current.length - 1];
-  const backLabel = `← Back to ${peek ? VIEW_LABELS[peek.view] : 'Tools'}`;
-
   const views: Record<ViewName, React.ReactNode> = {
     home: <HomeView />,
     path: <PathView />,
@@ -268,8 +229,6 @@ export default function AppRoot() {
               style={{ padding: '2px 10px', ...(disabled ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
               disabled={disabled} onClick={disabled ? undefined : () => setViewAs(v as ViewAs)} title={title}>{label}</button>
           ))}
-          {(viewAs === 'user' || viewAs === 'op') && <span style={{ opacity: 0.7, fontStyle: 'italic' }}>· previewing — controls reflect this role</span>}
-          {(viewAs === 'languages' || viewAs === 'stem') && <span style={{ opacity: 0.7, fontStyle: 'italic' }}>· coming soon</span>}
         </div>
       )}
       {demo && (
@@ -282,15 +241,7 @@ export default function AppRoot() {
           >×</button>
         </div>
       )}
-      {/* Global back bar — on every page EXCEPT the tool/presentation page (kept
-          clean), a centered Back button that returns to the previous page in the
-          series (falls back to Tools) under a full-width dashed rule. */}
-      {view !== 'tool' && (
-      <div style={{ margin: '6px 0 8px', textAlign: 'center' }}>
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
-        <button className="btn small" style={backBtnStyle} onClick={back}>{backLabel}</button>
-      </div>
-      )}
+      {/* (The global "← Back to …" bar was removed — navigation lives in the header.) */}
       {/* key={view} remounts only on a view switch (fresh state per view, like
           the legacy SPA); in-view rerender() updates in place. For the tool view
           the key also carries the active tool's slug, so opening a DIFFERENT tool
@@ -299,14 +250,6 @@ export default function AppRoot() {
       <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}>
         <ErrorBoundary onHome={() => nav('tools')}>{views[view]}</ErrorBoundary>
       </main>
-      {/* A second Back button at the very bottom, above the footer (hidden on the
-          tool/presentation page). */}
-      {view !== 'tool' && (
-      <div style={{ margin: '10px 0 4px', textAlign: 'center' }}>
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
-        <button className="btn small" style={backBtnStyle} onClick={back}>{backLabel}</button>
-      </div>
-      )}
       <Footer />
     </AppContext.Provider>
   );
