@@ -884,7 +884,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   // repo-wide toggle on (Assignment / Moderator upload / User upload). These are
   // the "live" emojis. A vertical line separates them from the permanent set.
   const activeControls: React.ReactNode[] = [];
-  if (assignControl) activeControls.push(<span key="assign">{assignControl}</span>);
   // 📎 Moderator · 📁 User. The icon IS the whole control. For someone who may
   // EDIT the slot it's a button that opens the inline editor; for a viewer who can
   // only open/download the attachment it's a real <a> download link (a plain
@@ -962,15 +961,30 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     <button key="hide" type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>,
     <button key="del" type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>,
   );
+  // 📁 with a RED underline — turn the User upload folder OFF for THIS card only.
+  // Shown to owner/admin whenever the repo-wide user-upload feature is on; when
+  // active (card.userOff) the folder button is suppressed on this card even though
+  // the feature is on elsewhere.
+  if (ctx.canEdit && ctx.userUpload) permanentControls.push(
+    <button key="useroff" type="button"
+      title={card.userOff ? 'User upload folder is OFF for this card — click to allow it again' : 'Hide the user upload folder on this card only (the feature stays on for other cards)'}
+      style={{ ...iconBtn, borderBottom: '3px solid #c0392b', borderRadius: 3, paddingBottom: 1, opacity: card.userOff ? 1 : 0.45 }}
+      onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>📁</button>,
+  );
 
-  // The control cluster: [ active emojis | permanent emojis ], with a vertical
-  // divider ALWAYS between the two groups (even when no active controls are on).
-  const vDivider = <span key="vdiv" style={{ alignSelf: 'stretch', borderLeft: '2px solid var(--ink)', opacity: 0.28, margin: '0 4px', minHeight: 18 }} />;
+  // The control cluster. The icon buttons (active + permanent) are laid out on a
+  // 3-column grid, so they wrap onto a NEW ROW every 3 icons instead of stretching
+  // across one long line. The assignment control/chip (a wider LABELLED button)
+  // sits on its own line above the icon grid.
+  const iconButtons = [...activeControls, ...permanentControls];
   const iconGrid = (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 8px', alignItems: 'center', flex: '0 0 auto' }}>
-      {activeControls}
-      {vDivider}
-      {permanentControls}
+    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', flex: '0 0 auto' }}>
+      {assignControl && <div>{assignControl}</div>}
+      {iconButtons.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: '4px 6px', justifyItems: 'center', alignItems: 'center' }}>
+          {iconButtons}
+        </div>
+      )}
     </div>
   );
   // ▲ / ▼ reorder this card within its own level (swap with the sibling above /

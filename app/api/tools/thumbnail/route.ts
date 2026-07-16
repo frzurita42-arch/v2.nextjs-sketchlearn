@@ -98,26 +98,28 @@ export async function POST(req: Request) {
     'a lively downtown street', 'a city skyline at dusk', 'a rainy neon city street', 'a historic town square',
   ];
   const scene = SCENES[Math.floor(Math.random() * SCENES.length)];
-  // Number of people varies — often none. At most two.
-  const PEOPLE = [
-    'no people at all', 'no people at all', 'no people at all',
-    'exactly one man', 'exactly one woman',
-    'exactly one man and one woman', 'exactly two men', 'exactly two women',
-  ];
-  const people = PEOPLE[Math.floor(Math.random() * PEOPLE.length)];
-  const hasPeople = people !== 'no people at all';
+  // The COMPOSITION varies so thumbnails aren't all "people chatting". Weighted
+  // toward clean object / product shots (startup-style), then people DOING a
+  // relevant activity, then a mix of both — so the gallery gets objects-only,
+  // people-only and combined images.
+  const MODES = ['objects', 'objects', 'objects', 'people', 'people', 'both', 'both'];
+  const mode = MODES[Math.floor(Math.random() * MODES.length)];
+
+  const startupStyle = 'Overall style: a sleek, modern AI-STARTUP marketing / publicity image — the kind of polished hero visual a tech brand puts on its landing page or ad campaign. Premium and confident, clean composition with tasteful negative space, a cohesive modern colour palette, soft studio or natural lighting, subtle depth, and optionally understated abstract tech motifs (gentle gradients, soft glows) as brand flavour. It must NOT look like a screenshot of software or a UI mockup.';
+
+  const modeLine = mode === 'objects'
+    ? 'Composition: NO people — a striking, well-lit arrangement of the OBJECTS, products or symbolic props that represent what this tool does (a still-life / product hero shot) on a clean, branded backdrop. Let the objects and mood tell the story.'
+    : mode === 'people'
+    ? `Composition: one or two people DOING an activity related to the tool's topic — candid and mid-action, NOT posing for or looking at the camera, and NOT talking-head portraits facing each other. Setting: ${scene}. Show a DIVERSE, randomly-picked mix (vary ethnicity/race and body type naturally; everyone healthy, authentic and respectful). No visible phones, laptops or screens.`
+    : `Composition: a blend of a person or two engaged in a relevant activity TOGETHER WITH the meaningful objects/props of the topic, arranged like a brand campaign photo. Setting: ${scene}. Diverse, natural, candid people (not facing the camera), no visible screens.`;
 
   const prompt = [
-    `A polished, advertising-style photorealistic thumbnail that REPRESENTS a tool — like a tasteful magazine ad or brand photo, NOT a screenshot of someone operating software.`,
-    `The tool is about: "${theme}".`,
-    `Setting / backdrop: ${scene}. People in the image: ${people} (never more than two).`,
-    hasPeople
-      ? `Show the ${people === 'no people at all' ? '' : people} TALKING or interacting freely and warmly — emphasize expressive BODY LANGUAGE and FACIAL EXPRESSIONS to convey the tool's feeling and message. Absolutely NO computers, laptops, phones, tablets, screens or devices — no one is "using an app". Their gestures and mood should hint at the tool's purpose. Choose the people from a DIVERSE, randomly-picked mix — vary ethnicity/race across the full real-world range and vary body types naturally; everyone healthy and normal-looking, authentic and respectful, never defaulting to one look.`
-      : `With no people, let the setting, nature, interior or city view and a few meaningful everyday objects tell the story and evoke the tool's purpose.`,
-    `Represent the tool's idea through everyday objects, gentle visual metaphors and mood. For example: an assignment-grading tool → a relaxed teacher on a morning jog with a thoughtful smile; a collaborative math tool → two students chatting warmly and gesturing on a campus lawn.`,
-    `Keep it coherent and believable, warm and uplifting, conveying productivity, cohesion and community engagement. Natural lighting, shallow depth of field, centered composition readable at small thumbnail size.`,
+    startupStyle,
+    `What the tool is about (make the image clearly RELATE to this): "${theme}".`,
+    modeLine,
+    `Represent the tool's idea through fitting objects, gentle visual metaphors and mood, so it reads like a real AI product brand promoting THIS tool. Warm, uplifting and forward-looking. Centered composition readable at small thumbnail size, shallow depth of field.`,
     NO_TEXT_RULE,
-    instruction ? `IMPORTANT — also weave in the user's specific request and blend it seamlessly with everything above into ONE coherent image: "${instruction}".` : '',
+    instruction ? `IMPORTANT — also weave in the user's specific request and blend it seamlessly into ONE coherent image: "${instruction}".` : '',
   ].filter(Boolean).join(' ');
 
   try {
