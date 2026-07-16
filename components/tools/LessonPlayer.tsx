@@ -40,6 +40,9 @@ const TEXT_LEVELS = [
   'Lower Intermediate', 'Intermediate', 'Upper Intermediate',
   'Lower Advanced (Undergrad)', 'Advanced (Graduate)', 'Upper Advanced (PhD level)',
 ];
+// Paragraph DENSITY presets — how MUCH text to show, independent of the level
+// (which sets vocabulary/comprehension difficulty). "" = follow the level default.
+const PARA_DENSITIES = ['Low', 'Low-Medium', 'Medium', 'Medium-High', 'High'];
 // Preset slide counts offered in the (editable) dropdown for the "slides" field.
 const SLIDE_COUNTS = ['3', '4', '5', '6', '8', '10', '12', '15', '20'];
 // Map any legacy CEFR level a tool was saved with onto the new academic scale, so
@@ -855,6 +858,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // load (kept in a ref keyed by entry id) so cards with no picture keep shuffling
   // to a new random emoji on every refresh, but stay stable while you browse.
   const randEmojis = useRef<Record<string, string>>({});
+  // Per-slide, per-level cache of re-leveled text/questions (the ⚙ gear). Switching
+  // a slide to a level it was already generated at restores it instantly, and
+  // switching back to an earlier level returns the exact text saved for it.
+  const levelCache = useRef<Record<number, Record<string, { content?: string; translation?: string; questions?: any[] }>>>({});
   // Refs let the background prefetch read the latest state without stale closures.
   const slidesRef = useRef<(Slide | null)[]>([]);
   const cfgRef = useRef<Cfg>({});
@@ -992,7 +999,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       // random emoji until the owner presses 🎨 on the card to generate one.
       API.patch('/api/tools/entries', {
         slug, entryId: playedEntryId.current,
-        config: { theme: cfg.theme, level: cfg.level, difficulty: cfg.difficulty, imageStyle: cfg.imageStyle, tone: cfg.tone, topic: cfg.topic, slides: cfg.slides, paragraphs: cfg.paragraphs, length: cfg.length, category: cfg.category, score: answered ? pct : undefined },
+        config: { theme: cfg.theme, level: cfg.level, difficulty: cfg.difficulty, imageStyle: cfg.imageStyle, tone: cfg.tone, topic: cfg.topic, slides: cfg.slides, paragraphs: cfg.paragraphs, length: cfg.length, category: cfg.category, density: cfg.density, score: answered ? pct : undefined },
       }).then(() => loadActivities()).catch(() => { /* best-effort */ });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1061,7 +1068,15 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // cleared so the new questions start fresh. Support/images are left untouched.
   const relevel = async (lvl: string) => {
     const s = slidesRef.current[cur]; if (!s) return;
-    setRelevelBusy(true); setLevelOpen(false);
+    // The level this slide's CURRENT text is at (so we can save it before switching).
+    const curLvl = String(slideLevel[cur] || cfg.level || cfg.difficulty || levels[0]);
+    if (curLvl === lvl && (levelCache.current[cur]?.[lvl])) { setLevelOpen(false); return; }
+    setLevelOpen(false);
+    // Remember the current slide's text/questions under its current level, so
+    // switching back to it later restores it instantly (no regeneration).
+    const bucket = (levelCache.current[cur] = levelCache.current[cur] || {});
+    if (!bucket[curLvl]) bucket[curLvl] = { content: s.content, translation: s.translation, questions: s.questions };
+
     // Carry the new level FORWARD: update the run config so every slide generated
     // after this one uses the new level, and discard any already-prefetched slides
     // ahead of the current one so they regenerate at the new level.
@@ -1071,26 +1086,42 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     slidesRef.current = kept; setSlides(kept);
     Object.keys(prefetching.current).forEach((k) => { if (Number(k) > cur) delete prefetching.current[Number(k)]; });
     setSlideLevel((m) => { const n: Record<number, string> = {}; for (const k of Object.keys(m)) { if (Number(k) <= cur) n[Number(k)] = m[Number(k)]; } n[cur] = lvl; return n; });
+
+    // Apply a slide's text/questions (from cache or a fresh relevel) to slide `cur`.
+    const applyLeveled = (r: { content?: string; translation?: string; questions?: any[] }) => {
+      setSlides((sc) => {
+        const n = [...sc];
+        if (n[cur]) n[cur] = {
+          ...(n[cur] as Slide),
+          content: r.content || (n[cur] as Slide).content,
+          translation: r.translation || (n[cur] as Slide).translation,
+          questions: Array.isArray(r.questions) && r.questions.length ? r.questions : (n[cur] as Slide).questions,
+        };
+        slidesRef.current = n; return n;
+      });
+      // Questions differ per level — drop this slide's recorded answers.
+      setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
+    };
+
+    // Already generated this slide at this level before → restore instantly.
+    if (bucket[lvl]) { applyLeveled(bucket[lvl]); prefetch(cur + 1); return; }
+
+    setRelevelBusy(true);
     prefetch(cur + 1);
     try {
       const r = await API.post('/api/tools/lesson/relevel', {
         subject: lesson.subject, topic: cfg.topic || '', title: s.title, content: s.content, translation: s.translation,
         level: lvl, language: lesson.language, translateTo: lesson.translateTo, paragraphs: cfg.paragraphs, length: cfg.length,
-        questions: s.questions || [],
+        density: cfg.density || '', questions: s.questions || [],
       });
       if (r?.content || Array.isArray(r?.questions)) {
-        setSlides((sc) => {
-          const n = [...sc];
-          if (n[cur]) n[cur] = {
-            ...(n[cur] as Slide),
-            content: r.content || (n[cur] as Slide).content,
-            translation: r.translation || (n[cur] as Slide).translation,
-            questions: Array.isArray(r.questions) && r.questions.length ? r.questions : (n[cur] as Slide).questions,
-          };
-          slidesRef.current = n; return n;
-        });
-        // The questions were rewritten — drop any answers recorded for this slide.
-        if (Array.isArray(r?.questions) && r.questions.length) setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
+        const leveled = {
+          content: r.content || s.content,
+          translation: r.translation || s.translation,
+          questions: Array.isArray(r.questions) && r.questions.length ? r.questions : s.questions,
+        };
+        bucket[lvl] = leveled;   // save for instant return later
+        applyLeveled(leveled);
       }
     } catch { /* keep the current text */ }
     setRelevelBusy(false);
@@ -1327,6 +1358,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             const bits = [
               lvl && `🎚️ ${lvl}`,
               theme && `🎭 ${theme}`,
+              d.density && `📏 ${d.density}`,
               imgStyle && `🖼 ${imgStyle}`,
               `📄 ${slideCountOf(d)} slides`,
               typeof d.score === 'number' && `🏆 ${d.score}%`,
@@ -1382,6 +1414,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme</span>
               <select value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
                 {LESSON_THEMES.map((th) => <option key={th} value={th}>{th === 'Any' ? 'Any (AI picks)' : th}</option>)}
+              </select>
+            </label>
+            <label className="field" style={{ maxWidth: 240 }}><span>📏 Text density</span>
+              <select value={(form as any).density || ''} onChange={(e) => setForm(s => ({ ...s, density: e.target.value }))}
+                title="How much text to show — independent of the level's vocabulary difficulty">
+                <option value="">Auto (match the level)</option>
+                {PARA_DENSITIES.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </label>
             <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style</span>

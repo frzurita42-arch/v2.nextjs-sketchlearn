@@ -4,7 +4,7 @@ import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config'
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { levelDepthGuidance } = require('@/src/ai/level-depth');
+const { levelDepthGuidance, textAmountGuidance } = require('@/src/ai/level-depth');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -95,17 +95,18 @@ export async function POST(req: Request) {
   const title = String(b.title || '').slice(0, 120);
   const language = String(b.language || '').slice(0, 40);
   const translateTo = String(b.translateTo || 'English').slice(0, 40);
-  const paras = Math.max(1, Math.min(4, parseInt(b.paragraphs, 10) || 1));
-  const pLen = ['brief', 'medium', 'detailed'].includes(b.length) ? b.length : 'medium';
 
   const system = [
     `Re-explain ONE ${subject} teaching text${topic ? ` about ${topic}` : ''} at ${level} level.`,
     title ? `Slide title: ${title}.` : '',
     `LEVEL DEPTH (${level}): ${levelDepthGuidance(level)}`,
-    'Keep the SAME core idea and facts — do not change the topic. Only change the depth, technicality and phrasing to fit the level (LONGER and more challenging as the level rises).',
+    // Amount of text follows the density (if the learner set one) else the level;
+    // difficulty always follows the level.
+    `TEXT AMOUNT: ${textAmountGuidance(level, String(b.density || ''))}`,
+    'Keep the SAME core idea and facts — do not change the topic. Only change the depth, technicality, vocabulary, phrasing and amount to fit the level and density.',
     language
-      ? `This is a ${language} lesson: write "content" in ${language} and the ${translateTo} meaning in "translation".`
-      : `Write "content" as ${paras} ${pLen} paragraph(s) of plain teaching prose. Leave "translation" empty.`,
+      ? `This is a ${language} lesson: write "content" in ${language} and the ${translateTo} meaning in "translation". Respect the text-amount rule above strictly.`
+      : `Write "content" as plain teaching prose, respecting the text-amount rule above. Leave "translation" empty.`,
     'For math/science you may use inline $...$ LaTeX for symbols. Return STRICT JSON: { "content": "...", "translation": "..." }.',
   ].filter(Boolean).join('\n');
   const user = `Original text to re-explain at ${level}:\n${content}`;

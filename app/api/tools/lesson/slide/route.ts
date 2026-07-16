@@ -7,7 +7,7 @@ import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { levelDepthGuidance } = require('@/src/ai/level-depth');
+const { levelDepthGuidance, textAmountGuidance } = require('@/src/ai/level-depth');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { wolframAvailable } = require('@/src/connectors/wolfram');
 
@@ -247,6 +247,7 @@ export async function POST(req: Request) {
     `Generate slide ${n} of ${total} for a ${subject} lesson at ${level} level.`,
     language ? `Level objective: ${levelGuidance(level)}` : '',
     `LEVEL DEPTH (${level}): ${levelDepthGuidance(level)}`,
+    `TEXT AMOUNT: ${textAmountGuidance(level, String(b.values?.density || ''))}`,
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
     themeDirective(theme),
     customNote ? `AUTHOR'S CUSTOM INSTRUCTIONS (honor these wherever they don't conflict with the output schema): ${customNote}` : '',
