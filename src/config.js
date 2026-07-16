@@ -174,7 +174,15 @@ const LEONARDO_MODEL = process.env.LEONARDO_MODEL || '6b645e3a-d64f-4341-a6d8-7a
 const LEONARDO_SIZE = parseInt(process.env.LEONARDO_SIZE, 10) || 512;
 const leonardoEnabled = !forceFallback && hasConfiguredKey(LEONARDO_API_KEY);
 
-const imageEnabled = !forceFallback && (grokEnabled || hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled || leonardoEnabled);
+// Pollinations.ai — a free, keyless image generator (a plain GET to
+// image.pollinations.ai/prompt/<text>). Enabled by default so image generation
+// ALWAYS has a working fallback even with no other provider configured; set
+// POLLINATIONS_DISABLE=1 to turn it off. Model is overridable (default 'flux').
+const POLLINATIONS_BASE = process.env.POLLINATIONS_API_URL || 'https://image.pollinations.ai/prompt/';
+const POLLINATIONS_MODEL = process.env.POLLINATIONS_MODEL || 'flux';
+const pollinationsEnabled = !forceFallback && !/^(1|true|yes)$/i.test(String(process.env.POLLINATIONS_DISABLE || '').trim());
+
+const imageEnabled = !forceFallback && (grokEnabled || hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled || leonardoEnabled || pollinationsEnabled);
 
 // Optional: ElevenLabs text-to-speech / voice generation.
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -262,6 +270,9 @@ module.exports = {
   LEONARDO_MODEL,
   LEONARDO_SIZE,
   leonardoEnabled,
+  POLLINATIONS_BASE,
+  POLLINATIONS_MODEL,
+  pollinationsEnabled,
   imageEnabled,
   ELEVENLABS_API_KEY,
   ELEVENLABS_API_URL,

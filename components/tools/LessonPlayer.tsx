@@ -227,7 +227,7 @@ function SupportsLoader({ slide, ctx }: { slide: Slide; ctx: any }) {
     plan.forEach((type, i) => {
       if (sl._supports[i] !== undefined) return; // already loaded (or failed)
       if (!sl._supportP[i]) {
-        sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson: ctx.lesson, values: ctx.values, type, content: slide.content, title: slide.title, imageStyle: ctx.imageStyle || '' })
+        sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson: ctx.lesson, values: ctx.values, type, content: slide.content, title: slide.title, imageStyle: ctx.imageStyle || '', imageProvider: ctx.imageProvider || '' })
           .then((r: any) => { sl._supports[i] = r?.support || null; })
           .catch(() => { sl._supports[i] = null; });
       }
@@ -853,6 +853,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [themeBusy, setThemeBusy] = useState(false);
   // The create form's image-style picker is in "custom" mode (a typed style).
   const [customImg, setCustomImg] = useState(false);
+  // Available image backends (from /api/config) + the run's chosen one's dropdown.
+  const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
+  const [providerOpen, setProviderOpen] = useState(false);
+  useEffect(() => { API.get('/api/config').then((c: any) => setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : [])).catch(() => { /* ignore */ }); }, []);
   const [supportNonce, setSupportNonce] = useState(0);
   // A random emoji per rendition card that has no real image, picked ONCE per page
   // load (kept in a ref keyed by entry id) so cards with no picture keep shuffling
@@ -891,7 +895,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       if (!sl._supports || sl._supports.length !== plan.length) sl._supports = plan.map(() => undefined);
       if (!sl._supportP || sl._supportP.length !== plan.length) sl._supportP = plan.map(() => undefined);
       if (sl._supports[i] !== undefined || sl._supportP[i]) return;   // already warmed / loaded
-      sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson, values: cfgRef.current, type: 'image', content: sl.content, title: sl.title, imageStyle: cfgRef.current.imageStyle || '' })
+      sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson, values: cfgRef.current, type: 'image', content: sl.content, title: sl.title, imageStyle: cfgRef.current.imageStyle || '', imageProvider: cfgRef.current.imageProvider || '' })
         .then((r: any) => { sl._supports[i] = r?.support || null; })
         .catch(() => { sl._supports[i] = null; });
     } catch { /* best-effort */ }
@@ -999,7 +1003,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       // random emoji until the owner presses 🎨 on the card to generate one.
       API.patch('/api/tools/entries', {
         slug, entryId: playedEntryId.current,
-        config: { theme: cfg.theme, level: cfg.level, difficulty: cfg.difficulty, imageStyle: cfg.imageStyle, tone: cfg.tone, topic: cfg.topic, slides: cfg.slides, paragraphs: cfg.paragraphs, length: cfg.length, category: cfg.category, density: cfg.density, score: answered ? pct : undefined },
+        config: { theme: cfg.theme, level: cfg.level, difficulty: cfg.difficulty, imageStyle: cfg.imageStyle, imageProvider: cfg.imageProvider, tone: cfg.tone, topic: cfg.topic, slides: cfg.slides, paragraphs: cfg.paragraphs, length: cfg.length, category: cfg.category, density: cfg.density, score: answered ? pct : undefined },
       }).then(() => loadActivities()).catch(() => { /* best-effort */ });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1155,6 +1159,21 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     setCfg((c) => ({ ...c, imageStyle: style }));
     setSlideImgStyle({});   // drop per-slide overrides — the new style is global
     // Invalidate cached image supports on EVERY loaded slide so they refetch.
+    slidesRef.current.forEach((sl: any) => {
+      if (sl && Array.isArray(sl.supportPlan)) {
+        sl.supportPlan.forEach((t: string, i: number) => { if (t === 'image') { if (sl._supports) sl._supports[i] = undefined; if (sl._supportP) sl._supportP[i] = undefined; } });
+      }
+    });
+    setSupportNonce((n) => n + 1);
+  };
+
+  // Choose which image BACKEND (OpenAI, Grok, Gemini, Leonardo, Pollinations…) to
+  // try first, for the whole presentation. Invalidates cached images so they
+  // regenerate on the chosen provider. '' = Auto (best available, in order).
+  const setImageProvider = (id: string) => {
+    setProviderOpen(false);
+    cfgRef.current = { ...cfgRef.current, imageProvider: id };
+    setCfg((c) => ({ ...c, imageProvider: id }));
     slidesRef.current.forEach((sl: any) => {
       if (sl && Array.isArray(sl.supportPlan)) {
         sl.supportPlan.forEach((t: string, i: number) => { if (t === 'image') { if (sl._supports) sl._supports[i] = undefined; if (sl._supportP) sl._supportP[i] = undefined; } });
@@ -1442,6 +1461,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 </>;
               })()}
             </label>
+            <label className="field" style={{ maxWidth: 240 }}><span>🔌 Image API</span>
+              <select value={(form as any).imageProvider || ''} onChange={(e) => setForm(s => ({ ...s, imageProvider: e.target.value }))}
+                title="Which image generator to use — Pollinations is free & keyless">
+                <option value="">Auto (best available)</option>
+                {imageProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
           </div>
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
             <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
@@ -1695,6 +1721,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             {(curSlide.supportPlan?.includes('image') || curSlide.support?.type === 'image') && (
               <button className="btn small ghost" title="Image style for this slide" onClick={() => setImgStyleOpen((o) => !o)} style={{ padding: '0 6px' }}>🖼</button>
             )}
+            <button className="btn small ghost" title="Image API — choose which image generator to use (Pollinations is free)" onClick={() => setProviderOpen((o) => !o)} style={{ padding: '0 6px' }}>🔌</button>
+            {providerOpen && (
+              <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 200, textAlign: 'left' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>IMAGE API</div>
+                {[{ id: '', label: 'Auto (best available)' }, ...imageProviders].map((p) => {
+                  const active = (cfg.imageProvider || '') === p.id;
+                  return <button key={p.id || 'auto'} className={`btn small ${active ? 'green' : 'ghost'}`} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 3 }} onClick={() => setImageProvider(p.id)}>{p.label}</button>;
+                })}
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>Pollinations is free &amp; needs no key. Regenerates this slide&apos;s image(s).</div>
+              </div>
+            )}
             {themeOpen && (
               <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 200, maxHeight: 320, overflowY: 'auto', textAlign: 'left' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>THEME</div>
@@ -1752,7 +1789,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>}
           {/* Support materials — each streams into its own card, dotted-separated. */}
           {(curSlide.supportPlan?.length || curSlide.support) && curSlide.content ? <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12 }} /> : null}
-          <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg, imageStyle: slideImgStyle[cur] || cfg.imageStyle || '', nonce: supportNonce }} />
+          <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg, imageStyle: slideImgStyle[cur] || cfg.imageStyle || '', imageProvider: cfg.imageProvider || '', nonce: supportNonce }} />
 
           {/* Every question, stacked as its own "paper"; scroll down to reach them. */}
           {qList.map((q: Q, i: number) => {

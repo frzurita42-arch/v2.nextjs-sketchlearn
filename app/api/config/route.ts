@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled } from '@/src/config';
+import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled, grokEnabled, leonardoEnabled, pollinationsEnabled, IMAGE_API_KEY } from '@/src/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,6 +21,16 @@ export async function GET() {
         deepseekEnabled && { id: 'deepseek', label: 'DeepSeek' },
       ].filter(Boolean),
       imagesEnabled: !!imageEnabled,
+      // The image backends the user can pick from (a picker on the create form /
+      // slide toolbar sets which to TRY first). Pollinations is keyless, so it is
+      // always here as a free fallback. "Auto" (no id) = the default order.
+      imageProviders: [
+        hasConfiguredKey(IMAGE_API_KEY) && { id: 'openai', label: 'OpenAI · photos' },
+        grokEnabled && { id: 'grok', label: 'Grok' },
+        leonardoEnabled && { id: 'leonardo', label: 'Leonardo' },
+        geminiEnabled && { id: 'gemini', label: 'Gemini · Nano Banana' },
+        pollinationsEnabled && { id: 'pollinations', label: 'Pollinations · free' },
+      ].filter(Boolean),
       voiceEnabled: !!elevenlabsEnabled,
       dbEnabled: !!dbEnabled,
       dbPooled: !!dbPooled,

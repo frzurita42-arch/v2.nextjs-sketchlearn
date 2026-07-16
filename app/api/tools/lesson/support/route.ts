@@ -29,8 +29,8 @@ function inferKind(subject: string, language?: string): string {
   return 'general';
 }
 
-async function makeImage(prompt: string): Promise<string> {
-  if (imageEnabled) { try { const u = await generateImage(prompt); if (u) return u; } catch { /* fall through */ } }
+async function makeImage(prompt: string, provider?: string): Promise<string> {
+  if (imageEnabled) { try { const u = await generateImage(prompt, provider ? { provider } : {}); if (u) return u; } catch { /* fall through */ } }
   return fallbackImageDataUrl(prompt, '');
 }
 
@@ -54,9 +54,9 @@ function supSpecFor(type: string, mathish: boolean, kind: string): string {
 }
 
 // Turn the model's raw support object into the shape the player renders.
-async function parseSupport(type: string, s: any, subject: string, imgStyle?: string): Promise<any> {
+async function parseSupport(type: string, s: any, subject: string, imgStyle?: string, imgProvider?: string): Promise<any> {
   if (!s || typeof s !== 'object') s = {};
-  if (type === 'image') return { type: 'image', url: await makeImage(`${String(s.prompt || subject)}. ${imageStyleDirective(imgStyle)}`), caption: String(s.caption || '') };
+  if (type === 'image') return { type: 'image', url: await makeImage(`${String(s.prompt || subject)}. ${imageStyleDirective(imgStyle)}`, imgProvider), caption: String(s.caption || '') };
   if (type === 'code') return { type: 'code', language: String(s.language || '').slice(0, 20), code: String(s.code || '').slice(0, 1200) };
   if (type === 'table' && Array.isArray(s.headers)) return {
     type: 'table',
@@ -97,11 +97,13 @@ export async function POST(req: Request) {
   // Preferred art style for images (per-tool preset or per-slide override). Empty
   // / "Any" -> tasteful, adult-leaning default (see imageStyleDirective).
   const imgStyle = String(b.imageStyle || b.values?.imageStyle || '').slice(0, 40);
+  // Which image backend to TRY first (user-chosen). Empty = the default order.
+  const imgProvider = String(b.imageProvider || b.values?.imageProvider || '').slice(0, 20);
 
   // Image needs no text model — build it directly from the slide context.
   if (type === 'image' && !openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     const base = mathish ? `a clean, labelled reference diagram for: ${content || title || subject}` : (content || title || subject);
-    return NextResponse.json({ support: { type: 'image', url: await makeImage(`${base}. ${imageStyleDirective(imgStyle)}`), caption: '' } });
+    return NextResponse.json({ support: { type: 'image', url: await makeImage(`${base}. ${imageStyleDirective(imgStyle)}`, imgProvider), caption: '' } });
   }
   if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json({ support: null });
 
@@ -118,7 +120,7 @@ export async function POST(req: Request) {
   try {
     const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.6, maxTokens: 1200 });
     const raw = r?.support && typeof r.support === 'object' ? r.support : r;
-    const support = await parseSupport(type, raw, subject, imgStyle);
+    const support = await parseSupport(type, raw, subject, imgStyle, imgProvider);
     return NextResponse.json({ support: support || null });
   } catch {
     return NextResponse.json({ support: null });

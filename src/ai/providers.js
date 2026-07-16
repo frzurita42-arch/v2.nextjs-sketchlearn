@@ -8,6 +8,7 @@ const {
   GROK_API_KEY, GROK_URL, GROK_MODEL, GROK_IMAGE_URL, GROK_IMAGE_MODEL, grokEnabled,
   IMAGE_API_KEY, IMAGE_API_URL, IMAGE_API_MODEL,
   LEONARDO_API_KEY, LEONARDO_API_BASE, LEONARDO_MODEL, LEONARDO_SIZE, leonardoEnabled,
+  POLLINATIONS_BASE, POLLINATIONS_MODEL, pollinationsEnabled,
   ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
   ELEVENLABS_API_KEY, ELEVENLABS_API_URL, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled
 } = require('../config');
@@ -463,14 +464,45 @@ async function leonardoImage(prompt) {
   return null;
 }
 
-// Generate one image, trying each configured backend and falling through on
-// failure. Order: OpenAI-compatible API (gpt-image-1 — the DEFAULT, produces real
-// photographs) → Grok → Leonardo AI → Gemini image models (Nano Banana) LAST.
-async function generateImage(prompt) {
-  if (IMAGE_API_KEY) { const u = await openaiCompatImage(prompt); if (u) return u; }
-  if (grokEnabled) { const k = await grokImage(prompt); if (k) return k; }
-  if (leonardoEnabled) { const l = await leonardoImage(prompt); if (l) return l; }
-  if (geminiEnabled) { const g = await geminiImage(prompt); if (g) return g; }
+// Pollinations.ai — a FREE, keyless image generator: a plain GET to
+// image.pollinations.ai/prompt/<url-encoded prompt> returns the image bytes. We
+// fetch them and return a data URL so it's stable (not re-generated on each view).
+// This is the always-available final fallback so images work with no API key.
+async function pollinationsImage(prompt) {
+  try {
+    const clean = String(prompt || '').slice(0, 1600);
+    const base = String(POLLINATIONS_BASE || 'https://image.pollinations.ai/prompt/').replace(/\/?$/, '/');
+    const url = `${base}${encodeURIComponent(clean)}?width=1024&height=1024&nologo=true&model=${encodeURIComponent(POLLINATIONS_MODEL || 'flux')}`;
+    const res = await fetchWithTimeout(url, { headers: { Accept: 'image/*' } }, 60000, 'Pollinations image');
+    if (!res.ok) { lastImageError = `pollinations: ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`; return null; }
+    const ct = res.headers.get('content-type') || 'image/jpeg';
+    if (!/^image\//i.test(ct)) { lastImageError = 'pollinations: non-image response'; return null; }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length) { lastImageError = 'pollinations: empty image'; return null; }
+    return `data:${ct};base64,${buf.toString('base64')}`;
+  } catch (e) { lastImageError = `pollinations: ${e.message}`; return null; }
+}
+
+// Generate one image. Each backend is tried in order, falling through on failure.
+// Default order: OpenAI-compatible API (gpt-image-1, real photos) → Grok →
+// Leonardo → Gemini (Nano Banana) → Pollinations (free, keyless) LAST. Pass
+// opts.provider ('openai'|'grok'|'leonardo'|'gemini'|'pollinations') to TRY that
+// backend first (it still falls back to the others if it fails / isn't configured).
+async function generateImage(prompt, opts = {}) {
+  const backends = {
+    openai: () => (IMAGE_API_KEY ? openaiCompatImage(prompt) : null),
+    grok: () => (grokEnabled ? grokImage(prompt) : null),
+    leonardo: () => (leonardoEnabled ? leonardoImage(prompt) : null),
+    gemini: () => (geminiEnabled ? geminiImage(prompt) : null),
+    pollinations: () => (pollinationsEnabled ? pollinationsImage(prompt) : null),
+  };
+  const defaultOrder = ['openai', 'grok', 'leonardo', 'gemini', 'pollinations'];
+  const pick = opts && opts.provider;
+  const order = (pick && backends[pick]) ? [pick, ...defaultOrder.filter((p) => p !== pick)] : defaultOrder;
+  for (const p of order) {
+    const u = await backends[p]();
+    if (u) return u;
+  }
   return null;
 }
 
@@ -721,6 +753,7 @@ module.exports = {
   geminiImage,
   grokImage,
   leonardoImage,
+  pollinationsImage,
   generateSvgSketch,
   generateImageOrSketch,
   getLastImageError,

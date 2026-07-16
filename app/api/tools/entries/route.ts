@@ -90,7 +90,7 @@ export async function PATCH(req: Request) {
   // Only persist known config knobs the player can tweak mid-run — never let this
   // overwrite a card's title/subtitle/thumbnail or other rendition data.
   const src = (b.config && typeof b.config === 'object') ? b.config : {};
-  const ALLOWED = ['theme', 'level', 'difficulty', 'imageStyle', 'tone', 'topic', 'slides', 'paragraphs', 'length', 'category', 'score', 'density'];
+  const ALLOWED = ['theme', 'level', 'difficulty', 'imageStyle', 'imageProvider', 'tone', 'topic', 'slides', 'paragraphs', 'length', 'category', 'score', 'density'];
   const patch: Record<string, any> = {};
   for (const k of ALLOWED) if (src[k] !== undefined) patch[k] = typeof src[k] === 'string' ? String(src[k]).slice(0, 200) : src[k];
   if (!Object.keys(patch).length) return NextResponse.json({ ok: true, data: entry.data });
