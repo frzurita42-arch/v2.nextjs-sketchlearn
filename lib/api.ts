@@ -127,6 +127,7 @@ class ApiClient {
   get(url: string, opts?: { retries?: number }) { return this.call('GET', url, undefined, opts); }
   post(url: string, body?: any, opts?: { retries?: number }) { return this.call('POST', url, body, opts); }
   put(url: string, body?: any, opts?: { retries?: number }) { return this.call('PUT', url, body, opts); }
+  patch(url: string, body?: any, opts?: { retries?: number }) { return this.call('PATCH', url, body, opts); }
   del(url: string, opts?: { retries?: number }) { return this.call('DELETE', url, undefined, opts); }
 }
 

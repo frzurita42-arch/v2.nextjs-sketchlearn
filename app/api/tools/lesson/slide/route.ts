@@ -2,6 +2,7 @@ import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
+import { themeDirective } from '@/lib/lesson-themes';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
@@ -159,6 +160,9 @@ export async function POST(req: Request) {
   const paras = Math.max(1, Math.min(4, parseInt(b.values?.paragraphs, 10) || parseInt(pageSpec?.paragraphsPerSlide, 10) || parseInt(lesson.paragraphsPerSlide, 10) || 1));
   const pLen = ['brief', 'medium', 'detailed'].includes(b.values?.length) ? b.values.length : (pageSpec?.paragraphLength || lesson.paragraphLength || 'medium');
   const tone = String(b.values?.tone || lesson.tone || '').slice(0, 40);
+  // Content theme (a lens for examples/scenarios) — chosen on the create form or
+  // switched per slide in the player. Carried forward across the run.
+  const theme = String(b.values?.theme || lesson.theme || '').slice(0, 40);
   // Free-text "Custom instructions" the author typed on the generate form.
   const customNote = String(b.values?.custom || b.values?.customInstructions || '').slice(0, 400);
   // A per-slide change the learner/author asked for WHILE viewing the slide
@@ -244,6 +248,7 @@ export async function POST(req: Request) {
     language ? `Level objective: ${levelGuidance(level)}` : '',
     `LEVEL DEPTH (${level}): ${levelDepthGuidance(level)}`,
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
+    themeDirective(theme),
     customNote ? `AUTHOR'S CUSTOM INSTRUCTIONS (honor these wherever they don't conflict with the output schema): ${customNote}` : '',
     modify ? `CHANGE REQUEST FOR THIS SLIDE (apply it now, it overrides the defaults above): ${modify}. You MAY add, remove or change the questions and the teaching content to satisfy it — e.g. add a multiple-choice or fill-blank question, remove one, rewrite the passage. If it asks for a support visual (image/table/etc.), mention it in the content so it fits.` : '',
     pageSpec?.style ? `This slide was designed to use: ${pageSpec.style}` : '',

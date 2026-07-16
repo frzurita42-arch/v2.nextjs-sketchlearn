@@ -23,6 +23,7 @@ import { matchAnswer, answerHint } from '@/lib/answer-match';
 import { defaultEmojiFor, randomEmoji } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 import { IMAGE_STYLES } from '@/lib/image-styles';
+import { LESSON_THEMES } from '@/lib/lesson-themes';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
@@ -706,6 +707,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const savedRun = useRef(false);   // guard: auto-save a finished run only once
   const playedEntryId = useRef<string | null>(null);   // the history card for the run in progress
   const scoredEntry = useRef<string | null>(null);     // guard: score-image a run once
+  const finalizedEntry = useRef<string | null>(null);  // guard: persist tweaks to a run's card once
   const saveDeck = async (resultsArg?: Record<number, any>, silent = false) => {
     const gen = slidesRef.current.filter(Boolean);
     if (!gen.length) { if (!silent) setDeckMsg('Play through the deck first, then save.'); return; }
@@ -815,6 +817,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   // forces the SupportsLoader to re-fetch the images when the style changes.
   const [slideImgStyle, setSlideImgStyle] = useState<Record<number, string>>({});
   const [imgStyleOpen, setImgStyleOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [themeBusy, setThemeBusy] = useState(false);
   const [supportNonce, setSupportNonce] = useState(0);
   // A random emoji per rendition card that has no real image, picked ONCE per page
   // load (kept in a ref keyed by entry id) so cards with no picture keep shuffling
@@ -916,6 +920,18 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     if (phase === 'done' && canEdit && !savedRun.current && slidesRef.current.filter(Boolean).length) {
       savedRun.current = true;
       saveDeck(results, true);
+    }
+    // PERSIST the learner's in-play tweaks (theme, level, image style, …) — but
+    // ONLY now that the run has reached the end. This writes the final config onto
+    // this play's gallery card, so coming back / replaying it starts from the
+    // adjustments this player made. Abandoned runs never persist their tweaks.
+    if (phase === 'done' && playedEntryId.current && finalizedEntry.current !== playedEntryId.current) {
+      finalizedEntry.current = playedEntryId.current;
+      const cfg = cfgRef.current || {};
+      API.patch('/api/tools/entries', {
+        slug, entryId: playedEntryId.current,
+        config: { theme: cfg.theme, level: cfg.level, difficulty: cfg.difficulty, imageStyle: cfg.imageStyle, tone: cfg.tone, topic: cfg.topic, slides: cfg.slides, paragraphs: cfg.paragraphs, length: cfg.length, category: cfg.category },
+      }).then(() => loadActivities()).catch(() => { /* best-effort */ });
     }
     // When a run finishes, generate a FRESH image for its history card that subtly
     // reflects how the student did (through mood / body language, never numbers).
@@ -1067,6 +1083,28 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       }
     });
     setSupportNonce((n) => n + 1);
+  };
+
+  // Change the CONTENT theme for the whole presentation (Vacations, Sports, Stoic
+  // philosophy, …). It becomes the run's theme so every slide generated after it
+  // is framed around it; the current slide is regenerated with the new theme now,
+  // its answers cleared, and any prefetched later slides are discarded so they
+  // regenerate too. Like the level/image-style tweaks, it only PERSISTS to the
+  // gallery if the learner plays to the end (finalizeRun).
+  const setLessonTheme = async (theme: string) => {
+    setThemeOpen(false);
+    if ((cfgRef.current.theme || 'Any') === theme) return;
+    cfgRef.current = { ...cfgRef.current, theme };
+    setCfg((c) => ({ ...c, theme }));
+    // Drop the current slide and everything after it so they regenerate on-theme.
+    const kept = slidesRef.current.map((sl, i) => (i < cur ? sl : null));
+    slidesRef.current = kept; setSlides(kept);
+    Object.keys(prefetching.current).forEach((k) => { if (Number(k) >= cur) delete prefetching.current[Number(k)]; });
+    setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
+    setThemeBusy(true); setGenBusy(true); setErr('');
+    try { await (prefetching.current[cur] || prefetch(cur)); } catch { /* ignore */ }
+    setGenBusy(false); setThemeBusy(false);
+    prefetch(cur + 1);
   };
 
   const goBack = () => { if (cur > 0) { setCur(cur - 1); prefetch(cur); } };
@@ -1273,12 +1311,19 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             <button className="btn small ghost" onClick={loadTopics} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
           </div>
           {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} />}
-          {/* Image art style preset for every image this lesson generates. */}
-          <label className="field" style={{ maxWidth: 240, marginTop: 10 }}><span>🖼 Image style</span>
-            <select value={(form as any).imageStyle || 'Any'} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
-              {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
-            </select>
-          </label>
+          {/* Content theme + image art style presets for this lesson. */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
+            <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme</span>
+              <select value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
+                {LESSON_THEMES.map((th) => <option key={th} value={th}>{th === 'Any' ? 'Any (AI picks)' : th}</option>)}
+              </select>
+            </label>
+            <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style</span>
+              <select value={(form as any).imageStyle || 'Any'} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
+                {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
+              </select>
+            </label>
+          </div>
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
             <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
           </div>
@@ -1527,8 +1572,19 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             <h3 style={{ margin: 0, textAlign: 'center' }}>{curSlide.title}</h3>
             <button className="btn small ghost" title="Change the reading level of this slide" onClick={() => setLevelOpen((o) => !o)} style={{ padding: '0 6px' }}>{relevelBusy ? <Spinner /> : '⚙'}</button>
             <button className="btn small ghost" title="Ask the AI to change this slide — add or remove a component, a question, an image…" onClick={() => setModOpen((o) => !o)} style={{ padding: '0 6px' }}>{modBusy ? <Spinner /> : '🧩'}</button>
+            <button className="btn small ghost" title="Change the theme of this presentation (Vacations, Sports, Stoic philosophy…)" onClick={() => setThemeOpen((o) => !o)} style={{ padding: '0 6px' }}>{themeBusy ? <Spinner /> : '🎭'}</button>
             {(curSlide.supportPlan?.includes('image') || curSlide.support?.type === 'image') && (
               <button className="btn small ghost" title="Image style for this slide" onClick={() => setImgStyleOpen((o) => !o)} style={{ padding: '0 6px' }}>🖼</button>
+            )}
+            {themeOpen && (
+              <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 200, maxHeight: 320, overflowY: 'auto', textAlign: 'left' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>THEME</div>
+                {LESSON_THEMES.map((th) => {
+                  const active = (cfg.theme || 'Any') === th;
+                  return <button key={th} className={`btn small ${active ? 'green' : 'ghost'}`} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 3 }} onClick={() => setLessonTheme(th)}>{th === 'Any' ? 'Any (AI picks)' : th}</button>;
+                })}
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>Reframes this &amp; the following slides. Saved if you finish the run.</div>
+              </div>
             )}
             {imgStyleOpen && (
               <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 180, textAlign: 'left' }}>

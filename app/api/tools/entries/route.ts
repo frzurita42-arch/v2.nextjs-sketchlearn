@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getToolBySlug, insertEntry, listEntries, setEntryStatus, getEntry, deleteEntry } = require('@/src/db/platform');
+const { getToolBySlug, insertEntry, listEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { userState } = require('@/src/db/users');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -67,6 +67,35 @@ export async function POST(req: Request) {
   };
   await insertEntry(record);
   return NextResponse.json({ entry: record });
+}
+
+// PATCH /api/tools/entries { slug, entryId, config } -> merge the run's final
+// tweaked config (theme, level, image style, …) onto a rendition. This is how a
+// learner's in-play adjustments are PERSISTED: the player calls it only when the
+// run reaches the end, so the saved gallery card carries the tweaks and a replay
+// starts from them. The entry's own author (the player), the tool owner, or an
+// admin may finalize it.
+export async function PATCH(req: Request) {
+  const a = await requireAuth(req);
+  if (!a.ok) return a.response;
+  const b = (await req.json().catch(() => ({}))) || {};
+  const tool = await resolveTool(String(b.slug || ''));
+  if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const entry = await getEntry(String(b.entryId || ''));
+  if (!entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+  const isOwner = tool.owner === a.user.username || a.user.role === 'admin';
+  if (entry.username !== a.user.username && !isOwner) {
+    return NextResponse.json({ error: 'Only the entry author, the tool owner, or an admin can update it.' }, { status: 403 });
+  }
+  // Only persist known config knobs the player can tweak mid-run — never let this
+  // overwrite a card's title/subtitle/thumbnail or other rendition data.
+  const src = (b.config && typeof b.config === 'object') ? b.config : {};
+  const ALLOWED = ['theme', 'level', 'difficulty', 'imageStyle', 'tone', 'topic', 'slides', 'paragraphs', 'length', 'category'];
+  const patch: Record<string, any> = {};
+  for (const k of ALLOWED) if (src[k] !== undefined) patch[k] = typeof src[k] === 'string' ? String(src[k]).slice(0, 200) : src[k];
+  if (!Object.keys(patch).length) return NextResponse.json({ ok: true, data: entry.data });
+  const data = await updateEntryData(entry.id, patch);
+  return NextResponse.json({ ok: true, data });
 }
 
 // PUT /api/tools/entries { slug, entryId, status } -> owner approves/rejects.
