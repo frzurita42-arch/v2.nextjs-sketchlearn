@@ -1746,6 +1746,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         <button className="btn small ghost" onClick={() => { setPhase('hub'); loadActivities(); }}>← Lessons</button>
         <span style={{ fontSize: 13, opacity: 0.7 }}>{label(cfg)}</span>
       </div>
+      {/* Always show the current slide's LEVEL, just under the back button and above
+          the progress bar (reflects a per-slide ⚙ level change too). */}
+      <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, opacity: 0.75, marginBottom: 6 }}>
+        🎚️ Level: {slideLevel[cur] || cfg.level || cfg.difficulty || levels[0]}
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 13, opacity: 0.7 }}>Slide {cur + 1} / {tot}{qList.length > 1 ? ` · ${answeredCount}/${qList.length} answered` : ''}</span>
         <span style={{ fontSize: 13, opacity: 0.7 }}>Score: {scoreSoFar}</span>
@@ -1859,7 +1864,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </div>
             )}
           </div>
-          {slideLevel[cur] && <div style={{ textAlign: 'center', fontSize: 11, opacity: 0.6, marginTop: 2 }}>Level: {slideLevel[cur]}</div>}
           {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
           {/* Reading passage (its own "paper"). */}
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} speakable={!!lesson.language} voiceId={cfg.voice} /></p>}

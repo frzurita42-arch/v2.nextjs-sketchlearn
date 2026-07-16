@@ -448,14 +448,13 @@ export function ToolRunnerView() {
         {/* Platform-provided comment section on every tool. */}
         <CommentSection targetType="tool" targetId={tool.slug} />
 
-        {/* ┄ divider: comments ┄ more picks ┄ */}
-        <div style={dashRule} />
         {/* On a REPOSITORY: 10 AI-recommended TOPICS drawn from its subjects, each a
-            preset that opens the presentation builder. Elsewhere: the usual "more
-            like this" tool feed. */}
+            preset that opens the presentation builder. On other non-lesson tools:
+            the usual "more like this" feed. A LESSON (presentation) page shows NO
+            "more like this" — it's just noise on a play page. */}
         {isRepo
-          ? <TopicSuggestions repoSlug={tool.slug} repoTitle={tool.title} />
-          : <SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" />}
+          ? <><div style={dashRule} /><TopicSuggestions repoSlug={tool.slug} repoTitle={tool.title} /></>
+          : (!isLesson && <><div style={dashRule} /><SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" /></>)}
       </>)}
     </>
   );
