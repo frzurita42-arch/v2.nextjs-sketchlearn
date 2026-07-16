@@ -902,6 +902,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const cfgRef = useRef<Cfg>({});
   const prefetching = useRef<Record<number, Promise<void> | undefined>>({});
   const startedAt = useRef(0);   // when the current play began, for the end-slide time
+  // Per-PLAY slide order. The designed deck stores pages in a fixed order, but a
+  // presentation shouldn't play identically every time: the FIRST page is always
+  // the intro, and the remaining pages are SHUFFLED for each run so a middle- or
+  // last-designed slide can appear earlier. Holds display-position → original page
+  // index; empty/identity when there are no designed pages to reorder.
+  const pageOrderRef = useRef<number[]>([]);
   useEffect(() => { slidesRef.current = slides; }, [slides]);
   // Changing slide silences any audio still playing from the previous slide
   // (belt-and-braces with the AudioButton unmount cleanup) and jumps the view to
@@ -949,13 +955,34 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     return out.slice(-6).join('\n');
   };
 
+  // Roll a fresh play order for THIS run: the intro (page 0) stays first and the
+  // rest are Fisher–Yates shuffled. A no-op unless there are 3+ designed pages.
+  const shufflePages = () => {
+    const pages = Array.isArray(lesson.pages) ? lesson.pages : [];
+    const n = pages.length;
+    if (n <= 2) { pageOrderRef.current = pages.map((_: any, i: number) => i); return; }
+    const rest = pages.map((_: any, i: number) => i).slice(1);
+    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+    pageOrderRef.current = [0, ...rest];
+  };
+  // The lesson to SEND for slide requests, with `pages` reordered to this run's
+  // play order so slide N (1-based) maps to the shuffled page. Every non-page field
+  // (subject, level, theme, style…) is left untouched. Falls back to the raw lesson
+  // when there is nothing to reorder.
+  const runLesson = (): any => {
+    const pages = Array.isArray(lesson.pages) ? lesson.pages : null;
+    const order = pageOrderRef.current;
+    if (!pages || order.length !== pages.length) return lesson;
+    return { ...lesson, pages: order.map((i) => pages[i]) };
+  };
+
   // Quietly load slide `idx` in the BACKGROUND (no spinner), so Next is instant
   // for EVERY answer type — including AI-checked ones that don't block on it.
   const prefetch = (idx: number): Promise<void> | undefined => {
     if (idx < 0 || idx >= total() || slidesRef.current[idx] || prefetching.current[idx]) return prefetching.current[idx];
     const p = (async () => {
       try {
-        const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: idx + 1, priorSummary: priorDigest(idx) });
+        const r = await API.post('/api/tools/lesson/slide', { lesson: runLesson(), values: cfgRef.current, slideNumber: idx + 1, priorSummary: priorDigest(idx) });
         // Publish to slidesRef SYNCHRONOUSLY: the ref normally syncs via an effect
         // that only runs after a re-render, which is too late for the Next click
         // that is awaiting this prefetch — that made Next need two clicks.
@@ -1007,7 +1034,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     cfgRef.current = useCfg;
     setGenBusy(true); setErr('');
     try {
-      const r = await API.post('/api/tools/lesson/slide', { lesson, values: useCfg, slideNumber: idx + 1, priorSummary: priorDigest(idx) });
+      const r = await API.post('/api/tools/lesson/slide', { lesson: runLesson(), values: useCfg, slideNumber: idx + 1, priorSummary: priorDigest(idx) });
       setSlides(sc => { const n = [...sc]; n[idx] = r; slidesRef.current = n; return n; });
       setGenBusy(false);
       prefetch(idx + 1);               // start loading the NEXT slide in the background
@@ -1017,6 +1044,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
 
   const play = (c: Cfg) => {
     cfgRef.current = c; slidesRef.current = []; prefetching.current = {}; startedAt.current = Date.now();
+    shufflePages();   // roll a fresh slide order for this run (intro stays first)
     savedRun.current = false;   // this fresh run hasn't been auto-saved yet
     setCfg(c); setSlides([]); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
     fetchInto(0, c);
@@ -1186,7 +1214,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     const s = slidesRef.current[cur]; if (!s || modBusy || !modText.trim()) return;
     setModBusy(true);
     try {
-      const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: cur + 1, priorSummary: priorDigest(cur), modify: modText.trim() });
+      const r = await API.post('/api/tools/lesson/slide', { lesson: runLesson(), values: cfgRef.current, slideNumber: cur + 1, priorSummary: priorDigest(cur), modify: modText.trim() });
       if (r?.content || (Array.isArray(r?.questions) && r.questions.length) || r?.title) {
         setSlides((sc) => { const n = [...sc]; n[cur] = r; slidesRef.current = n; return n; });
         setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
@@ -1792,7 +1820,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const isLast = cur >= tot - 1;
   const canNext = allAnswered && !isLast && !genBusy;
   const canFinish = allAnswered && isLast && !genBusy;
-  const padSize = (Array.isArray(lesson.pages) && lesson.pages[cur]?.padSize) || 'large';
+  // The designed page for the CURRENT display position, honoring this run's play
+  // order (the pages are shuffled per run, so read through runLesson()).
+  const curPage = runLesson().pages?.[cur];
+  const padSize = curPage?.padSize || 'large';
   const hasAnnotation = qList.some((q: Q) => q.kind === 'annotation');
   const scoreSoFar = Object.values(results).reduce((a, r) => a + Object.values(r.answers).filter((x: any) => x.correct).length, 0);
 
@@ -1921,7 +1952,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </div>
             )}
           </div>
-          {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
+          {curPage?.decorations?.length ? <Decorations items={curPage.decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
           {/* Reading passage (its own "paper"). */}
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} speakable={!!lesson.language} voiceId={cfg.voice} /></p>}
           {/* Support materials — each streams into its own card, dotted-separated. */}
