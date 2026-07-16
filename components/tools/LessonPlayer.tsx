@@ -819,6 +819,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [imgStyleOpen, setImgStyleOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [themeBusy, setThemeBusy] = useState(false);
+  // The create form's image-style picker is in "custom" mode (a typed style).
+  const [customImg, setCustomImg] = useState(false);
   const [supportNonce, setSupportNonce] = useState(0);
   // A random emoji per rendition card that has no real image, picked ONCE per page
   // load (kept in a ref keyed by entry id) so cards with no picture keep shuffling
@@ -1319,9 +1321,23 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
               </select>
             </label>
             <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style</span>
-              <select value={(form as any).imageStyle || 'Any'} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
-                {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
-              </select>
+              {(() => {
+                const cur = (form as any).imageStyle || 'Any';
+                const isPreset = (IMAGE_STYLES as readonly string[]).includes(cur);
+                const showCustom = customImg || !isPreset;
+                return <>
+                  <select value={showCustom ? '__custom__' : cur} onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '__custom__') { setCustomImg(true); if (isPreset) setForm(s => ({ ...s, imageStyle: '' })); }
+                    else { setCustomImg(false); setForm(s => ({ ...s, imageStyle: v })); }
+                  }}>
+                    {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
+                    <option value="__custom__">✍️ Custom…</option>
+                  </select>
+                  {showCustom && <input type="text" placeholder="Describe your image style…" value={(form as any).imageStyle || ''}
+                    onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))} style={{ marginTop: 6 }} />}
+                </>;
+              })()}
             </label>
           </div>
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
@@ -1593,6 +1609,13 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
                   const active = (slideImgStyle[cur] || cfg.imageStyle || 'Any') === st;
                   return <button key={st} className={`btn small ${active ? 'green' : 'ghost'}`} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 3 }} onClick={() => setSlideImageStyle(st)}>{st}</button>;
                 })}
+                {(() => {
+                  const curStyle = slideImgStyle[cur] || cfg.imageStyle || 'Any';
+                  const isCustom = !(IMAGE_STYLES as readonly string[]).includes(curStyle);
+                  return <input type="text" defaultValue={isCustom ? curStyle : ''} placeholder="✍️ Custom style — type & Enter"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v) setSlideImageStyle(v); } }}
+                    style={{ width: '100%', marginTop: 4, fontSize: 12 }} />;
+                })()}
                 <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>Regenerates this slide&apos;s image(s).</div>
               </div>
             )}
