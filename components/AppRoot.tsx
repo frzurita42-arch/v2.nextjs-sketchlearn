@@ -282,13 +282,15 @@ export default function AppRoot() {
           >×</button>
         </div>
       )}
-      {/* Global back bar — on every page, a centered orange Back button that
-          returns to the PREVIOUS page in the series (falls back to Tools) under a
-          full-width dashed rule, right under the header. */}
+      {/* Global back bar — on every page EXCEPT the tool/presentation page (kept
+          clean), a centered Back button that returns to the previous page in the
+          series (falls back to Tools) under a full-width dashed rule. */}
+      {view !== 'tool' && (
       <div style={{ margin: '6px 0 8px', textAlign: 'center' }}>
         <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
         <button className="btn small" style={backBtnStyle} onClick={back}>{backLabel}</button>
       </div>
+      )}
       {/* key={view} remounts only on a view switch (fresh state per view, like
           the legacy SPA); in-view rerender() updates in place. For the tool view
           the key also carries the active tool's slug, so opening a DIFFERENT tool
@@ -297,11 +299,14 @@ export default function AppRoot() {
       <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}>
         <ErrorBoundary onHome={() => nav('tools')}>{views[view]}</ErrorBoundary>
       </main>
-      {/* A second Back button at the very bottom, above the footer. */}
+      {/* A second Back button at the very bottom, above the footer (hidden on the
+          tool/presentation page). */}
+      {view !== 'tool' && (
       <div style={{ margin: '10px 0 4px', textAlign: 'center' }}>
         <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '0 0 8px' }} />
         <button className="btn small" style={backBtnStyle} onClick={back}>{backLabel}</button>
       </div>
+      )}
       <Footer />
     </AppContext.Provider>
   );

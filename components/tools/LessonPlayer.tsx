@@ -821,16 +821,18 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     } catch (err: any) { alert(err?.message || 'Could not update.'); }
     finally { setDistBusy(b => { const n = { ...b }; delete n[e.id]; return n; }); }
   };
-  const editEntryText = (e: any) => {
-    const title = window.prompt('Title for this rendition card:', e.data?.title || label(e.data || {}));
-    if (title == null) return;
-    const subtitle = window.prompt('Subtitle / short description (optional):', e.data?.subtitle || '');
-    distort(e, 'set', { title, subtitle: subtitle || '' });
-  };
-  const promptEntryImage = (e: any) => {
-    const instruction = window.prompt('Describe the image to generate for this card (optional):', '');
-    if (instruction == null) return;
-    distort(e, 'image', { instruction });
+  // Inline edit modal for a rendition card (replaces window.prompt, which silently
+  // fails / is blocked in many browsers). kind 'text' edits title + subtitle;
+  // kind 'image' takes a custom AI-image prompt.
+  const [cardEdit, setCardEdit] = useState<null | { e: any; kind: 'text' | 'image'; title: string; subtitle: string; prompt: string }>(null);
+  const editEntryText = (e: any) => setCardEdit({ e, kind: 'text', title: e.data?.title || label(e.data || {}), subtitle: e.data?.subtitle || '', prompt: '' });
+  const promptEntryImage = (e: any) => setCardEdit({ e, kind: 'image', title: '', subtitle: '', prompt: '' });
+  const submitCardEdit = async () => {
+    if (!cardEdit) return;
+    const { e, kind, title, subtitle, prompt } = cardEdit;
+    setCardEdit(null);
+    if (kind === 'text') await distort(e, 'set', { title: title.trim() || (e.data?.title || label(e.data || {})), subtitle: subtitle.trim() });
+    else await distort(e, 'image', { instruction: prompt.trim() });
   };
   const uploadEntryImage = (e: any) => {
     const inp = document.createElement('input');
@@ -1469,6 +1471,36 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     const showGenerate = viewMode !== 'history' || !hasSaved;
     return (
       <div>
+        {/* Inline editor for a gallery card (title/subtitle, or a custom AI-image
+            prompt) — replaces the unreliable browser prompt. */}
+        {cardEdit && (
+          <div onClick={() => setCardEdit(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'auto', padding: '48px 12px' }}>
+            <div className="card" onClick={(ev) => ev.stopPropagation()} style={{ maxWidth: 460, width: '100%', padding: '16px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <b>{cardEdit.kind === 'text' ? '✎ Edit card' : '✎ Custom image'}</b>
+                <button className="btn small ghost" onClick={() => setCardEdit(null)}>✕</button>
+              </div>
+              {cardEdit.kind === 'text' ? (
+                <>
+                  <label className="field"><span>Title</span>
+                    <input type="text" autoFocus value={cardEdit.title} onChange={(ev) => setCardEdit(c => c && { ...c, title: ev.target.value })} />
+                  </label>
+                  <label className="field" style={{ marginTop: 8 }}><span>Description / subtitle</span>
+                    <textarea value={cardEdit.subtitle} placeholder="A short description…" onChange={(ev) => setCardEdit(c => c && { ...c, subtitle: ev.target.value })} style={{ minHeight: 64 }} />
+                  </label>
+                </>
+              ) : (
+                <label className="field"><span>Describe the image to generate</span>
+                  <textarea autoFocus value={cardEdit.prompt} placeholder="e.g. a labelled diagram of a plant cell, watercolour style…" onChange={(ev) => setCardEdit(c => c && { ...c, prompt: ev.target.value })} style={{ minHeight: 72 }} />
+                </label>
+              )}
+              <div className="slide-actions" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                <button className="btn small ghost" onClick={() => setCardEdit(null)}>Cancel</button>
+                <button className="btn green" onClick={submitCardEdit}>{cardEdit.kind === 'text' ? 'Save' : '🎨 Generate'}</button>
+              </div>
+            </div>
+          </div>
+        )}
         {hasSaved && viewMode !== 'replica' && (
           <div className="card" style={{ padding: '14px 16px', marginBottom: 12, borderStyle: 'dashed' }}>
             <h4 style={{ margin: '0 0 4px' }}>📖 This presentation has a saved original</h4>
