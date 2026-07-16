@@ -19,6 +19,7 @@ import {
 type Msg = { role: 'assistant' | 'user'; content: string };
 const newLayout = (): StudioLayout => ({ template: 'auto', components: [] });
 const newPage = (): StudioPage => ({ layouts: [newLayout()], length: 'medium', paragraphs: 1 });
+const TONES = ['Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling', 'Encouraging', 'Concise', 'Enthusiastic', 'Professional'];
 const blankRepoCard = (): RepoCard => ({ name: '', link: '', description: '', children: [] });
 
 // One repository card in the builder — a compact Name + Link row, a roomier
@@ -74,7 +75,23 @@ export function BuilderStudioView() {
   const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
   const [title, setTitle] = useState(seed?.title || '');
   const [subject, setSubject] = useState(seed?.subject || '');
-  const [tone, setTone] = useState(seed?.tone || 'Friendly');
+  // Tone is now a multi-select: pick any of the presets. Sent to the AI as a
+  // comma-joined string, so the rest of the code just reads `tone`.
+  const [tones, setTones] = useState<string[]>(seed?.tone ? String(seed.tone).split(/,\s*/).filter(Boolean) : ['Friendly']);
+  const tone = tones.join(', ');
+  // 🎨 palette "diffuser" — reword the title/subject to a similar but different
+  // phrasing so the author can shuffle it to taste.
+  const [rewording, setRewording] = useState<'' | 'title' | 'subject'>('');
+  const rewordField = async (kind: 'title' | 'subject') => {
+    const cur = kind === 'title' ? title : subject;
+    if (!cur.trim() || rewording) return;
+    setRewording(kind);
+    try {
+      const r: any = await API.post('/api/tools/reword', { text: cur, kind, context: `${title} ${subject}`.trim() });
+      if (r?.text) { if (kind === 'title') setTitle(r.text); else setSubject(r.text); }
+    } catch { /* ignore */ }
+    setRewording('');
+  };
   // A topic pick can hand us an AI-designed slide plan (seed.pages) to prefill the
   // Studio so the user reviews/edits the preset slides before generating.
   const [pages, setPages] = useState<StudioPage[]>(seed?.pages && seed.pages.length ? (seed.pages as StudioPage[]) : [newPage()]);
@@ -214,9 +231,53 @@ export function BuilderStudioView() {
   const setComp = (i: number, li: number, uid: string, patch: Partial<StudioComponent>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.map((c) => ((c.uid || c.id) === uid ? { ...c, ...patch } : c)) } : l)));
   const rmComp = (i: number, li: number, uid: string) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.filter((c) => (c.uid || c.id) !== uid) } : l)));
 
+  // ---- Presentation "Suggest / Edit with AI" (mirrors the repository flow) ----
+  // Map the designer's simple pages [{components:[id|{id,instr}], length, paragraphs}]
+  // into editable StudioPage[] (one layout per slide), and back for edit context.
+  const designToPages = (raw: any[]): StudioPage[] => (Array.isArray(raw) ? raw : []).map((pg: any) => ({
+    layouts: [{ template: 'auto', components: (Array.isArray(pg?.components) ? pg.components : []).map((c: any) => {
+      const id = typeof c === 'string' ? c : String(c?.id || '');
+      const instr = typeof c === 'object' ? String(c?.instr || '') : '';
+      const it = studioItem(id);
+      const opt = it?.sizes ? ANNOTATION_SIZES[1] : it?.button ? 'ask' : undefined;
+      return { id, uid: mkUid(), instr, opt };
+    }).filter((c: any) => c.id) }],
+    length: ['brief', 'medium', 'detailed'].includes(pg?.length) ? pg.length : 'medium',
+    paragraphs: Math.max(1, Math.min(4, parseInt(pg?.paragraphs, 10) || 1)),
+  })).filter((p: StudioPage) => ((p.layouts?.[0]?.components.length) || 0) > 0);
+  const pagesToDesign = (ps: StudioPage[]) => ps.map((p) => ({
+    components: layoutsOf(p).flatMap((l) => l.components).map((c: any) => ({ id: c.id, ...(c.instr ? { instr: c.instr } : {}) })),
+    length: p.length, paragraphs: p.paragraphs,
+  }));
+  // Once the AI has proposed slides, the button flips to "Edit with AI": the next
+  // request MODIFIES the existing slides (and can add more) instead of a fresh deck.
+  const [presSuggested, setPresSuggested] = useState(false);
+  const suggestPresentation = async () => {
+    if (suggesting || busy) return;
+    setSuggesting(true); setErr('');
+    try {
+      const editing = presSuggested && !nextCard;
+      const r: any = await API.post('/api/tools/studio-design', {
+        subject: subject || title, title, tone, provider, context, docs: docsPayload(),
+        mode: nextCard ? 'next' : editing ? 'edit' : 'suggest',
+        existing: (nextCard || editing) ? pagesToDesign(pages) : undefined,
+      }, { retries: 1 });
+      const mapped = designToPages(r?.pages || []);
+      if (mapped.length) {
+        if (nextCard) setPages((ps) => [...ps, ...mapped]);   // append the new slide(s)
+        else setPages(mapped);                                 // fresh or fully-edited deck
+        // Fill the title/subject the AI proposed when the author left them blank.
+        if (!title.trim() && r?.title) setTitle(String(r.title));
+        if (!subject.trim() && r?.subject) setSubject(String(r.subject));
+        setPresSuggested(true);
+      } else setErr('The AI did not return slides — add a subject or some detail, then try again.');
+    } catch (e: any) { setErr(e?.message || 'Could not build a suggestion.'); }
+    setSuggesting(false);
+  };
+
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, context, cards: repoCards, imageGen: false };
+    : { artifact, title, subject, tone, context, cards: repoCards, imageGen: false };
 
   const generate = async () => {
     if (busy) return;
@@ -336,14 +397,34 @@ export function BuilderStudioView() {
             </div>
           </div>
 
-          {/* Global settings */}
+          {/* Global settings — the SAME Title / Subject-topic / Tone layout for
+              both presentations and repositories. The 🎨 palette rewords a field
+              (a similar-but-different phrasing) and the AI fills them in when it
+              suggests slides. */}
           <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 8 }}>OVERALL</div>
             <div style={gridCol}>
-              <label className="field"><span>Title</span><input type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} /></label>
-              <label className="field"><span>{artifact === 'presentation' ? 'Subject / topic' : 'Collection name'}</span><input type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. My sketchbook'} onChange={(e) => setSubject(e.target.value)} /></label>
-              {artifact === 'presentation'
-                && <label className="field"><span>Tone</span><input type="text" value={tone} onChange={(e) => setTone(e.target.value)} /></label>}
+              <div className="field"><span>Title</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input style={{ flex: 1, minWidth: 0 }} type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} />
+                  <button type="button" className="btn small ghost" style={{ flex: '0 0 auto', padding: '0 8px' }} disabled={!title.trim() || !!rewording} title="Reword with AI — a similar but different phrasing" onClick={() => rewordField('title')}>{rewording === 'title' ? '…' : '🎨'}</button>
+                </div>
+              </div>
+              <div className="field"><span>Subject / topic</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input style={{ flex: 1, minWidth: 0 }} type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. Small Payment System'} onChange={(e) => setSubject(e.target.value)} />
+                  <button type="button" className="btn small ghost" style={{ flex: '0 0 auto', padding: '0 8px' }} disabled={!subject.trim() || !!rewording} title="Reword with AI — a similar but different phrasing" onClick={() => rewordField('subject')}>{rewording === 'subject' ? '…' : '🎨'}</button>
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Tone (pick any)</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {TONES.map((t) => {
+                  const on = tones.includes(t);
+                  return <button key={t} type="button" className={`btn small ${on ? 'green' : 'ghost'}`} onClick={() => setTones((xs) => on ? xs.filter((x) => x !== t) : [...xs, t])}>{t}</button>;
+                })}
+              </div>
             </div>
           </div>
 
@@ -434,13 +515,12 @@ export function BuilderStudioView() {
               "Suggest with AI", and the document to consider is attached here. */}
           <div className="card alt" style={{ padding: '12px 14px', margin: '12px 0' }}>
             <label className="field" style={{ gridColumn: '1 / -1' }}>
-              <span>{artifact === 'repository' ? 'What should the plan achieve? / Anything else for the AI to consider (optional)' : 'Anything else for the AI to consider? (optional)'}</span>
+              <span>{artifact === 'repository' ? 'What should the plan achieve? / Anything else for the AI to consider (optional)' : 'What should the lesson teach? / What to build or change (optional)'}</span>
               <textarea value={context}
-                placeholder={artifact === 'repository' ? 'e.g. “A 12-week plan to pass Physics I”, “Steps to launch a podcast”, constraints, your goal…' : 'Extra details, constraints, examples…'}
+                placeholder={artifact === 'repository' ? 'e.g. “A 12-week plan to pass Physics I”, “Steps to launch a podcast”, constraints, your goal…' : 'e.g. “Intro to fractions for grade 5”. After suggesting, describe a change: “add multiple-choice questions about bananas on a harder level”.'}
                 onChange={(e) => setContext(e.target.value)} style={{ minHeight: 52 }} /></label>
-            {/* Attached-document chips: their own row, directly under the input,
-                left-aligned; more documents sit next to each other on this row. */}
-            {artifact === 'repository' && docs.length > 0 && (
+            {/* Attached-document chips: their own row, directly under the input. */}
+            {docs.length > 0 && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                 {docs.map((d, i) => (
                   <span key={i} style={{ fontSize: 12, opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--card-alt, rgba(0,0,0,0.04))', borderRadius: 6, padding: '2px 8px' }}>
@@ -449,31 +529,45 @@ export function BuilderStudioView() {
                 ))}
               </div>
             )}
-            {/* One row of controls: add a document, the two toggles, and the
-                Suggest-with-AI action. */}
-            {artifact === 'repository' && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
-                <label className="btn small blue" style={{ cursor: 'pointer' }}>
-                  📎 {docs.length ? 'Add another document' : 'Attach a document (optional)'}
-                  <input type="file" accept=".pdf,.txt,.md,.csv,.doc,.docx,.rtf,text/*,application/pdf" style={{ display: 'none' }}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) onConsiderDoc(f); e.currentTarget.value = ''; }} />
-                </label>
+            {/* One row of controls: attach a document, the toggles, and the
+                Suggest/Edit-with-AI action — for BOTH presentations and repos. A
+                presentation proposes SLIDES you can review & edit before generating;
+                after the first suggestion the button becomes "Edit with AI" and the
+                next request modifies the existing slides (and can add more). */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+              <label className="btn small blue" style={{ cursor: 'pointer' }}>
+                📎 {docs.length ? 'Add another document' : 'Attach a document (optional)'}
+                <input type="file" accept=".pdf,.txt,.md,.csv,.doc,.docx,.rtf,text/*,application/pdf" style={{ display: 'none' }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onConsiderDoc(f); e.currentTarget.value = ''; }} />
+              </label>
+              {artifact === 'repository' && (
                 <button type="button" className={`btn small ${withLinks ? 'green' : 'ghost'}`} onClick={() => setWithLinks((v) => !v)}
                   title="When on, Suggest with AI also adds a reference link (website / image / Wikipedia) to each card's Poster button.">
                   🔗 Link suggestion: {withLinks ? 'On' : 'Off'}
                 </button>
-                <button type="button" className={`btn small ${nextCard ? 'green' : 'ghost'}`} onClick={() => setNextCard((v) => !v)}
-                  title="When ON, Suggest with AI adds ONE next card that follows the cards already on the page (using the chat, title & description). When OFF, it regenerates a whole fresh batch of proposed pathways.">
-                  ➕ Next card: {nextCard ? 'On' : 'Off'}
+              )}
+              <button type="button" className={`btn small ${nextCard ? 'green' : 'ghost'}`} onClick={() => setNextCard((v) => !v)}
+                title={artifact === 'presentation'
+                  ? 'When ON, Suggest adds ONE next slide that follows the slides already on the page. When OFF, it proposes / edits the whole deck.'
+                  : 'When ON, Suggest with AI adds ONE next card that follows the cards already on the page. When OFF, it regenerates a whole fresh batch.'}>
+                ➕ Next {artifact === 'presentation' ? 'slide' : 'card'}: {nextCard ? 'On' : 'Off'}
+              </button>
+              {artifact === 'presentation' ? (
+                <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={suggestPresentation}
+                  title={nextCard ? 'Add ONE next slide after the current deck.'
+                    : presSuggested ? 'Edit the slides above with AI — describe your change in the box (e.g. “add multiple-choice questions about bananas on a harder level”) and it rewrites/adds slides.'
+                    : 'Let the AI propose a full slide deck into the editor above — then edit it and Generate.'}>
+                  {suggesting ? '🤖 Thinking…' : nextCard ? '🤖 Suggest next slide' : presSuggested ? '🤖 Edit with AI' : '🤖 Suggest with AI'}
                 </button>
+              ) : (
                 <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={suggestWithAI}
                   title={nextCard
                     ? 'Add ONE next card that follows the cards already on the page — it considers your chat, title & description.'
                     : 'Let the AI propose a fresh plan into the cards above — it considers your goal, chat, documents and the cards so far. Then edit them and Post.'}>
                   {suggesting ? '🤖 Thinking…' : (nextCard ? '🤖 Suggest next card' : '🤖 Suggest with AI')}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
             {messages.some((m) => m.role === 'user') && <small style={{ fontSize: 11, opacity: 0.65, display: 'block', marginTop: 6 }}>💬 Your chat answers are also considered.</small>}
           </div>
 
