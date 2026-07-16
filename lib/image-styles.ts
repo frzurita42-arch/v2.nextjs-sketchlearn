@@ -43,10 +43,10 @@ const PHOTO_STYLES = new Set(['Photorealistic', 'Editorial photo', 'Cinematic', 
 // Every generated image should be a picture only — never a poster with text.
 export const NO_TEXT_RULE = 'IMPORTANT: the image must contain NO text, words, letters, numbers, labels, captions or writing of any kind — just the picture itself.';
 
-// Steer AWAY from stiff, camera-facing portraits toward candid, in-the-moment
-// scenes — people absorbed in a real activity related to the content, or just the
-// relevant objects/scene when that shows the idea better.
-export const SCENE_RULE = 'COMPOSITION: capture a candid, in-the-moment scene — NOT a posed portrait or headshot. Any people should be busy DOING an activity that fits the content (mid-action, interacting with each other or with objects) and should NOT look at or face the camera — as if the moment were caught naturally. When the idea is shown better by things than people, show the relevant OBJECTS / setting from the lesson instead. Avoid a single person centred and staring forward.';
+// Steer AWAY from stiff, camera-facing group portraits toward candid, in-the-moment
+// slice-of-life scenes — people absorbed in a real activity related to the content,
+// or just the relevant objects/scene when that shows the idea better.
+export const SCENE_RULE = 'COMPOSITION (MANDATORY — overrides any wording above): show a NATURAL, CANDID slice-of-life photo of people genuinely BUSY IN AN ACTIVITY that fits the content — mid-action, interacting with each other or with objects, seen from a natural, off-centre angle like documentary / photojournalism, a moment caught in passing. Absolutely NOBODY looks at, faces, or poses for the camera; nobody is lined up, grouped together, or centred staring forward. Choose the everyday activity that best matches this slide: e.g. friends chatting and laughing over coffee in a café, a family playing or doing yard chores on the lawn, people playing beach volleyball / throwing a frisbee / swimming at the beach, colleagues working at their desks in an office, a person reading a book in an armchair or speaking to a small group. If objects illustrate the idea better than people, show just the relevant objects / setting instead. NEVER a straight-on posed group portrait.';
 
 // A directive prepended to an image-generation prompt to steer its art style.
 // The medium instruction is stated FIRST and assertively so it wins over any

@@ -43,7 +43,7 @@ function supSpecFor(type: string, mathish: boolean, kind: string): string {
       : 'a short, correct code snippet';
   if (type === 'image') return mathish
     ? 'Return support = { "type": "image", "prompt": "a CLEAN, LABELLED reference diagram that helps understand this slide — e.g. a right triangle with base, height, hypotenuse and angle labelled; a physics free-body sketch with forces and values; a geometry figure with measurements. Describe it precisely so it reads like a textbook diagram.", "caption": "what the diagram shows" }.'
-    : 'Return support = { "type": "image", "prompt": "a vivid image description that illustrates this slide", "caption": "..." }.';
+    : 'Return support = { "type": "image", "prompt": "<a vivid CANDID SCENE that illustrates this slide: describe people mid-activity in a real setting (or just the relevant objects) doing something tied to the content — e.g. friends chatting over coffee in a café, a family doing chores on the lawn, people playing beach volleyball, colleagues working at office desks. Do NOT describe anyone posing or looking at the camera and do NOT describe a group portrait>", "caption": "..." }.';
   if (type === 'code') return `Return support = { "type": "code", "language": "...", "code": ${JSON.stringify(codeHint)} }.`;
   if (type === 'table') return mathish
     ? 'Return support = { "type": "table", "headers": ["Step", "Equation", "What we did"], "rows": [["1", "the equation for this step (plain math text)", "short reason"], ...] } — a 3-column step-by-step working table.'
