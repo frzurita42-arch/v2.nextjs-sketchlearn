@@ -266,7 +266,21 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
     return m;
   }, [tools, favs]);
 
-  const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
+  // The gallery list carries a LIGHT tool (heavy embedded media stripped for a fast
+  // gallery), so fetch the FULL definition by slug before opening the tool page —
+  // the player/repo view then mounts with all its images/saved deck intact.
+  // "Build a repository" / "Build a presentation" — open the Builder Studio (the
+  // tool that makes them) pre-toggled to THIS page's artifact type.
+  const openBuilder = () => {
+    appState.builderSeed = { artifact: isSlides ? 'presentation' : 'repository' } as any;
+    app.nav('toolbuilder');
+  };
+  const open = async (t: any) => {
+    if (!t?.slug) { appState.activeTool = t; app.nav('tool'); return; }
+    try { const r = await API.get(`/api/tools?slug=${encodeURIComponent(t.slug)}`); appState.activeTool = r?.tool || t; }
+    catch { appState.activeTool = t; }
+    app.nav('tool');
+  };
 
   const isExample = (t: any) => (t.tags || []).includes('example');
   const mineToDelete = (t: any) => !isExample(t) && (app.user?.role === 'admin' || app.user?.username === t.owner);
@@ -342,7 +356,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
       {(!loading && tools.length === 0) ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>
-            {isAdmin && <button className="btn green" onClick={() => app.nav('toolbuilder')}>＋ Build a tool</button>}
+            {isAdmin && <button className="btn green" onClick={openBuilder}>＋ Build a {isSlides ? 'presentation' : 'repository'}</button>}
           </div>
         ) : (!loading && galleryCollapsed && !isAdmin) ? null : (
           <>
@@ -354,9 +368,8 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
               titleKey="galleryShelfTitle" titleFallback="🖼️ Gallery"
               bannerKey="galleryBanner" bannerDefault="🖼️ Gallery — browse every tool. Search by name or @user, filter by favorites, liked by admin or Moderators, switch grid or rows, sort newest/oldest, and page through. Tap a card to open its tool."
               showRefresh={false}
-              bottomRule
               belowToolbar={canBuild
-                ? <div style={{ display: 'flex', justifyContent: 'center' }}><button className="btn small green" onClick={() => app.nav('toolbuilder')}>＋ Build a {isSlides ? 'presentation' : 'repository'}</button></div>
+                ? <div style={{ display: 'flex', justifyContent: 'center' }}><button className="btn small green" onClick={openBuilder}>＋ Build a {isSlides ? 'presentation' : 'repository'}</button></div>
                 : undefined}
               showCollapse collapsed={galleryCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('galleryCollapsed', galleryCollapsed) : undefined}
@@ -417,11 +430,12 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
       )}
 
       {/* Page-wide discussion — a comment section shared by everyone browsing this
-          gallery (one thread per page: repositories vs slides). */}
+          gallery (one thread per page: repositories vs slides). The dashed rule sits
+          at the BOTTOM of the section, not the top. */}
       <div style={{ maxWidth: 820, margin: '18px auto 0' }}>
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, marginBottom: 12 }} />
         <h3 style={{ textAlign: 'center', margin: '0 0 10px' }}>💬 Discussion</h3>
         <CommentSection targetType="tool" targetId={isSlides ? '__gallery_slides__' : '__gallery_repos__'} />
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, marginTop: 12 }} />
       </div>
     </>
   );

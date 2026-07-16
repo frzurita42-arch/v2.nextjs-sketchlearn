@@ -14,6 +14,25 @@ const { userState } = require('@/src/db/users');
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Strip the heavy embedded media out of a tool definition for the LIST payload —
+// saved decks (slides full of AI images), repo-card images and data-URL links.
+// The gallery only needs the light fields; the full media comes back via ?slug=.
+function slimForList(def: any): any {
+  if (!def || typeof def !== 'object') return def;
+  const d: any = { ...def };
+  if (d.lesson && typeof d.lesson === 'object') { const l = { ...d.lesson }; delete l.savedDeck; d.lesson = l; }
+  const stripCards = (cards: any[]): any[] => (Array.isArray(cards) ? cards : []).map((c: any) => {
+    const nc: any = { ...c };
+    if (typeof nc.image === 'string' && nc.image.startsWith('data:')) nc.image = '';
+    if (typeof nc.genImage === 'string' && nc.genImage.startsWith('data:')) nc.genImage = '';
+    if (Array.isArray(nc.links)) nc.links = nc.links.map((l: any) => (l && typeof l.url === 'string' && l.url.startsWith('data:') ? { ...l, url: '' } : l));
+    if (Array.isArray(nc.children)) nc.children = stripCards(nc.children);
+    return nc;
+  });
+  if (d.repo && Array.isArray(d.repo.cards)) d.repo = { ...d.repo, cards: stripCards(d.repo.cards) };
+  return d;
+}
+
 // GET /api/tools            -> list visible tools (public + your own)
 // GET /api/tools?slug=xyz   -> one tool by slug
 export async function GET(req: Request) {
@@ -40,18 +59,23 @@ export async function GET(req: Request) {
   const adminOwners = (userState.users || []).filter((u: any) => u.role === 'admin').map((u: any) => u.username);
   const tools = await listTools({ includePrivateFor: a.user.username, adminOwners, viewerIsAdmin, limit: 60 });
   // Flag tools an admin has liked (for the "liked by admin" gallery filter) and
-  // drop the raw liker list from the public payload.
+  // drop the raw liker list from the public payload. Also SLIM the definition:
+  // the gallery only needs the top-level fields (title, description, thumbnail,
+  // archetype, tags, owner…), so we strip the heavy embedded media out of the
+  // definition (saved decks full of AI images, repo-card images and data-URL
+  // links). This keeps the list payload light so the galleries load fast; the FULL
+  // tool (with its media) is fetched by ?slug= when a card is opened.
   const adminSet = new Set(adminOwners);
   const decorated = tools.map((t: any) => {
     const likers: string[] = Array.isArray(t.likedBy) ? t.likedBy : [];
     const likedByAdmin = likers.some((u: string) => adminSet.has(u));
     const likedByOwner = likers.includes(t.owner);   // the creator (OP) favorited their own tool
     const { likedBy, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
-    return { ...rest, likedByAdmin, likedByOwner };
+    return { ...rest, definition: slimForList(rest.definition), likedByAdmin, likedByOwner };
   });
   // Prepend a couple of featured examples (with any admin overrides applied) so
   // the gallery always has a working lesson to try.
-  const featured = applyOverrides(GALLERY_EXAMPLES, await getExampleOverrides());
+  const featured = applyOverrides(GALLERY_EXAMPLES, await getExampleOverrides()).map((t: any) => ({ ...t, definition: slimForList(t.definition) }));
   return NextResponse.json({ tools: [...featured, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
