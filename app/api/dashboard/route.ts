@@ -1,0 +1,66 @@
+import '@/lib/legacy-env';
+import { NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/auth-guard';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { listTools, listRecentEntries } = require('@/src/db/platform');
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+// GET /api/dashboard -> grouped data for the admin dashboard (admin only):
+//   tools: every published tool (light — no embedded media), with a slide/card
+//          count so the "slide tools" and "repositories" tables can group them.
+//   runs:  every saved presentation RUN (a lesson entry), enriched with its tool's
+//          title and the run's grade / level / theme / topic — the "who scored
+//          what" table.
+// The underlying storage stays normalised (separate tools / entries / users /
+// comments tables); this endpoint just joins what the dashboard needs to display.
+export async function GET(req: Request) {
+  const a = await requireAdmin(req);
+  if (!a.ok) return a.response;
+
+  const rawTools: any[] = await listTools({ viewerIsAdmin: true, limit: 200 });
+  const tools = rawTools.map((t: any) => {
+    const def = t.definition || {};
+    const cardCount = (def.repo && Array.isArray(def.repo.cards)) ? countCards(def.repo.cards) : 0;
+    const slideCount = def.lesson ? (parseInt(def.lesson.totalSlides, 10) || (Array.isArray(def.lesson.pages) ? def.lesson.pages.length : 0)) : 0;
+    const hasSavedDeck = !!(def.lesson && def.lesson.savedDeck && Array.isArray(def.lesson.savedDeck.slides) && def.lesson.savedDeck.slides.length);
+    return {
+      id: t.id, slug: t.slug, title: t.title, owner: t.owner,
+      archetype: t.archetype, visibility: t.visibility,
+      createdAt: t.createdAt || t.updatedAt || null,
+      tags: Array.isArray(t.tags) ? t.tags : [],
+      aiGenerated: !!t.aiGenerated, likeCount: t.likeCount || 0,
+      cardCount, slideCount, hasSavedDeck,
+    };
+  });
+  const byId: Record<string, any> = {};
+  for (const t of tools) byId[t.id] = t;
+
+  const rawEntries: any[] = await listRecentEntries({ limit: 200 });
+  // A "run" is a saved lesson rendition (skip favorites and non-lesson submissions).
+  const runs = rawEntries
+    .filter((e: any) => e && e.data && !e.data.__fav)
+    .map((e: any) => {
+      const tool = byId[e.toolId] || {};
+      const d = e.data || {};
+      const scoreNum = typeof d.score === 'number' ? d.score : null;
+      return {
+        id: e.id, user: e.username || 'anon',
+        toolTitle: tool.title || '(deleted tool)', toolSlug: tool.slug || '', archetype: tool.archetype || '',
+        topic: d.topic || '', level: d.level || d.difficulty || '', theme: d.theme && d.theme !== 'Any' ? d.theme : '',
+        imageStyle: d.imageStyle && d.imageStyle !== 'Any' ? d.imageStyle : '',
+        density: d.density || '', slides: parseInt(d.slides, 10) || tool.slideCount || 0,
+        score: scoreNum, createdAt: e.createdAt || null,
+      };
+    })
+    .filter((r: any) => r.archetype === 'lesson' || r.score !== null);
+
+  return NextResponse.json({ tools, runs }, { headers: { 'Cache-Control': 'no-cache' } });
+}
+
+function countCards(cards: any[]): number {
+  let n = 0;
+  for (const c of (Array.isArray(cards) ? cards : [])) { n += 1; if (Array.isArray(c.children)) n += countCards(c.children); }
+  return n;
+}
