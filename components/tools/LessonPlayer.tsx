@@ -75,9 +75,9 @@ function Spinner() {
 // A little ✏️ that "writes" — glides across leaving a growing underline — shown
 // while a slide or its image is being generated, so loading feels like the lesson
 // is being hand-written. `em`-based, so it scales with the surrounding font size.
-function WritingPencil() {
+function WritingPencil({ size, block }: { size?: number; block?: boolean }) {
   return (
-    <span className="sl-pencil" aria-hidden>
+    <span className="sl-pencil" aria-hidden style={{ ...(size ? { fontSize: size } : {}), ...(block ? { marginRight: 0 } : {}) }}>
       <span className="sl-pencil__line" />
       <span className="sl-pencil__tip">✏️</span>
     </span>
@@ -109,9 +109,10 @@ function GenProgress({ target, total }: { target: number; total: number }) {
           <span key={i} aria-hidden style={{ position: 'absolute', top: 0, bottom: 0, left: `${((i + 1) / total) * 100}%`, width: 2, background: 'var(--ink)', opacity: 0.45 }} />
         ))}
       </div>
-      <p style={{ opacity: 0.75, marginTop: 8, fontSize: 13 }}>
-        <WritingPencil />Writing slide {target} of {total}{left > 0 ? ` · ${left} slide${left === 1 ? '' : 's'} left until the end` : ' · last slide'}
-      </p>
+      <div style={{ opacity: 0.75, marginTop: 10, fontSize: 13 }}>
+        <div style={{ lineHeight: 1 }}><WritingPencil size={40} block /></div>
+        <p style={{ margin: '8px 0 0' }}>Writing slide {target} of {total}{left > 0 ? ` · ${left} slide${left === 1 ? '' : 's'} left until the end` : ' · last slide'}</p>
+      </div>
     </div>
   );
 }
@@ -197,7 +198,8 @@ function SupportSkeleton({ type }: { type: string }) {
   const label = ({ image: 'illustration', code: 'code snippet', table: 'table', formula: 'formula', wolfram: 'step-by-step solution', geogebra: 'interactive graph' } as Record<string, string>)[type] || 'material';
   return (
     <div style={{ margin: '8px 0', padding: '14px 16px', border: '1.5px dashed var(--ink)', borderRadius: 8, textAlign: 'center', opacity: 0.7, fontSize: 13 }}>
-      <WritingPencil />Sketching {label}…
+      <div style={{ lineHeight: 1 }}><WritingPencil size={36} block /></div>
+      <p style={{ margin: '8px 0 0' }}>Sketching {label}…</p>
     </div>
   );
 }

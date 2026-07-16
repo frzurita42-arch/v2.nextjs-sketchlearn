@@ -253,11 +253,20 @@ export default function AppRoot() {
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', margin: '6px 0 0', fontSize: 12 }}>
           <span style={{ opacity: 0.6, fontWeight: 700 }}>👁 View as</span>
           {/* The admin's own view IS "Admin" (mapped to the neutral `self`), so there
-              is no separate "You". Admin can preview the page as a plain User, a
-              Moderator, or (soon) a Languages view. */}
-          {([['user', 'User'], ['op', 'Moderators'], ['self', 'Admin'], ['languages', 'Languages'], ['stem', 'STEM']] as [ViewAs, string][]).map(([v, label]) => (
-            <button key={v} className={`btn small ${viewAs === v ? 'blue' : 'ghost'}`} style={{ padding: '2px 10px' }} onClick={() => setViewAs(v)}
-              title={v === 'user' ? 'As a plain signed-in visitor' : v === 'op' ? 'As a moderator (the content owner)' : v === 'self' ? 'Your admin view' : v === 'languages' ? 'Language view — coming soon' : 'STEM view — coming soon'}>{label}</button>
+              is no separate "You". Admin can preview the page as a Guest (not signed
+              in), a plain User, a Moderator, or (soon) a Languages / STEM view.
+              Guest, Languages and STEM are placeholders for now — shown but disabled. */}
+          {([
+            ['guest', 'Guest', true, 'A visitor who is NOT signed in — coming soon'],
+            ['user', 'User', false, 'As a plain signed-in visitor'],
+            ['op', 'Moderators', false, 'As a moderator (the content owner)'],
+            ['self', 'Admin', false, 'Your admin view'],
+            ['languages', 'Languages', true, 'Language view — coming soon'],
+            ['stem', 'STEM', true, 'STEM view — coming soon'],
+          ] as [string, string, boolean, string][]).map(([v, label, disabled, title]) => (
+            <button key={v} className={`btn small ${!disabled && viewAs === v ? 'blue' : 'ghost'}`}
+              style={{ padding: '2px 10px', ...(disabled ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
+              disabled={disabled} onClick={disabled ? undefined : () => setViewAs(v as ViewAs)} title={title}>{label}</button>
           ))}
           {(viewAs === 'user' || viewAs === 'op') && <span style={{ opacity: 0.7, fontStyle: 'italic' }}>· previewing — controls reflect this role</span>}
           {(viewAs === 'languages' || viewAs === 'stem') && <span style={{ opacity: 0.7, fontStyle: 'italic' }}>· coming soon</span>}
