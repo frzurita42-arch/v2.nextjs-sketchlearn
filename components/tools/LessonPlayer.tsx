@@ -892,8 +892,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   // images + answers + their results) so "OP results" is always available and the
   // results are reachable again via the tool's share link — no manual step needed.
   useEffect(() => {
-    // Land the results screen at the TOP so the score is visible without scrolling.
-    if (phase === 'done' || phase === 'history') window.scrollTo(0, 0);
+    // Jump to the TOP whenever the view changes — so starting a lesson lands on
+    // the progress bar (not scrolled halfway down where the gallery card was), and
+    // the results screen shows the score without scrolling.
+    if (phase === 'play' || phase === 'done' || phase === 'history') window.scrollTo(0, 0);
     // The owner/admin's finished run auto-saves the canonical deck (silently, no
     // manual "save" button). Every play — by anyone — is already saved to the
     // tool's gallery as its own rendition entry when it starts, so finished games

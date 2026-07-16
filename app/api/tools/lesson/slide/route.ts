@@ -221,7 +221,7 @@ export async function POST(req: Request) {
   if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
 
   const langLine = language
-    ? `This is a ${language} lesson: write "content" in ${language} and put the ${translateTo} meaning in "translation".`
+    ? `This is a ${language} lesson: write "content" in ${language} and put the ${translateTo} meaning in "translation". GRAMMAR TIP: to explain a grammar point, syntax or conjugation, use a TWO-COLUMN TABLE — left column the rule/form/explanation, right column a concrete example (or the target-language form vs its meaning). A table reads far clearer than a paragraph for grammar.`
     : `Write "content" as ${paras} ${pLen} paragraph(s).`;
   const subjectLine = mathish
     ? `MATH/SCIENCE FORMATTING (important): explain any method as SEVERAL short paragraphs, one step per paragraph (separate steps with a blank line). ${wolfram

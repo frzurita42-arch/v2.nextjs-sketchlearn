@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     'DESIGN RULES:',
     '1. Produce 5–8 slides in a sensible teaching ORDER: an intro/overview first, then each middle slide teaches ONE sub-idea and immediately PRACTISES it, and a final slide is a comprehension CHECK / recap.',
     '2. EVERY slide carries substance to read/see AND most slides include an activity so progress is measured. VARY activity types across the lesson. Keep each slide focused: about 2–4 components.',
-    '3. ADAPT the mix to the subject KIND: STEM/quantitative → latex/codeblock/geogebra/image/table + wolfram + assess with annotation/code/input/mcq; Humanities/arts/text → reading/image/table (timelines) + mcq/fill-blank/input/deco-hint, few or no formulas; Language → reading/audio/translate/fill-blank/input. Pick activities that genuinely fit.',
+    '3. ADAPT the mix to the subject KIND: STEM/quantitative → latex/codeblock/geogebra/image/table + wolfram + assess with annotation/code/input/mcq; Humanities/arts/text → reading/image/table (timelines) + mcq/fill-blank/input/deco-hint, few or no formulas; Language → reading/audio/translate/fill-blank/input, and for a GRAMMAR/syntax/conjugation point add a two-column "table" (rule/form on the left, a concrete example on the right). Pick activities that genuinely fit.',
   ].join('\n');
   const shape = `Return STRICT JSON only: { "title": short lesson title, "subject": the subject/topic, "pages": [ { "components": ["reading",{"id":"mcq4","instr":"..."}], "length": "brief|medium|detailed", "paragraphs": 1 }, ... ] }. Always fill in a good "title" and "subject" (invent sensible ones if the user left them blank).${imageRule}`;
 

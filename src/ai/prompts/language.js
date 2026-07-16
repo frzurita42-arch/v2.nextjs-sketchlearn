@@ -48,6 +48,7 @@ function buildReadingInstructions({ language, level, topic, grammarTopic }) {
     ` Theme for examples: "${topic || 'everyday life'}". Grammar focus: "${grammarTopic || 'general'}".` +
     ` Each slide is a short reading passage sized to the level (Zero: a few short words/sentences; higher levels: more sentences and paragraphs, richer vocabulary and harder interpretation), followed by a comprehension multiple-choice question.` +
     ` On EVERY slide include exactly one support component that fits the passage — an image or a table (e.g. vocabulary/conjugations) — AND exactly one sticky note whose text is either an encouraging comment on the learner's progress so far, a short level-appropriate quote about the theme, or a quick motivational cheer.` +
+    ` GRAMMAR: to explain a grammar point, syntax or conjugation, prefer a TWO-COLUMN table — left column the rule/form/explanation, right column a concrete example (or target-language form vs its meaning).` +
     ` NEVER use a code block/snippet: this is a language lesson, not programming — code boxes are only for STEM (coding, math, algorithms).` +
     ` Keep the lesson oriented to what a ${level} learner actually needs (Zero: survival basics; A1/A2: greetings and daily life; B1/B2: experiences and opinions; C1/C2: negotiation, study, travel, business).`;
 }
