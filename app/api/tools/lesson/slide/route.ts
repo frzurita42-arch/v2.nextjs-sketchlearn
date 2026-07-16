@@ -161,6 +161,10 @@ export async function POST(req: Request) {
   const tone = String(b.values?.tone || lesson.tone || '').slice(0, 40);
   // Free-text "Custom instructions" the author typed on the generate form.
   const customNote = String(b.values?.custom || b.values?.customInstructions || '').slice(0, 400);
+  // A per-slide change the learner/author asked for WHILE viewing the slide
+  // (the 🧩 "change this slide" box in the player) — e.g. "add a multiple-choice
+  // question about bananas" or "remove the image". Honoured strongly on regen.
+  const modify = String(b.modify || '').slice(0, 400);
   // Learner-chosen support toggles (sup_*) override the page/tool defaults.
   const baseSup = pageSpec?.support || lesson.support || { images: true };
   const pickBool = (v: any, d: any) => (typeof v === 'boolean' ? v : d);
@@ -241,6 +245,7 @@ export async function POST(req: Request) {
     `LEVEL DEPTH (${level}): ${levelDepthGuidance(level)}`,
     topic ? `Focus: ${topic}.` : '', tone ? `Tone: ${tone}.` : '', lesson.style ? `Style: ${lesson.style}.` : '',
     customNote ? `AUTHOR'S CUSTOM INSTRUCTIONS (honor these wherever they don't conflict with the output schema): ${customNote}` : '',
+    modify ? `CHANGE REQUEST FOR THIS SLIDE (apply it now, it overrides the defaults above): ${modify}. You MAY add, remove or change the questions and the teaching content to satisfy it — e.g. add a multiple-choice or fill-blank question, remove one, rewrite the passage. If it asks for a support visual (image/table/etc.), mention it in the content so it fits.` : '',
     pageSpec?.style ? `This slide was designed to use: ${pageSpec.style}` : '',
     priorSummary ? `The learner has already seen (build on these — connect this slide to them and do NOT repeat): ${priorSummary}.` : '',
     'COHESION: Every component on THIS slide — the reading, each visual, and every question — must revolve around ONE coherent concept and clearly relate to each other; do not mix unrelated ideas on the same slide. Across the whole presentation the slides should build on one another into a connected lesson.',

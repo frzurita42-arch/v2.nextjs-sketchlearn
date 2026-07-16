@@ -300,7 +300,7 @@ function Decorations({ items, subject = '', topic = '', onFinish }: { items: any
 
 // ---- Self-resolving questions (mcq / fill-blank / input) — no AI check. ----
 // Report the outcome via onDone(correct, detail).
-function ChoiceQuestion({ q, translateTo, subject, onDone }: { q: Q; translateTo: string; subject: string; onDone: (correct: boolean, detail: any) => void }) {
+function ChoiceQuestion({ q, translateTo, subject, onDone, recorded }: { q: Q; translateTo: string; subject: string; onDone: (correct: boolean, detail: any) => void; recorded?: any }) {
   const [opts] = useState<any[]>(() => q.kind === 'mcq' ? shuffle(q.options || []) : []);
   const [picked, setPicked] = useState<number | null>(null);
   const [val, setVal] = useState('');
@@ -311,20 +311,25 @@ function ChoiceQuestion({ q, translateTo, subject, onDone }: { q: Q; translateTo
   const finish = (correct: boolean, detail: any) => { if (state === 'open') { setState(correct ? 'right' : 'wrong'); onDone(correct, detail); } };
 
   if (q.kind === 'mcq') {
-    const answered = picked !== null;
+    // Answered either just now (picked) or on a revisit (recorded.your). Keep the
+    // options on screen: chosen-wrong in red, the correct one in green, with a
+    // short explanation below — never collapse to a bare "wrong" line.
+    const yourText = recorded ? String(recorded.your ?? '') : (picked !== null ? opts[picked!]?.text : '');
+    const answered = picked !== null || !!recorded;
     const correctText = (opts.find((o: any) => o.correct) || {}).text || '';
+    const explain = (opts.find((o: any) => o.text === yourText)?.explanation) || recorded?.feedback || opts[picked!]?.explanation || '';
     return (
       <div>
         <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 10px' }}><MathText text={q.prompt} /></p>
         <div style={{ display: 'grid', gap: 8, maxWidth: 460, margin: '0 auto' }}>
           {opts.map((o: any, i: number) => {
-            const isP = picked === i;
+            const isP = picked === i || (recorded && o.text === yourText);
             const bg = !answered ? undefined : o.correct ? 'rgba(127,176,105,0.25)' : (isP ? 'rgba(228,87,46,0.2)' : undefined);
             return <button key={i} className="btn" style={{ textAlign: 'left', width: '100%', background: bg, borderColor: answered && o.correct ? 'var(--ink)' : undefined }} disabled={answered}
               onClick={() => { setPicked(i); finish(!!o.correct, { prompt: q.prompt, your: o.text, answer: correctText, correct: !!o.correct, feedback: o.explanation || '' }); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}<MathText text={o.text} /></button>;
           })}
         </div>
-        {answered && opts[picked!]?.explanation && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 10, textAlign: 'center' }}>{opts[picked!].explanation}</p>}
+        {answered && explain && <p style={{ fontSize: 14, opacity: 0.85, marginTop: 10, textAlign: 'center' }}>{explain}</p>}
         {!answered && <GuidePanel subject={subject} prompt={q.prompt} kind="mcq" getAttempt={() => ''} />}
       </div>
     );
@@ -506,9 +511,10 @@ function GuidePanel({ subject, prompt, kind, getAttempt }: { subject: string; pr
   };
   return (
     <div style={{ marginTop: 8 }}>
-      <div className="chat-input-row" style={{ maxWidth: 520, margin: '0 auto' }}>
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Ask the AI for a hint… (🎤 to speak)" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ask(); } }} />
-        <button className="btn small blue" disabled={busy} onClick={ask}>{busy ? <><Spinner />…</> : '💬 Ask'}</button>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%', maxWidth: 520, margin: '0 auto' }}>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Ask the AI for a hint… (🎤 to speak)" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ask(); } }}
+          style={{ flex: 1, minWidth: 0 }} />
+        <button className="btn small blue" style={{ flex: '0 0 auto' }} disabled={busy} onClick={ask}>{busy ? <><Spinner />…</> : '💬 Ask'}</button>
       </div>
       {chat.length > 0 && (
         <div style={{ maxWidth: 560, margin: '10px auto 0', textAlign: 'left', display: 'grid', gap: 6 }}>
@@ -799,12 +805,24 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [slideLevel, setSlideLevel] = useState<Record<number, string>>({});
   const [relevelBusy, setRelevelBusy] = useState(false);
   const [levelOpen, setLevelOpen] = useState(false);
+  // 🧩 "change this slide" box: the learner types a change (add/remove a
+  // component or question, tweak the content) and Apply regenerates THIS slide.
+  const [modOpen, setModOpen] = useState(false);
+  const [modText, setModText] = useState('');
+  const [modBusy, setModBusy] = useState(false);
   // Refs let the background prefetch read the latest state without stale closures.
   const slidesRef = useRef<(Slide | null)[]>([]);
   const cfgRef = useRef<Cfg>({});
   const prefetching = useRef<Record<number, Promise<void> | undefined>>({});
   const startedAt = useRef(0);   // when the current play began, for the end-slide time
   useEffect(() => { slidesRef.current = slides; }, [slides]);
+  // Changing slide silences any audio still playing from the previous slide
+  // (belt-and-braces with the AudioButton unmount cleanup).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.querySelectorAll('audio').forEach((a) => { try { a.pause(); a.currentTime = 0; } catch { /* ignore */ } });
+    try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
+  }, [cur]);
 
   // Quietly load slide `idx` in the BACKGROUND (no spinner), so Next is instant
   // for EVERY answer type — including AI-checked ones that don't block on it.
@@ -814,6 +832,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       try {
         const prior = slidesRef.current.filter(Boolean).map((s) => (s as Slide).title);
         const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: idx + 1, priorSummary: prior.slice(-6).join('; ') });
+        // Publish to slidesRef SYNCHRONOUSLY: the ref normally syncs via an effect
+        // that only runs after a re-render, which is too late for the Next click
+        // that is awaiting this prefetch — that made Next need two clicks.
+        if (!slidesRef.current[idx]) { const nr = [...slidesRef.current]; nr[idx] = r; slidesRef.current = nr; }
         setSlides((sc) => { if (sc[idx]) return sc; const n = [...sc]; n[idx] = r; return n; });
       } catch { /* goNext will fetch on demand if this failed */ }
       finally { delete prefetching.current[idx]; }
@@ -870,6 +892,12 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   // images + answers + their results) so "OP results" is always available and the
   // results are reachable again via the tool's share link — no manual step needed.
   useEffect(() => {
+    // Land the results screen at the TOP so the score is visible without scrolling.
+    if (phase === 'done' || phase === 'history') window.scrollTo(0, 0);
+    // The owner/admin's finished run auto-saves the canonical deck (silently, no
+    // manual "save" button). Every play — by anyone — is already saved to the
+    // tool's gallery as its own rendition entry when it starts, so finished games
+    // always appear there.
     if (phase === 'done' && canEdit && !savedRun.current && slidesRef.current.filter(Boolean).length) {
       savedRun.current = true;
       saveDeck(results, true);
@@ -962,6 +990,24 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       });
     } catch { /* keep the current text */ }
     setRelevelBusy(false);
+  };
+
+  // Regenerate THIS slide applying the learner's change request. Apply IS the
+  // send + refresh: it asks the AI, waits, then swaps the slide in place (and
+  // clears its answers so the new questions start fresh).
+  const applyModify = async () => {
+    const s = slidesRef.current[cur]; if (!s || modBusy || !modText.trim()) return;
+    setModBusy(true);
+    try {
+      const prior = slidesRef.current.slice(0, cur).filter(Boolean).map((x) => (x as Slide).title);
+      const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: cur + 1, priorSummary: prior.slice(-6).join('; '), modify: modText.trim() });
+      if (r?.content || (Array.isArray(r?.questions) && r.questions.length) || r?.title) {
+        setSlides((sc) => { const n = [...sc]; n[cur] = r; slidesRef.current = n; return n; });
+        setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
+        setModText(''); setModOpen(false);
+      }
+    } catch { /* keep the current slide */ }
+    setModBusy(false);
   };
 
   const goBack = () => { if (cur > 0) { setCur(cur - 1); prefetch(cur); } };
@@ -1133,8 +1179,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             <>
               <button style={iconBtn} title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
               {(hasSaved || canEdit) && (
-                <button className="btn small" title={hasSaved ? "View the moderator's results (with answers)" : 'No original results saved yet'}
-                  onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No original results saved yet. Play a run, then tap “Save this as the original deck” on the results screen — it will then show here for everyone.'); }}>📖 Moderator results</button>
+                <button className="btn small" style={{ background: '#fbe08a', padding: '5px 9px' }} title={hasSaved ? "Moderator results — view the saved answer-key run" : 'No moderator results saved yet'}
+                  onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No moderator results saved yet — an owner plays a run and it saves automatically.'); }}>📖</button>
               )}
               <button className="btn small green" title="Play a fresh replica (no answers)" onClick={play}>▶ Play</button>
             </>
@@ -1348,12 +1394,9 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>
           <button className="btn" onClick={() => { setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
         </div>
-        {canEdit && (
-          <div className="card alt" style={{ padding: '10px 14px', marginTop: 12, textAlign: 'center' }}>
-            <button className="btn small blue" onClick={() => saveDeck(results)}>💾 Save this as the original deck</button>
-            <p style={{ fontSize: 11, opacity: 0.65, margin: '6px 0 0' }}>Viewers can then open these exact slides (with the answer key). {deckMsg}</p>
-          </div>
-        )}
+        {/* The finished run is saved automatically (owner: canonical deck; everyone:
+            their rendition entry) — no manual save button needed. */}
+        {canEdit && deckMsg && <p style={{ fontSize: 11, opacity: 0.6, textAlign: 'center', marginTop: 8 }}>{deckMsg}</p>}
       </div>
     );
   }
@@ -1404,6 +1447,20 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, position: 'relative' }}>
             <h3 style={{ margin: 0, textAlign: 'center' }}>{curSlide.title}</h3>
             <button className="btn small ghost" title="Change the reading level of this slide" onClick={() => setLevelOpen((o) => !o)} style={{ padding: '0 6px' }}>{relevelBusy ? <Spinner /> : '⚙'}</button>
+            <button className="btn small ghost" title="Ask the AI to change this slide — add or remove a component, a question, an image…" onClick={() => setModOpen((o) => !o)} style={{ padding: '0 6px' }}>{modBusy ? <Spinner /> : '🧩'}</button>
+            {modOpen && (
+              <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 10, minWidth: 240, maxWidth: 300, textAlign: 'left' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>CHANGE THIS SLIDE</div>
+                <textarea value={modText} onChange={(e) => setModText(e.target.value)} disabled={modBusy}
+                  placeholder="e.g. add a multiple-choice question about…, remove the image, make it shorter"
+                  style={{ width: '100%', minHeight: 56, fontSize: 13 }} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) applyModify(); }} />
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6 }}>
+                  <button className="btn small ghost" onClick={() => setModOpen(false)}>✕</button>
+                  <button className="btn small blue" disabled={modBusy || !modText.trim()} onClick={applyModify}>{modBusy ? <><Spinner />Applying…</> : '🔄 Apply'}</button>
+                </div>
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 4 }}>The AI rebuilds this slide with your change.</div>
+              </div>
+            )}
             {levelOpen && (
               <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 170, textAlign: 'left' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>READING LEVEL</div>
@@ -1429,14 +1486,18 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             return (
               <div key={`${cur}-${i}`} style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
                 {qList.length > 1 && <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5, marginBottom: 6 }}>Question {i + 1} / {qList.length}</div>}
-                {ans ? <ReviewRow d={ans} />
+                {/* MCQ keeps its full option list (chosen red, correct green,
+                    explanation below) even after it's answered; other kinds use
+                    the compact ReviewRow once answered. */}
+                {ans && q.kind !== 'mcq'
+                  ? <ReviewRow d={ans} />
                   : q.kind === 'annotation'
                     ? <AnnotationQuestion q={q} subject={lesson.subject || ''} size={padSize} onDone={(c, d) => recordQ(i, c, d)} />
                     : q.kind === 'code'
                       ? <CodeQuestion q={q} subject={lesson.subject || ''} onDone={(c, d) => recordQ(i, c, d)} />
                       : q.kind === 'writing'
                         ? <WritingQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />
-                        : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} subject={lesson.subject || ''} onDone={(c, d) => recordQ(i, c, d)} />}
+                        : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} subject={lesson.subject || ''} recorded={ans} onDone={(c, d) => recordQ(i, c, d)} />}
               </div>
             );
           })}

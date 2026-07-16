@@ -48,6 +48,10 @@ export async function POST(req: Request) {
   // Fold any attached TEXT documents into the context the designer considers.
   const docText = (Array.isArray(b.docs) ? b.docs : []).map((d: any) => String(d?.text || '')).filter(Boolean).join('\n\n').slice(0, 6000);
   const fullContext = [context, docText && `Reference document(s):\n${docText}`].filter(Boolean).join('\n\n').slice(0, 8000);
+  // If the author explicitly asks for images/visuals, put an image on (nearly)
+  // every slide so the request is honoured.
+  const wantsImages = /\b(image|images|picture|pictures|photo|photos|visual|visuals|illustrat|diagram)\b/i.test(fullContext);
+  const imageRule = wantsImages ? ' THE AUTHOR WANTS IMAGES: include an "image" component on EVERY slide (or all but the pure-quiz recap).' : '';
   // A subject is enough, but so is a goal/context or an attached document or an
   // existing deck to edit — the AI infers the subject from whatever is provided.
   if (!subject && !fullContext && !existing.length) return NextResponse.json({ error: 'Add a subject, a goal, or a document first.' }, { status: 200 });
@@ -81,7 +85,7 @@ export async function POST(req: Request) {
     '2. EVERY slide carries substance to read/see AND most slides include an activity so progress is measured. VARY activity types across the lesson. Keep each slide focused: about 2–4 components.',
     '3. ADAPT the mix to the subject KIND: STEM/quantitative → latex/codeblock/geogebra/image/table + wolfram + assess with annotation/code/input/mcq; Humanities/arts/text → reading/image/table (timelines) + mcq/fill-blank/input/deco-hint, few or no formulas; Language → reading/audio/translate/fill-blank/input. Pick activities that genuinely fit.',
   ].join('\n');
-  const shape = 'Return STRICT JSON only: { "title": short lesson title, "subject": the subject/topic, "pages": [ { "components": ["reading",{"id":"mcq4","instr":"..."}], "length": "brief|medium|detailed", "paragraphs": 1 }, ... ] }. Always fill in a good "title" and "subject" (invent sensible ones if the user left them blank).';
+  const shape = `Return STRICT JSON only: { "title": short lesson title, "subject": the subject/topic, "pages": [ { "components": ["reading",{"id":"mcq4","instr":"..."}], "length": "brief|medium|detailed", "paragraphs": 1 }, ... ] }. Always fill in a good "title" and "subject" (invent sensible ones if the user left them blank).${imageRule}`;
 
   let system: string; let user: string; let minPages = 3; let maxPages = 10;
   const existingJson = JSON.stringify(existing);

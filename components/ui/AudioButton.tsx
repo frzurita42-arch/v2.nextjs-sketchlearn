@@ -2,7 +2,7 @@
 /* Reusable text-to-speech button. Plays `text` via the server TTS proxy
  * (ElevenLabs). Falls back to showing the text + the real error when audio is
  * unavailable. Used by the language listening/spelling slides and coach chat. */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 
 export function AudioButton({ text, label = '🔊 Play', small = false, showTextOnFail = true }: {
@@ -12,6 +12,12 @@ export function AudioButton({ text, label = '🔊 Play', small = false, showText
   const [err, setErr] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const srcRef = useRef<string | null>(null);
+  // Stop playback if this button unmounts (e.g. the learner clicks Next mid-audio)
+  // so the clip doesn't keep playing in the background on the next slide.
+  useEffect(() => () => { try { audioRef.current?.pause(); } catch { /* ignore */ } }, []);
+  // If the TEXT changes (React reused this button on a new slide), drop the cached
+  // clip and reset — otherwise it would replay the PREVIOUS slide's audio.
+  useEffect(() => { try { audioRef.current?.pause(); } catch { /* ignore */ } srcRef.current = null; setState('idle'); setErr(''); }, [text]);
 
   const play = async () => {
     if (srcRef.current) { audioRef.current?.play().catch(() => {}); return; }
