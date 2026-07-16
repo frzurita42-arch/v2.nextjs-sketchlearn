@@ -41,6 +41,7 @@ export async function GET(req: Request) {
       subjectKind: tool.definition?.lesson?.subjectKind || '',
       tags: tool.tags || tool.definition?.tags || [],
       title: d.title || '',
+      subtitle: d.subtitle || d.why || '',
       topic: d.topic || '',
       level: d.level || d.difficulty || '',
       thumbnail: d.thumbnail || null,

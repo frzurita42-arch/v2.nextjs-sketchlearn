@@ -5,6 +5,8 @@ import { generateStructured, generateImage } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug, getEntry, updateEntryData } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,7 +23,9 @@ export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
-  const tool = await getToolBySlug(String(b.slug || ''));
+  // Resolve real DB tools AND built-in virtual example/admin tools (whose
+  // renditions live under the slug), so their cards can be edited too.
+  const tool = (await getToolBySlug(String(b.slug || ''))) || exampleBySlug(String(b.slug || ''));
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const entry = await getEntry(String(b.entryId || ''));
   if (!entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
@@ -43,6 +47,12 @@ export async function POST(req: Request) {
     if (typeof b.subtitle === 'string') patch.subtitle = b.subtitle.slice(0, 400);
     const provided = String(b.image || '');
     if (provided) {
+      // An "emoji:X" thumbnail (the 🎲 random-emoji button) is stored as-is.
+      if (/^emoji:/.test(provided)) {
+        patch.thumbnail = provided.slice(0, 40);
+        const data = await updateEntryData(entry.id, patch);
+        return NextResponse.json({ data });
+      }
       if (!(/^https?:\/\//i.test(provided) || /^data:image\//i.test(provided))) {
         return NextResponse.json({ error: 'Not a valid image.' }, { status: 400 });
       }
