@@ -154,6 +154,12 @@ export function ToolRunnerView() {
   const app = useApp();
   const tool = appState.activeTool;
   const def = tool?.definition;
+  // A lesson in progress switches this page into a focused "player" — the tool's
+  // title / author / share / description / comments / "more like this" chrome is
+  // hidden so only the slide presentation (plus the app header + footer) shows.
+  const [immersive, setImmersive] = useState(false);
+  // Reset when the active tool changes so a new tool page starts with full chrome.
+  useEffect(() => { setImmersive(false); }, [tool?.slug]);
 
   // Clear any leftover Posts-carousel open-intent once this tool page is up. Child
   // effects run first, so the LessonPlayer consumes it before this fires; for
@@ -299,45 +305,49 @@ export function ToolRunnerView() {
 
   return (
     <>
-      <h1 className="view-title">{tool.title}
-        {canEdit && <button title="Edit title (type or AI)" onClick={() => setEditField('title')} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
-      </h1>
+      {!immersive && (
+        <h1 className="view-title">{tool.title}
+          {canEdit && <button title="Edit title (type or AI)" onClick={() => setEditField('title')} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
+        </h1>
+      )}
       {editField && (
         <AiEditPopup field={editField} slug={tool.slug} initial={editField === 'title' ? tool.title : (descDraft || def.description || '')}
           onSave={editField === 'title' ? saveTitle : saveDesc} onClose={() => setEditField(null)} />
       )}
 
-      {/* ┄ divider: title ┄ author/stats card ┄ */}
-      <div style={dashRule} />
+      {!immersive && (<>
+        {/* ┄ divider: title ┄ author/stats card ┄ */}
+        <div style={dashRule} />
 
-      {/* Social chrome: author + stats + like + share, provided by the platform
-          (so tools never build their own author/like/comment components). */}
-      <div className="card" style={{ maxWidth: 820, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: authorAv.color, border: '2px solid var(--ink)', fontSize: 20 }}>{authorAv.emoji}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700 }}>@{tool.owner}</div>
-          <div style={{ fontSize: 12, opacity: 0.65 }}>{created}{created ? ' · ' : ''}{tool.archetype} · {tool.visibility}{tool.aiGenerated ? ' · ✦AI-built' : ''}</div>
+        {/* Social chrome: author + stats + like + share, provided by the platform
+            (so tools never build their own author/like/comment components). */}
+        <div className="card" style={{ maxWidth: 820, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: authorAv.color, border: '2px solid var(--ink)', fontSize: 20 }}>{authorAv.emoji}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700 }}>@{tool.owner}</div>
+            <div style={{ fontSize: 12, opacity: 0.65 }}>{created}{created ? ' · ' : ''}{tool.archetype} · {tool.visibility}{tool.aiGenerated ? ' · ✦AI-built' : ''}</div>
+          </div>
+          <button className="btn small ghost" onClick={toggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
+          {tool.visibility !== 'private' && <SharePanel slug={tool.slug} title={tool.title} />}
+          {/* Studio-made repositories & presentations don't expose Settings. */}
+          {!(tool.tags || []).includes('example') && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && perms.canEdit && (
+            <button className="btn small ghost" onClick={() => app.nav('toolsettings')}>⚙️ Settings</button>
+          )}
+          <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>
         </div>
-        <button className="btn small ghost" onClick={toggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
-        {tool.visibility !== 'private' && <SharePanel slug={tool.slug} title={tool.title} />}
-        {/* Studio-made repositories & presentations don't expose Settings. */}
-        {!(tool.tags || []).includes('example') && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && perms.canEdit && (
-          <button className="btn small ghost" onClick={() => app.nav('toolsettings')}>⚙️ Settings</button>
+        {(def.description || descDraft || canEdit) && (
+          <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>
+            {descDraft || def.description || <em style={{ opacity: 0.6 }}>No description yet.</em>}
+            {canEdit && <button title="Edit description (type or AI)" onClick={() => setEditField('description')} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✎</button>}
+          </p>
         )}
-        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Tools</button>
-      </div>
-      {(def.description || descDraft || canEdit) && (
-        <p className="view-sub" style={{ maxWidth: 820, margin: '8px auto 0' }}>
-          {descDraft || def.description || <em style={{ opacity: 0.6 }}>No description yet.</em>}
-          {canEdit && <button title="Edit description (type or AI)" onClick={() => setEditField('description')} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✎</button>}
-        </p>
-      )}
+      </>)}
 
       <section style={{ maxWidth: 820, margin: '8px auto 0' }}>
         {isRepo ? (
           <RepoView def={def} slug={tool.slug} canEdit={canEdit} owner={tool.owner} />
         ) : isLesson ? (
-          <LessonPlayer def={def} slug={tool.slug} canEdit={canEdit} />
+          <LessonPlayer def={def} slug={tool.slug} canEdit={canEdit} onImmersiveChange={setImmersive} />
         ) : !isApp ? (
           !def.generator ? (
             <div className="card alt" style={{ padding: '14px 16px' }}><p style={{ margin: 0 }}>This tool&apos;s definition is incomplete and can&apos;t run. Try rebuilding it from the Builder.</p></div>
@@ -431,20 +441,22 @@ export function ToolRunnerView() {
         </div>
       )}
 
-      {/* ┄ divider: activities/feed ┄ comments ┄ */}
-      <div style={dashRule} />
+      {!immersive && (<>
+        {/* ┄ divider: activities/feed ┄ comments ┄ */}
+        <div style={dashRule} />
 
-      {/* Platform-provided comment section on every tool. */}
-      <CommentSection targetType="tool" targetId={tool.slug} />
+        {/* Platform-provided comment section on every tool. */}
+        <CommentSection targetType="tool" targetId={tool.slug} />
 
-      {/* ┄ divider: comments ┄ more picks ┄ */}
-      <div style={dashRule} />
-      {/* On a REPOSITORY: 10 AI-recommended TOPICS drawn from its subjects, each a
-          preset that opens the presentation builder. Elsewhere: the usual "more
-          like this" tool feed. */}
-      {isRepo
-        ? <TopicSuggestions repoSlug={tool.slug} repoTitle={tool.title} />
-        : <SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" />}
+        {/* ┄ divider: comments ┄ more picks ┄ */}
+        <div style={dashRule} />
+        {/* On a REPOSITORY: 10 AI-recommended TOPICS drawn from its subjects, each a
+            preset that opens the presentation builder. Elsewhere: the usual "more
+            like this" tool feed. */}
+        {isRepo
+          ? <TopicSuggestions repoSlug={tool.slug} repoTitle={tool.title} />
+          : <SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" />}
+      </>)}
     </>
   );
 }

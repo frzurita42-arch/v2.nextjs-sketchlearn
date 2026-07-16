@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
+import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
@@ -675,7 +676,7 @@ function AnswerKey({ q }: { q: Q }) {
   );
 }
 
-export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: string; canEdit?: boolean }) {
+export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: { def: any; slug: string; canEdit?: boolean; onImmersiveChange?: (immersive: boolean) => void }) {
   const lesson = def?.lesson || {};
   // Conversation / journal modes are a growing canvas thread, not a slide deck.
   if (lesson.mode === 'conversation' || lesson.mode === 'journal') {
@@ -685,7 +686,14 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const levelField = settings.find((f: any) => f.id === 'level' || f.id === 'difficulty');
   const levels: string[] = levelField?.options?.length ? levelField.options : TEXT_LEVELS;
 
+  const app = useApp();
   const [phase, setPhase] = useState<'hub' | 'play' | 'done' | 'history'>('hub');
+  // "Immersive" = actually inside a run (a slide, results, or the saved deck) — as
+  // opposed to the hub (create form + gallery). The parent tool page hides its
+  // title / author / share / comments / "more like this" chrome while immersive,
+  // so the presentation reads like a focused player.
+  const immersive = phase !== 'hub';
+  useEffect(() => { onImmersiveChange?.(immersive); }, [immersive, onImmersiveChange]);
   const [form, setForm] = useState<Cfg>(() => defaultsFor(settings));
   // Upgrade a legacy CEFR default (A1…C2) to the new academic scale so the
   // Difficulty dropdown always presents a current option.
@@ -1137,7 +1145,10 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     return (
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
+          <span style={{ display: 'inline-flex', gap: 6 }}>
+            <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
+            <button className="btn small ghost" title="Exit to the tools page" onClick={() => app.nav('tools')}>🚪 Exit</button>
+          </span>
           {viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Play a replica</button>}
         </div>
 
@@ -1520,6 +1531,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         <div className="slide-actions" style={{ justifyContent: 'center', gap: 8, marginTop: 12 }}>
           <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>
           <button className="btn" onClick={() => { setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
+          <button className="btn ghost" title="Exit to the tools page" onClick={() => app.nav('tools')}>🚪 Exit</button>
         </div>
         {/* The finished run is saved automatically (owner: canonical deck; everyone:
             their rendition entry) — no manual save button needed. */}
@@ -1548,8 +1560,11 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   return (
     <div>
       <style>{'@keyframes sl-spin{to{transform:rotate(360deg)}}'}</style>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <button className="btn small ghost" onClick={() => { setPhase('hub'); loadActivities(); }}>← Lessons</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', gap: 6 }}>
+          <button className="btn small ghost" onClick={() => { setPhase('hub'); loadActivities(); }}>← Lessons</button>
+          <button className="btn small ghost" title="Exit the presentation and go back to the tools page" onClick={() => app.nav('tools')}>🚪 Exit</button>
+        </span>
         <span style={{ fontSize: 13, opacity: 0.7 }}>{label(cfg)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

@@ -43,6 +43,11 @@ const PHOTO_STYLES = new Set(['Photorealistic', 'Editorial photo', 'Cinematic', 
 // Every generated image should be a picture only — never a poster with text.
 export const NO_TEXT_RULE = 'IMPORTANT: the image must contain NO text, words, letters, numbers, labels, captions or writing of any kind — just the picture itself.';
 
+// Steer AWAY from stiff, camera-facing portraits toward candid, in-the-moment
+// scenes — people absorbed in a real activity related to the content, or just the
+// relevant objects/scene when that shows the idea better.
+export const SCENE_RULE = 'COMPOSITION: capture a candid, in-the-moment scene — NOT a posed portrait or headshot. Any people should be busy DOING an activity that fits the content (mid-action, interacting with each other or with objects) and should NOT look at or face the camera — as if the moment were caught naturally. When the idea is shown better by things than people, show the relevant OBJECTS / setting from the lesson instead. Avoid a single person centred and staring forward.';
+
 // A directive prepended to an image-generation prompt to steer its art style.
 // The medium instruction is stated FIRST and assertively so it wins over any
 // stray "illustration"/"cartoon" wording that appears later in the prompt.
@@ -51,14 +56,14 @@ export function imageStyleDirective(style?: string): string {
   if (!s || s === 'Any') {
     // Default to a REAL photograph — the app kept returning cartoons, and a
     // photographic default is what users expect unless they pick an art style.
-    return `ART STYLE: render this as a realistic, natural-light PHOTOGRAPH for an ADULT / general audience. It must NOT be a cartoon, illustration, clip-art, vector art or childish drawing. ${NO_TEXT_RULE}`;
+    return `ART STYLE: render this as a realistic, natural-light PHOTOGRAPH for an ADULT / general audience. It must NOT be a cartoon, illustration, clip-art, vector art or childish drawing. ${SCENE_RULE} ${NO_TEXT_RULE}`;
   }
   const desc = STYLE_PROMPT[s] || s;
   // For photographic styles, forbid any illustrated look outright — this is what
   // makes "Photorealistic" actually return a photo instead of a cartoon.
   if (PHOTO_STYLES.has(s)) {
-    return `ART STYLE (MANDATORY): render this as ${desc}. This MUST be a REAL PHOTOGRAPH — lifelike and photographic. It must NOT be an illustration, cartoon, drawing, clip-art, vector art, anime, 3D render, painting or any stylised/graphic look, EVEN IF the description above says "illustration", "cartoon", "drawing" or similar — ignore any such wording and produce a genuine photograph. Keep it tasteful and suited to an adult / general audience. ${NO_TEXT_RULE}`;
+    return `ART STYLE (MANDATORY): render this as ${desc}. This MUST be a REAL PHOTOGRAPH — lifelike and photographic. It must NOT be an illustration, cartoon, drawing, clip-art, vector art, anime, 3D render, painting or any stylised/graphic look, EVEN IF the description above says "illustration", "cartoon", "drawing" or similar — ignore any such wording and produce a genuine photograph. Keep it tasteful and suited to an adult / general audience. ${SCENE_RULE} ${NO_TEXT_RULE}`;
   }
   const adult = s === 'Childish cartoon' ? '' : ' Keep it tasteful and suited to an adult / general audience.';
-  return `ART STYLE (MANDATORY): render this as ${desc}. Commit fully to this style and ignore any conflicting style wording elsewhere in the prompt.${adult} ${NO_TEXT_RULE}`;
+  return `ART STYLE (MANDATORY): render this as ${desc}. Commit fully to this style and ignore any conflicting style wording elsewhere in the prompt.${adult} ${SCENE_RULE} ${NO_TEXT_RULE}`;
 }
