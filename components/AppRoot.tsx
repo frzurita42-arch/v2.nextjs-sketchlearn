@@ -29,7 +29,7 @@ import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 // or, for 'tool', reload from the ?tool=<slug>). Transient flow views (path,
 // settings, activity, language, toolsettings) depend on in-memory state, so a
 // refresh on those returns home instead of showing a broken screen.
-const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 'feed', 'tools', 'tool', 'toolbuilder'];
+const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 'feed', 'tools', 'slides', 'tool', 'toolbuilder'];
 
 type NavEntry = { view: ViewName; tool: string | null };
 
@@ -198,7 +198,8 @@ export default function AppRoot() {
     dashboard: <DashboardView />,
     cspath: <CsPathView />,
     feed: <FeedView />,
-    tools: <ToolsView />,
+    tools: <ToolsView kind="repository" />,
+    slides: <ToolsView kind="presentation" />,
     tool: <ToolRunnerView />,
     toolbuilder: <BuilderStudioView />,
     toolsettings: <ToolSettingsView />,

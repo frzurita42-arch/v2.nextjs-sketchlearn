@@ -9,7 +9,8 @@ export function Header() {
     <nav id="topbar" className="topbar">
       <button className="brand" onClick={() => nav('tools')}>✏️ SketchLearn</button>
       <div className="topbar-links">
-        <button onClick={() => nav('tools')}>Tools</button>
+        <button onClick={() => nav('tools')}>Repos</button>
+        <button onClick={() => nav('slides')}>Slides</button>
         {/* Feed and My stats hidden for now — restore when needed.
         <button onClick={() => nav('feed')}>Feed</button>
         <button onClick={() => nav('stats')}>My stats</button>
