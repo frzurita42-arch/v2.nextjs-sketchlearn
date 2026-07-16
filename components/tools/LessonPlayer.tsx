@@ -823,11 +823,14 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const startedAt = useRef(0);   // when the current play began, for the end-slide time
   useEffect(() => { slidesRef.current = slides; }, [slides]);
   // Changing slide silences any audio still playing from the previous slide
-  // (belt-and-braces with the AudioButton unmount cleanup).
+  // (belt-and-braces with the AudioButton unmount cleanup) and jumps the view to
+  // the top so each newly-shown card starts at the progress bar, not scrolled
+  // down where the previous slide's questions were.
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.querySelectorAll('audio').forEach((a) => { try { a.pause(); a.currentTime = 0; } catch { /* ignore */ } });
     try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
+    if (phase === 'play') window.scrollTo(0, 0);
   }, [cur]);
 
   // Quietly load slide `idx` in the BACKGROUND (no spinner), so Next is instant
@@ -979,23 +982,49 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       const answers = { ...prev.answers, [qi]: { ...detail, correct } };
       return { ...r, [cur]: { answers, done: Object.keys(answers).length >= qs } };
     });
+    // Bring the view back up to the top of the slide so the learner is carried to
+    // the next question / the Next button without hunting for it. Deferred a beat
+    // so it runs after the answer feedback (red/green + explanation) has rendered.
+    if (typeof window !== 'undefined') setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 80);
   };
 
-  // Re-explain THIS slide's teaching text at a chosen level (the gear on the
-  // slide). Deeper/more technical as the level rises; questions/support untouched.
+  // Re-explain THIS slide at a chosen level (the gear on the slide): the teaching
+  // text AND the questions move together — deeper/longer/more challenging as the
+  // level rises. Because the questions change, this slide's recorded answers are
+  // cleared so the new questions start fresh. Support/images are left untouched.
   const relevel = async (lvl: string) => {
     const s = slidesRef.current[cur]; if (!s) return;
-    setRelevelBusy(true); setLevelOpen(false); setSlideLevel((m) => ({ ...m, [cur]: lvl }));
+    setRelevelBusy(true); setLevelOpen(false);
+    // Carry the new level FORWARD: update the run config so every slide generated
+    // after this one uses the new level, and discard any already-prefetched slides
+    // ahead of the current one so they regenerate at the new level.
+    cfgRef.current = { ...cfgRef.current, level: lvl, difficulty: lvl };
+    setCfg((c) => ({ ...c, level: lvl, difficulty: lvl }));
+    const kept = slidesRef.current.map((sl, i) => (i > cur ? null : sl));
+    slidesRef.current = kept; setSlides(kept);
+    Object.keys(prefetching.current).forEach((k) => { if (Number(k) > cur) delete prefetching.current[Number(k)]; });
+    setSlideLevel((m) => { const n: Record<number, string> = {}; for (const k of Object.keys(m)) { if (Number(k) <= cur) n[Number(k)] = m[Number(k)]; } n[cur] = lvl; return n; });
+    prefetch(cur + 1);
     try {
       const r = await API.post('/api/tools/lesson/relevel', {
         subject: lesson.subject, topic: cfg.topic || '', title: s.title, content: s.content, translation: s.translation,
         level: lvl, language: lesson.language, translateTo: lesson.translateTo, paragraphs: cfg.paragraphs, length: cfg.length,
+        questions: s.questions || [],
       });
-      if (r?.content) setSlides((sc) => {
-        const n = [...sc];
-        if (n[cur]) n[cur] = { ...(n[cur] as Slide), content: r.content, translation: r.translation || (n[cur] as Slide).translation };
-        slidesRef.current = n; return n;
-      });
+      if (r?.content || Array.isArray(r?.questions)) {
+        setSlides((sc) => {
+          const n = [...sc];
+          if (n[cur]) n[cur] = {
+            ...(n[cur] as Slide),
+            content: r.content || (n[cur] as Slide).content,
+            translation: r.translation || (n[cur] as Slide).translation,
+            questions: Array.isArray(r.questions) && r.questions.length ? r.questions : (n[cur] as Slide).questions,
+          };
+          slidesRef.current = n; return n;
+        });
+        // The questions were rewritten — drop any answers recorded for this slide.
+        if (Array.isArray(r?.questions) && r.questions.length) setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
+      }
     } catch { /* keep the current text */ }
     setRelevelBusy(false);
   };
@@ -1018,15 +1047,21 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
     setModBusy(false);
   };
 
-  // Change THIS slide's image art style and re-generate its images with it.
+  // Change the image art style for the WHOLE presentation. It becomes the run's
+  // image style (so every slide — including ones generated later — uses it), any
+  // per-slide overrides are cleared, and every slide's cached images are dropped
+  // so they regenerate with the new style when viewed.
   const setSlideImageStyle = (style: string) => {
-    setSlideImgStyle((m) => ({ ...m, [cur]: style }));
     setImgStyleOpen(false);
-    const sl = slidesRef.current[cur] as any;
-    if (sl && Array.isArray(sl.supportPlan)) {
-      // Drop the cached image supports so they refetch with the new style.
-      sl.supportPlan.forEach((t: string, i: number) => { if (t === 'image') { if (sl._supports) sl._supports[i] = undefined; if (sl._supportP) sl._supportP[i] = undefined; } });
-    }
+    cfgRef.current = { ...cfgRef.current, imageStyle: style };
+    setCfg((c) => ({ ...c, imageStyle: style }));
+    setSlideImgStyle({});   // drop per-slide overrides — the new style is global
+    // Invalidate cached image supports on EVERY loaded slide so they refetch.
+    slidesRef.current.forEach((sl: any) => {
+      if (sl && Array.isArray(sl.supportPlan)) {
+        sl.supportPlan.forEach((t: string, i: number) => { if (t === 'image') { if (sl._supports) sl._supports[i] = undefined; if (sl._supportP) sl._supportP[i] = undefined; } });
+      }
+    });
     setSupportNonce((n) => n + 1);
   };
 
