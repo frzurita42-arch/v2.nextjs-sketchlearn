@@ -264,7 +264,14 @@ export function Collection<T>({
           ? { ...wrap, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinPx}px, 1fr))`, gap: 14, alignItems: 'start' }
           : { ...wrap, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
           {Array.from({ length: view === 'grid' ? 6 : 3 }).map((_, i) => (
-            <div key={i} className="card sl-skeleton" aria-hidden style={{ height: view === 'grid' ? 300 : 74, borderRadius: 12 }} />
+            // Each loading card shows the "writing pencil" animation (the same one
+            // the slide generator uses) so it's clear the card's content is on its way.
+            <div key={i} className="card sl-skeleton" aria-hidden style={{ height: view === 'grid' ? 300 : 74, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span className="sl-pencil" style={{ fontSize: view === 'grid' ? 34 : 22, opacity: 0.8, position: 'relative', zIndex: 1 }}>
+                <span className="sl-pencil__line" />
+                <span className="sl-pencil__tip">✏️</span>
+              </span>
+            </div>
           ))}
         </div>
       ) : items.length === 0 ? (
