@@ -75,20 +75,20 @@ export function BuilderStudioView() {
   const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
   const [title, setTitle] = useState(seed?.title || '');
   const [subject, setSubject] = useState(seed?.subject || '');
-  // Tone is now a multi-select: pick any of the presets. Sent to the AI as a
-  // comma-joined string, so the rest of the code just reads `tone`.
-  const [tones, setTones] = useState<string[]>(seed?.tone ? String(seed.tone).split(/,\s*/).filter(Boolean) : ['Friendly']);
-  const tone = tones.join(', ');
-  // 🎨 palette "diffuser" — reword the title/subject to a similar but different
-  // phrasing so the author can shuffle it to taste.
-  const [rewording, setRewording] = useState<'' | 'title' | 'subject'>('');
-  const rewordField = async (kind: 'title' | 'subject') => {
-    const cur = kind === 'title' ? title : subject;
+  // Tone: a dropdown of presets PLUS a free custom text field (both write `tone`),
+  // with a 🎲 to roll a random preset and a 🎨 to reword it.
+  const [tone, setTone] = useState(seed?.tone || 'Friendly');
+  const randomTone = () => setTone(TONES[Math.floor(Math.random() * TONES.length)]);
+  // 🎨 palette "diffuser" — reword a field to a similar but different phrasing so
+  // the author can shuffle it to taste.
+  const [rewording, setRewording] = useState<'' | 'title' | 'subject' | 'tone'>('');
+  const rewordField = async (kind: 'title' | 'subject' | 'tone') => {
+    const cur = kind === 'title' ? title : kind === 'subject' ? subject : tone;
     if (!cur.trim() || rewording) return;
     setRewording(kind);
     try {
-      const r: any = await API.post('/api/tools/reword', { text: cur, kind, context: `${title} ${subject}`.trim() });
-      if (r?.text) { if (kind === 'title') setTitle(r.text); else setSubject(r.text); }
+      const r: any = await API.post('/api/tools/reword', { text: cur, kind: kind === 'tone' ? 'generic' : kind, context: `${title} ${subject}`.trim() });
+      if (r?.text) { if (kind === 'title') setTitle(r.text); else if (kind === 'subject') setSubject(r.text); else setTone(r.text); }
     } catch { /* ignore */ }
     setRewording('');
   };
@@ -370,6 +370,13 @@ export function BuilderStudioView() {
   };
 
   const gridCol = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 } as const;
+  // Field-label row that can carry inline tool buttons (🎨 / 🎲) next to the title.
+  const labelRow = { display: 'inline-flex', alignItems: 'center', gap: 6 } as const;
+  const miniBtn = { padding: '0 6px', fontSize: 12, lineHeight: 1.6 } as const;
+  const paletteBtn = (kind: 'title' | 'subject' | 'tone') => {
+    const val = kind === 'title' ? title : kind === 'subject' ? subject : tone;
+    return <button type="button" className="btn small ghost" style={miniBtn} disabled={!val.trim() || !!rewording} title="Reword with AI — a similar but different phrasing" onClick={() => rewordField(kind)}>{rewording === kind ? '…' : '🎨'}</button>;
+  };
 
   return (
     <>
@@ -404,26 +411,24 @@ export function BuilderStudioView() {
           <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 8 }}>OVERALL</div>
             <div style={gridCol}>
-              <div className="field"><span>Title</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input style={{ flex: 1, minWidth: 0 }} type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} />
-                  <button type="button" className="btn small ghost" style={{ flex: '0 0 auto', padding: '0 8px' }} disabled={!title.trim() || !!rewording} title="Reword with AI — a similar but different phrasing" onClick={() => rewordField('title')}>{rewording === 'title' ? '…' : '🎨'}</button>
-                </div>
+              <div className="field">
+                <span style={labelRow}>Title {paletteBtn('title')}</span>
+                <input type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} />
               </div>
-              <div className="field"><span>Subject / topic</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input style={{ flex: 1, minWidth: 0 }} type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. Small Payment System'} onChange={(e) => setSubject(e.target.value)} />
-                  <button type="button" className="btn small ghost" style={{ flex: '0 0 auto', padding: '0 8px' }} disabled={!subject.trim() || !!rewording} title="Reword with AI — a similar but different phrasing" onClick={() => rewordField('subject')}>{rewording === 'subject' ? '…' : '🎨'}</button>
-                </div>
+              <div className="field">
+                <span style={labelRow}>Subject / topic {paletteBtn('subject')}</span>
+                <input type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. Small Payment System'} onChange={(e) => setSubject(e.target.value)} />
               </div>
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Tone (pick any)</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {TONES.map((t) => {
-                  const on = tones.includes(t);
-                  return <button key={t} type="button" className={`btn small ${on ? 'green' : 'ghost'}`} onClick={() => setTones((xs) => on ? xs.filter((x) => x !== t) : [...xs, t])}>{t}</button>;
-                })}
+              <div className="field">
+                <span style={labelRow}>Tone
+                  <button type="button" className="btn small ghost" style={miniBtn} title="Roll a random tone" onClick={randomTone}>🎲</button>
+                  {paletteBtn('tone')}
+                </span>
+                <select value={TONES.includes(tone) ? tone : ''} onChange={(e) => { if (e.target.value) setTone(e.target.value); }}>
+                  <option value="">Custom…</option>
+                  {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input type="text" value={tone} placeholder="or type a custom tone…" onChange={(e) => setTone(e.target.value)} style={{ marginTop: 6 }} />
               </div>
             </div>
           </div>

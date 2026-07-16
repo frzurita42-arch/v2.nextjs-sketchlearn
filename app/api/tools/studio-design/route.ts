@@ -48,7 +48,9 @@ export async function POST(req: Request) {
   // Fold any attached TEXT documents into the context the designer considers.
   const docText = (Array.isArray(b.docs) ? b.docs : []).map((d: any) => String(d?.text || '')).filter(Boolean).join('\n\n').slice(0, 6000);
   const fullContext = [context, docText && `Reference document(s):\n${docText}`].filter(Boolean).join('\n\n').slice(0, 8000);
-  if (!subject && !existing.length) return NextResponse.json({ error: 'A subject is required.' }, { status: 200 });
+  // A subject is enough, but so is a goal/context or an attached document or an
+  // existing deck to edit — the AI infers the subject from whatever is provided.
+  if (!subject && !fullContext && !existing.length) return NextResponse.json({ error: 'Add a subject, a goal, or a document first.' }, { status: 200 });
 
   // A sensible fallback plan so a lesson is always produced even with no AI: a
   // short teach→practice→check arc. (Subject-agnostic; the generator fills content.)
