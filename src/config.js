@@ -154,9 +154,13 @@ const GROK_IMAGE_URL = process.env.GROK_IMAGE_API_URL || 'https://api.x.ai/v1/im
 const GROK_IMAGE_MODEL = process.env.GROK_IMAGE_MODEL || 'grok-2-image-1212';
 const grokEnabled = !forceFallback && hasConfiguredKey(GROK_API_KEY);
 
-// Optional image-generation backend (see .env.example). Priority: an explicit
-// OpenAI-compatible image provider, else Gemini's image model, else no images.
-const IMAGE_API_KEY = process.env.IMAGE_API_KEY;
+// OpenAI-compatible image generation. This is the DEFAULT / preferred image
+// backend (it produces genuine photographs, unlike the more cartoon-prone
+// models). A plain OPENAI_API_KEY works out of the box: the URL + model default
+// to OpenAI's gpt-image-1. IMAGE_API_KEY (a dedicated var) still takes priority
+// so a separate OpenAI-compatible provider can be pointed at instead.
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const IMAGE_API_KEY = process.env.IMAGE_API_KEY || OPENAI_API_KEY;
 const IMAGE_API_URL = process.env.IMAGE_API_URL || 'https://api.openai.com/v1/images/generations';
 const IMAGE_API_MODEL = process.env.IMAGE_API_MODEL || 'gpt-image-1';
 
@@ -249,6 +253,7 @@ module.exports = {
   GROK_IMAGE_URL,
   GROK_IMAGE_MODEL,
   grokEnabled,
+  OPENAI_API_KEY,
   IMAGE_API_KEY,
   IMAGE_API_URL,
   IMAGE_API_MODEL,

@@ -342,25 +342,25 @@ async function openrouter(messages, { json = true, temperature = 0.8, maxTokens 
 async function generateText(messages, opts = {}) {
   const pick = opts && opts.provider;
   if (pick && pick !== 'auto') {
+    if (pick === 'deepseek' && deepseekEnabled) return deepseek(messages, opts);
     if (pick === 'grok' && grokEnabled) return grok(messages, opts);
     if (pick === 'openrouter' && openrouterEnabled) return openrouter(messages, opts);
     if (pick === 'gemini' && geminiEnabled) return gemini(messages, opts);
     if (pick === 'moonshot' && moonshotEnabled) return moonshot(messages, opts);
-    if (pick === 'deepseek' && deepseekEnabled) return deepseek(messages, opts);
     // Chosen provider isn't configured — fall through to auto failover.
   }
   // Auto: try each configured provider in order and fall through to the next when
   // one fails (e.g. Gemini 503 "high demand") — so a single provider's hiccup no
-  // longer fails the whole request. Grok is the DEFAULT (tried first when set).
+  // longer fails the whole request. DeepSeek is the DEFAULT (tried first when set).
   const chain = [
+    deepseekEnabled && ['DeepSeek', deepseek],
     grokEnabled && ['Grok', grok],
     openrouterEnabled && ['OpenRouter', openrouter],
     geminiEnabled && ['Gemini', gemini],
     moonshotEnabled && ['Kimi', moonshot],
-    deepseekEnabled && ['DeepSeek', deepseek],
   ].filter(Boolean);
   if (!chain.length) {
-    throw new Error('No AI provider key is configured. Set GROK_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, MOONSHOT_API_KEY or DEEPSEEK_API_KEY in environment variables.');
+    throw new Error('No AI provider key is configured. Set DEEPSEEK_API_KEY, GROK_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY or MOONSHOT_API_KEY in environment variables.');
   }
   let lastErr = null;
   for (let i = 0; i < chain.length; i++) {
@@ -464,11 +464,11 @@ async function leonardoImage(prompt) {
 }
 
 // Generate one image, trying each configured backend and falling through on
-// failure. Order: Grok (default) → OpenAI-compatible API → Leonardo AI → Gemini
-// image models (Nano Banana) LAST, per product decision.
+// failure. Order: OpenAI-compatible API (gpt-image-1 — the DEFAULT, produces real
+// photographs) → Grok → Leonardo AI → Gemini image models (Nano Banana) LAST.
 async function generateImage(prompt) {
-  if (grokEnabled) { const k = await grokImage(prompt); if (k) return k; }
   if (IMAGE_API_KEY) { const u = await openaiCompatImage(prompt); if (u) return u; }
+  if (grokEnabled) { const k = await grokImage(prompt); if (k) return k; }
   if (leonardoEnabled) { const l = await leonardoImage(prompt); if (l) return l; }
   if (geminiEnabled) { const g = await geminiImage(prompt); if (g) return g; }
   return null;

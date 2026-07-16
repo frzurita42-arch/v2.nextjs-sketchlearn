@@ -47,7 +47,9 @@ export const NO_TEXT_RULE = 'IMPORTANT: the image must contain NO text, words, l
 export function imageStyleDirective(style?: string): string {
   const s = String(style || '').trim();
   if (!s || s === 'Any') {
-    return `Art style: choose the style that best fits the subject for an ADULT / general audience — tasteful and mature, NOT a childish cartoon (unless the lesson is clearly meant for young children). ${NO_TEXT_RULE}`;
+    // Default to a REAL photograph — the app kept returning cartoons, and a
+    // photographic default is what users expect unless they pick an art style.
+    return `ART STYLE: render this as a realistic, natural-light PHOTOGRAPH for an ADULT / general audience. It must NOT be a cartoon, illustration, clip-art, vector art or childish drawing. ${NO_TEXT_RULE}`;
   }
   const desc = STYLE_PROMPT[s] || s;
   // For photographic styles, forbid any illustrated look outright — this is what

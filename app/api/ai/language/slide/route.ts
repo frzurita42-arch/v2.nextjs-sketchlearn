@@ -7,7 +7,7 @@ import { generateStructured, generateImage } from '@/src/ai/providers';
 import { buildLangSlidePrompt } from '@/src/ai/prompts/language';
 import { sanitizeComponents } from '@/src/slides/sanitize';
 import { fallbackImageDataUrl } from '@/src/slides/visual-policy';
-import { NO_TEXT_RULE } from '@/lib/image-styles';
+import { imageStyleDirective } from '@/lib/image-styles';
 import { requireAuth } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
@@ -91,7 +91,9 @@ function fbWriting(topic: string) {
 
 async function fillImage(prompt: string): Promise<string> {
   if (imageEnabled) {
-    try { const url = await generateImage(`${prompt}. ${NO_TEXT_RULE}`); if (url) return url; } catch { /* fall through */ }
+    // Apply the default (photographic) art-style directive so vocabulary images
+    // are real photos, not cartoons — the NO_TEXT_RULE is already included in it.
+    try { const url = await generateImage(`${prompt}. ${imageStyleDirective('')}`); if (url) return url; } catch { /* fall through */ }
   }
   return fallbackImageDataUrl(prompt, '');
 }
