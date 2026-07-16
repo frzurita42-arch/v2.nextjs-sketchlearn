@@ -884,6 +884,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
   const [providerOpen, setProviderOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [suggestingField, setSuggestingField] = useState<Record<string, boolean>>({});
   useEffect(() => { API.get('/api/config').then((c: any) => setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : [])).catch(() => { /* ignore */ }); }, []);
   const [supportNonce, setSupportNonce] = useState(0);
   // A random emoji per rendition card that has no real image, picked ONCE per page
@@ -1331,6 +1332,20 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       // A free-text box for anything else the author wants woven into the lesson.
       { id: 'custom', label: 'Custom instructions (optional)', type: 'text', placeholder: 'e.g. focus on real-world examples, add a fun fact each slide…' },
     ];
+    // 🎨 Suggest ONE field's value with AI, reading the author's other settings and
+    // (especially) the Custom instructions box so the suggestion stays consistent.
+    const suggestField = async (id: string) => {
+      const field: any = formFields.find((f: any) => f.id === id);
+      if (!field) return;
+      setSuggestingField((m) => ({ ...m, [id]: true }));
+      try {
+        const r = await API.post('/api/tools/lesson/suggest-field', {
+          lesson, field: { id, label: field.label, options: field.options || [] }, values: form,
+        });
+        if (r?.value !== undefined && String(r.value) !== '') setForm((s) => ({ ...s, [id]: r.value }));
+      } catch { /* ignore */ }
+      setSuggestingField((m) => { const n = { ...m }; delete n[id]; return n; });
+    };
     // Every rendition here is the same tool's topic, so there's no topic filter —
     // the standard Collection owns search / favorites / by-admin / rows / sort /
     // count / pagination.
@@ -1457,7 +1472,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <h4 style={{ margin: '0 0 8px' }}>Create a {lesson.subject || 'lesson'} activity</h4>
             <button className="btn small ghost" onClick={loadTopics} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
           </div>
-          {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} />}
+          {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} />}
           {/* Content theme + image art style presets for this lesson. */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
             <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme</span>

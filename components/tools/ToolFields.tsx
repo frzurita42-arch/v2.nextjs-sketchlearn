@@ -1,28 +1,43 @@
 'use client';
 /* Renders a Tool Definition field array into a controlled form. Supports the
  * "select-or-custom" type: a dropdown with a ✎ pencil toggle that flips to a
- * free-text input — the same pattern used on the language activity's title. */
+ * free-text input — the same pattern used on the language activity's title.
+ * When `onSuggest` is provided, each text-like field also gets a 🎨 "suggest with
+ * AI" button that fills it in from the tool's context + the other fields. */
 import { useState } from 'react';
 import type { ToolField } from '@/lib/tool-schema';
 import { AudioField, DrawField } from '@/components/tools/MediaFields';
 import { ImageField } from '@/components/tools/ImageField';
 
-function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v: any) => void }) {
+// Field types where an AI suggestion makes sense (skip media/toggle/date).
+const SUGGESTABLE = new Set(['text', 'textarea', 'number', 'select', 'select-or-custom']);
+
+function Field({ f, value, onChange, onSuggest, suggesting }: {
+  f: ToolField; value: any; onChange: (v: any) => void; onSuggest?: () => void; suggesting?: boolean;
+}) {
   const inList = f.options?.includes(value);
   // Every dropdown (select AND select-or-custom) supports typing a custom value.
   const selectish = f.type === 'select' || f.type === 'select-or-custom';
   const [custom, setCustom] = useState<boolean>(selectish && value != null && value !== '' && !inList);
 
+  // The 🎨 "suggest with AI" control, shown after the label for suggestable fields.
+  const suggestBtn = (onSuggest && SUGGESTABLE.has(f.type || 'text')) ? (
+    <button type="button" title="Suggest with AI (uses your custom instructions & other settings)" disabled={!!suggesting}
+      onClick={onSuggest} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: suggesting ? 'wait' : 'pointer', fontSize: 13 }}>
+      {suggesting ? '…' : '🎨'}
+    </button>
+  ) : null;
+
   if (f.type === 'textarea') {
     return (
-      <label className="field" style={{ gridColumn: '1 / -1' }}><span>{f.label}</span>
+      <label className="field" style={{ gridColumn: '1 / -1' }}><span>{f.label}{suggestBtn}</span>
         <textarea value={value ?? ''} placeholder={f.placeholder} onChange={e => onChange(e.target.value)} style={{ minHeight: 70 }} />
       </label>
     );
   }
   if (f.type === 'number') {
     return (
-      <label className="field"><span>{f.label}</span>
+      <label className="field"><span>{f.label}{suggestBtn}</span>
         <input type="number" value={value ?? 0} placeholder={f.placeholder} onChange={e => onChange(e.target.value)} />
       </label>
     );
@@ -47,6 +62,7 @@ function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v:
       <label className="field"><span>{f.label}
         <button type="button" title={custom ? 'Pick from list' : 'Type a custom value'} onClick={() => setCustom(c => !c)}
           style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{custom ? '▾' : '✎'}</button>
+        {suggestBtn}
       </span>
         {custom
           ? <input type="text" value={value ?? ''} placeholder={f.placeholder || 'Type your own…'} onChange={e => onChange(e.target.value)} />
@@ -60,19 +76,21 @@ function Field({ f, value, onChange }: { f: ToolField; value: any; onChange: (v:
   if (f.type === 'drawing') return <DrawField label={f.label} value={value} onChange={onChange} />;
   // text (default)
   return (
-    <label className="field"><span>{f.label}</span>
+    <label className="field"><span>{f.label}{suggestBtn}</span>
       <input type="text" value={value ?? ''} placeholder={f.placeholder} onChange={e => onChange(e.target.value)} />
     </label>
   );
 }
 
-export function ToolFields({ fields, values, onChange }: {
+export function ToolFields({ fields, values, onChange, onSuggest, suggesting }: {
   fields: ToolField[]; values: Record<string, any>; onChange: (id: string, v: any) => void;
+  onSuggest?: (id: string) => void; suggesting?: Record<string, boolean>;
 }) {
   if (!fields?.length) return null;
   return (
     <div className="settings-compact">
-      {fields.map(f => <Field key={f.id} f={f} value={values[f.id]} onChange={v => onChange(f.id, v)} />)}
+      {fields.map(f => <Field key={f.id} f={f} value={values[f.id]} onChange={v => onChange(f.id, v)}
+        onSuggest={onSuggest ? () => onSuggest(f.id) : undefined} suggesting={!!suggesting?.[f.id]} />)}
     </div>
   );
 }
