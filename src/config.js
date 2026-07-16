@@ -144,6 +144,16 @@ const MOONSHOT_URL = process.env.MOONSHOT_API_URL || 'https://api.moonshot.ai/v1
 const MOONSHOT_MODEL = process.env.MOONSHOT_MODEL || 'kimi-k2-0711-preview';
 const moonshotEnabled = !forceFallback && hasConfiguredKey(MOONSHOT_API_KEY);
 
+// xAI Grok — OpenAI-compatible chat AND image generation. When set it becomes the
+// DEFAULT provider for both text and images; everything else is a fallback. Model
+// ids are overridable (e.g. GROK_MODEL='grok-4', GROK_IMAGE_MODEL='grok-2-image').
+const GROK_API_KEY = process.env.GROK_API_KEY;
+const GROK_URL = process.env.GROK_API_URL || 'https://api.x.ai/v1/chat/completions';
+const GROK_MODEL = process.env.GROK_MODEL || 'grok-4-fast';
+const GROK_IMAGE_URL = process.env.GROK_IMAGE_API_URL || 'https://api.x.ai/v1/images/generations';
+const GROK_IMAGE_MODEL = process.env.GROK_IMAGE_MODEL || 'grok-2-image-1212';
+const grokEnabled = !forceFallback && hasConfiguredKey(GROK_API_KEY);
+
 // Optional image-generation backend (see .env.example). Priority: an explicit
 // OpenAI-compatible image provider, else Gemini's image model, else no images.
 const IMAGE_API_KEY = process.env.IMAGE_API_KEY;
@@ -160,7 +170,7 @@ const LEONARDO_MODEL = process.env.LEONARDO_MODEL || '6b645e3a-d64f-4341-a6d8-7a
 const LEONARDO_SIZE = parseInt(process.env.LEONARDO_SIZE, 10) || 512;
 const leonardoEnabled = !forceFallback && hasConfiguredKey(LEONARDO_API_KEY);
 
-const imageEnabled = !forceFallback && (hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled || leonardoEnabled);
+const imageEnabled = !forceFallback && (grokEnabled || hasConfiguredKey(IMAGE_API_KEY) || geminiEnabled || leonardoEnabled);
 
 // Optional: ElevenLabs text-to-speech / voice generation.
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -233,6 +243,12 @@ module.exports = {
   MOONSHOT_URL,
   MOONSHOT_MODEL,
   moonshotEnabled,
+  GROK_API_KEY,
+  GROK_URL,
+  GROK_MODEL,
+  GROK_IMAGE_URL,
+  GROK_IMAGE_MODEL,
+  grokEnabled,
   IMAGE_API_KEY,
   IMAGE_API_URL,
   IMAGE_API_MODEL,

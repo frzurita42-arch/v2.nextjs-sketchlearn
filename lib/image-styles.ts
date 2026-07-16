@@ -14,6 +14,7 @@ export const IMAGE_STYLES = [
   'Comic book',
   'Anime',
   'Minimalist',
+  'Soviet propaganda posters',
   'Childish cartoon',
 ] as const;
 
@@ -28,6 +29,7 @@ const STYLE_PROMPT: Record<string, string> = {
   'Comic book': 'a bold comic-book / graphic-novel ink illustration',
   Anime: 'a clean anime / manga illustration',
   Minimalist: 'a minimalist flat-vector illustration',
+  'Soviet propaganda posters': 'a bold Soviet-style propaganda poster — flat graphic shapes, heroic idealized figures, strong diagonal constructivist composition, a limited red / gold / cream palette, dramatic low-angle heroism',
   'Childish cartoon': 'a playful, colourful cartoon aimed at young children',
 };
 

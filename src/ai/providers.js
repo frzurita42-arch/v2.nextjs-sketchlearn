@@ -5,6 +5,7 @@ const {
   GEMINI_API_KEY, GEMINI_API_BASE, GEMINI_TEXT_MODEL, GEMINI_IMAGE_MODEL, geminiEnabled,
   OPENROUTER_API_KEY, OPENROUTER_URL, OPENROUTER_MODEL, OPENROUTER_MODEL_REASON, OPENROUTER_MODEL_VISION, openrouterEnabled,
   MOONSHOT_API_KEY, MOONSHOT_URL, MOONSHOT_MODEL, moonshotEnabled,
+  GROK_API_KEY, GROK_URL, GROK_MODEL, GROK_IMAGE_URL, GROK_IMAGE_MODEL, grokEnabled,
   IMAGE_API_KEY, IMAGE_API_URL, IMAGE_API_MODEL,
   LEONARDO_API_KEY, LEONARDO_API_BASE, LEONARDO_MODEL, LEONARDO_SIZE, leonardoEnabled,
   ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
@@ -141,6 +142,42 @@ async function moonshot(messages, { json = true, temperature = 0.8, maxTokens = 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error('Empty response from Kimi');
+    if (!json) return content;
+    try {
+      return parseModelJson(content);
+    } catch (e) {
+      lastParseErr = e;
+    }
+  }
+  throw lastParseErr || new Error('Model returned invalid JSON');
+}
+
+// xAI Grok — OpenAI-compatible chat completions (same shape as DeepSeek/Kimi).
+// The DEFAULT text provider when GROK_API_KEY is set.
+async function grok(messages, { json = true, temperature = 0.8, maxTokens = 4096 } = {}) {
+  if (!grokEnabled) throw new Error('GROK_API_KEY is not configured. Set a real key in .env.');
+  let lastParseErr = null;
+  for (let attempt = 0; attempt < (json ? 4 : 1); attempt++) {
+    const attemptMaxTokens = json ? Math.min(16384, Math.round(maxTokens * Math.pow(1.6, attempt))) : maxTokens;
+    const body = {
+      model: GROK_MODEL,
+      messages,
+      temperature: attempt === 0 ? temperature : 0.2,
+      max_tokens: attemptMaxTokens
+    };
+    if (json) body.response_format = { type: 'json_object' };
+    const res = await fetchWithTimeout(GROK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROK_API_KEY}` },
+      body: JSON.stringify(body)
+    }, 45000, 'Grok request');
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Grok API error ${res.status}: ${text.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from Grok');
     if (!json) return content;
     try {
       return parseModelJson(content);
@@ -305,6 +342,7 @@ async function openrouter(messages, { json = true, temperature = 0.8, maxTokens 
 async function generateText(messages, opts = {}) {
   const pick = opts && opts.provider;
   if (pick && pick !== 'auto') {
+    if (pick === 'grok' && grokEnabled) return grok(messages, opts);
     if (pick === 'openrouter' && openrouterEnabled) return openrouter(messages, opts);
     if (pick === 'gemini' && geminiEnabled) return gemini(messages, opts);
     if (pick === 'moonshot' && moonshotEnabled) return moonshot(messages, opts);
@@ -313,15 +351,16 @@ async function generateText(messages, opts = {}) {
   }
   // Auto: try each configured provider in order and fall through to the next when
   // one fails (e.g. Gemini 503 "high demand") — so a single provider's hiccup no
-  // longer fails the whole request.
+  // longer fails the whole request. Grok is the DEFAULT (tried first when set).
   const chain = [
+    grokEnabled && ['Grok', grok],
     openrouterEnabled && ['OpenRouter', openrouter],
     geminiEnabled && ['Gemini', gemini],
     moonshotEnabled && ['Kimi', moonshot],
     deepseekEnabled && ['DeepSeek', deepseek],
   ].filter(Boolean);
   if (!chain.length) {
-    throw new Error('No AI provider key is configured. Set OPENROUTER_API_KEY, GEMINI_API_KEY, MOONSHOT_API_KEY or DEEPSEEK_API_KEY in environment variables.');
+    throw new Error('No AI provider key is configured. Set GROK_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, MOONSHOT_API_KEY or DEEPSEEK_API_KEY in environment variables.');
   }
   let lastErr = null;
   for (let i = 0; i < chain.length; i++) {
@@ -373,6 +412,26 @@ async function openaiCompatImage(prompt) {
   return null;
 }
 
+// xAI Grok image generation — OpenAI-compatible /images/generations. The DEFAULT
+// image backend when GROK_API_KEY is set. Grok's image model takes no `size`
+// param (it ignores/rejects it), so we omit it. Returns a data URL or hosted URL.
+async function grokImage(prompt) {
+  try {
+    const res = await fetchWithTimeout(GROK_IMAGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROK_API_KEY}` },
+      body: JSON.stringify({ model: GROK_IMAGE_MODEL, prompt: String(prompt || '').slice(0, 1400), n: 1, response_format: 'b64_json' })
+    }, 45000, 'Grok image');
+    if (!res.ok) { lastImageError = `grok image: ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`; return null; }
+    const data = await res.json();
+    const item = data.data && data.data[0];
+    if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+    if (item?.url) return item.url;
+    lastImageError = 'grok image: response had no image';
+  } catch (e) { lastImageError = `grok image: ${e.message}`; }
+  return null;
+}
+
 // Leonardo AI image generation. Async: create a generation job, then poll for the
 // finished image URL. Used as a fallback when Google/Gemini image generation is
 // unavailable. Returns a hosted image URL (renders in <img>) or null.
@@ -405,11 +464,13 @@ async function leonardoImage(prompt) {
 }
 
 // Generate one image, trying each configured backend and falling through on
-// failure: OpenAI-compatible API → Gemini image models → Leonardo AI.
+// failure. Order: Grok (default) → OpenAI-compatible API → Leonardo AI → Gemini
+// image models (Nano Banana) LAST, per product decision.
 async function generateImage(prompt) {
+  if (grokEnabled) { const k = await grokImage(prompt); if (k) return k; }
   if (IMAGE_API_KEY) { const u = await openaiCompatImage(prompt); if (u) return u; }
-  if (geminiEnabled) { const g = await geminiImage(prompt); if (g) return g; }
   if (leonardoEnabled) { const l = await leonardoImage(prompt); if (l) return l; }
+  if (geminiEnabled) { const g = await geminiImage(prompt); if (g) return g; }
   return null;
 }
 
@@ -652,11 +713,13 @@ module.exports = {
   deepseek,
   gemini,
   moonshot,
+  grok,
   generateText,
   generateStructured, geminiDoc,
   generateVisionJSON,
   generateImage,
   geminiImage,
+  grokImage,
   leonardoImage,
   generateSvgSketch,
   generateImageOrSketch,
