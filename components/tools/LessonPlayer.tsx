@@ -969,13 +969,18 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     setExBusy(false);
   };
   // Fetch 5 suggested topics for this course (the create form's topic dropdown).
-  const loadTopics = async () => {
+  // `fresh` = a manual refresh (🎨 / 🔄): avoid the topics currently shown so the
+  // dropdown shows a DIFFERENT set each press, and select the first new one.
+  const loadTopics = async (fresh = false) => {
     setTopicsBusy(true);
     try {
-      const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, count: 5 });
+      const r = await API.post('/api/tools/lesson/suggest', { lesson, levels, count: 5, avoid: fresh ? topicIdeas.join(', ') : '' });
       const ideas = Array.isArray(r?.topics) ? r.topics.map(String).filter(Boolean) : [];
-      setTopicIdeas(ideas);
-      if (ideas.length) setForm(s => (s.topic ? s : { ...s, topic: ideas[0] }));   // default to the first idea
+      if (ideas.length) {
+        setTopicIdeas(ideas);
+        // On a manual refresh always jump to a new topic; on first load only if unset.
+        setForm(s => (fresh || !s.topic ? { ...s, topic: ideas[0] } : s));
+      }
     } catch { /* ignore */ }
     setTopicsBusy(false);
   };
@@ -1338,6 +1343,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     const suggestField = async (id: string) => {
       const field: any = formFields.find((f: any) => f.id === id);
       if (!field) return;
+      // Topic is special: refresh the WHOLE dropdown with a fresh, different set of
+      // recommendations each press (not just one value). Other fields pick one.
+      if (id === 'topic') { setSuggestingField((m) => ({ ...m, topic: true })); await loadTopics(true); setSuggestingField((m) => { const n = { ...m }; delete n.topic; return n; }); return; }
       setSuggestingField((m) => ({ ...m, [id]: true }));
       try {
         const r = await API.post('/api/tools/lesson/suggest-field', {
@@ -1518,7 +1526,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         <div className="card alt" style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <h4 style={{ margin: '0 0 8px' }}>Create a {lesson.subject || 'lesson'} activity</h4>
-            <button className="btn small ghost" onClick={loadTopics} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
+            <button className="btn small ghost" onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
           </div>
           {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} />}
           {/* Content theme + image art style presets for this lesson. */}
