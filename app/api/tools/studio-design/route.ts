@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
+import { recordTextUsage } from '@/lib/usage-log';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -134,6 +135,7 @@ export async function POST(req: Request) {
     const r: any = await generateStructured(
       [{ role: 'system', content: system }, { role: 'user', content: user }],
       { temperature: mode === 'edit' ? 0.4 : 0.5, maxTokens: 3000, provider });
+    await recordTextUsage({ username: a.user.username, kind: 'studio-design', provider: provider === 'auto' ? 'auto' : provider, input: system + user, output: JSON.stringify(r || {}), subject: subject || title });
     const raw: any[] = Array.isArray(r?.pages) ? r.pages : (Array.isArray(r) ? r : []);
     const pages = raw.map((pg: any) => {
       const comps = (Array.isArray(pg?.components) ? pg.components : [])

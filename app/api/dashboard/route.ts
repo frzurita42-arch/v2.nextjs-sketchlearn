@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listTools, listRecentEntries } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { listUsage } = require('@/src/db/usage');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -56,7 +58,26 @@ export async function GET(req: Request) {
     })
     .filter((r: any) => r.archetype === 'lesson' || r.score !== null);
 
-  return NextResponse.json({ tools, runs }, { headers: { 'Cache-Control': 'no-cache' } });
+  // AI token / cost usage — per event + a per-user roll-up for profitability.
+  const rawUsage: any[] = await listUsage({ limit: 500 });
+  const usage = rawUsage.map((u: any) => ({
+    id: u.id, user: u.username || 'anon', kind: u.kind || '', provider: u.provider || '',
+    promptTokens: u.promptTokens || 0, completionTokens: u.completionTokens || 0, totalTokens: u.totalTokens || 0,
+    costUsd: Number(u.costUsd) || 0, subject: u.subject || '', prompt: (u.meta && u.meta.prompt) || '',
+    createdAt: u.createdAt || null,
+  }));
+  const byUser: Record<string, any> = {};
+  for (const u of usage) {
+    const k = u.user;
+    if (!byUser[k]) byUser[k] = { user: k, events: 0, tokens: 0, images: 0, cost: 0 };
+    byUser[k].events += 1;
+    byUser[k].tokens += u.totalTokens;
+    if (u.kind.includes('image') || u.kind === 'thumbnail') byUser[k].images += 1;
+    byUser[k].cost += u.costUsd;
+  }
+  const usageByUser = Object.values(byUser).sort((a: any, b: any) => b.cost - a.cost);
+
+  return NextResponse.json({ tools, runs, usage, usageByUser }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 function countCards(cards: any[]): number {

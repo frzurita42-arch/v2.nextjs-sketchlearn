@@ -1,12 +1,12 @@
 'use client';
-/* Admin dashboard: a single place to see the platform's data, grouped into tables
- * — created slide tools, created repositories, saved presentation runs (grades by
- * user), users (with add/edit), and the built-in game statistics. The storage stays
- * normalised (separate tools / entries / users tables); the dashboard just joins
- * and groups what it needs to display.
+/* Admin dashboard: the platform's data, grouped into tables — created slide tools,
+ * created repositories, saved presentation runs (grades by user), AI token usage &
+ * cost (per event + per user), users (with add/edit), and the built-in game stats.
+ * Storage stays normalised (separate tables); the dashboard joins/groups for display.
  *
- * Every table shows at most 4 rows and paginates; any cell longer than 100 chars is
- * clipped with an 👁 button that opens the full text in a popup. */
+ * The dashboard shows ONE table per page (pick it from the tabs / Prev–Next). Each
+ * table shows at most 4 rows and paginates; any cell over 100 chars is clipped with
+ * an 👁 button that opens the full text in a popup. */
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
@@ -15,14 +15,14 @@ import { Loading } from '@/components/ui/Loading';
 
 const fmtDate = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }); };
 const fmtDay = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(); };
+const money = (n: number) => `$${(Number(n) || 0).toFixed(4)}`;
 
 const ROWS_PER_PAGE = 4;
 const CELL_LIMIT = 100;
-// A cell is plain text/number, or a { node } for interactive content (buttons).
 type Cell = string | number | null | undefined | { node: React.ReactNode };
 
-// A table that shows ROWS_PER_PAGE rows at a time (with Prev/Next) and clips any
-// text cell over CELL_LIMIT chars, revealing the full value in a popup via 👁.
+// A table that shows ROWS_PER_PAGE rows at a time (Prev/Next) and clips any text
+// cell over CELL_LIMIT chars, revealing the full value in a popup via 👁.
 function PagedTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][]; empty: string }) {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<{ title: string; text: string } | null>(null);
@@ -51,15 +51,15 @@ function PagedTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][
       {pages > 1 && (
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
           <button className="btn small ghost" disabled={p <= 0} onClick={() => setPage(p - 1)}>‹ Prev</button>
-          <span style={{ fontSize: 12, opacity: 0.7 }}>Page {p + 1} / {pages} · {rows.length} rows</span>
+          <span style={{ fontSize: 12, opacity: 0.7 }}>Rows {p * ROWS_PER_PAGE + 1}–{Math.min(rows.length, (p + 1) * ROWS_PER_PAGE)} of {rows.length}</span>
           <button className="btn small ghost" disabled={p >= pages - 1} onClick={() => setPage(p + 1)}>Next ›</button>
         </div>
       )}
       {view && (
         <div onClick={() => setView(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, width: '100%', padding: '16px 18px', maxHeight: '80vh', overflow: 'auto' }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: '16px 18px', maxHeight: '80vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><b>{view.title || 'Full text'}</b><button className="btn small ghost" onClick={() => setView(null)}>✕</button></div>
-            <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontSize: 14, lineHeight: 1.5 }}>{view.text}</p>
+            <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit' }}>{view.text}</p>
           </div>
         </div>
       )}
@@ -71,9 +71,10 @@ export function DashboardView() {
   const app = useApp();
   const [usersList, setUsersList] = useState<any[] | null>(null);
   const [games, setGames] = useState<any[]>([]);
-  const [dash, setDash] = useState<{ tools: any[]; runs: any[] } | null>(null);
+  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[] } | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [tab, setTab] = useState(0);
   const [newUser, setNewUser] = useState('');
   const [newPass, setNewPass] = useState('');
   const [newRole, setNewRole] = useState('user');
@@ -91,6 +92,8 @@ export function DashboardView() {
   const slideTools = useMemo(() => (dash?.tools || []).filter((t: any) => t.archetype === 'lesson'), [dash]);
   const repoTools = useMemo(() => (dash?.tools || []).filter((t: any) => t.archetype !== 'lesson'), [dash]);
   const runs = dash?.runs || [];
+  const usage = dash?.usage || [];
+  const usageByUser = dash?.usageByUser || [];
 
   if (error) return <div className="card">{error}</div>;
   if (usersList === null || dash === null) return <Loading text="Opening the teacher’s desk…" />;
@@ -121,19 +124,19 @@ export function DashboardView() {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   };
 
-  // ---- table data (plain string rows: reused for both the table and CSV) ----
+  // ---- rows for each table (plain strings, reused for table + CSV) ----
   const slideHeaders = ['Title', 'Owner', 'Visibility', 'Slides', 'Saved deck', 'AI', 'Created'];
   const slideRows: (string | number)[][] = slideTools.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.slideCount || '—', t.hasSavedDeck ? '📖 yes' : '—', t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
-
   const repoHeaders = ['Title', 'Owner', 'Visibility', 'Cards', 'Kind', 'AI', 'Created'];
   const repoRows: (string | number)[][] = repoTools.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.cardCount || '—', t.archetype, t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
-
   const runHeaders = ['User', 'Presentation', 'Topic', 'Level', 'Theme', 'Slides', 'Grade', 'Date'];
   const runRows: (string | number)[][] = runs.map((r: any) => [`@${r.user}`, r.toolTitle, r.topic || '—', r.level || '—', r.theme || '—', r.slides || '—', r.score == null ? '—' : `${r.score}%`, fmtDate(r.createdAt)]);
-
+  const usageHeaders = ['User', 'Component', 'Provider', 'Tokens', 'Cost', 'Subject', 'Prompt', 'Date'];
+  const usageRows: (string | number)[][] = usage.map((u: any) => [`@${u.user}`, u.kind, u.provider || '—', u.totalTokens || 0, money(u.costUsd), u.subject || '—', u.prompt || '—', fmtDate(u.createdAt)]);
+  const costHeaders = ['User', 'Generations', 'Tokens', 'Images', 'Total cost'];
+  const costRows: (string | number)[][] = usageByUser.map((u: any) => [`@${u.user}`, u.events, u.tokens, u.images, money(u.cost)]);
   const gameHeaders = ['User', 'Date', 'Topic', 'Concept', 'Level', 'Score', 'Time'];
   const gameRows: (string | number)[][] = games.slice().reverse().map((g: any) => [g.username, fmtDate(g.finishedAt), g.topic, g.concept, g.level, `${g.correct}/${g.total}`, `${Math.floor(g.durationSec / 60)}:${String(g.durationSec % 60).padStart(2, '0')}`]);
-
   const userHeaders = ['Username', 'Role', 'Created', 'Games', 'Actions'];
   const userRows: Cell[][] = usersList.map((u: any) => [u.username, u.role, fmtDay(u.createdAt), u.gamesPlayed, {
     node: <>
@@ -142,55 +145,64 @@ export function DashboardView() {
     </>,
   }]);
 
-  const sectionHead = (title: string, count: number, onCsv?: () => void) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <h3 style={{ margin: 0 }}>{title} <span style={{ opacity: 0.5, fontWeight: 400 }}>({count})</span></h3>
-      {onCsv && count > 0 && <button className="btn small" onClick={onCsv}>⬇ CSV</button>}
-    </div>
-  );
+  const totalCost = usageByUser.reduce((s: number, u: any) => s + (Number(u.cost) || 0), 0);
+
+  // The tables, one per page. `footer` adds extra UI (the add-user form).
+  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; empty: string; csv?: () => void; footer?: React.ReactNode }[] = [
+    { key: 'slides', label: '🎞️ Slide tools', count: slideTools.length, headers: slideHeaders, rows: slideRows, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows) },
+    { key: 'repos', label: '🗂️ Repositories', count: repoTools.length, headers: repoHeaders, rows: repoRows, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows) },
+    { key: 'runs', label: '📊 Presentation runs', count: runs.length, headers: runHeaders, rows: runRows, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows) },
+    { key: 'usage', label: '💸 Token usage', count: usage.length, headers: usageHeaders, rows: usageRows, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows) },
+    { key: 'cost', label: '📉 Cost by user', count: usageByUser.length, headers: costHeaders, rows: costRows, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
+    {
+      key: 'users', label: '👥 Users', count: usersList.length, headers: userHeaders, rows: userRows, empty: 'No users.',
+      footer: (
+        <>
+          <h3 style={{ marginTop: 18 }}>➕ Add a user</h3>
+          <div className="settings-grid" style={{ marginTop: 8 }}>
+            <label className="field"><span>Username</span><input type="text" value={newUser} onChange={e => setNewUser(e.target.value)} /></label>
+            <label className="field"><span>Password</span><input type="text" value={newPass} onChange={e => setNewPass(e.target.value)} /></label>
+            <label className="field"><span>Role</span>
+              <select value={newRole} onChange={e => setNewRole(e.target.value)}>
+                <option value="user">user</option><option value="moderator">moderator</option><option value="admin">admin</option>
+              </select></label>
+          </div>
+          <p className="form-error">{userErr}</p>
+          <button className="btn green" disabled={!newUser.trim() || !newPass} onClick={addUser}>Add user</button>
+        </>
+      ),
+    },
+    { key: 'games', label: '📈 Activity stats', count: games.length, headers: gameHeaders, rows: gameRows, empty: 'No games played yet.', footer: <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}><button className="btn small" onClick={downloadCsv}>⬇ Export all games as CSV</button></div> },
+  ];
+  const cur = Math.min(tab, sections.length - 1);
+  const sec = sections[cur];
 
   return (
     <>
       <h1 className="view-title">Teacher’s <span className="scribble-underline">dashboard</span></h1>
-      <p className="view-sub" style={{ textAlign: 'center' }}>Every group of data on the platform, in its own table (4 rows per page).</p>
+      <p className="view-sub" style={{ textAlign: 'center' }}>One table per page — pick a group below.</p>
 
-      <div className="card">
-        {sectionHead('🎞️ Created slide tools', slideTools.length, () => exportRows('slide-tools', slideHeaders, slideRows))}
-        <PagedTable headers={slideHeaders} rows={slideRows} empty="No slide tools yet." />
+      {/* Which table (one per page). */}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '0 0 12px' }}>
+        {sections.map((s, i) => (
+          <button key={s.key} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => setTab(i)}>{s.label} <span style={{ opacity: 0.6 }}>({s.count})</span></button>
+        ))}
       </div>
 
-      <div className="card">
-        {sectionHead('🗂️ Created repositories', repoTools.length, () => exportRows('repositories', repoHeaders, repoRows))}
-        <PagedTable headers={repoHeaders} rows={repoRows} empty="No repositories yet." />
-      </div>
-
-      <div className="card alt">
-        {sectionHead('📊 Presentation runs — grades by user', runs.length, () => exportRows('presentation-runs', runHeaders, runRows))}
-        <PagedTable headers={runHeaders} rows={runRows} empty="No saved runs yet — a moderator plays a presentation to the end and it lands here." />
-      </div>
-
-      <div className="card">
-        {sectionHead('👥 Users', usersList.length)}
-        <PagedTable headers={userHeaders} rows={userRows} empty="No users." />
-        <h3 style={{ marginTop: 18 }}>➕ Add a user</h3>
-        <div className="settings-grid" style={{ marginTop: 8 }}>
-          <label className="field"><span>Username</span><input type="text" value={newUser} onChange={e => setNewUser(e.target.value)} /></label>
-          <label className="field"><span>Password</span><input type="text" value={newPass} onChange={e => setNewPass(e.target.value)} /></label>
-          <label className="field"><span>Role</span>
-            <select value={newRole} onChange={e => setNewRole(e.target.value)}>
-              <option value="user">user</option><option value="moderator">moderator</option><option value="admin">admin</option>
-            </select></label>
+      <div className={cur % 2 ? 'card alt' : 'card'}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <h3 style={{ margin: 0 }}>{sec.label} <span style={{ opacity: 0.5, fontWeight: 400 }}>({sec.count})</span></h3>
+          {sec.csv && sec.count > 0 && <button className="btn small" onClick={sec.csv}>⬇ CSV</button>}
         </div>
-        <p className="form-error">{userErr}</p>
-        <button className="btn green" disabled={!newUser.trim() || !newPass} onClick={addUser}>Add user</button>
+        <PagedTable key={sec.key} headers={sec.headers} rows={sec.rows} empty={sec.empty} />
+        {sec.footer}
       </div>
 
-      <div className="card alt">
-        {sectionHead('📈 Activity statistics', games.length)}
-        <PagedTable headers={gameHeaders} rows={gameRows} empty="No games played yet." />
-        <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
-          <button className="btn small" onClick={downloadCsv}>⬇ Export all as CSV</button>
-        </div>
+      {/* Table pager (one table per page). */}
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', marginTop: 12 }}>
+        <button className="btn small ghost" disabled={cur <= 0} onClick={() => setTab(cur - 1)}>‹ Prev table</button>
+        <span style={{ fontSize: 12, opacity: 0.7 }}>Table {cur + 1} / {sections.length}</span>
+        <button className="btn small ghost" disabled={cur >= sections.length - 1} onClick={() => setTab(cur + 1)}>Next table ›</button>
       </div>
     </>
   );

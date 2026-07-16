@@ -4,6 +4,7 @@ import { geminiEnabled, openrouterEnabled, deepseekEnabled, imageEnabled } from 
 import { generateStructured, generateImageWithMeta } from '@/src/ai/providers';
 import { imageStyleDirective, DIAGRAM_RULE, VARIED_RULE } from '@/lib/image-styles';
 import { requireAuth } from '@/lib/auth-guard';
+import { recordTextUsage, recordImageUsage } from '@/lib/usage-log';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fallbackImageDataUrl } = require('@/src/slides/visual-policy');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -115,6 +116,7 @@ export async function POST(req: Request) {
   if (type === 'image' && !openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     const base = mathish ? `a clear, labelled diagram / infographic of: ${content || title || subject}` : (content || title || subject);
     const m = await makeImage(`${base}. ${imageComposition(mathish, imgStyle)}`, imgProvider);
+    await recordImageUsage({ username: a.user.username, kind: 'support-image', provider: m.by, subject: [subject, topic].filter(Boolean).join(' — '), meta: { prompt: base } });
     return NextResponse.json({ support: { type: 'image', url: m.url, by: m.by, caption: '' } });
   }
   if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json({ support: null });
@@ -133,6 +135,9 @@ export async function POST(req: Request) {
     const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.6, maxTokens: 1200 });
     const raw = r?.support && typeof r.support === 'object' ? r.support : r;
     const support = await parseSupport(type, raw, subject, imgStyle, imgProvider, mathish);
+    const subj = [subject, topic].filter(Boolean).join(' — ');
+    if (support && (support as any).type === 'image') await recordImageUsage({ username: a.user.username, kind: 'support-image', provider: (support as any).by, subject: subj, meta: { prompt: content || title } });
+    else if (support) await recordTextUsage({ username: a.user.username, kind: `support-${type}`, input: system + user, output: JSON.stringify(r || {}), subject: subj });
     return NextResponse.json({ support: support || null });
   } catch {
     return NextResponse.json({ support: null });

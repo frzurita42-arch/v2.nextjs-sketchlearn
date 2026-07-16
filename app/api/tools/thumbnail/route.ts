@@ -5,6 +5,7 @@ import { generateImage, generateSvgSketch, getLastImageError } from '@/src/ai/pr
 import { requireAuth } from '@/lib/auth-guard';
 import { emojiThumb, emojiOf, randomEmoji } from '@/lib/emoji-thumb';
 import { NO_TEXT_RULE } from '@/lib/image-styles';
+import { recordImageUsage } from '@/lib/usage-log';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug, updateTool, setExampleOverride } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -124,6 +125,7 @@ export async function POST(req: Request) {
 
   try {
     let img = await generateImage(prompt);
+    if (img) await recordImageUsage({ username: a.user.username, kind: 'thumbnail', provider: '', subject: theme, meta: { prompt } });
     // No image model available (e.g. Gemini image generation is unreachable) —
     // fall back to a hand-drawn SVG illustration via the TEXT model, so the 🎨
     // button still produces a picture instead of erroring.

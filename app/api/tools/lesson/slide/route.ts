@@ -4,6 +4,7 @@ import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config'
 import { generateStructured } from '@/src/ai/providers';
 import { themeDirective } from '@/lib/lesson-themes';
 import { requireAuth } from '@/lib/auth-guard';
+import { recordTextUsage } from '@/lib/usage-log';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -282,6 +283,7 @@ export async function POST(req: Request) {
     // but none came back. A designed reading-only page (qKinds empty) legitimately
     // has no questions, so an empty array is fine there.
     if (!content || (qKinds.length > 0 && !questions.length)) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
+    await recordTextUsage({ username: a.user.username, kind: 'slide', input: system + user, output: JSON.stringify(r || {}), subject: [subject, topic].filter(Boolean).join(' — '), meta: { level, slideNumber: n } });
     return NextResponse.json({
       title: String(r.title || `${subject} — slide ${n}`).slice(0, 100),
       content: content.slice(0, 2000),

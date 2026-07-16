@@ -207,6 +207,26 @@ async function initDatabase() {
   await dbQuery("ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id TEXT");
   await dbQuery("ALTER TABLE comments ADD COLUMN IF NOT EXISTS links JSONB");
   await dbQuery("ALTER TABLE comments ADD COLUMN IF NOT EXISTS liked_by JSONB");
+  // AI usage / token-consumption log — one row per generation (slide, image,
+  // design, suggestion…). Powers the dashboard's per-user cost / profitability
+  // tables. Estimated token counts + cost (real rates vary by provider).
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS ai_usage (
+      id TEXT PRIMARY KEY,
+      username TEXT,
+      kind TEXT,
+      provider TEXT,
+      model TEXT,
+      prompt_tokens INTEGER NOT NULL DEFAULT 0,
+      completion_tokens INTEGER NOT NULL DEFAULT 0,
+      total_tokens INTEGER NOT NULL DEFAULT 0,
+      cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+      subject TEXT,
+      meta JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_ai_usage_user ON ai_usage(username, created_at DESC)');
 }
 
 // Persist every AI generation to a JSON file, as the site's content source of record.
