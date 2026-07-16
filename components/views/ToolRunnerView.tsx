@@ -390,7 +390,7 @@ export function ToolRunnerView() {
                 time={(e: any) => new Date(e.createdAt || 0).getTime()}
                 favs={entryFavs}
                 likedByAdmin={(e: any) => !!e.byAdmin}
-                perPage={9}
+                perPage={6}
                 storageKey="sl_entry_view"
                 sortPrefKey="entryfeed"
                 defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(def?.feedFilter || '') ? def.feedFilter : 'all') as FilterKey}

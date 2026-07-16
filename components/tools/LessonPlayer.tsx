@@ -10,7 +10,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
-import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
@@ -339,8 +338,15 @@ function ChoiceQuestion({ q, translateTo, subject, onDone, recorded }: { q: Q; t
         <div style={{ display: 'grid', gap: 8, maxWidth: 460, margin: '0 auto' }}>
           {opts.map((o: any, i: number) => {
             const isP = picked === i || (recorded && o.text === yourText);
-            const bg = !answered ? undefined : o.correct ? 'rgba(127,176,105,0.25)' : (isP ? 'rgba(228,87,46,0.2)' : undefined);
-            return <button key={i} className="btn" style={{ textAlign: 'left', width: '100%', background: bg, borderColor: answered && o.correct ? 'var(--ink)' : undefined }} disabled={answered}
+            // After answering, disabled buttons are dimmed (opacity .5) — so we make
+            // the CORRECT answer (vivid green) and the CHOSEN-WRONG answer (vivid red)
+            // fully opaque with a bold border + readable text so they clearly stand
+            // out, while every OTHER option stays greyed/muted.
+            const hl: React.CSSProperties = !answered ? {}
+              : o.correct ? { background: '#5fa044', color: '#fff', borderColor: '#356b23', borderWidth: 3, opacity: 1, fontWeight: 700 }
+              : isP ? { background: '#e4572e', color: '#fff', borderColor: '#a5331a', borderWidth: 3, opacity: 1, fontWeight: 700 }
+              : { background: 'rgba(45,42,38,0.06)', opacity: 0.45 };
+            return <button key={i} className="btn" style={{ textAlign: 'left', width: '100%', ...hl }} disabled={answered}
               onClick={() => { setPicked(i); finish(!!o.correct, { prompt: q.prompt, your: o.text, answer: correctText, correct: !!o.correct, feedback: o.explanation || '' }); }}>{o.correct && answered ? '✓ ' : (isP && !o.correct ? '✗ ' : '')}<MathText text={o.text} /></button>;
           })}
         </div>
@@ -698,7 +704,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const levelField = settings.find((f: any) => f.id === 'level' || f.id === 'difficulty');
   const levels: string[] = levelField?.options?.length ? levelField.options : TEXT_LEVELS;
 
-  const app = useApp();
   const [phase, setPhase] = useState<'hub' | 'play' | 'done' | 'history'>('hub');
   // "Immersive" = actually inside a run (a slide, results, or the saved deck) — as
   // opposed to the hub (create form + gallery). The parent tool page hides its
@@ -865,6 +870,24 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     if (phase === 'play') window.scrollTo(0, 0);
   }, [cur]);
 
+  // Kick off the ONE image on a (pre)fetched slide ahead of time, caching the
+  // in-flight request on the slide the same way SupportsLoader does — so when the
+  // learner reaches the slide the picture is already loading/ready. Warms at most
+  // one image per slide; other support (tables/formulas) stays lazy/on-view.
+  const warmSlideImage = (sl: any) => {
+    try {
+      const plan: string[] = Array.isArray(sl?.supportPlan) ? sl.supportPlan : [];
+      const i = plan.indexOf('image');
+      if (i < 0) return;
+      if (!sl._supports || sl._supports.length !== plan.length) sl._supports = plan.map(() => undefined);
+      if (!sl._supportP || sl._supportP.length !== plan.length) sl._supportP = plan.map(() => undefined);
+      if (sl._supports[i] !== undefined || sl._supportP[i]) return;   // already warmed / loaded
+      sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson, values: cfgRef.current, type: 'image', content: sl.content, title: sl.title, imageStyle: cfgRef.current.imageStyle || '' })
+        .then((r: any) => { sl._supports[i] = r?.support || null; })
+        .catch(() => { sl._supports[i] = null; });
+    } catch { /* best-effort */ }
+  };
+
   // Quietly load slide `idx` in the BACKGROUND (no spinner), so Next is instant
   // for EVERY answer type — including AI-checked ones that don't block on it.
   const prefetch = (idx: number): Promise<void> | undefined => {
@@ -878,6 +901,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         // that is awaiting this prefetch — that made Next need two clicks.
         if (!slidesRef.current[idx]) { const nr = [...slidesRef.current]; nr[idx] = r; slidesRef.current = nr; }
         setSlides((sc) => { if (sc[idx]) return sc; const n = [...sc]; n[idx] = r; return n; });
+        // Warm ONLY the next slide's single image in the background while the learner
+        // is still reading the current slide — image generation is the slow part, so
+        // this makes the picture appear (near-)instantly on arrival. Never warm more
+        // than one image (tables/formulas/etc. are quick and load on view).
+        warmSlideImage(r);
       } catch { /* goNext will fetch on demand if this failed */ }
       finally { delete prefetching.current[idx]; }
     })();
@@ -1153,10 +1181,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     return (
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ display: 'inline-flex', gap: 6 }}>
-            <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
-            <button className="btn small ghost" title="Exit to the tools page" onClick={() => app.nav('tools')}>🚪 Exit</button>
-          </span>
+          <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
           {viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Play a replica</button>}
         </div>
 
@@ -1460,7 +1485,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           time={(e: any) => new Date(e.createdAt || 0).getTime()}
           favs={favs}
           likedByAdmin={(e: any) => !!e.byAdmin}
-          perPage={9}
+          perPage={6}
           storageKey="sl_lessonfeed_view"
           sortPrefKey="lessonfeed"
           defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(def?.feedFilter || '') ? def.feedFilter : 'all') as FilterKey}
@@ -1558,7 +1583,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         <div className="slide-actions" style={{ justifyContent: 'center', gap: 8, marginTop: 12 }}>
           <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>
           <button className="btn" onClick={() => { setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
-          <button className="btn ghost" title="Exit to the tools page" onClick={() => app.nav('tools')}>🚪 Exit</button>
         </div>
         {/* The finished run is saved automatically (owner: canonical deck; everyone:
             their rendition entry) — no manual save button needed. */}
@@ -1588,10 +1612,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     <div>
       <style>{'@keyframes sl-spin{to{transform:rotate(360deg)}}'}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ display: 'inline-flex', gap: 6 }}>
-          <button className="btn small ghost" onClick={() => { setPhase('hub'); loadActivities(); }}>← Lessons</button>
-          <button className="btn small ghost" title="Exit the presentation and go back to the tools page" onClick={() => app.nav('tools')}>🚪 Exit</button>
-        </span>
+        <button className="btn small ghost" onClick={() => { setPhase('hub'); loadActivities(); }}>← Lessons</button>
         <span style={{ fontSize: 13, opacity: 0.7 }}>{label(cfg)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
