@@ -709,3 +709,7 @@ input.ll-count::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0;
 @media (prefers-reduced-motion: reduce) {
   .sl-pencil__tip, .sl-pencil__line { animation: none; }
 }
+
+/* Click-to-pronounce: each word in a language reading is tappable to hear it. */
+.sl-word { cursor: pointer; border-radius: 3px; padding: 0 1px; transition: background 0.12s ease; }
+.sl-word:hover { background: var(--yellow, #fadf63); text-decoration: underline dotted; }

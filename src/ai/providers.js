@@ -759,15 +759,17 @@ async function illustrateWithClaude(slide, context) {
 // ElevenLabs text-to-speech for the language listening/spelling activities.
 // Returns { audio: base64 data URL | null, error: string | null } so the caller can
 // surface the real reason (401 bad key, 402 quota, …) instead of a silent failure.
-async function generateSpeech(text) {
+async function generateSpeech(text, voiceId) {
   if (!ttsEnabled) return { audio: null, error: 'ElevenLabs not configured (set ELEVENLABS_API_KEY).' };
   const clean = String(text || '').trim().slice(0, 600);
   if (!clean) return { audio: null, error: 'No text to speak.' };
   const key = String(ELEVENLABS_API_KEY || '').trim(); // trim stray spaces/newlines from the env value
   if (!key) return { audio: null, error: 'ELEVENLABS_API_KEY is empty.' };
   const base = String(ELEVENLABS_API_URL || 'https://api.elevenlabs.io/v1').replace(/\/+$/, '');
+  // A caller-chosen voice (a valid ElevenLabs voice id) overrides the default.
+  const voice = /^[A-Za-z0-9]{16,40}$/.test(String(voiceId || '')) ? String(voiceId) : ELEVENLABS_VOICE_ID;
   try {
-    const res = await fetchWithTimeout(`${base}/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+    const res = await fetchWithTimeout(`${base}/text-to-speech/${voice}`, {
       method: 'POST',
       headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
       body: JSON.stringify({ text: clean, model_id: ELEVENLABS_MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),

@@ -13,8 +13,8 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
-  const { text = '' } = (await req.json().catch(() => ({}))) || {};
+  const { text = '', voiceId = '' } = (await req.json().catch(() => ({}))) || {};
   if (!ttsEnabled) return NextResponse.json({ audio: null, enabled: false, error: 'ELEVENLABS_API_KEY not set' });
-  const { audio, error } = await generateSpeech(text);
+  const { audio, error } = await generateSpeech(text, voiceId);
   return NextResponse.json({ audio, enabled: true, error });
 }

@@ -25,6 +25,7 @@ import { defaultEmojiFor, randomEmoji } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 import { IMAGE_STYLES } from '@/lib/image-styles';
 import { LESSON_THEMES } from '@/lib/lesson-themes';
+import { TTS_VOICES } from '@/lib/tts';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
@@ -340,7 +341,7 @@ function Decorations({ items, subject = '', topic = '', onFinish }: { items: any
 
 // ---- Self-resolving questions (mcq / fill-blank / input) — no AI check. ----
 // Report the outcome via onDone(correct, detail).
-function ChoiceQuestion({ q, translateTo, subject, onDone, recorded }: { q: Q; translateTo: string; subject: string; onDone: (correct: boolean, detail: any) => void; recorded?: any }) {
+function ChoiceQuestion({ q, translateTo, subject, onDone, recorded, voiceId, speakable }: { q: Q; translateTo: string; subject: string; onDone: (correct: boolean, detail: any) => void; recorded?: any; voiceId?: string; speakable?: boolean }) {
   const [opts] = useState<any[]>(() => q.kind === 'mcq' ? shuffle(q.options || []) : []);
   const [picked, setPicked] = useState<number | null>(null);
   const [val, setVal] = useState('');
@@ -419,7 +420,7 @@ function ChoiceQuestion({ q, translateTo, subject, onDone, recorded }: { q: Q; t
       {state === 'open' && aiNote && <p style={{ fontSize: 13, opacity: 0.85 }}>{aiNote}</p>}
       {state === 'open' && tries > 0 && <p style={{ fontSize: 13, color: 'var(--danger,#e4572e)' }}>Not quite — {3 - tries} {3 - tries === 1 ? 'try' : 'tries'} left.</p>}
       {state === 'right' && <p style={{ fontSize: 14, color: 'var(--accent,#5c80bc)' }}>✓ Correct!</p>}
-      {state === 'wrong' && <p style={{ fontSize: 14 }}>Answer: <b>{q.answer}</b> <RichText text={String(q.answer || '')} translateTo={translateTo} /></p>}
+      {state === 'wrong' && <p style={{ fontSize: 14 }}>Answer: <b>{q.answer}</b> <RichText text={String(q.answer || '')} translateTo={translateTo} voiceId={voiceId} speakable={speakable} /></p>}
       {state === 'open' && <GuidePanel subject={subject} prompt={q.prompt} kind={q.kind} getAttempt={() => val} />}
     </div>
   );
@@ -882,6 +883,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // Available image backends (from /api/config) + the run's chosen one's dropdown.
   const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
   const [providerOpen, setProviderOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   useEffect(() => { API.get('/api/config').then((c: any) => setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : [])).catch(() => { /* ignore */ }); }, []);
   const [supportNonce, setSupportNonce] = useState(0);
   // A random emoji per rendition card that has no real image, picked ONCE per page
@@ -1204,6 +1206,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     setSupportNonce((n) => n + 1);
   };
 
+  // Set the TTS voice for the whole run (read-aloud + click-to-pronounce). Audio is
+  // fetched on demand, so no cache to invalidate — just update the config.
+  const setVoice = (id: string) => { setVoiceOpen(false); cfgRef.current = { ...cfgRef.current, voice: id }; setCfg((c) => ({ ...c, voice: id })); };
+
   // Change the CONTENT theme for the whole presentation (Vacations, Sports, Stoic
   // philosophy, …). It becomes the run's theme so every slide generated after it
   // is framed around it; the current slide is regenerated with the new theme now,
@@ -1287,7 +1293,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               <button className="btn small ghost" title="Back to top" onClick={() => jump(0)}>↑ Top</button>
             </div>
             <h3 style={{ marginTop: 4, textAlign: 'center' }}>{s.title}</h3>
-            {s.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={s.content} translateTo={lesson.translateTo || 'English'} /></p>}
+            {s.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={s.content} translateTo={lesson.translateTo || 'English'} speakable={!!lesson.language} voiceId={cfg.voice} /></p>}
             {(Array.isArray(s._supports) ? s._supports : (s.support ? [s.support] : [])).map((sup: any, k: number) => <Support key={k} s={sup} />)}
             {(Array.isArray(s.questions) ? s.questions : []).map((q, qi) => (
               <div key={qi} style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
@@ -1490,6 +1496,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 title="Which image generator to use — Pollinations is free & keyless">
                 <option value="">Auto (best available)</option>
                 {imageProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
+            <label className="field" style={{ maxWidth: 240 }}><span>🎙 Voice</span>
+              <select value={(form as any).voice || ''} onChange={(e) => setForm(s => ({ ...s, voice: e.target.value }))}
+                title="Which voice reads the text aloud / pronounces words">
+                <option value="">Default voice</option>
+                {TTS_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
               </select>
             </label>
           </div>
@@ -1748,6 +1761,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               <button className="btn small ghost" title="Image style for this slide" onClick={() => setImgStyleOpen((o) => !o)} style={{ padding: '0 6px' }}>🖼</button>
             )}
             <button className="btn small ghost" title="Image API — choose which image generator to use (Pollinations is free)" onClick={() => setProviderOpen((o) => !o)} style={{ padding: '0 6px' }}>🔌</button>
+            <button className="btn small ghost" title="Voice — choose which voice reads aloud / pronounces words" onClick={() => setVoiceOpen((o) => !o)} style={{ padding: '0 6px' }}>🎙</button>
+            {voiceOpen && (
+              <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 200, maxHeight: 320, overflowY: 'auto', textAlign: 'left' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>VOICE</div>
+                {[{ id: '', label: 'Default voice' }, ...TTS_VOICES].map((v) => {
+                  const active = (cfg.voice || '') === v.id;
+                  return <button key={v.id || 'default'} className={`btn small ${active ? 'green' : 'ghost'}`} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 3 }} onClick={() => setVoice(v.id)}>{v.label}</button>;
+                })}
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>Used by 🔊 read-aloud and click-to-pronounce.</div>
+              </div>
+            )}
             {providerOpen && (
               <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 200, textAlign: 'left' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>IMAGE API</div>
@@ -1812,7 +1836,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           {slideLevel[cur] && <div style={{ textAlign: 'center', fontSize: 11, opacity: 0.6, marginTop: 2 }}>Level: {slideLevel[cur]}</div>}
           {Array.isArray(lesson.pages) && lesson.pages[cur]?.decorations?.length ? <Decorations items={lesson.pages[cur].decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
           {/* Reading passage (its own "paper"). */}
-          {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>}
+          {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} speakable={!!lesson.language} voiceId={cfg.voice} /></p>}
           {/* Support materials — each streams into its own card, dotted-separated. */}
           {(curSlide.supportPlan?.length || curSlide.support) && curSlide.content ? <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12 }} /> : null}
           <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg, imageStyle: slideImgStyle[cur] || cfg.imageStyle || '', imageProvider: cfg.imageProvider || '', nonce: supportNonce }} />
@@ -1834,7 +1858,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                       ? <CodeQuestion q={q} subject={lesson.subject || ''} onDone={(c, d) => recordQ(i, c, d)} />
                       : q.kind === 'writing'
                         ? <WritingQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />
-                        : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} subject={lesson.subject || ''} recorded={ans} onDone={(c, d) => recordQ(i, c, d)} />}
+                        : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} subject={lesson.subject || ''} recorded={ans} voiceId={cfg.voice} speakable={!!lesson.language} onDone={(c, d) => recordQ(i, c, d)} />}
               </div>
             );
           })}
