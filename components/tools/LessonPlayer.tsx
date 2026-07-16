@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
+import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
@@ -709,6 +710,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const levelField = settings.find((f: any) => f.id === 'level' || f.id === 'difficulty');
   const levels: string[] = levelField?.options?.length ? levelField.options : TEXT_LEVELS;
 
+  const app = useApp();
+  // Only moderators and admins may PLAY / generate a presentation. A normal user
+  // (or a guest / an admin previewing as a user) can only VIEW the saved history.
+  const eff = app.eff();
+  const canPlay = !!(eff.isAdmin || eff.isModerator);
   const [phase, setPhase] = useState<'hub' | 'play' | 'done' | 'history'>('hub');
   // "Immersive" = actually inside a run (a slide, results, or the saved deck) — as
   // opposed to the hub (create form + gallery). The parent tool page hides its
@@ -735,8 +741,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // original deck so the results persist and are reachable via the tool's link /
   // the "OP results" button. `resultsArg` is the finisher's own score/answers.
   const savedRun = useRef(false);   // guard: auto-save a finished run only once
-  const playedEntryId = useRef<string | null>(null);   // the history card for the run in progress
-  const finalizedEntry = useRef<string | null>(null);  // guard: persist tweaks + score to a run's card once
+  const playedEntryId = useRef<string | null>(null);   // the history card, created only on finish
+  const savedRunEntry = useRef(false);                 // guard: create the gallery card once per finished run
   const saveDeck = async (resultsArg?: Record<number, any>, silent = false) => {
     const gen = slidesRef.current.filter(Boolean);
     if (!gen.length) { if (!silent) setDeckMsg('Play through the deck first, then save.'); return; }
@@ -986,38 +992,34 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       savedRun.current = true;
       saveDeck(results, true);
     }
-    // PERSIST the learner's in-play tweaks (theme, level, image style, …) — but
-    // ONLY now that the run has reached the end. This writes the final config onto
-    // this play's gallery card, so coming back / replaying it starts from the
-    // adjustments this player made. Abandoned runs never persist their tweaks.
-    if (phase === 'done' && playedEntryId.current && finalizedEntry.current !== playedEntryId.current) {
-      finalizedEntry.current = playedEntryId.current;
+    // CREATE the gallery card — ONLY now that the run has reached the end. This is
+    // the single point a rendition is saved: an abandoned run (that never reaches
+    // 'done') leaves no card. The card carries the run's FINAL config (all in-play
+    // tweaks) plus the score. No image is auto-generated — a card with no picture
+    // shows a random emoji until someone presses 🎨 on it.
+    if (phase === 'done' && !savedRunEntry.current && slidesRef.current.filter(Boolean).length) {
+      savedRunEntry.current = true;
       const cfg = cfgRef.current || {};
-      // Score for this run — shown on its gallery card.
       const all = Object.values(results).flatMap((r: any) => Object.values(r.answers || {}));
       const answered = all.length;
       const correct = all.filter((d: any) => d.correct).length;
       const pct = answered ? Math.round((correct / answered) * 100) : 0;
-      // Persist the final tweaks AND the score onto this play's card. We deliberately
-      // do NOT auto-generate an image here: a card with no picture keeps showing a
-      // random emoji until the owner presses 🎨 on the card to generate one.
-      API.patch('/api/tools/entries', {
-        slug, entryId: playedEntryId.current,
-        config: { theme: cfg.theme, level: cfg.level, difficulty: cfg.difficulty, imageStyle: cfg.imageStyle, imageProvider: cfg.imageProvider, tone: cfg.tone, topic: cfg.topic, slides: cfg.slides, paragraphs: cfg.paragraphs, length: cfg.length, category: cfg.category, density: cfg.density, score: answered ? pct : undefined },
-      }).then(() => loadActivities()).catch(() => { /* best-effort */ });
+      const data: Cfg = { ...cfg, ...(answered ? { score: pct } : {}) };
+      API.post('/api/tools/entries', { slug, data })
+        .then((r: any) => { playedEntryId.current = r?.entry?.id || null; loadActivities(); })
+        .catch(() => { /* best-effort */ });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   const defaultCat = () => lesson.subjectKind === 'math' ? 'Mathematics' : lesson.subjectKind === 'programming' ? 'Technology' : lesson.subjectKind === 'language' ? 'Language Learning' : 'Science';
-  // Record a play in the lesson history (activities feed), then play it. Every
-  // route into a deck — the create form, an AI-suggested topic, or a replica —
-  // goes through here so it shows up as an option in the history.
+  // Start a play. The gallery card is NOT created here — a rendition is only saved
+  // to the gallery when the learner REACHES THE END (see the 'done' effect). An
+  // abandoned run leaves no card. The run's config (incl. any AI-suggested/replica
+  // flags) is stashed so the finish handler can save it.
   const recordAndPlay = async (c: Cfg, extra?: Record<string, any>) => {
     const cc: Cfg = { ...c, level: c.level || c.difficulty || levels[0], topic: c.topic || '', category: c.category || defaultCat(), ...extra };
-    playedEntryId.current = null; finalizedEntry.current = null;
-    try { const r = await API.post('/api/tools/entries', { slug, data: cc }); playedEntryId.current = r?.entry?.id || null; } catch { /* ignore */ }
-    loadActivities();
+    playedEntryId.current = null; savedRunEntry.current = false;
     play(cc);
   };
   const createAndPlay = () => recordAndPlay(form);
@@ -1233,7 +1235,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
           <button className="btn small ghost" onClick={() => setPhase('hub')}>← Lessons</button>
-          {viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Play a replica</button>}
+          {canPlay && viewMode !== 'history' && <button className="btn small green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Play a replica</button>}
         </div>
 
         {/* Start at the ENDING: a results/summary header with navigation tools. */}
@@ -1362,9 +1364,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           title={title}
           subtitle={subtitle || undefined}
           fav={!!favs[e.id]}
+          gridHeight={row ? undefined : 372}   // uniform tiles: title clamps to 2 lines (…), edit icons stay
           thumbnail={emoji ? null : thumb}
           iconNode={emoji ? <span aria-hidden>{emoji}</span> : undefined}
-          onOpen={play}
+          onOpen={canPlay ? play : (hasSaved ? () => { setPhase('history'); window.scrollTo(0, 0); } : undefined)}
           overlay={overlay}
           placeholder={placeholder}
           editBtns={editIcons}
@@ -1394,10 +1397,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <>
               <button style={iconBtn} title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
               {(hasSaved || canEdit) && (
-                <button className="btn small" style={{ background: '#fbe08a', padding: '5px 9px' }} title={hasSaved ? "Moderator results — view the saved answer-key run" : 'No moderator results saved yet'}
-                  onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No moderator results saved yet — an owner plays a run and it saves automatically.'); }}>📖</button>
+                <button className="btn small" style={{ background: '#fbe08a', padding: '5px 9px' }} title={hasSaved ? "View the saved run (history)" : 'No results saved yet'}
+                  onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No results saved yet — a moderator plays a run and it saves automatically.'); }}>📖</button>
               )}
-              <button className="btn small green" title="Play a fresh replica (no answers)" onClick={play}>▶ Play</button>
+              {/* Only moderators/admins can play; a normal user just views the history. */}
+              {canPlay && <button className="btn small green" title="Play a fresh replica (no answers)" onClick={play}>▶ Play</button>}
             </>
           }
         />
@@ -1416,7 +1420,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn blue" onClick={() => { setPhase('history'); window.scrollTo(0, 0); }}>📖 View original (with answers)</button>
-              {showGenerate && <button className="btn green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Generate a fresh replica →</button>}
+              {canPlay && showGenerate && <button className="btn green" onClick={() => recordAndPlay(savedDeck?.config || form, { replica: true })}>✨ Generate a fresh replica →</button>}
             </div>
           </div>
         )}
@@ -1470,7 +1474,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             </label>
           </div>
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
-            <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
+            {canPlay
+              ? <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
+              : <p style={{ margin: 0, fontSize: 13, opacity: 0.7, fontStyle: 'italic' }}>Only moderators can generate a lesson. Browse the saved lessons below and open one to view it.</p>}
           </div>
         </div>
         )}
@@ -1502,11 +1508,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                     thumbnail={null}
                     iconNode={<span aria-hidden>{defaultEmojiFor(`${example.topic || ''} ${example.level || ''} ${lesson.subject || ''}`, def?.tags)}</span>}
                     meta={<span style={{ fontSize: 11, opacity: 0.6 }}>📄 {slideCountOf(form)} slides · 🕒 {new Date().toLocaleString()}</span>}
-                    onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}
+                    onOpen={canPlay ? () => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' }) : undefined}
                     actions={
                       <>
-                        <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>▶ Play</button>
-                        <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>✨ Generate</button>
+                        {canPlay && <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>▶ Play</button>}
+                        {canPlay && <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>✨ Generate</button>}
                       </>
                     }
                   />
@@ -1647,7 +1653,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           </div>
         )}
         <div className="slide-actions" style={{ justifyContent: 'center', gap: 8, marginTop: 12 }}>
-          <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>
+          {canPlay && <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>}
           <button className="btn" onClick={() => { setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
         </div>
         {/* The finished run is saved automatically (owner: canonical deck; everyone:
