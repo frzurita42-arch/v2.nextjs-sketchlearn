@@ -62,6 +62,9 @@ const GALLERY_CATEGORIES = [
   { key: 'presentation', label: '📊 Presentations' },
   { key: 'repository', label: '🗂️ Repositories' },
 ];
+// Temporarily hide the "Admin's Made Tools" shelf on the tools page. Flip to true
+// to bring it back.
+const SHOW_ADMIN_TOOLS = false;
 const galleryCategory = (t: any): string => {
   const arch = t?.archetype || t?.definition?.archetype;
   return arch === 'lesson' ? 'presentation' : 'repository';
@@ -404,16 +407,20 @@ export function ToolsView() {
               {catItems.map((t: any) => <div key={t.slug || t.id} style={{ height: '100%' }}>{card(t, 'grid', true)}</div>)}
             </Carousel>
           )}
-          <div style={{ height: 8 }} />
-          {(adminToolsCollapsed && !isAdmin) ? null : (
-            <AdminToolsCarousel max={10}
-              title={site.picksShelfTitle || "🛠️ Admin's Made Tools"}
-              canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
-              onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || "🛠️ Admin's Made Tools")} remixingTitle={!!headMix.picksShelfTitle}
-              showCollapse collapsed={adminToolsCollapsed}
-              onToggleCollapse={isAdmin ? () => toggleCollapse('adminToolsCollapsed', adminToolsCollapsed) : undefined}
-              banner={<InstructionPlank settingKey="adminToolsBanner" defaultText="🛠️ Admin's Made Tools — the platform's built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the ♻️ icon starts a fresh generation, 📖 opens the original saved results, and 🗑 hides it. Slide or Refresh to reshuffle." />} />
-          )}
+          {/* "Admin's Made Tools" section hidden for now (restore by flipping
+              SHOW_ADMIN_TOOLS to true). */}
+          {SHOW_ADMIN_TOOLS && (adminToolsCollapsed && !isAdmin) ? null : SHOW_ADMIN_TOOLS ? (
+            <>
+              <div style={{ height: 8 }} />
+              <AdminToolsCarousel max={10}
+                title={site.picksShelfTitle || "🛠️ Admin's Made Tools"}
+                canEditTitle={isAdmin} onRenameTitle={(t) => saveShelf('picksShelfTitle', t)}
+                onRemixTitle={() => remixShelf('picksShelfTitle', site.picksShelfTitle || "🛠️ Admin's Made Tools")} remixingTitle={!!headMix.picksShelfTitle}
+                showCollapse collapsed={adminToolsCollapsed}
+                onToggleCollapse={isAdmin ? () => toggleCollapse('adminToolsCollapsed', adminToolsCollapsed) : undefined}
+                banner={<InstructionPlank settingKey="adminToolsBanner" defaultText="🛠️ Admin's Made Tools — the platform's built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the ♻️ icon starts a fresh generation, 📖 opens the original saved results, and 🗑 hides it. Slide or Refresh to reshuffle." />} />
+            </>
+          ) : null}
         </>
       )}
     </>
