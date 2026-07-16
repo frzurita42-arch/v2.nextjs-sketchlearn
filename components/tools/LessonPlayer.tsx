@@ -977,6 +977,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   };
 
   const label = (c: Cfg) => [lesson.subject, c.level || c.difficulty, c.topic].filter(Boolean).join(' · ');
+  // How many slides a run has — from its own config, else the lesson default.
+  const slideCountOf = (c: any) => Math.max(1, Math.min(75, parseInt(c?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
 
   // ---------------- ORIGINAL DECK (history, with answers) ----------------
   if (phase === 'history') {
@@ -1125,7 +1127,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           placeholder={placeholder}
           editBtns={editIcons}
           badges={badges}
-          meta={<span style={{ fontSize: 11, opacity: 0.6 }}>@{e.username || 'anon'}{e.data?.category ? ` · ${e.data.category}` : ''}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleDateString()}` : ''}</span>}
+          meta={<span style={{ fontSize: 11, opacity: 0.6 }}>@{e.username || 'anon'} · 📄 {slideCountOf(e.data)} slides{e.createdAt ? ` · 🕒 ${new Date(e.createdAt).toLocaleString()}` : ''}</span>}
           del={del}
           actions={
             <>
@@ -1181,21 +1183,23 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed', minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input type="text" value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about… (optional)" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
-                    style={{ width: 220 }} />
-                  <button className="btn small ghost" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄 Suggest'}</button>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap' }}>
+                  <input type="text" value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about…" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
+                    style={{ width: 130, maxWidth: '42vw', minWidth: 0 }} />
+                  <button className="btn small ghost" style={{ flex: '0 0 auto', padding: '5px 10px' }} title="Suggest an example with AI" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄'}</button>
                 </div>
               </div>
               {example ? (
                 <div style={{ marginTop: 8 }}>
-                  {/* The AI example uses the SAME card component — image spot (empty →
-                      no-photo placeholder), title, subtitle — with Play + Generate. */}
+                  {/* The AI example uses the SAME card component — a default emoji fills
+                      the image spot (no photo yet), plus slide count + date/time. */}
                   <CardShell
                     view="grid"
                     title={label({ level: example.level, topic: example.topic })}
                     subtitle={example.why || undefined}
                     thumbnail={null}
+                    iconNode={<span aria-hidden>{defaultEmojiFor(`${example.topic || ''} ${example.level || ''} ${lesson.subject || ''}`, def?.tags)}</span>}
+                    meta={<span style={{ fontSize: 11, opacity: 0.6 }}>📄 {slideCountOf(form)} slides · 🕒 {new Date().toLocaleString()}</span>}
                     onOpen={() => recordAndPlay({ ...form, level: example.level, topic: example.topic }, { suggested: true, why: example.why || '' })}
                     actions={
                       <>
