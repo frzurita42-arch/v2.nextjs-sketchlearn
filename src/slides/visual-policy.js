@@ -119,7 +119,7 @@ function buildTimeTravelImagePrompt(slide, context = {}) {
     'Make this scene composition clearly different from earlier slides in the same activity.',
     'The scene must directly visualize the concept in this story and support answering the slide quiz.',
     'No anachronisms: all visual details must match the selected time period accurately.',
-    'Cinematic but classroom-safe, clear composition, high detail, no text overlays, no logos.'
+    'Cinematic but classroom-safe, clear composition, high detail, no logos. The image must contain NO text, words, letters, numbers, labels or captions of any kind — just the picture.'
   ].join(' ');
 }
 
@@ -159,7 +159,7 @@ function buildGenericImagePrompt(slide, context = {}) {
     `Title: ${String(slide?.title || '').trim()}. Summary: ${String(slide?.summary || '').trim()}.`,
     `Key content: ${texts.slice(0, 600)}`,
     'Make this image unique vs previous slides and directly useful for answering the quiz.',
-    'High clarity, no logos, no text overlays.'
+    'High clarity, no logos. The image must contain NO text, words, letters, numbers, labels or captions of any kind — just the picture.'
   ].join(' ');
 }
 

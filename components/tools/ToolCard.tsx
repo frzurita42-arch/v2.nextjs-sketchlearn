@@ -6,8 +6,9 @@
  * clickable (open the tool); owner/admin controls (edit title+desc, AI tap-mixer,
  * generate/regenerate the thumbnail, delete) are optional and only render when
  * their handlers are supplied. Delete is a small plain icon, not a boxed button. */
+import { useState } from 'react';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { emojiOf, defaultEmojiFor } from '@/lib/emoji-thumb';
+import { emojiOf, randomEmojiFor } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 
 export interface ToolCardProps {
@@ -92,8 +93,11 @@ export function ToolCard(p: ToolCardProps) {
   // any create path that didn't stamp one), fall back to a topic-derived emoji at
   // render time so a card is NEVER blank — the user shouldn't have to press a
   // button to get an image when there isn't one.
-  const emoji = emojiOf(t.thumbnail)
-    || (isRenderableImage(t.thumbnail) ? '' : defaultEmojiFor(`${t.title || ''} ${t.description || ''} ${t.definition?.lesson?.subject || ''}`, t.tags));
+  // A random on-topic emoji, picked ONCE per mount so it varies each page load
+  // (three French tools won't all show the same face) but stays stable while you
+  // browse — until a real image or a 🎲 emoji is set on the card.
+  const [randEmoji] = useState(() => randomEmojiFor(`${t.title || ''} ${t.description || ''} ${t.definition?.lesson?.subject || ''}`, t.tags));
+  const emoji = emojiOf(t.thumbnail) || (isRenderableImage(t.thumbnail) ? '' : randEmoji);
   return (
     <CardShell
       view={view}
