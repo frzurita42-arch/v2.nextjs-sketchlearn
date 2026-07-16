@@ -277,10 +277,9 @@ export function assembleDefinition(cfg: StudioConfig): any {
         id: `c${(seq++).toString(36)}`, kind: 'card',
         title: (c.name || 'Untitled').trim().slice(0, 120),
         text: (c.description || '').trim().slice(0, 2000),
-        // Generated repository cards default to the "📋 Assigned" status so every
-        // post reads as an assigned item in the normal user view (the owner can
-        // cycle any card's status afterwards).
-        mode: 'assigned',
+        // Generated repository cards default to "Set status" (no mode) — the owner
+        // can cycle any card to Assigned/Pending/… afterwards, but nothing is
+        // pre-labelled as assigned.
         links, children: kids.length ? kids : undefined,
       };
     };
@@ -294,7 +293,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       repo: {
         layout: 'post', display: 'bars', offlineExport: false,   // no offline-copy button
         imageGen: !!cfg.imageGen,   // "Suggest AI" per-card picture button
-        cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', mode: 'assigned', links: [] }],
+        cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },
     };
   }
