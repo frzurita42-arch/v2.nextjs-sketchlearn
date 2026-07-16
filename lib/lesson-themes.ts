@@ -18,6 +18,18 @@ export const LESSON_THEMES = [
   'Motivational',
   'Health & wellness',
   'Climate awareness',
+  'Biology',
+  'Healthcare',
+  'Physics',
+  'Cybersecurity',
+  'Chemistry',
+  'Finance',
+  'Economy',
+  'Psychology',
+  'History',
+  'Anthropology',
+  'Philosophy',
+  'Negotiation',
 ] as const;
 
 const THEME_HINT: Record<string, string> = {
@@ -34,6 +46,18 @@ const THEME_HINT: Record<string, string> = {
   Motivational: 'motivation, goals, perseverance, discipline, a growth mindset and encouragement',
   'Health & wellness': 'health, fitness, nutrition, sleep, mental wellbeing and self-care',
   'Climate awareness': 'climate change, sustainability, nature, energy and protecting the environment',
+  Biology: 'biology — living things, the body, cells, plants, animals and ecosystems',
+  Healthcare: 'healthcare — going to the doctor, symptoms, medicine, hospitals and staying healthy',
+  Physics: 'physics — everyday forces, motion, light, heat, electricity and how things work',
+  Cybersecurity: 'cybersecurity and computers — passwords, the internet, scams, safety online and fixing simple tech problems',
+  Chemistry: 'chemistry — materials, mixing things, cooking reactions, water, air and everyday substances',
+  Finance: 'personal finance — money, saving, spending, budgets, banks and paying for things',
+  Economy: 'the economy — buying and selling, prices, jobs, markets and trade',
+  Psychology: 'psychology — feelings, moods, memory, habits and why people act the way they do',
+  History: 'history — the past, important events, how people used to live, and famous moments',
+  Anthropology: 'anthropology and culture — traditions, customs, festivals and how different people live',
+  Philosophy: 'philosophy — big questions about life, right and wrong, happiness and how to think',
+  Negotiation: 'negotiation — asking, offering, agreeing, disagreeing politely and making a deal',
 };
 
 // A directive woven into the slide-generation prompt to steer the CONTENT (not
@@ -42,5 +66,9 @@ export function themeDirective(theme?: string): string {
   const t = String(theme || '').trim();
   if (!t || t === 'Any') return '';
   const hint = THEME_HINT[t] || t;
-  return `THEME: orient this slide — its examples, scenarios, people, vocabulary and situations — around the theme of ${hint}. Keep the underlying subject and skill exactly the same and at the same level, but frame everything through this theme.`;
+  return [
+    `THEME — "${t}": frame this slide around ${hint}.`,
+    'Weave a real idea, concept or everyday scenario from this theme into the reading, examples and questions — but explain it AT THE LEARNER\'S CURRENT LEVEL, in the simplest words that level allows, exactly as you would explain it to someone who only speaks the language at this level. Do NOT raise the language difficulty or use jargon: the SUBJECT and skill and level stay exactly the same; only the topic/context changes to this theme.',
+    'Prefer a short, concrete, relatable everyday situation over a technical definition. For example, "Cybersecurity" at a beginner level could be a simple scene like: "I can\'t connect to the internet and I don\'t know why. Maybe I should turn the router off and on again." — a real, useful concept from the theme, told in beginner-level sentences.',
+  ].join(' ');
 }
