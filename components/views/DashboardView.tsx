@@ -91,13 +91,14 @@ export function DashboardView() {
   const [newPass, setNewPass] = useState('');
   const [newRole, setNewRole] = useState('user');
   const [userErr, setUserErr] = useState('');
-  // AI visual generator (per page): chosen output style, include-all-tables toggle,
-  // a custom instruction, and the generated image kept per table key.
+  // Data-analysis + AI-visual sections: which table to chart / feed the AI, the
+  // chosen output style, a custom instruction, and the generated image.
+  const [analysisSel, setAnalysisSel] = useState('all');
+  const [visualSel, setVisualSel] = useState('all');
   const [visKind, setVisKind] = useState('infographic');
-  const [visAll, setVisAll] = useState(false);
   const [visCustom, setVisCustom] = useState('');
-  const [visImg, setVisImg] = useState<Record<string, { url: string; by: string }>>({});
-  const [visBusy, setVisBusy] = useState('');
+  const [visImg, setVisImg] = useState<{ url: string; by: string } | null>(null);
+  const [visBusy, setVisBusy] = useState(false);
 
   useEffect(() => {
     if (app.user?.role !== 'admin') { app.nav('home'); return; }
@@ -216,76 +217,113 @@ export function DashboardView() {
     },
     { key: 'games', label: '📈 Activity stats', count: games.length, headers: gameHeaders, rows: gameRows, empty: 'No games played yet.', chart: { type: 'line', data: gameChart, title: 'Recent scores', unit: '%' }, footer: <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}><button className="btn small" onClick={downloadCsv}>⬇ Export all games as CSV</button></div> },
   ];
-  const cur = Math.min(tab, sections.length - 1);
-  const sec = sections[cur];
+  // Pages in the pager: the data tables, then a Data-analysis page and an AI-visual
+  // page (each with a dropdown to pick which table / all tables).
+  const TABLE_PAGES = sections.length;
+  const ANALYSIS = TABLE_PAGES, VISUALS = TABLE_PAGES + 1;
+  const totalPages = TABLE_PAGES + 2;
+  const cur = Math.min(tab, totalPages - 1);
+  const pageLabels = [...sections.map(s => s.label), '📊 Data analysis', '🎨 AI visuals'];
+  const tableOptions = [{ key: 'all', label: '🗂️ All tables' }, ...sections.map(s => ({ key: s.key, label: s.label }))];
 
-  // Generate an AI visual (infographic / poster / …) from the current table — or,
-  // if the toggle is on, from EVERY table — plus the custom instruction.
+  // Generate an AI visual from the selected table (or all tables) + custom prompt.
   const genVisual = async () => {
-    setVisBusy(sec.key);
+    const all = visualSel === 'all';
+    const chosen = all ? sections : sections.filter(s => s.key === visualSel);
+    const summary = chosen.map(s => summarize(s.label, s.headers, s.rows)).join('\n\n');
+    const tableName = all ? 'all tables' : (sections.find(s => s.key === visualSel)?.label || 'data');
+    setVisBusy(true);
     try {
-      const summary = summarize(sec.label, sec.headers, sec.rows);
-      const allSummaries = visAll ? sections.map(s => summarize(s.label, s.headers, s.rows)).join('\n\n') : '';
-      const r: any = await API.post('/api/dashboard/visual', { kind: visKind, tableName: sec.label, summary, includeAll: visAll, allSummaries, custom: visCustom.trim() });
-      if (r?.url) setVisImg(m => ({ ...m, [sec.key]: { url: r.url, by: r.by || '' } }));
+      const r: any = await API.post('/api/dashboard/visual', { kind: visKind, tableName, summary, includeAll: all, allSummaries: summary, custom: visCustom.trim() });
+      if (r?.url) setVisImg({ url: r.url, by: r.by || '' });
       else alert(r?.error || 'Could not generate an image.');
     } catch (e: any) { alert(e?.message || 'Could not generate an image.'); }
-    setVisBusy('');
+    setVisBusy(false);
   };
+
+  // A dashed rule between components so it's clear where one ends and the next begins.
+  const rule = <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '16px 0' }} />;
 
   return (
     <>
       <h1 className="view-title">Teacher’s <span className="scribble-underline">dashboard</span></h1>
-      <p className="view-sub" style={{ textAlign: 'center' }}>One table per page — pick a group below.</p>
+      <p className="view-sub" style={{ textAlign: 'center' }}>One page at a time — pick a section below.</p>
 
-      {/* Which table (one per page). */}
+      {/* Page picker. */}
       <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '0 0 12px' }}>
-        {sections.map((s, i) => (
-          <button key={s.key} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => setTab(i)}>{s.label} <span style={{ opacity: 0.6 }}>({s.count})</span></button>
+        {pageLabels.map((lbl, i) => (
+          <button key={i} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => setTab(i)}>{lbl}{i < TABLE_PAGES ? <span style={{ opacity: 0.6 }}> ({sections[i].count})</span> : null}</button>
         ))}
       </div>
 
-      <div className={cur % 2 ? 'card alt' : 'card'}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-          <h3 style={{ margin: 0 }}>{sec.label} <span style={{ opacity: 0.5, fontWeight: 400 }}>({sec.count})</span></h3>
-          {sec.csv && sec.count > 0 && <button className="btn small" onClick={sec.csv}>⬇ CSV</button>}
-        </div>
-        <PagedTable key={sec.key} headers={sec.headers} rows={sec.rows} empty={sec.empty} />
-        {sec.footer}
-
-        {/* A best-fit chart of this table's data. */}
-        {sec.chart && sec.count > 0 && (
-          <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12, paddingTop: 6 }}>
-            <MiniChart type={sec.chart.type} data={sec.chart.data} title={sec.chart.title} unit={sec.chart.unit} />
+      {cur < TABLE_PAGES ? (() => {
+        const sec = sections[cur];
+        return (
+          <div className={cur % 2 ? 'card alt' : 'card'}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+              <h3 style={{ margin: 0 }}>{sec.label} <span style={{ opacity: 0.5, fontWeight: 400 }}>({sec.count})</span></h3>
+              {sec.csv && sec.count > 0 && <button className="btn small" onClick={sec.csv}>⬇ CSV</button>}
+            </div>
+            <PagedTable key={sec.key} headers={sec.headers} rows={sec.rows} empty={sec.empty} />
+            {sec.footer}
           </div>
-        )}
-
-        {/* AI visual generator — reads this table (or all tables) into an image. */}
-        <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12, paddingTop: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.6, marginBottom: 6 }}>🎨 AI VISUAL FROM THIS DATA</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <select value={visKind} onChange={e => setVisKind(e.target.value)} style={{ fontSize: 13 }}>
-              {VISUAL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+        );
+      })() : cur === ANALYSIS ? (
+        <div className="card">
+          <h3 style={{ margin: '0 0 8px' }}>📊 Data analysis</h3>
+          <label className="field" style={{ maxWidth: 280 }}><span>Table to chart</span>
+            <select value={analysisSel} onChange={e => setAnalysisSel(e.target.value)}>
+              {tableOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
-            <button type="button" className={`btn small ${visAll ? 'green' : 'ghost'}`} onClick={() => setVisAll(v => !v)}
-              title="Include EVERY table's data in the prompt (not just this one)">🗂️ All tables: {visAll ? 'On' : 'Off'}</button>
-            <input type="text" value={visCustom} onChange={e => setVisCustom(e.target.value)} placeholder="Custom instruction (optional)…" style={{ flex: '1 1 200px', minWidth: 0, fontSize: 13 }} />
-            <button className="btn small blue" disabled={!!visBusy} onClick={genVisual}>{visBusy === sec.key ? '🎨 Generating…' : '🎨 Generate'}</button>
-          </div>
-          {visImg[sec.key] && (
-            <figure style={{ margin: '10px 0 0', textAlign: 'center' }}>
-              <img src={visImg[sec.key].url} alt="AI visual of the table data" style={{ maxWidth: '100%', maxHeight: 480, borderRadius: 10, border: '2px solid var(--ink)' }} />
-              {visImg[sec.key].by && <figcaption style={{ fontSize: 11, opacity: 0.6, marginTop: 3 }}>🖼 generated by {visImg[sec.key].by}</figcaption>}
-            </figure>
-          )}
+          </label>
+          {rule}
+          {(analysisSel === 'all' ? sections : sections.filter(s => s.key === analysisSel)).map((s, i, arr) => (
+            <div key={s.key}>
+              {s.chart && s.count > 0
+                ? <MiniChart type={s.chart.type} data={s.chart.data} title={`${s.label} — ${s.chart.title}`} unit={s.chart.unit} />
+                : <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center' }}>{s.label}: no data to chart yet.</p>}
+              {i < arr.length - 1 && rule}
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="card alt">
+          <h3 style={{ margin: '0 0 8px' }}>🎨 AI visuals from your data</h3>
+          <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>Pick a table (or all tables) and a style; the AI reads the data and generates an infographic / poster / diagram.</p>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label className="field" style={{ margin: 0, maxWidth: 240 }}><span>Data to use</span>
+                <select value={visualSel} onChange={e => setVisualSel(e.target.value)}>
+                  {tableOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                </select>
+              </label>
+              <label className="field" style={{ margin: 0, maxWidth: 240 }}><span>Output style</span>
+                <select value={visKind} onChange={e => setVisKind(e.target.value)}>
+                  {VISUAL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                </select>
+              </label>
+            </div>
+            <label className="field" style={{ margin: 0 }}><span>Custom instruction (optional)</span>
+              <input type="text" value={visCustom} onChange={e => setVisCustom(e.target.value)} placeholder="e.g. emphasise cost per user and growth" />
+            </label>
+            <div><button className="btn blue" disabled={visBusy} onClick={genVisual}>{visBusy ? '🎨 Generating…' : '🎨 Generate visual'}</button></div>
+          </div>
+          {rule}
+          {visImg
+            ? <figure style={{ margin: 0, textAlign: 'center' }}>
+                <img src={visImg.url} alt="AI visual of the dashboard data" style={{ maxWidth: '100%', maxHeight: 560, borderRadius: 10, border: '2px solid var(--ink)' }} />
+                {visImg.by && <figcaption style={{ fontSize: 11, opacity: 0.6, marginTop: 3 }}>🖼 generated by {visImg.by}</figcaption>}
+              </figure>
+            : <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center' }}>No visual yet — choose your options and press Generate. (Needs an image model configured.)</p>}
+        </div>
+      )}
 
-      {/* Table pager (one table per page). */}
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', marginTop: 12 }}>
-        <button className="btn small ghost" disabled={cur <= 0} onClick={() => setTab(cur - 1)}>‹ Prev table</button>
-        <span style={{ fontSize: 12, opacity: 0.7 }}>Table {cur + 1} / {sections.length}</span>
-        <button className="btn small ghost" disabled={cur >= sections.length - 1} onClick={() => setTab(cur + 1)}>Next table ›</button>
+      {rule}
+      {/* Page pager. */}
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
+        <button className="btn small ghost" disabled={cur <= 0} onClick={() => setTab(cur - 1)}>‹ Prev</button>
+        <span style={{ fontSize: 12, opacity: 0.7 }}>Page {cur + 1} / {totalPages}</span>
+        <button className="btn small ghost" disabled={cur >= totalPages - 1} onClick={() => setTab(cur + 1)}>Next ›</button>
       </div>
     </>
   );
