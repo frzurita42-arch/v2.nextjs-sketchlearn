@@ -14,6 +14,7 @@ export const IMAGE_STYLES = [
   'Comic book',
   'Anime',
   'Minimalist',
+  'Infographic',
   'Hand-drawn (coloured pencils & markers)',
   'Soviet propaganda posters',
   'Childish cartoon',
@@ -30,6 +31,7 @@ const STYLE_PROMPT: Record<string, string> = {
   'Comic book': 'a bold comic-book / graphic-novel ink illustration',
   Anime: 'a clean anime / manga illustration',
   Minimalist: 'a minimalist flat-vector illustration',
+  Infographic: 'a clean modern INFOGRAPHIC — flat vector shapes, simple icons, labelled parts with thin leader lines, a tidy colour palette and clear visual hierarchy that explains the subject at a glance (short labels are welcome)',
   'Hand-drawn (coloured pencils & markers)': 'a hand-drawn illustration made with coloured pencils and felt-tip markers — visible pencil strokes and marker texture on paper, warm and personal, like a sketchbook drawing',
   'Soviet propaganda posters': 'a bold Soviet-style propaganda poster — flat graphic shapes, heroic idealized figures, strong diagonal constructivist composition, a limited red / gold / cream palette, dramatic low-angle heroism',
   'Childish cartoon': 'a playful, colourful cartoon aimed at young children',
@@ -75,5 +77,9 @@ export function imageStyleDirective(style?: string): string {
     return `ART STYLE (MANDATORY): render this as ${desc}. This MUST be a REAL PHOTOGRAPH — lifelike and photographic. It must NOT be an illustration, cartoon, drawing, clip-art, vector art, anime, 3D render, painting or any stylised/graphic look, EVEN IF the description above says "illustration", "cartoon", "drawing" or similar — ignore any such wording and produce a genuine photograph. Keep it tasteful and suited to an adult / general audience. ${NO_TEXT_RULE}`;
   }
   const adult = s === 'Childish cartoon' ? '' : ' Keep it tasteful and suited to an adult / general audience.';
+  // An infographic NEEDS its short labels — allow text for it instead of NO_TEXT_RULE.
+  if (s === 'Infographic') {
+    return `ART STYLE (MANDATORY): render this as ${desc}. Short, correctly-spelled labels/numbers are welcome; avoid long sentences or paragraphs.${adult}`;
+  }
   return `ART STYLE (MANDATORY): render this as ${desc}. Commit fully to this style and ignore any conflicting style wording elsewhere in the prompt.${adult} ${NO_TEXT_RULE}`;
 }
