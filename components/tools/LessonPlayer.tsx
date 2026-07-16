@@ -20,6 +20,8 @@ import { CanvasConversation } from '@/components/tools/CanvasConversation';
 import { renderMath, renderInlineMath, renderMathProse } from '@/components/ui/shared';
 import { buildLessonZip } from '@/lib/lesson-export';
 import { matchAnswer, answerHint } from '@/lib/answer-match';
+import { emojiOf, defaultEmojiFor } from '@/lib/emoji-thumb';
+import { isRenderableImage } from '@/lib/img';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
@@ -1073,6 +1075,13 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       const editable = canEditEntry(e);
       const title = e.data?.title || label(e.data || {});
       const subtitle = e.data?.subtitle || (e.data?.why || '');
+      // Same emoji fallback as the front-page gallery cards: use a stored
+      // "emoji:" thumbnail, else derive a default emoji from the lesson's
+      // topic/subject so a freshly-generated lesson always shows an icon (never
+      // a blank card) — like the other cards on the front page.
+      const thumb = e.data?.thumbnail;
+      const emoji = emojiOf(thumb)
+        || (isRenderableImage(thumb) ? '' : defaultEmojiFor(`${title} ${subtitle} ${lesson.subject || ''} ${e.data?.topic || ''}`, def?.tags));
       const play = () => recordAndPlay(e.data || {}, { replica: true });
       const editIcons = editable ? (
         <span style={{ display: 'inline-flex', gap: 6, marginLeft: 5, verticalAlign: 'middle' }}>
@@ -1109,7 +1118,8 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           title={title}
           subtitle={subtitle || undefined}
           fav={!!favs[e.id]}
-          thumbnail={e.data?.thumbnail}
+          thumbnail={emoji ? null : thumb}
+          iconNode={emoji ? <span aria-hidden>{emoji}</span> : undefined}
           onOpen={play}
           overlay={overlay}
           placeholder={placeholder}

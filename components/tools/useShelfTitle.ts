@@ -9,7 +9,10 @@ import { useApp } from '@/components/AppContext';
 
 export function useShelfTitle(key: string, fallback: string) {
   const app = useApp();
-  const isAdmin = app.user?.role === 'admin';
+  // Section titles are admin-only site chrome — gate on the EFFECTIVE admin flag
+  // so editing disappears in the Moderators / User previews (and for real
+  // moderator / user accounts), not just the raw session role.
+  const isAdmin = app.eff().isAdmin;
   const [title, setTitle] = useState(fallback);
   const [remixingTitle, setRemixing] = useState(false);
 
