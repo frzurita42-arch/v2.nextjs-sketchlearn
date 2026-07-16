@@ -8,7 +8,7 @@
  * their handlers are supplied. Delete is a small plain icon, not a boxed button. */
 import { useState } from 'react';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { emojiOf, randomEmojiFor } from '@/lib/emoji-thumb';
+import { randomEmojiFor } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 
 export interface ToolCardProps {
@@ -93,11 +93,13 @@ export function ToolCard(p: ToolCardProps) {
   // any create path that didn't stamp one), fall back to a topic-derived emoji at
   // render time so a card is NEVER blank — the user shouldn't have to press a
   // button to get an image when there isn't one.
-  // A random on-topic emoji, picked ONCE per mount so it varies each page load
-  // (three French tools won't all show the same face) but stays stable while you
-  // browse — until a real image or a 🎲 emoji is set on the card.
+  // Until a REAL image (upload / AI) is set, show a random on-topic emoji, picked
+  // ONCE per mount so it varies each page load (three French tools won't all show
+  // the same face) but stays stable while you browse. A stored "emoji:" thumbnail
+  // (creation default / 🎲) is intentionally NOT treated as a set image, so the
+  // emoji keeps shuffling until a picture is attached.
   const [randEmoji] = useState(() => randomEmojiFor(`${t.title || ''} ${t.description || ''} ${t.definition?.lesson?.subject || ''}`, t.tags));
-  const emoji = emojiOf(t.thumbnail) || (isRenderableImage(t.thumbnail) ? '' : randEmoji);
+  const emoji = isRenderableImage(t.thumbnail) ? '' : randEmoji;
   return (
     <CardShell
       view={view}
