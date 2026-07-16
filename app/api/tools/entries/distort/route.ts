@@ -40,6 +40,12 @@ export async function POST(req: Request) {
   const curTitle = String(d.title || [subject, d.level || d.difficulty, d.topic].filter(Boolean).join(' · ') || 'Activity');
   const curDesc = String(d.subtitle || d.why || '');
 
+  // --- Clear the image so the card falls back to a random emoji again. ---
+  if (action === 'clearimage') {
+    const data = await updateEntryData(entry.id, { thumbnail: '' });
+    return NextResponse.json({ data });
+  }
+
   // --- Manual set (typed text and/or a provided/uploaded image URL). ---
   if (action === 'set') {
     const patch: any = {};

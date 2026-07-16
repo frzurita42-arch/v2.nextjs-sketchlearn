@@ -794,6 +794,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     };
     inp.click();
   };
+  // 🎲 Remove the card's AI/uploaded image so it goes back to a random emoji (which
+  // re-shuffles on every page load). To show a picture again, use 🎨 / ✎ / 📎.
+  const clearEntryImage = (e: any) => { delete randEmojis.current[e.id]; distort(e, 'clearimage'); };
   const deleteRendition = async (e: any) => {
     if (!confirm('Delete this rendition from the history?')) return;
     try {
@@ -1243,6 +1246,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       ) : null;
       const overlay = editable ? (
         <span style={{ position: 'absolute', top: 6, right: 8, display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          <button title="Remove image — show a random emoji instead" style={overlayIcon} disabled={busy} onClick={stop(() => clearEntryImage(e))}>🎲</button>
           <button title="Custom image — describe it" style={overlayIcon} disabled={busy} onClick={stop(() => promptEntryImage(e))}>✎</button>
           <button title="Regenerate image with AI" style={overlayIcon} disabled={busy} onClick={stop(() => distort(e, 'image'))}>{busy ? '…' : '🎨'}</button>
           <button title="Upload a custom image" style={overlayIcon} disabled={busy} onClick={stop(() => uploadEntryImage(e))}>📎</button>
