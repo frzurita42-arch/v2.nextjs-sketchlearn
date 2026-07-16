@@ -141,6 +141,9 @@ export interface RepoCard {
   // "Moderator upload" / "User upload" toggles, or per card as an override.
   posterOff?: boolean;
   userOff?: boolean;
+  // Paywall: when true, normal viewers see this card greyed out with its content
+  // LOCKED — only the owner/admin and the repo's authorizedUsers can open it.
+  paywall?: boolean;
   // 🤖 "AI question" — a prompt the owner/admin saves on the card. When the AI
   // feature is on, adding a card inside generates an answer from the card + page
   // + this prompt + attachments instead of a blank card.
@@ -172,6 +175,8 @@ export interface RepoSpec {
   imageGen?: boolean;           // "Suggest AI": show the 🖼️ per-card picture button
                                 // (owner/admin generate an image of the item; it stays
                                 // saved for everyone until cleared). Default off.
+  authorizedUsers?: string[];   // usernames allowed to view paywalled cards without
+                                // the lock (in addition to the owner/admin).
   cards: RepoCard[];
 }
 
@@ -276,6 +281,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (['assigned', 'pending', 'approved', 'rejected', 'disabled', 'preview'].includes(c.mode)) card.mode = c.mode;
   if (c.posterOff) card.posterOff = true;
   if (c.userOff) card.userOff = true;
+  if (c.paywall) card.paywall = true;
   if (c.aiPrompt) card.aiPrompt = String(c.aiPrompt).slice(0, 2000);
   if (c.createdAt) card.createdAt = String(c.createdAt).slice(0, 40);
   if (children.length) card.children = children;
@@ -306,7 +312,9 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
     const display: 'bars' | 'grid' = r.display === 'grid' ? 'grid' : 'bars';
     const cards = (Array.isArray(r.cards) ? r.cards : []).slice(0, 60)
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
-    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, assignShow: !!r.assignShow, docUpload: !!r.docUpload, showDates: r.showDates !== false, imageGen: !!r.imageGen, cards };
+    const authorizedUsers = (Array.isArray(r.authorizedUsers) ? r.authorizedUsers : [])
+      .map((u: any) => String(u || '').trim().slice(0, 40)).filter(Boolean).slice(0, 200);
+    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, assignShow: !!r.assignShow, docUpload: !!r.docUpload, showDates: r.showDates !== false, imageGen: !!r.imageGen, authorizedUsers, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);

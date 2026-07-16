@@ -43,6 +43,7 @@ type ViewCtx = {
   docUpload: boolean;                              // 📄 file uploads enabled — the "Attach a document" button is active
   showDates: boolean;                              // 🕒 show each card's created date/time
   imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
+  authorizedUsers: string[];                       // usernames that bypass a card's paywall (plus owner/admin)
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
   distortTitle: (card: RepoCard) => Promise<void>;                  // 🎨 AI rewrite the title
@@ -532,6 +533,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const isStatus = mode === 'assigned' || mode === 'pending' || mode === 'approved' || mode === 'rejected';
   const blocked = (mode === 'disabled' || mode === 'preview') && !ctx.canEdit;
   const previewBlocked = mode === 'preview' && !ctx.canEdit;
+  // PAYWALL: a card locked behind a paywall is greyed + content-blocked for anyone
+  // who is not the owner/admin and not on the repo's authorized-users list.
+  const locked = !!card.paywall && !ctx.canEdit && !ctx.authorizedUsers.includes(ctx.me || '');
   // Icon precedence: a custom icon the user set wins; otherwise an uploaded card
   // image shows; otherwise the DEFAULT is the card's number within its level
   // (0…9 as a single keycap). Past the 9th (index ≥ 10) a two-digit keycap looks
@@ -608,6 +612,17 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     return (
       <div style={{ opacity: 0.5, pointerEvents: 'none' }}>
         <CardShell view={view} title={card.title || 'Untitled'} subtitle={card.text || ''} />
+      </div>
+    );
+  }
+
+  // PAYWALL for a non-authorized viewer: the card is greyed out with a 🔒 lock and
+  // its content is blocked — only the title shows. Owner/admin and authorized users
+  // fall through and see the whole card.
+  if (locked) {
+    return (
+      <div style={{ opacity: 0.55, pointerEvents: 'none' }} title="Locked — authorized users only">
+        <CardShell view={view} title={`🔒 ${card.title || 'Untitled'}`} subtitle="Locked — authorized users only" />
       </div>
     );
   }
@@ -971,6 +986,14 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       style={{ ...iconBtn, borderBottom: '3px solid #c0392b', borderRadius: 3, paddingBottom: 1, opacity: card.userOff ? 1 : 0.45 }}
       onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>📁</button>,
   );
+  // 🔒 Paywall — grey the card out and block its content for anyone who is not the
+  // owner/admin or on the repo's Authorized users list. Amber underline when on.
+  if (ctx.canEdit) permanentControls.push(
+    <button key="paywall" type="button"
+      title={card.paywall ? 'Paywall is ON — only authorized users see this card’s content (click to unlock)' : 'Lock this card behind a paywall — greys it out and blocks the content for anyone who is not an authorized user'}
+      style={{ ...iconBtn, borderBottom: `3px solid ${card.paywall ? '#f0a202' : 'transparent'}`, borderRadius: 3, paddingBottom: 1, opacity: card.paywall ? 1 : 0.7 }}
+      onClick={() => ctx.editField(card.id, { paywall: !card.paywall })}>🔒</button>,
+  );
 
   // The control cluster. The icon buttons (active + permanent) are laid out on a
   // 3-column grid, so they wrap onto a NEW ROW every 3 icons instead of stretching
@@ -1161,6 +1184,17 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // manageable). Stored on the repo as clipForAll / folderForAll.
   const [posterUpload, setPosterUpload] = useState(!!repo.clipForAll);
   const [userUpload, setUserUpload] = useState(!!repo.folderForAll);
+  // Authorized users — usernames that can view PAYWALLED cards without the lock
+  // (in addition to the owner/admin). Persisted repo-wide.
+  const [authorizedUsers, setAuthorizedUsers] = useState<string[]>(repo.authorizedUsers || []);
+  // Known usernames for the Authorized-users picker dropdown. Best-effort: the
+  // /api/users list is admin-only, so a non-admin owner just types a username.
+  const [knownUsers, setKnownUsers] = useState<string[]>([]);
+  const [authInput, setAuthInput] = useState('');
+  useEffect(() => {
+    if (!canEdit) return;
+    API.get('/api/users').then((r: any) => { if (Array.isArray(r)) setKnownUsers(r.map((u: any) => String(u.username || '')).filter(Boolean)); }).catch(() => { /* not an admin — manual entry only */ });
+  }, [canEdit]);
   // "AI question" — a repo-wide toggle (owner/admin). On: every card gets a 🤖
   // prompt icon, and adding a card inside (➕) generates an AI answer from the
   // card + page + prompt + attachments. Off: ➕ makes a blank card as before.
@@ -1232,6 +1266,20 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { /* ignore */ }
   };
 
+  // One place that builds & sends the repo settings payload, so every persisted
+  // switch carries ALL the current settings (never dropping authorizedUsers or a
+  // sibling toggle). Pass only the field(s) that changed as `over`.
+  const postRepo = async (over: Record<string, any> = {}) => {
+    const body = {
+      layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport,
+      imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown,
+      docUpload, showDates, authorizedUsers, cards, ...over,
+    };
+    const r = await API.post('/api/tools/repo', { slug, repo: body });
+    if (r?.repo && def) def.repo = r.repo;
+    return r;
+  };
+
   // Persist a new card tree (used by the inline card icons in collection view).
   // Optimistically updates, then reconciles with the sanitized server copy.
   const saveCards = async (next: RepoCard[]) => {
@@ -1240,8 +1288,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     // a moderator needs to actually set/cycle statuses, not just look.
     setCards(next);
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, cards: next } });
-      if (r?.repo) { setCards(r.repo.cards || next); if (def) def.repo = r.repo; }
+      const r = await postRepo({ cards: next });
+      if (r?.repo) setCards(r.repo.cards || next);
     } catch { /* keep the optimistic copy */ }
   };
   // A returned repo (from the normal-user attach endpoint) reconciled into state.
@@ -1308,57 +1356,26 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, authorizedUsers, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
-  const saveImageGen = async (next: boolean) => {
-    setImageGen(next);
-    try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen: next, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, showDates, cards } });
-      if (r?.repo && def) def.repo = r.repo;
-    } catch { /* keep the optimistic toggle */ }
-  };
+  const saveImageGen = async (next: boolean) => { setImageGen(next); try { await postRepo({ imageGen: next }); } catch { /* keep the optimistic toggle */ } };
   // Persist the Moderator (📎 clip) / User (📁 folder) upload switches.
-  const saveUploads = async (poster: boolean, user: boolean) => {
-    setPosterUpload(poster); setUserUpload(user);
-    try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: poster, folderForAll: user, assignShow: assignShown, docUpload, showDates, cards } });
-      if (r?.repo && def) def.repo = r.repo;
-    } catch { /* keep the optimistic toggle */ }
-  };
+  const saveUploads = async (poster: boolean, user: boolean) => { setPosterUpload(poster); setUserUpload(user); try { await postRepo({ clipForAll: poster, folderForAll: user }); } catch { /* keep the optimistic toggle */ } };
   // Persist the 🏷️ Assignment feature switch.
-  const saveAssign = async (next: boolean) => {
-    setAssignShown(next);
-    try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: next, docUpload, showDates, cards } });
-      if (r?.repo && def) def.repo = r.repo;
-    } catch { /* keep the optimistic toggle */ }
-  };
+  const saveAssign = async (next: boolean) => { setAssignShown(next); try { await postRepo({ assignShow: next }); } catch { /* keep the optimistic toggle */ } };
   // Persist the 📄 file-upload (Attach a document) switch.
-  const saveDocUpload = async (next: boolean) => {
-    setDocUpload(next);
-    try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload: next, showDates, cards } });
-      if (r?.repo && def) def.repo = r.repo;
-    } catch { /* keep the optimistic toggle */ }
-  };
+  const saveDocUpload = async (next: boolean) => { setDocUpload(next); try { await postRepo({ docUpload: next }); } catch { /* keep the optimistic toggle */ } };
   // Persist the 🕒 show-dates switch.
-  const saveShowDates = async (next: boolean) => {
-    setShowDates(next);
-    try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, showDates: next, cards } });
-      if (r?.repo && def) def.repo = r.repo;
-    } catch { /* keep the optimistic toggle */ }
-  };
+  const saveShowDates = async (next: boolean) => { setShowDates(next); try { await postRepo({ showDates: next }); } catch { /* keep the optimistic toggle */ } };
+  // Persist the 🔒 Authorized-users list (usernames that bypass card paywalls).
+  const saveAuthorized = async (next: string[]) => { setAuthorizedUsers(next); try { await postRepo({ authorizedUsers: next }); } catch { /* keep the optimistic list */ } };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
   const saveDisplayLock = async (lockedNext: boolean, viewSel: 'grid' | 'row') => {
     const nextDisplay: 'bars' | 'grid' = viewSel === 'grid' ? 'grid' : 'bars';
-    try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display: nextDisplay, displayLocked: lockedNext, offlineExport: repo.offlineExport, imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown, docUpload, showDates, cards } });
-      if (r?.repo && def) def.repo = r.repo;
-    } catch { /* ignore */ }
+    try { await postRepo({ display: nextDisplay, displayLocked: lockedNext }); } catch { /* ignore */ }
   };
 
   // Offline export (owner/admin can toggle it off in Settings).
@@ -1386,8 +1403,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const save = async () => {
     setSaving(true); setSaved('');
     try {
-      const r = await API.post('/api/tools/repo', { slug, repo: { layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport, imageGen, cards } });
-      if (r?.repo) { setCards(r.repo.cards || []); dirty.current = false; setSaved('Saved ✓'); if (def) def.repo = r.repo; }
+      const r = await postRepo({ cards });
+      if (r?.repo) { setCards(r.repo.cards || []); dirty.current = false; setSaved('Saved ✓'); }
       else setSaved(r?.error || 'Could not save.');
     } catch (e: any) { setSaved(e?.message || 'Could not save.'); }
     setSaving(false);
@@ -1445,52 +1462,72 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
           belowToolbar={
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-              {cards.some((c) => (c.children || []).length > 0) && (
-                <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
-                  onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
-              )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+              {/* Row 1 — display & add controls (everyone). */}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {cards.some((c) => (c.children || []).length > 0) && (
+                  <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
+                    onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
+                )}
+                <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`}
+                  title="Sort the cards — click to cycle: Manual (as arranged) → ↑ Oldest first → ↓ Newest first → 🔀 Random"
+                  onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
+                {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
+              </div>
+
+              {/* Row 2 — owner feature toggles, grouped in a labelled panel. */}
               {canEdit && (
-                <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
-                  title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'}
-                  onClick={() => saveAssign(!assignShown)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', padding: '10px 12px 8px', border: '1.5px dashed var(--ink)', borderRadius: 10, maxWidth: 780 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center', marginBottom: 2 }}>OWNER CONTROLS</span>
+                  <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
+                    title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'}
+                    onClick={() => saveAssign(!assignShown)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`}
+                    title="Enable the Moderator 📎 link on every card. When off, the clip only stays on cards that already have a link (viewers can still open those)."
+                    onClick={() => saveUploads(!posterUpload, userUpload)}>📎 Moderator upload: {posterUpload ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${userUpload ? 'blue' : 'ghost'}`}
+                    title="Let users add their own 📁 link on every card. When off, the folder only stays on cards where a user already has one (they can still open/manage theirs)."
+                    onClick={() => saveUploads(posterUpload, !userUpload)}>📁 User upload: {userUpload ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${aiShown ? 'blue' : 'ghost'}`}
+                    title={aiShown ? 'Turn off the AI question feature' : 'Turn on the AI question feature — each card gets a 🤖 prompt, and adding a card inside (➕) generates an AI answer from the card, page, prompt and attachments'}
+                    onClick={() => setAiShown((v) => !v)}>🤖 AI question: {aiShown ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${imageGen ? 'blue' : 'ghost'}`}
+                    title={imageGen ? 'Turn off card pictures' : 'Turn on card pictures — each card gets a 🖼️ button (beside the clip/folder) to generate an AI picture of the item; a saved picture stays viewable to everyone even after you turn this off'}
+                    onClick={() => saveImageGen(!imageGen)}>🖼️ Card picture: {imageGen ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${docUpload ? 'blue' : 'ghost'}`}
+                    title={docUpload ? 'Turn off file uploads — the attach editor becomes link-only' : 'Turn on file uploads — the "📎 Attach a document" button in the attach editor is enabled so users can upload a file, not just paste a link'}
+                    onClick={() => saveDocUpload(!docUpload)}>📄 File upload: {docUpload ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${showDates ? 'blue' : 'ghost'}`}
+                    title={showDates ? 'Hide each card’s created date & time' : 'Show each card’s created date & time'}
+                    onClick={() => saveShowDates(!showDates)}>{showDates ? '👁 Dates: On' : '🙈 Dates: Off'}</button>
+                </div>
               )}
+
+              {/* Row 3 — Authorized users: who can open PAYWALLED (🔒) cards without
+                  the lock. Add from the dropdown of known users or by typing one. */}
               {canEdit && (
-                <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`}
-                  title="Enable the Moderator 📎 link on every card. When off, the clip only stays on cards that already have a link (viewers can still open those)."
-                  onClick={() => saveUploads(!posterUpload, userUpload)}>📎 Moderator upload: {posterUpload ? 'On' : 'Off'}</button>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', maxWidth: 780 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall button.">👥 Authorized users:</span>
+                  {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
+                  {authorizedUsers.map((u) => (
+                    <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
+                      @{u}
+                      <button className="btn small ghost" style={{ padding: '0 5px' }} title="Remove" onClick={() => saveAuthorized(authorizedUsers.filter((x) => x !== u))}>✕</button>
+                    </span>
+                  ))}
+                  {knownUsers.filter((u) => !authorizedUsers.includes(u)).length > 0 && (
+                    <select value="" onChange={(e) => { const v = e.target.value; if (v) saveAuthorized([...authorizedUsers, v]); e.currentTarget.selectedIndex = 0; }} style={{ fontSize: 12 }} title="Pick a user to authorize">
+                      <option value="">＋ Add a user…</option>
+                      {knownUsers.filter((u) => !authorizedUsers.includes(u)).map((u) => <option key={u} value={u}>@{u}</option>)}
+                    </select>
+                  )}
+                  <input value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username" list="repo-known-users"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
+                    style={{ fontSize: 12, width: 130 }} />
+                  <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
+                  <button className="btn small blue" onClick={() => { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); }}>Add</button>
+                </div>
               )}
-              {canEdit && (
-                <button className={`btn small ${userUpload ? 'blue' : 'ghost'}`}
-                  title="Let users add their own 📁 link on every card. When off, the folder only stays on cards where a user already has one (they can still open/manage theirs)."
-                  onClick={() => saveUploads(posterUpload, !userUpload)}>📁 User upload: {userUpload ? 'On' : 'Off'}</button>
-              )}
-              {canEdit && (
-                <button className={`btn small ${aiShown ? 'blue' : 'ghost'}`}
-                  title={aiShown ? 'Turn off the AI question feature' : 'Turn on the AI question feature — each card gets a 🤖 prompt, and adding a card inside (➕) generates an AI answer from the card, page, prompt and attachments'}
-                  onClick={() => setAiShown((v) => !v)}>🤖 AI question: {aiShown ? 'On' : 'Off'}</button>
-              )}
-              {canEdit && (
-                <button className={`btn small ${imageGen ? 'blue' : 'ghost'}`}
-                  title={imageGen ? 'Turn off card pictures' : 'Turn on card pictures — each card gets a 🖼️ button (beside the clip/folder) to generate an AI picture of the item; a saved picture stays viewable to everyone even after you turn this off'}
-                  onClick={() => saveImageGen(!imageGen)}>🖼️ Card picture: {imageGen ? 'On' : 'Off'}</button>
-              )}
-              {canEdit && (
-                <button className={`btn small ${docUpload ? 'blue' : 'ghost'}`}
-                  title={docUpload ? 'Turn off file uploads — the attach editor becomes link-only' : 'Turn on file uploads — the "📎 Attach a document" button in the attach editor is enabled so users can upload a file, not just paste a link'}
-                  onClick={() => saveDocUpload(!docUpload)}>📄 File upload: {docUpload ? 'On' : 'Off'}</button>
-              )}
-              {canEdit && (
-                <button className={`btn small ${showDates ? 'blue' : 'ghost'}`}
-                  title={showDates ? 'Hide each card’s created date & time' : 'Show each card’s created date & time'}
-                  onClick={() => saveShowDates(!showDates)}>{showDates ? '👁 Dates: On' : '🙈 Dates: Off'}</button>
-              )}
-              {/* Sort order — available to everyone (a personal display preference):
-                  cycles Manual → Oldest → Newest → Random. */}
-              <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`}
-                title="Sort the cards — click to cycle: Manual (as arranged) → ↑ Oldest first → ↓ Newest first → 🔀 Random"
-                onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
-              {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
             </div>
           }
           favs={myFavs}
