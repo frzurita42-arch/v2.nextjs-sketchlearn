@@ -22,6 +22,7 @@ import { buildLessonZip } from '@/lib/lesson-export';
 import { matchAnswer, answerHint } from '@/lib/answer-match';
 import { emojiOf, defaultEmojiFor } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
+import { IMAGE_STYLES } from '@/lib/image-styles';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
@@ -208,7 +209,7 @@ function SupportsLoader({ slide, ctx }: { slide: Slide; ctx: any }) {
     plan.forEach((type, i) => {
       if (sl._supports[i] !== undefined) return; // already loaded (or failed)
       if (!sl._supportP[i]) {
-        sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson: ctx.lesson, values: ctx.values, type, content: slide.content, title: slide.title })
+        sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson: ctx.lesson, values: ctx.values, type, content: slide.content, title: slide.title, imageStyle: ctx.imageStyle || '' })
           .then((r: any) => { sl._supports[i] = r?.support || null; })
           .catch(() => { sl._supports[i] = null; });
       }
@@ -216,7 +217,7 @@ function SupportsLoader({ slide, ctx }: { slide: Slide; ctx: any }) {
     });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slide]);
+  }, [slide, ctx.nonce]);
 
   // Fallback / legacy: a single pre-built support and no plan.
   if (!plan.length) return <Support s={slide.support} />;
@@ -511,9 +512,9 @@ function GuidePanel({ subject, prompt, kind, getAttempt }: { subject: string; pr
   };
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%', maxWidth: 520, margin: '0 auto' }}>
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Ask the AI for a hint… (🎤 to speak)" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ask(); } }}
-          style={{ flex: 1, minWidth: 0 }} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%', maxWidth: 380, margin: '0 auto', justifyContent: 'center' }}>
+        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Ask the AI for a hint…" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ask(); } }}
+          style={{ flex: 1, minWidth: 0, fontSize: '0.95rem', padding: '7px 12px' }} />
         <button className="btn small blue" style={{ flex: '0 0 auto' }} disabled={busy} onClick={ask}>{busy ? <><Spinner />…</> : '💬 Ask'}</button>
       </div>
       {chat.length > 0 && (
@@ -810,6 +811,11 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
   const [modOpen, setModOpen] = useState(false);
   const [modText, setModText] = useState('');
   const [modBusy, setModBusy] = useState(false);
+  // 🖼 per-slide image art style (overrides the tool's preset) + a nonce that
+  // forces the SupportsLoader to re-fetch the images when the style changes.
+  const [slideImgStyle, setSlideImgStyle] = useState<Record<number, string>>({});
+  const [imgStyleOpen, setImgStyleOpen] = useState(false);
+  const [supportNonce, setSupportNonce] = useState(0);
   // Refs let the background prefetch read the latest state without stale closures.
   const slidesRef = useRef<(Slide | null)[]>([]);
   const cfgRef = useRef<Cfg>({});
@@ -1010,6 +1016,18 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
       }
     } catch { /* keep the current slide */ }
     setModBusy(false);
+  };
+
+  // Change THIS slide's image art style and re-generate its images with it.
+  const setSlideImageStyle = (style: string) => {
+    setSlideImgStyle((m) => ({ ...m, [cur]: style }));
+    setImgStyleOpen(false);
+    const sl = slidesRef.current[cur] as any;
+    if (sl && Array.isArray(sl.supportPlan)) {
+      // Drop the cached image supports so they refetch with the new style.
+      sl.supportPlan.forEach((t: string, i: number) => { if (t === 'image') { if (sl._supports) sl._supports[i] = undefined; if (sl._supportP) sl._supportP[i] = undefined; } });
+    }
+    setSupportNonce((n) => n + 1);
   };
 
   const goBack = () => { if (cur > 0) { setCur(cur - 1); prefetch(cur); } };
@@ -1215,6 +1233,12 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             <button className="btn small ghost" onClick={loadTopics} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
           </div>
           {settings.length > 0 && <ToolFields fields={formFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} />}
+          {/* Image art style preset for every image this lesson generates. */}
+          <label className="field" style={{ maxWidth: 240, marginTop: 10 }}><span>🖼 Image style</span>
+            <select value={(form as any).imageStyle || 'Any'} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
+              {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
+            </select>
+          </label>
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
             <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
           </div>
@@ -1450,6 +1474,19 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
             <h3 style={{ margin: 0, textAlign: 'center' }}>{curSlide.title}</h3>
             <button className="btn small ghost" title="Change the reading level of this slide" onClick={() => setLevelOpen((o) => !o)} style={{ padding: '0 6px' }}>{relevelBusy ? <Spinner /> : '⚙'}</button>
             <button className="btn small ghost" title="Ask the AI to change this slide — add or remove a component, a question, an image…" onClick={() => setModOpen((o) => !o)} style={{ padding: '0 6px' }}>{modBusy ? <Spinner /> : '🧩'}</button>
+            {(curSlide.supportPlan?.includes('image') || curSlide.support?.type === 'image') && (
+              <button className="btn small ghost" title="Image style for this slide" onClick={() => setImgStyleOpen((o) => !o)} style={{ padding: '0 6px' }}>🖼</button>
+            )}
+            {imgStyleOpen && (
+              <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 8, minWidth: 180, textAlign: 'left' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>IMAGE STYLE</div>
+                {IMAGE_STYLES.map((st) => {
+                  const active = (slideImgStyle[cur] || cfg.imageStyle || 'Any') === st;
+                  return <button key={st} className={`btn small ${active ? 'green' : 'ghost'}`} style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 3 }} onClick={() => setSlideImageStyle(st)}>{st}</button>;
+                })}
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 2 }}>Regenerates this slide&apos;s image(s).</div>
+              </div>
+            )}
             {modOpen && (
               <div className="card" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 30, padding: 10, minWidth: 240, maxWidth: 300, textAlign: 'left' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>CHANGE THIS SLIDE</div>
@@ -1480,7 +1517,7 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} /></p>}
           {/* Support materials — each streams into its own card, dotted-separated. */}
           {(curSlide.supportPlan?.length || curSlide.support) && curSlide.content ? <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12 }} /> : null}
-          <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg }} />
+          <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg, imageStyle: slideImgStyle[cur] || cfg.imageStyle || '', nonce: supportNonce }} />
 
           {/* Every question, stacked as its own "paper"; scroll down to reach them. */}
           {qList.map((q: Q, i: number) => {
