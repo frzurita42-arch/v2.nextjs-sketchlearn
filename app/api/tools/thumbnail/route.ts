@@ -98,20 +98,20 @@ export async function POST(req: Request) {
     'a lively downtown street', 'a city skyline at dusk', 'a rainy neon city street', 'a historic town square',
   ];
   const scene = SCENES[Math.floor(Math.random() * SCENES.length)];
-  // The COMPOSITION varies so thumbnails aren't all "people chatting". Weighted
-  // toward clean object / product shots (startup-style), then people DOING a
-  // relevant activity, then a mix of both — so the gallery gets objects-only,
-  // people-only and combined images.
-  const MODES = ['objects', 'objects', 'objects', 'people', 'people', 'both', 'both'];
+  // The COMPOSITION varies so thumbnails aren't all people. Weighted toward clean
+  // object / product shots and pure visual representations (graphs / infographics),
+  // with a SINGLE-person option. Whenever a person appears it is exactly ONE person
+  // doing a mundane task — never a crowd or a pair.
+  const MODES = ['objects', 'objects', 'infographic', 'infographic', 'person', 'objects', 'person'];
   const mode = MODES[Math.floor(Math.random() * MODES.length)];
 
   const startupStyle = 'Overall style: a sleek, modern AI-STARTUP marketing / publicity image — the kind of polished hero visual a tech brand puts on its landing page or ad campaign. Premium and confident, clean composition with tasteful negative space, a cohesive modern colour palette, soft studio or natural lighting, subtle depth, and optionally understated abstract tech motifs (gentle gradients, soft glows) as brand flavour. It must NOT look like a screenshot of software or a UI mockup.';
 
   const modeLine = mode === 'objects'
     ? 'Composition: NO people — a striking, well-lit arrangement of the OBJECTS, products or symbolic props that represent what this tool does (a still-life / product hero shot) on a clean, branded backdrop. Let the objects and mood tell the story.'
-    : mode === 'people'
-    ? `Composition: one or two people DOING an activity related to the tool's topic — candid and mid-action, NOT posing for or looking at the camera, and NOT talking-head portraits facing each other. Setting: ${scene}. Show a DIVERSE, randomly-picked mix (vary ethnicity/race and body type naturally; everyone healthy, authentic and respectful). No visible phones, laptops or screens.`
-    : `Composition: a blend of a person or two engaged in a relevant activity TOGETHER WITH the meaningful objects/props of the topic, arranged like a brand campaign photo. Setting: ${scene}. Diverse, natural, candid people (not facing the camera), no visible screens.`;
+    : mode === 'infographic'
+    ? 'Composition: NO people — a clean, purely VISUAL representation of the tool\'s idea: a simple diagram, chart, graph or infographic-style image built from shapes, icons, bars, lines and symbols only. It represents the concept visually with NO readable text, numbers or labels of any kind.'
+    : `Composition: EXACTLY ONE person (never two or more, never a group) doing a simple, MUNDANE everyday task related to the tool's topic — candid and mid-action, absorbed in the task, NOT posing for or looking at the camera. Setting: ${scene}. A natural, authentic individual (vary ethnicity/race and body type; healthy and respectful). No visible phones, laptops or screens.`;
 
   const prompt = [
     startupStyle,
