@@ -52,10 +52,13 @@ export function ToolCard(p: ToolCardProps) {
     inp.click();
   };
 
+  // ✎ edit title+description, 🎨 AI-reword — shown as clear, boxed buttons in a
+  // dedicated slot on the right of the title row so they're easy to spot and tap.
+  const editIconStyle = { background: 'rgba(0,0,0,0.05)', border: '1.5px solid var(--ink)', borderRadius: 8, cursor: 'pointer', padding: '2px 6px', fontSize: 15, lineHeight: 1.1 } as const;
   const editBtns = canEdit && (p.onEdit || p.onRemix) ? (
-    <span style={{ display: 'inline-flex', gap: 6, marginLeft: 5, verticalAlign: 'middle' }}>
-      {p.onEdit && <button title="Edit title & description" style={iconBtn} onClick={stop(() => p.onEdit!(t))}>✎</button>}
-      {p.onRemix && <button title="AI tap-mixer — reword title & description" style={iconBtn} disabled={!!p.mixing} onClick={stop(() => p.onRemix!(t))}>{p.mixing ? '…' : '🎨'}</button>}
+    <span style={{ display: 'inline-flex', gap: 5, marginLeft: 5, verticalAlign: 'middle' }}>
+      {p.onEdit && <button title="Edit title & description" style={editIconStyle} onClick={stop(() => p.onEdit!(t))}>✎</button>}
+      {p.onRemix && <button title="AI reword — title & description" style={editIconStyle} disabled={!!p.mixing} onClick={stop(() => p.onRemix!(t))}>{p.mixing ? '…' : '🎨'}</button>}
     </span>
   ) : null;
 

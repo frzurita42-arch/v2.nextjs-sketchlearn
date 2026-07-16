@@ -41,7 +41,8 @@ export async function GET(req: Request) {
   }
   // Flag entries authored by an admin (for the "liked by admin" feed filter).
   const admins = new Set((userState.users || []).filter((u: any) => u.role === 'admin').map((u: any) => u.username));
-  const flagged = entries.map((e: any) => ({ ...e, byAdmin: admins.has(e.username) }));
+  const mods = new Set((userState.users || []).filter((u: any) => u.role === 'moderator').map((u: any) => u.username));
+  const flagged = entries.map((e: any) => ({ ...e, byAdmin: admins.has(e.username), byModerator: mods.has(e.username) }));
   return NextResponse.json({ entries: flagged, isOwner, review: !!tool.definition?.app?.review }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 

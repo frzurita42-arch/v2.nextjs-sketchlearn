@@ -1649,6 +1649,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           time={(e: any) => new Date(e.createdAt || 0).getTime()}
           favs={favs}
           likedByAdmin={(e: any) => !!e.byAdmin}
+          likedByOwner={(e: any) => !!e.byModerator}
+          ownerLabel="🧑‍🏫 Moderator" ownerTitle="Only runs a moderator saved"
           perPage={6}
           storageKey="sl_lessonfeed_view"
           sortPrefKey="lessonfeed"

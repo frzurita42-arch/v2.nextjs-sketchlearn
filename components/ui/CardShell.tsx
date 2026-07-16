@@ -120,8 +120,9 @@ export function CardShell(p: CardShellProps) {
           // don't shrink (flexShrink 0) — that's what caused text to overlap.
           ? <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexShrink: 0 }}>
               <strong style={{ fontSize: 16, lineHeight: 1.25, minHeight: '2.5em', flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}</strong>
+              {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6, flex: '0 0 auto', marginTop: 2 }}>{badge}</span>}
+              {/* Dedicated right-hand slot for the ✎ / 🎨 edit controls. */}
               {(p.editBtns || p.afterTitle) && <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 4, alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>{p.editBtns}{p.afterTitle}</span>}
-              {badge && <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.6, flex: '0 0 auto' }}>{badge}</span>}
             </div>
           : <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
               <strong style={{ fontSize: 16, ...(onOpen ? clickable : {}) }} onClick={onOpen}>{title}{fav ? ' ★' : ''}{p.editBtns}{p.afterTitle}</strong>
