@@ -10,6 +10,17 @@ export const maxDuration = 60;
 
 const textAI = () => openrouterEnabled || geminiEnabled || deepseekEnabled || moonshotEnabled;
 
+// Pull an explicit slide count out of the author's goal text ("only 2 slides",
+// "make it three pages") so a requested number is HONORED exactly. Returns 0 when
+// no count was asked for (then the AI picks a sensible length).
+const NUM_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+function requestedCount(text: string): number {
+  const m = text.toLowerCase().match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:slides?|pages?|cards?)\b/);
+  if (!m) return 0;
+  const n = /^\d+$/.test(m[1]) ? parseInt(m[1], 10) : (NUM_WORDS[m[1]] || 0);
+  return n >= 1 && n <= 20 ? n : 0;
+}
+
 // The presentation components the AI may place on a slide (catalog ids). Kept in
 // sync with STUDIO_CATEGORIES (the "for: presentation" + shared items). Gated
 // integrations (music/news, specific AI providers) are intentionally excluded so
@@ -79,11 +90,19 @@ export async function POST(req: Request) {
     '• latex — a typeset formula. wolfram — step-by-step equation solving. geogebra — an interactive graph/plot. codeblock — a code / pseudocode snippet. table — a table (data, comparisons, TIMELINES). image — an AI diagram or picture.',
     '• audio — the content is read aloud. translate — a translate button (language subjects).',
   ].join('\n');
+  // An explicit "N slides/pages" in the goal is obeyed exactly; otherwise 5–8.
+  const wantCount = requestedCount(fullContext);
+  const countRule = wantCount
+    ? `1. Produce EXACTLY ${wantCount} slide${wantCount === 1 ? '' : 's'} — the author asked for ${wantCount}. Do NOT add or drop any. Fit the whole lesson into exactly ${wantCount}: if that is few, pack the needed teaching + activities into those slides (using several components, and more than one activity on a slide when it helps); if that is many, spread the material out. Never exceed or fall short of ${wantCount}.`
+    : '1. Produce 5–8 slides in a sensible teaching ORDER: an intro/overview first, then each middle slide teaches ONE sub-idea and immediately PRACTISES it, and a final slide is a comprehension CHECK / recap.';
   const designRules = [
     'DESIGN RULES:',
-    '1. Produce 5–8 slides in a sensible teaching ORDER: an intro/overview first, then each middle slide teaches ONE sub-idea and immediately PRACTISES it, and a final slide is a comprehension CHECK / recap.',
-    '2. EVERY slide carries substance to read/see AND most slides include an activity so progress is measured. VARY activity types across the lesson. Keep each slide focused: about 2–4 components.',
-    '3. ADAPT the mix to the subject KIND: STEM/quantitative → latex/codeblock/geogebra/image/table + wolfram + assess with annotation/code/input/mcq; Humanities/arts/text → reading/image/table (timelines) + mcq/fill-blank/input/deco-hint, few or no formulas; Language → reading/audio/translate/fill-blank/input, and for a GRAMMAR/syntax/conjugation point add a two-column "table" (rule/form on the left, a concrete example on the right). Pick activities that genuinely fit.',
+    countRule,
+    '2. EVERY slide carries substance to read/see AND most slides include an activity so progress is measured. VARY activity types across the lesson. Keep each slide focused: about 2–5 components.',
+    '3. ANALYZE THE TOOLBOX AND HONOR THE REQUEST: read the author\'s goal and pick the components that literally deliver what they asked for — "reading"/"text" → reading; "tooltip"/"hint"/"explain"/"definition" → deco-hint (a tappable hint) and/or note (a hidden teaching instruction); "image"/"picture"/"show me" → image; "draw"/"sketch"/"annotate"/"work it out by hand" → annotation (or writing for a single character); "AI evaluation"/"grade"/"check my answer"/"assess" → an AI-graded activity (input, code, or annotation); "quiz"/"multiple choice" → mcq4/mcq2; "fill in the blank" → fill-blank. If they name several (e.g. text + image + tooltip + AI evaluation), make sure EACH appears on the relevant slide(s). You have all these buttons — use the ones that match.',
+    '4. ONE reading + ONE well-chosen activity is the base unit. NEVER put two of the SAME activity type on a single slide for the same text (e.g. two mcq4 about one passage is pointless). If a slide should test more than once, either use two DIFFERENT activity types, or give the second activity its OWN reading/note above it — a slide can legitimately carry two teach→check pairs stacked so the learner scrolls down to the next one, rather than turning the page. Order components top-to-bottom the way a learner should meet them (read/see first, then do).',
+    '5. ADAPT the mix to the subject KIND: STEM/quantitative → latex/codeblock/geogebra/image/table + wolfram + assess with annotation/code/input/mcq; Humanities/arts/text → reading/image/table (timelines) + mcq/fill-blank/input/deco-hint, few or no formulas; Language → reading/audio/translate/fill-blank/input, and for a GRAMMAR/syntax/conjugation point add a two-column "table" (rule/form on the left, a concrete example on the right). Pick activities that genuinely fit.',
+    '6. The author will be able to EDIT every slide, its components and its order afterwards, so propose a confident best-effort design — don\'t leave slides empty "for them to fill in".',
   ].join('\n');
   const shape = `Return STRICT JSON only: { "title": short lesson title, "subject": the subject/topic, "pages": [ { "components": ["reading",{"id":"mcq4","instr":"..."}], "length": "brief|medium|detailed", "paragraphs": 1 }, ... ] }. Always fill in a good "title" and "subject" (invent sensible ones if the user left them blank).${imageRule}`;
 
@@ -106,6 +125,10 @@ export async function POST(req: Request) {
     user = [`Subject / topic: ${subject}`, title && title !== subject ? `Lesson title: ${title}` : '', difficulty ? `Level: ${difficulty}` : '', tone ? `Tone: ${tone}` : '',
       fullContext ? `Extra context / goal:\n${fullContext}` : '', 'Design the full slide-by-slide presentation now.'].filter(Boolean).join('\n');
   }
+  // An explicit "N slides" request caps the deck at exactly N (except in "next"
+  // mode, which always adds a single slide). We keep the minimum at 1 so a short
+  // count returns the AI's N slides rather than falling back to the generic deck.
+  if (wantCount && mode !== 'next') { minPages = 1; maxPages = wantCount; }
 
   try {
     const r: any = await generateStructured(

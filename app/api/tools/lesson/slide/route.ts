@@ -154,7 +154,7 @@ export async function POST(req: Request) {
   const kind = lesson.subjectKind || inferKind(subject, language);
   const n = Math.max(1, parseInt(b.slideNumber, 10) || 1);
   const total = Math.max(1, Math.min(75, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
-  const priorSummary = String(b.priorSummary || '').slice(0, 600);
+  const priorSummary = String(b.priorSummary || '').slice(0, 2400);
   // A designed page for THIS slide (from the Studio) steers its components + density.
   const pageSpec = (Array.isArray(lesson.pages) && lesson.pages[n - 1]) ? lesson.pages[n - 1] : null;
   const paras = Math.max(1, Math.min(4, parseInt(b.values?.paragraphs, 10) || parseInt(pageSpec?.paragraphsPerSlide, 10) || parseInt(lesson.paragraphsPerSlide, 10) || 1));
@@ -253,8 +253,10 @@ export async function POST(req: Request) {
     customNote ? `AUTHOR'S CUSTOM INSTRUCTIONS (honor these wherever they don't conflict with the output schema): ${customNote}` : '',
     modify ? `CHANGE REQUEST FOR THIS SLIDE (apply it now, it overrides the defaults above): ${modify}. You MAY add, remove or change the questions and the teaching content to satisfy it — e.g. add a multiple-choice or fill-blank question, remove one, rewrite the passage. If it asks for a support visual (image/table/etc.), mention it in the content so it fits.` : '',
     pageSpec?.style ? `This slide was designed to use: ${pageSpec.style}` : '',
-    priorSummary ? `The learner has already seen (build on these — connect this slide to them and do NOT repeat): ${priorSummary}.` : '',
-    'COHESION: Every component on THIS slide — the reading, each visual, and every question — must revolve around ONE coherent concept and clearly relate to each other; do not mix unrelated ideas on the same slide. Across the whole presentation the slides should build on one another into a connected lesson.',
+    priorSummary
+      ? `PREVIOUS SLIDES ALREADY SHOWN TO THE LEARNER (title + an excerpt of each reading):\n${priorSummary}\n\nNO-REPEAT RULE (critical): This new slide must ADVANCE the lesson — teach a DIFFERENT sub-idea and go DEEPER. Do NOT restate, paraphrase, or reuse the sentences, phrasing, examples or facts from the slides above. If those slides already covered the basics, move on to the next point, a new angle, a harder application, or more detail — never re-explain what was already said. Connect to the prior slides by building on them, not by repeating them.`
+      : '',
+    'COHESION: Every component on THIS slide — the reading, each visual, and every question — must revolve around ONE coherent concept and clearly relate to each other; do not mix unrelated ideas on the same slide. Across the whole presentation the slides should build on one another into a connected lesson, each slide adding something new rather than echoing an earlier one.',
     // Content/level fidelity — the #1 correctness rule.
     `CRITICAL: The teaching and the question MUST genuinely be about "${topic || subject}" and pitched at "${level}" level. If the subject is ${subject}, do NOT drift to unrelated easier material (e.g. for Trigonometry ask about sine/cosine/tangent, angles, identities or triangles — NOT plain arithmetic like "2+2"). Match the true difficulty of ${level}.`,
     ACTIVITY_MENU,

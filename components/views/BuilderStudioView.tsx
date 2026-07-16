@@ -78,6 +78,10 @@ export function BuilderStudioView() {
   // Tone: a dropdown of presets PLUS a free custom text field (both write `tone`),
   // with a 🎲 to roll a random preset and a 🎨 to reword it.
   const [tone, setTone] = useState(seed?.tone || 'Friendly');
+  // Tone is ONE field: a dropdown by default, flipped to a free-text box by the ✎
+  // pencil (and back by ▾). It starts in custom mode only if the seeded tone isn't
+  // one of the presets, so a hand-typed tone stays editable.
+  const [toneCustom, setToneCustom] = useState(!!(seed?.tone && !TONES.includes(seed.tone)));
   const randomTone = () => setTone(TONES[Math.floor(Math.random() * TONES.length)]);
   // 🎨 palette "diffuser" — reword a field to a similar but different phrasing so
   // the author can shuffle it to taste.
@@ -421,14 +425,17 @@ export function BuilderStudioView() {
               </div>
               <div className="field">
                 <span style={labelRow}>Tone
+                  <button type="button" className="btn small ghost" style={miniBtn}
+                    title={toneCustom ? 'Pick from the list' : 'Type a custom tone'}
+                    onClick={() => setToneCustom((c) => { const next = !c; if (!next && !TONES.includes(tone)) setTone(TONES[0]); return next; })}>{toneCustom ? '▾' : '✎'}</button>
                   <button type="button" className="btn small ghost" style={miniBtn} title="Roll a random tone" onClick={randomTone}>🎲</button>
                   {paletteBtn('tone')}
                 </span>
-                <select value={TONES.includes(tone) ? tone : ''} onChange={(e) => { if (e.target.value) setTone(e.target.value); }}>
-                  <option value="">Custom…</option>
-                  {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <input type="text" value={tone} placeholder="or type a custom tone…" onChange={(e) => setTone(e.target.value)} style={{ marginTop: 6 }} />
+                {toneCustom
+                  ? <input type="text" value={tone} placeholder="Type a custom tone…" onChange={(e) => setTone(e.target.value)} />
+                  : <select value={TONES.includes(tone) ? tone : TONES[0]} onChange={(e) => setTone(e.target.value)}>
+                      {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>}
               </div>
             </div>
           </div>

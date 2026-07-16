@@ -932,14 +932,30 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     } catch { /* best-effort */ }
   };
 
+  // Build the "what the learner has already seen" digest for the slide being
+  // generated (0-based `upto` = the slide index being built; earlier slides are
+  // 0..upto-1). It carries each earlier slide's TITLE and a trimmed excerpt of
+  // its reading — NOT just the titles — so the generator can see the actual prose
+  // already shown and go DEEPER instead of repeating the same sentences/passages.
+  const priorDigest = (upto: number): string => {
+    const out: string[] = [];
+    for (let i = 0; i < upto && i < slidesRef.current.length; i++) {
+      const s = slidesRef.current[i] as Slide | null;
+      if (!s) continue;
+      const title = String(s.title || '').trim();
+      const body = String(s.content || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      out.push(`Slide ${i + 1}${title ? ` "${title}"` : ''}: ${body}`);
+    }
+    return out.slice(-6).join('\n');
+  };
+
   // Quietly load slide `idx` in the BACKGROUND (no spinner), so Next is instant
   // for EVERY answer type — including AI-checked ones that don't block on it.
   const prefetch = (idx: number): Promise<void> | undefined => {
     if (idx < 0 || idx >= total() || slidesRef.current[idx] || prefetching.current[idx]) return prefetching.current[idx];
     const p = (async () => {
       try {
-        const prior = slidesRef.current.filter(Boolean).map((s) => (s as Slide).title);
-        const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: idx + 1, priorSummary: prior.slice(-6).join('; ') });
+        const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: idx + 1, priorSummary: priorDigest(idx) });
         // Publish to slidesRef SYNCHRONOUSLY: the ref normally syncs via an effect
         // that only runs after a re-render, which is too late for the Next click
         // that is awaiting this prefetch — that made Next need two clicks.
@@ -987,11 +1003,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   useEffect(() => { loadActivities(); refreshExample(); loadTopics(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug]);
 
   // Fetch slide `idx` (0-based) into the cache. Returns true on success.
-  const fetchInto = async (idx: number, useCfg: Cfg, prior: string[]): Promise<boolean> => {
+  const fetchInto = async (idx: number, useCfg: Cfg): Promise<boolean> => {
     cfgRef.current = useCfg;
     setGenBusy(true); setErr('');
     try {
-      const r = await API.post('/api/tools/lesson/slide', { lesson, values: useCfg, slideNumber: idx + 1, priorSummary: prior.slice(-6).join('; ') });
+      const r = await API.post('/api/tools/lesson/slide', { lesson, values: useCfg, slideNumber: idx + 1, priorSummary: priorDigest(idx) });
       setSlides(sc => { const n = [...sc]; n[idx] = r; slidesRef.current = n; return n; });
       setGenBusy(false);
       prefetch(idx + 1);               // start loading the NEXT slide in the background
@@ -1003,7 +1019,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     cfgRef.current = c; slidesRef.current = []; prefetching.current = {}; startedAt.current = Date.now();
     savedRun.current = false;   // this fresh run hasn't been auto-saved yet
     setCfg(c); setSlides([]); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
-    fetchInto(0, c, []);
+    fetchInto(0, c);
   };
 
   // When the OWNER/ADMIN finishes a run, auto-save the completed deck (slides +
@@ -1170,8 +1186,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     const s = slidesRef.current[cur]; if (!s || modBusy || !modText.trim()) return;
     setModBusy(true);
     try {
-      const prior = slidesRef.current.slice(0, cur).filter(Boolean).map((x) => (x as Slide).title);
-      const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: cur + 1, priorSummary: prior.slice(-6).join('; '), modify: modText.trim() });
+      const r = await API.post('/api/tools/lesson/slide', { lesson, values: cfgRef.current, slideNumber: cur + 1, priorSummary: priorDigest(cur), modify: modText.trim() });
       if (r?.content || (Array.isArray(r?.questions) && r.questions.length) || r?.title) {
         setSlides((sc) => { const n = [...sc]; n[cur] = r; slidesRef.current = n; return n; });
         setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
@@ -1819,7 +1834,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           </div>
         </div>
       )}
-      {err && !curSlide && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchInto(cur, cfg, slides.filter(Boolean).map(s => (s as Slide).title))}>Retry</button></p>}
+      {err && !curSlide && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchInto(cur, cfg)}>Retry</button></p>}
 
       {curSlide && (
         <div className="card" style={{ padding: '16px 18px', maxWidth: hasAnnotation ? 900 : 640, margin: '0 auto' }}>
