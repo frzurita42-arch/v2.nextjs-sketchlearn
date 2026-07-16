@@ -2,7 +2,7 @@ import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled, imageEnabled } from '@/src/config';
 import { generateStructured, generateImageWithMeta } from '@/src/ai/providers';
-import { imageStyleDirective } from '@/lib/image-styles';
+import { imageStyleDirective, DIAGRAM_RULE, VARIED_RULE } from '@/lib/image-styles';
 import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fallbackImageDataUrl } = require('@/src/slides/visual-policy');
@@ -46,8 +46,8 @@ function supSpecFor(type: string, mathish: boolean, kind: string): string {
       ? 'a short worked computation or proof shown as code/pseudocode, using COMMENTS to explain each step (e.g. "# derivative of x^2\\nf = x**2\\n# power rule: 2*x**(2-1)\\nf_prime = 2*x") — no Wolfram needed'
       : 'a short, correct code snippet';
   if (type === 'image') return mathish
-    ? 'Return support = { "type": "image", "prompt": "a CLEAN, LABELLED reference diagram that helps understand this slide — e.g. a right triangle with base, height, hypotenuse and angle labelled; a physics free-body sketch with forces and values; a geometry figure with measurements. Describe it precisely so it reads like a textbook diagram.", "caption": "what the diagram shows" }.'
-    : 'Return support = { "type": "image", "prompt": "<a vivid CANDID SCENE that illustrates this slide: describe people mid-activity in a real setting (or just the relevant objects) doing something tied to the content — e.g. friends chatting over coffee in a café, a family doing chores on the lawn, people playing beach volleyball, colleagues working at office desks. Do NOT describe anyone posing or looking at the camera and do NOT describe a group portrait>", "caption": "..." }.';
+    ? 'Return support = { "type": "image", "prompt": "a CLEAN, LABELLED educational DIAGRAM / INFOGRAPHIC / CHART of the actual SUBJECT of this slide — e.g. a labelled plant or cell with its parts named by leader lines; a labelled diagram of an organ or a device; a right triangle with base/height/hypotenuse/angle labelled; a free-body force sketch; a simple bar/line chart of the quantities. Describe the subject itself and its labelled parts precisely so it reads like a textbook figure. NO people unless the topic is literally about the human body.", "caption": "what the figure shows" }.'
+    : 'Return support = { "type": "image", "prompt": "<the BEST-FITTING visual for THIS slide — VARY the type, do NOT always pick people. Prefer a clear photo/illustration of the key OBJECT(s), or a simple infographic/diagram when the slide explains how something works; only describe a candid activity scene when the topic is genuinely about people or an everyday social situation (then people are mid-action, never posing or facing the camera)>", "caption": "..." }.';
   if (type === 'code') return `Return support = { "type": "code", "language": "...", "code": ${JSON.stringify(codeHint)} }.`;
   if (type === 'table') return mathish
     ? 'Return support = { "type": "table", "headers": ["Step", "Equation", "What we did"], "rows": [["1", "the equation for this step (plain math text)", "short reason"], ...] } — a 3-column step-by-step working table.'
@@ -58,9 +58,16 @@ function supSpecFor(type: string, mathish: boolean, kind: string): string {
 }
 
 // Turn the model's raw support object into the shape the player renders.
-async function parseSupport(type: string, s: any, subject: string, imgStyle?: string, imgProvider?: string): Promise<any> {
+// The composition rule for a slide image: STEM/explanatory slides get a labelled
+// diagram/infographic of the subject; everyday slides vary (object/infographic/
+// scene) instead of always showing people.
+function imageComposition(mathish: boolean, imgStyle?: string): string {
+  return mathish ? DIAGRAM_RULE : `${imageStyleDirective(imgStyle)} ${VARIED_RULE}`;
+}
+
+async function parseSupport(type: string, s: any, subject: string, imgStyle?: string, imgProvider?: string, mathish = false): Promise<any> {
   if (!s || typeof s !== 'object') s = {};
-  if (type === 'image') { const m = await makeImage(`${String(s.prompt || subject)}. ${imageStyleDirective(imgStyle)}`, imgProvider); return { type: 'image', url: m.url, by: m.by, caption: String(s.caption || '') }; }
+  if (type === 'image') { const m = await makeImage(`${String(s.prompt || subject)}. ${imageComposition(mathish, imgStyle)}`, imgProvider); return { type: 'image', url: m.url, by: m.by, caption: String(s.caption || '') }; }
   if (type === 'code') return { type: 'code', language: String(s.language || '').slice(0, 20), code: String(s.code || '').slice(0, 1200) };
   if (type === 'table' && Array.isArray(s.headers)) return {
     type: 'table',
@@ -106,8 +113,8 @@ export async function POST(req: Request) {
 
   // Image needs no text model — build it directly from the slide context.
   if (type === 'image' && !openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
-    const base = mathish ? `a clean, labelled reference diagram for: ${content || title || subject}` : (content || title || subject);
-    const m = await makeImage(`${base}. ${imageStyleDirective(imgStyle)}`, imgProvider);
+    const base = mathish ? `a clear, labelled diagram / infographic of: ${content || title || subject}` : (content || title || subject);
+    const m = await makeImage(`${base}. ${imageComposition(mathish, imgStyle)}`, imgProvider);
     return NextResponse.json({ support: { type: 'image', url: m.url, by: m.by, caption: '' } });
   }
   if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) return NextResponse.json({ support: null });
@@ -125,7 +132,7 @@ export async function POST(req: Request) {
   try {
     const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.6, maxTokens: 1200 });
     const raw = r?.support && typeof r.support === 'object' ? r.support : r;
-    const support = await parseSupport(type, raw, subject, imgStyle, imgProvider);
+    const support = await parseSupport(type, raw, subject, imgStyle, imgProvider, mathish);
     return NextResponse.json({ support: support || null });
   } catch {
     return NextResponse.json({ support: null });

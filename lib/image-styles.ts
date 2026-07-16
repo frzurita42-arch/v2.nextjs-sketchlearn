@@ -46,7 +46,17 @@ export const NO_TEXT_RULE = 'IMPORTANT: the image must contain NO text, words, l
 // Steer AWAY from stiff, camera-facing group portraits toward candid, in-the-moment
 // slice-of-life scenes — people absorbed in a real activity related to the content,
 // or just the relevant objects/scene when that shows the idea better.
-export const SCENE_RULE = 'COMPOSITION (MANDATORY — overrides any wording above): show a NATURAL, CANDID slice-of-life photo of people genuinely BUSY IN AN ACTIVITY that fits the content — mid-action, interacting with each other or with objects, seen from a natural, off-centre angle like documentary / photojournalism, a moment caught in passing. Absolutely NOBODY looks at, faces, or poses for the camera; nobody is lined up, grouped together, or centred staring forward. Choose the everyday activity that best matches this slide: e.g. friends chatting and laughing over coffee in a café, a family playing or doing yard chores on the lawn, people playing beach volleyball / throwing a frisbee / swimming at the beach, colleagues working at their desks in an office, a person reading a book in an armchair or speaking to a small group. If objects illustrate the idea better than people, show just the relevant objects / setting instead. NEVER a straight-on posed group portrait.';
+export const SCENE_RULE = 'COMPOSITION: show a NATURAL, CANDID slice-of-life photo of people genuinely BUSY IN AN ACTIVITY that fits the content — mid-action, interacting with each other or with objects, seen from a natural, off-centre angle like documentary / photojournalism, a moment caught in passing. Absolutely NOBODY looks at, faces, or poses for the camera; nobody is lined up, grouped together, or centred staring forward. Choose the everyday activity that best matches this slide: e.g. friends chatting and laughing over coffee in a café, a family playing or doing yard chores on the lawn, people playing beach volleyball / throwing a frisbee / swimming at the beach, colleagues working at their desks in an office, a person reading a book in an armchair. If objects illustrate the idea better than people, show just the relevant objects / setting instead. NEVER a straight-on posed group portrait.';
+
+// For EXPLANATORY / technical slides (STEM, how-things-work): make the SUBJECT
+// itself the visual — a labelled diagram, infographic, chart, or a clean picture
+// of the object/organism/structure. Short labels ARE allowed here (this rule is
+// used INSTEAD of NO_TEXT_RULE), because a labelled diagram needs its labels.
+export const DIAGRAM_RULE = 'COMPOSITION: make the SUBJECT of this slide the visual itself — NOT people. Choose the clearest of: a labelled scientific DIAGRAM (draw the actual organism / plant / cell / organ / structure / device and use thin leader lines with SHORT text labels naming its parts), an INFOGRAPHIC, a simple CHART / graph, or a clean close-up illustration or photo of the object being discussed. Short, correctly-spelled labels and numbers are welcome; avoid long sentences or paragraphs. Do NOT show unrelated people or a social scene — the subject / concept is the focus.';
+
+// For everyday / general slides: pick the best-fitting visual TYPE and VARY it
+// across slides — do not always show people.
+export const VARIED_RULE = 'COMPOSITION: pick the visual TYPE that best fits THIS slide and VARY it from slide to slide — it may be (a) a clear photo or illustration of the key OBJECT(s) being discussed, (b) a simple infographic / diagram / labelled figure when the slide EXPLAINS how something works, or (c) a candid real-life activity scene ONLY when the topic is genuinely about people or an everyday social situation. Do NOT default to people or a group scene for explanatory content. When you do show people, keep it candid — nobody posing or facing the camera.';
 
 // A directive prepended to an image-generation prompt to steer its art style.
 // The medium instruction is stated FIRST and assertively so it wins over any
@@ -56,14 +66,14 @@ export function imageStyleDirective(style?: string): string {
   if (!s || s === 'Any') {
     // Default to a REAL photograph — the app kept returning cartoons, and a
     // photographic default is what users expect unless they pick an art style.
-    return `ART STYLE: render this as a realistic, natural-light PHOTOGRAPH for an ADULT / general audience. It must NOT be a cartoon, illustration, clip-art, vector art or childish drawing. ${SCENE_RULE} ${NO_TEXT_RULE}`;
+    return `ART STYLE: render this as a realistic, natural-light PHOTOGRAPH for an ADULT / general audience. It must NOT be a cartoon, illustration, clip-art, vector art or childish drawing. ${NO_TEXT_RULE}`;
   }
   const desc = STYLE_PROMPT[s] || s;
   // For photographic styles, forbid any illustrated look outright — this is what
   // makes "Photorealistic" actually return a photo instead of a cartoon.
   if (PHOTO_STYLES.has(s)) {
-    return `ART STYLE (MANDATORY): render this as ${desc}. This MUST be a REAL PHOTOGRAPH — lifelike and photographic. It must NOT be an illustration, cartoon, drawing, clip-art, vector art, anime, 3D render, painting or any stylised/graphic look, EVEN IF the description above says "illustration", "cartoon", "drawing" or similar — ignore any such wording and produce a genuine photograph. Keep it tasteful and suited to an adult / general audience. ${SCENE_RULE} ${NO_TEXT_RULE}`;
+    return `ART STYLE (MANDATORY): render this as ${desc}. This MUST be a REAL PHOTOGRAPH — lifelike and photographic. It must NOT be an illustration, cartoon, drawing, clip-art, vector art, anime, 3D render, painting or any stylised/graphic look, EVEN IF the description above says "illustration", "cartoon", "drawing" or similar — ignore any such wording and produce a genuine photograph. Keep it tasteful and suited to an adult / general audience. ${NO_TEXT_RULE}`;
   }
   const adult = s === 'Childish cartoon' ? '' : ' Keep it tasteful and suited to an adult / general audience.';
-  return `ART STYLE (MANDATORY): render this as ${desc}. Commit fully to this style and ignore any conflicting style wording elsewhere in the prompt.${adult} ${SCENE_RULE} ${NO_TEXT_RULE}`;
+  return `ART STYLE (MANDATORY): render this as ${desc}. Commit fully to this style and ignore any conflicting style wording elsewhere in the prompt.${adult} ${NO_TEXT_RULE}`;
 }
