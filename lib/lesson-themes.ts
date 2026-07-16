@@ -30,6 +30,13 @@ export const LESSON_THEMES = [
   'Anthropology',
   'Philosophy',
   'Negotiation',
+  'Fashion',
+  'Pop culture',
+  'Folk tales',
+  'Science fiction',
+  'Literature',
+  'Bible study',
+  'Emerging technologies',
 ] as const;
 
 const THEME_HINT: Record<string, string> = {
@@ -58,6 +65,13 @@ const THEME_HINT: Record<string, string> = {
   Anthropology: 'anthropology and culture — traditions, customs, festivals and how different people live',
   Philosophy: 'philosophy — big questions about life, right and wrong, happiness and how to think',
   Negotiation: 'negotiation — asking, offering, agreeing, disagreeing politely and making a deal',
+  Fashion: 'fashion — clothes, style, colours, shopping for outfits and what people wear',
+  'Pop culture': 'pop culture — famous singers, actors, movies, trends, memes and social media',
+  'Folk tales': 'folk tales and fables — traditional stories, legends, morals and classic characters',
+  'Science fiction': 'science fiction — robots, space travel, aliens, the future and imaginative technology',
+  Literature: 'literature — stories, poems, authors, characters and famous books',
+  'Bible study': 'Bible study — well-known Bible stories, parables, characters and their lessons, told respectfully',
+  'Emerging technologies': 'emerging technologies — AI, robots, electric cars, smart devices and new gadgets',
 };
 
 // A directive woven into the slide-generation prompt to steer the CONTENT (not
