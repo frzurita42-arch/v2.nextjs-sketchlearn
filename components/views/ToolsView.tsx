@@ -12,6 +12,9 @@ import { ToolCard } from '@/components/tools/ToolCard';
 import { AdminToolsCarousel } from '@/components/tools/AdminToolsCarousel';
 import { Carousel } from '@/components/ui/Carousel';
 import { InstructionPlank } from '@/components/activities/InstructionPlank';
+import { CardShell } from '@/components/ui/CardShell';
+import { emojiOf, defaultEmojiFor } from '@/lib/emoji-thumb';
+import { isRenderableImage } from '@/lib/img';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -269,6 +272,39 @@ export function ToolsView() {
   }, [tools, favs]);
 
   const open = (t: any) => { appState.activeTool = t; app.nav('tool'); };
+
+  // ✨ Recent Lessons: lessons GENERATED across the platform (entries on lesson
+  // tools). They surface on the front page as cards; clicking opens the parent
+  // tool and plays a fresh copy of that lesson.
+  const [recentLessons, setRecentLessons] = useState<any[]>([]);
+  useEffect(() => {
+    API.get('/api/tools/recent-lessons').then((r: any) => setRecentLessons(Array.isArray(r?.lessons) ? r.lessons : [])).catch(() => { /* ignore */ });
+  }, [app.tick]);
+  const openLesson = async (l: any) => {
+    try {
+      const r = await API.get(`/api/tools?slug=${encodeURIComponent(l.toolSlug)}`);
+      const t = r?.tool;
+      if (!t) return;
+      appState.activeTool = t;
+      appState.openIntent = { action: 'replay', config: l.config || {} };
+      app.nav('tool');
+    } catch { /* ignore */ }
+  };
+  const lessonCard = (l: any) => {
+    const title = l.title || `${l.subject || l.toolTitle}${l.topic ? ` — ${l.topic}` : ''}` || 'Lesson';
+    const subtitle = [l.toolTitle, l.level].filter(Boolean).join(' · ');
+    const thumb = l.thumbnail;
+    const emoji = emojiOf(thumb) || (isRenderableImage(thumb) ? '' : defaultEmojiFor(`${title} ${l.subject || ''} ${l.topic || ''} ${l.subjectKind || ''}`, l.tags));
+    return (
+      <CardShell view="grid" title={title} subtitle={subtitle || undefined}
+        thumbnail={emoji ? null : thumb}
+        iconNode={emoji ? <span aria-hidden>{emoji}</span> : undefined}
+        onOpen={() => openLesson(l)}
+        meta={<span style={{ fontSize: 11, opacity: 0.6 }}>@{l.username}{l.createdAt ? ` · ${new Date(l.createdAt).toLocaleDateString()}` : ''}</span>}
+        actions={<button className="btn small green" title="Play a fresh copy of this lesson" onClick={() => openLesson(l)}>▶ Play</button>} />
+    );
+  };
+
   const isExample = (t: any) => (t.tags || []).includes('example');
   const mineToDelete = (t: any) => !isExample(t) && (app.user?.role === 'admin' || app.user?.username === t.owner);
   // Every card gets a 🗑: the owner/admin truly deletes their tool; anyone else
@@ -411,6 +447,15 @@ export function ToolsView() {
               showCollapse collapsed={adminToolsCollapsed}
               onToggleCollapse={isAdmin ? () => toggleCollapse('adminToolsCollapsed', adminToolsCollapsed) : undefined}
               banner={<InstructionPlank settingKey="adminToolsBanner" defaultText="🛠️ Admin's Made Tools — the platform's built-in activities (Learning Path, Suggested Topic, Time Travel, Structured Explanations, Language Learning). Open one to use its generator like any tool; the ♻️ icon starts a fresh generation, 📖 opens the original saved results, and 🗑 hides it. Slide or Refresh to reshuffle." />} />
+          )}
+          {recentLessons.length > 0 && (
+            <>
+              <div style={{ height: 8 }} />
+              <Carousel title="✨ Recent Lessons" cardWidth={240} cardHeight={360}
+                banner={<InstructionPlank settingKey="recentLessonsBanner" defaultText="✨ Recent Lessons — lessons people have generated across the tools. Tap a card to open its tool and play a fresh copy." />}>
+                {recentLessons.map((l: any) => <div key={l.id} style={{ height: '100%' }}>{lessonCard(l)}</div>)}
+              </Carousel>
+            </>
           )}
         </>
       )}
