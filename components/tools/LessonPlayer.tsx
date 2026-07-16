@@ -1463,7 +1463,20 @@ export function LessonPlayer({ def, slug, canEdit = false }: { def: any; slug: s
         ))}
       </div>
 
-      {genBusy && !curSlide && <GenProgress target={cur + 1} total={tot} />}
+      {/* A slide-sized skeleton fills the space WHILE loading, so the view keeps
+          the same height (the layout doesn't collapse to reveal the comments). */}
+      {genBusy && !curSlide && (
+        <div className="card" style={{ padding: '16px 18px', maxWidth: 640, margin: '0 auto', minHeight: 'min(72vh, 560px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <GenProgress target={cur + 1} total={tot} />
+          <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
+            <div className="sl-skeleton" style={{ height: 20, width: '55%', margin: '0 auto 8px', borderRadius: 6 }} />
+            <div className="sl-skeleton" style={{ height: 12, borderRadius: 6 }} />
+            <div className="sl-skeleton" style={{ height: 12, width: '92%', borderRadius: 6 }} />
+            <div className="sl-skeleton" style={{ height: 12, width: '80%', borderRadius: 6 }} />
+            <div className="sl-skeleton" style={{ height: 170, borderRadius: 10, marginTop: 10 }} />
+          </div>
+        </div>
+      )}
       {err && !curSlide && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchInto(cur, cfg, slides.filter(Boolean).map(s => (s as Slide).title))}>Retry</button></p>}
 
       {curSlide && (
