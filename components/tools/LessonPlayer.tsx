@@ -868,6 +868,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [showReview, setShowReview] = useState(false);
   // Per-slide text level (the gear on the slide) + re-leveling spinner.
   const [slideLevel, setSlideLevel] = useState<Record<number, string>>({});
+  // Per-slide favorites during a run — the ★ button. Saved with the finished run
+  // (data.favorites = the favorited slide indices). A ref mirrors it so the finish
+  // handler reads the latest set without a stale closure.
+  const [favSlides, setFavSlides] = useState<Record<number, boolean>>({});
+  const favSlidesRef = useRef<Record<number, boolean>>({});
+  const toggleFavSlide = (i: number) => setFavSlides(prev => { const n = { ...prev }; if (n[i]) delete n[i]; else n[i] = true; favSlidesRef.current = n; return n; });
   const [relevelBusy, setRelevelBusy] = useState(false);
   const [levelOpen, setLevelOpen] = useState(false);
   // 🧩 "change this slide" box: the learner types a change (add/remove a
@@ -1053,6 +1059,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     cfgRef.current = c; slidesRef.current = []; prefetching.current = {}; startedAt.current = Date.now();
     shufflePages();   // roll a fresh slide order for this run (intro stays first)
     savedRun.current = false;   // this fresh run hasn't been auto-saved yet
+    setFavSlides({}); favSlidesRef.current = {};
     setCfg(c); setSlides([]); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
     fetchInto(0, c);
   };
@@ -1085,7 +1092,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       const answered = all.length;
       const correct = all.filter((d: any) => d.correct).length;
       const pct = answered ? Math.round((correct / answered) * 100) : 0;
-      const data: Cfg = { ...cfg, ...(answered ? { score: pct } : {}) };
+      const favs = Object.keys(favSlidesRef.current).map(Number).sort((a, b) => a - b);
+      const data: Cfg = { ...cfg, ...(answered ? { score: pct } : {}), ...(favs.length ? { favorites: favs } : {}) };
       API.post('/api/tools/entries', { slug, data })
         .then((r: any) => { playedEntryId.current = r?.entry?.id || null; loadActivities(); })
         .catch(() => { /* best-effort */ });
@@ -1862,7 +1870,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       <style>{'@keyframes sl-spin{to{transform:rotate(360deg)}}'}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
         <button className="btn small ghost" onClick={() => { setPhase('hub'); loadActivities(); }}>← Lessons</button>
-        <span style={{ fontSize: 13, opacity: 0.7 }}>{label(cfg)}</span>
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 13, opacity: 0.7 }}>{label(cfg)}</span>
+          {/* ★ favorite THIS slide — saved with the finished run (data.favorites). */}
+          <button className="btn small ghost" title={favSlides[cur] ? 'Unfavorite this slide' : 'Favorite this slide (saved with the run)'}
+            onClick={() => toggleFavSlide(cur)} style={{ fontSize: 15, padding: '2px 8px', color: favSlides[cur] ? '#f5b301' : undefined }}>{favSlides[cur] ? '★' : '☆'}</button>
+        </span>
       </div>
       {/* Always show the current slide's LEVEL, just under the back button and above
           the progress bar (reflects a per-slide ⚙ level change too). */}
