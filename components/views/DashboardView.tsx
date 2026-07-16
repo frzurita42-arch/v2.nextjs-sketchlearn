@@ -12,6 +12,18 @@ import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
+import { MiniChart, type ChartType, type Datum } from '@/components/ui/MiniChart';
+
+// Output styles for the AI visual generator (matches the API's KINDS).
+const VISUAL_KINDS: { key: string; label: string }[] = [
+  { key: 'infographic', label: '📊 Infographic' },
+  { key: 'chart', label: '📈 Chart poster' },
+  { key: 'business-poster', label: '🏢 Business poster' },
+  { key: 'marketing-poster', label: '📣 Marketing poster' },
+  { key: 'business-plan', label: '🧭 Business-plan diagram' },
+  { key: 'executive-summary', label: '🗂️ Executive summary' },
+  { key: 'trend-forecast', label: '🔮 Trend & forecast' },
+];
 
 const fmtDate = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }); };
 const fmtDay = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(); };
@@ -79,6 +91,13 @@ export function DashboardView() {
   const [newPass, setNewPass] = useState('');
   const [newRole, setNewRole] = useState('user');
   const [userErr, setUserErr] = useState('');
+  // AI visual generator (per page): chosen output style, include-all-tables toggle,
+  // a custom instruction, and the generated image kept per table key.
+  const [visKind, setVisKind] = useState('infographic');
+  const [visAll, setVisAll] = useState(false);
+  const [visCustom, setVisCustom] = useState('');
+  const [visImg, setVisImg] = useState<Record<string, { url: string; by: string }>>({});
+  const [visBusy, setVisBusy] = useState('');
 
   useEffect(() => {
     if (app.user?.role !== 'admin') { app.nav('home'); return; }
@@ -147,15 +166,38 @@ export function DashboardView() {
 
   const totalCost = usageByUser.reduce((s: number, u: any) => s + (Number(u.cost) || 0), 0);
 
+  // ---- one best-fit chart per table (relevant slice of the data) ----
+  const topN = <T,>(a: T[], n = 6) => a.slice(0, n);
+  const slideChart: Datum[] = topN(slideTools).map((t: any) => ({ label: t.title, value: t.slideCount || 0 }));
+  const repoChart: Datum[] = topN(repoTools).map((t: any) => ({ label: t.title, value: t.cardCount || 0 }));
+  const runByUser: Record<string, { sum: number; n: number }> = {};
+  runs.forEach((r: any) => { if (r.score == null) return; (runByUser[r.user] ||= { sum: 0, n: 0 }); runByUser[r.user].sum += r.score; runByUser[r.user].n += 1; });
+  const runChart: Datum[] = topN(Object.entries(runByUser).map(([u, v]) => ({ label: `@${u}`, value: Math.round(v.sum / v.n) })).sort((a, b) => b.value - a.value));
+  const tokByKind: Record<string, number> = {};
+  usage.forEach((u: any) => { tokByKind[u.kind] = (tokByKind[u.kind] || 0) + (u.totalTokens || 0); });
+  const usageChart: Datum[] = topN(Object.entries(tokByKind).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value), 8);
+  const costChart: Datum[] = topN(usageByUser).map((u: any) => ({ label: `@${u.user}`, value: Number((u.cost || 0).toFixed(4)) }));
+  const roleCount: Record<string, number> = {};
+  usersList.forEach((u: any) => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
+  const userChart: Datum[] = Object.entries(roleCount).map(([k, v]) => ({ label: k, value: v }));
+  const gameChart: Datum[] = games.slice(-12).map((g: any, i: number) => ({ label: String(i + 1), value: g.total ? Math.round((g.correct / g.total) * 100) : 0 }));
+
+  // Turn a table into a compact text summary for the AI visual generator.
+  const summarize = (name: string, headers: string[], rows: Cell[][]) =>
+    `Table: ${name}\nColumns: ${headers.join(' | ')}\n` +
+    rows.slice(0, 20).map(r => r.map(c => (c && typeof c === 'object' && 'node' in c) ? '' : String(c ?? '')).join(' | ')).join('\n');
+
   // The tables, one per page. `footer` adds extra UI (the add-user form).
-  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; empty: string; csv?: () => void; footer?: React.ReactNode }[] = [
-    { key: 'slides', label: '🎞️ Slide tools', count: slideTools.length, headers: slideHeaders, rows: slideRows, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows) },
-    { key: 'repos', label: '🗂️ Repositories', count: repoTools.length, headers: repoHeaders, rows: repoRows, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows) },
-    { key: 'runs', label: '📊 Presentation runs', count: runs.length, headers: runHeaders, rows: runRows, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows) },
-    { key: 'usage', label: '💸 Token usage', count: usage.length, headers: usageHeaders, rows: usageRows, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows) },
-    { key: 'cost', label: '📉 Cost by user', count: usageByUser.length, headers: costHeaders, rows: costRows, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
+  type Chart = { type: ChartType; data: Datum[]; title: string; unit?: string };
+  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; empty: string; csv?: () => void; footer?: React.ReactNode; chart?: Chart }[] = [
+    { key: 'slides', label: '🎞️ Slide tools', count: slideTools.length, headers: slideHeaders, rows: slideRows, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows), chart: { type: 'hbar', data: slideChart, title: 'Slides per tool (top 6)' } },
+    { key: 'repos', label: '🗂️ Repositories', count: repoTools.length, headers: repoHeaders, rows: repoRows, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows), chart: { type: 'hbar', data: repoChart, title: 'Cards per repository (top 6)' } },
+    { key: 'runs', label: '📊 Presentation runs', count: runs.length, headers: runHeaders, rows: runRows, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows), chart: { type: 'bar', data: runChart, title: 'Average grade by user', unit: '%' } },
+    { key: 'usage', label: '💸 Token usage', count: usage.length, headers: usageHeaders, rows: usageRows, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows), chart: { type: 'donut', data: usageChart, title: 'Tokens by component' } },
+    { key: 'cost', label: '📉 Cost by user', count: usageByUser.length, headers: costHeaders, rows: costRows, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
     {
       key: 'users', label: '👥 Users', count: usersList.length, headers: userHeaders, rows: userRows, empty: 'No users.',
+      chart: { type: 'donut', data: userChart, title: 'Users by role' },
       footer: (
         <>
           <h3 style={{ marginTop: 18 }}>➕ Add a user</h3>
@@ -172,10 +214,24 @@ export function DashboardView() {
         </>
       ),
     },
-    { key: 'games', label: '📈 Activity stats', count: games.length, headers: gameHeaders, rows: gameRows, empty: 'No games played yet.', footer: <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}><button className="btn small" onClick={downloadCsv}>⬇ Export all games as CSV</button></div> },
+    { key: 'games', label: '📈 Activity stats', count: games.length, headers: gameHeaders, rows: gameRows, empty: 'No games played yet.', chart: { type: 'line', data: gameChart, title: 'Recent scores', unit: '%' }, footer: <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}><button className="btn small" onClick={downloadCsv}>⬇ Export all games as CSV</button></div> },
   ];
   const cur = Math.min(tab, sections.length - 1);
   const sec = sections[cur];
+
+  // Generate an AI visual (infographic / poster / …) from the current table — or,
+  // if the toggle is on, from EVERY table — plus the custom instruction.
+  const genVisual = async () => {
+    setVisBusy(sec.key);
+    try {
+      const summary = summarize(sec.label, sec.headers, sec.rows);
+      const allSummaries = visAll ? sections.map(s => summarize(s.label, s.headers, s.rows)).join('\n\n') : '';
+      const r: any = await API.post('/api/dashboard/visual', { kind: visKind, tableName: sec.label, summary, includeAll: visAll, allSummaries, custom: visCustom.trim() });
+      if (r?.url) setVisImg(m => ({ ...m, [sec.key]: { url: r.url, by: r.by || '' } }));
+      else alert(r?.error || 'Could not generate an image.');
+    } catch (e: any) { alert(e?.message || 'Could not generate an image.'); }
+    setVisBusy('');
+  };
 
   return (
     <>
@@ -196,6 +252,33 @@ export function DashboardView() {
         </div>
         <PagedTable key={sec.key} headers={sec.headers} rows={sec.rows} empty={sec.empty} />
         {sec.footer}
+
+        {/* A best-fit chart of this table's data. */}
+        {sec.chart && sec.count > 0 && (
+          <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12, paddingTop: 6 }}>
+            <MiniChart type={sec.chart.type} data={sec.chart.data} title={sec.chart.title} unit={sec.chart.unit} />
+          </div>
+        )}
+
+        {/* AI visual generator — reads this table (or all tables) into an image. */}
+        <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12, paddingTop: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.6, marginBottom: 6 }}>🎨 AI VISUAL FROM THIS DATA</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select value={visKind} onChange={e => setVisKind(e.target.value)} style={{ fontSize: 13 }}>
+              {VISUAL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+            </select>
+            <button type="button" className={`btn small ${visAll ? 'green' : 'ghost'}`} onClick={() => setVisAll(v => !v)}
+              title="Include EVERY table's data in the prompt (not just this one)">🗂️ All tables: {visAll ? 'On' : 'Off'}</button>
+            <input type="text" value={visCustom} onChange={e => setVisCustom(e.target.value)} placeholder="Custom instruction (optional)…" style={{ flex: '1 1 200px', minWidth: 0, fontSize: 13 }} />
+            <button className="btn small blue" disabled={!!visBusy} onClick={genVisual}>{visBusy === sec.key ? '🎨 Generating…' : '🎨 Generate'}</button>
+          </div>
+          {visImg[sec.key] && (
+            <figure style={{ margin: '10px 0 0', textAlign: 'center' }}>
+              <img src={visImg[sec.key].url} alt="AI visual of the table data" style={{ maxWidth: '100%', maxHeight: 480, borderRadius: 10, border: '2px solid var(--ink)' }} />
+              {visImg[sec.key].by && <figcaption style={{ fontSize: 11, opacity: 0.6, marginTop: 3 }}>🖼 generated by {visImg[sec.key].by}</figcaption>}
+            </figure>
+          )}
+        </div>
       </div>
 
       {/* Table pager (one table per page). */}
