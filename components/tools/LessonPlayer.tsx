@@ -1050,10 +1050,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       const answers = { ...prev.answers, [qi]: { ...detail, correct } };
       return { ...r, [cur]: { answers, done: Object.keys(answers).length >= qs } };
     });
-    // Bring the view back up to the top of the slide so the learner is carried to
-    // the next question / the Next button without hunting for it. Deferred a beat
-    // so it runs after the answer feedback (red/green + explanation) has rendered.
-    if (typeof window !== 'undefined') setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 80);
+    // Do NOT scroll on submit — the learner stays exactly where they answered so
+    // the red/green feedback and the Next button are right there, no hunting.
+    // (The view only jumps to the top when the NEXT slide loads.)
   };
 
   // Re-explain THIS slide at a chosen level (the gear on the slide): the teaching
