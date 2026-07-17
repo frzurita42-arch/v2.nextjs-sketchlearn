@@ -40,8 +40,8 @@ type Cell = string | number | null | undefined | { node: React.ReactNode };
 // A table that shows ROWS_PER_PAGE rows at a time (Prev/Next) and clips any text
 // cell over CELL_LIMIT chars, revealing the full value in a popup via 👁. The
 // full text stays in the row data, so search/CSV always see it — only the
-// on-screen cell is clipped. `big` doubles the table font (the .big CSS class).
-function PagedTable({ headers, rows, empty, rowIds, onDelete, big }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; big?: boolean }) {
+// on-screen cell is clipped.
+function PagedTable({ headers, rows, empty, rowIds, onDelete }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void }) {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<{ title: string; text: string } | null>(null);
   const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
@@ -49,11 +49,9 @@ function PagedTable({ headers, rows, empty, rowIds, onDelete, big }: { headers: 
   const slice = rows.slice(p * ROWS_PER_PAGE, p * ROWS_PER_PAGE + ROWS_PER_PAGE);
   const canDelete = !!(onDelete && rowIds);
   const totalCols = headers.length + (canDelete ? 1 : 0);
-  // At double font size, clip sooner so each row stays a small readable subset.
-  const limit = big ? 60 : CELL_LIMIT;
   return (
     <>
-      <div className="table-wrap"><table className={`sketch${big ? ' big' : ''}`}><tbody>
+      <div className="table-wrap"><table className="sketch"><tbody>
         <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
         {slice.length ? slice.map((r, ri) => {
           const abs = p * ROWS_PER_PAGE + ri;
@@ -63,8 +61,8 @@ function PagedTable({ headers, rows, empty, rowIds, onDelete, big }: { headers: 
             {r.map((c, ci) => {
               if (c && typeof c === 'object' && 'node' in c) return <td key={ci}>{c.node}</td>;
               const s = String(c ?? '');
-              if (s.length > limit) return (
-                <td key={ci}>{s.slice(0, limit)}…{' '}
+              if (s.length > CELL_LIMIT) return (
+                <td key={ci}>{s.slice(0, CELL_LIMIT)}…{' '}
                   <button type="button" title="Show the full text" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
                 </td>
               );
@@ -488,7 +486,7 @@ export function DashboardView() {
                 {regAi && regAiIds && !regAiErr && <span style={{ fontSize: 12, opacity: 0.65 }}>🤖 showing {vRegShown.length} of {vReg.length}</span>}
               </div>
             )}
-            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} big={sec.key === 'registry'} />
+            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} />
             {sec.footer}
           </div>
         );

@@ -10,7 +10,7 @@ import { useState, type ReactNode, type CSSProperties } from 'react';
 export function SectionHeader({
   title, canEditTitle, onRenameTitle, onRemixTitle, remixingTitle,
   onRefresh, refreshing, refreshTitle = 'Refresh', extra,
-  showCollapse, collapsed, onToggleCollapse, maxWidth, titleFontSize = 18,
+  showCollapse, collapsed, onToggleCollapse, maxWidth, titleFontSize = 36,
 }: {
   title: string;
   canEditTitle?: boolean;                     // show ✎ / 🎨
@@ -29,7 +29,8 @@ export function SectionHeader({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
-  const icon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 } as const;
+  // Icons scale with the doubled title so ✎ / 🎨 / 👁 stay proportionate.
+  const icon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 20, lineHeight: 1 } as const;
   const save = () => { const v = draft.trim(); if (v && onRenameTitle) onRenameTitle(v); setEditing(false); };
   const wrap: CSSProperties = maxWidth ? { maxWidth, margin: '0 auto' } : {};
   return (
@@ -38,7 +39,7 @@ export function SectionHeader({
       {editing ? (
         <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setDraft(title); setEditing(false); } }}
-          onBlur={save} style={{ fontSize: 17, fontWeight: 700, padding: '2px 6px', borderRadius: 6, border: '1.5px solid var(--ink)', maxWidth: 320 }} />
+          onBlur={save} style={{ fontSize: 32, fontWeight: 700, padding: '2px 6px', borderRadius: 6, border: '1.5px solid var(--ink)', maxWidth: 480 }} />
       ) : (
         <h3 style={{ margin: 0, fontSize: titleFontSize }}>{title}</h3>
       )}
