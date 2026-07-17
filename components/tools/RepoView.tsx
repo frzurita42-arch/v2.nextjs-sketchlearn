@@ -1612,7 +1612,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           showCollapse
           storageKey={`sl_repo_view_${slug}`}
           gridMinPx={260}
-          perPage={9999} /* the 📖 Read more button below paginates instead */
+          /* no perPage: the Prev/Next pager is retired — the "Read more" link
+             below the cards paginates instead (6 cards per click, nested count) */
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
           belowToolbar={
@@ -1803,13 +1804,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         </div>
       )}
 
-      {/* 📖 Read more — reveals the next chunk of cards (nested ones count too). */}
+      {/* Read more — plain letters at the foot of the card section, right above
+          the closing dashed rule. Each click reveals the next 6 cards (nested
+          cards count toward the 6). */}
       {!editing && remainingCards > 0 && (
-        <div style={{ textAlign: 'center', marginTop: 14 }}>
-          <button className="btn blue" onClick={() => setReadChunks((n) => n + 1)}>
-            📖 Read more · {Math.min(READ_MORE_STEP, remainingCards)} of {remainingCards} more card{remainingCards === 1 ? '' : 's'}
+        <div style={{ textAlign: 'center', marginTop: 12, marginBottom: 2 }}>
+          <button onClick={() => setReadChunks((n) => n + 1)}
+            title={`Show the next ${Math.min(READ_MORE_STEP, remainingCards)} cards (${shownCards} of ${totalCards} shown)`}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 16, color: 'var(--ink)', opacity: 0.75, textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
+            Read more ↓
           </button>
-          <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>Showing {shownCards} of {totalCards} cards</div>
         </div>
       )}
     </div>
