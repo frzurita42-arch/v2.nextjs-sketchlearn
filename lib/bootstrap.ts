@@ -23,8 +23,9 @@ async function ensureTestUsers(): Promise<boolean> {
   for (const [uname, pass, role] of want) {
     if (!userState.users.some((u: any) => u.username === uname)) { userState.users.push(makeUser(uname, pass, role)); changed = true; }
   }
-  // Give the test moderator a starter wallet so token-costing actions work.
-  try { if ((await getUserTokens('moderator1')) <= 0) await addUserTokens('moderator1', 5000); } catch { /* ignore */ }
+  // Give the test moderator the standard 500-token starter wallet so their
+  // creator actions work right away.
+  try { if ((await getUserTokens('moderator1')) <= 0) await addUserTokens('moderator1', 500); } catch { /* ignore */ }
   return changed;
 }
 import { normalizeStoreShape, writeSuggestedStore, writeHomeTopicsStore } from '@/src/db/caches';

@@ -258,14 +258,17 @@ export function DashboardView() {
         {isMod && (<>
           {rule}
           <SectionHeader title="🗂 My work" maxWidth={820} />
-          <div style={{ maxWidth: 820, margin: '0 auto', display: 'grid', gap: 14 }}>
-            <div className="card"><h3 style={{ margin: '0 0 6px' }}>🎬 My slide tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({slideTools.length})</span></h3>
+          {/* minmax(0,1fr) + min-width:0 let each card shrink to the page width so
+              the wide table scrolls INSIDE its own .table-wrap instead of pushing
+              the whole page wider. */}
+          <div style={{ maxWidth: 820, margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14 }}>
+            <div className="card" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>🎬 My slide tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({slideTools.length})</span></h3>
               <PagedTable compact headers={['Title', 'Slides', 'Visibility', 'Created']} empty="You haven't created any slide tools yet."
                 rows={slideTools.map((t: any) => [t.title, t.slideCount || 0, t.visibility, fmtDate(t.createdAt)])} /></div>
-            <div className="card alt"><h3 style={{ margin: '0 0 6px' }}>📁 My repositories <span style={{ opacity: 0.5, fontWeight: 400 }}>({repoTools.length})</span></h3>
+            <div className="card alt" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>📁 My repositories <span style={{ opacity: 0.5, fontWeight: 400 }}>({repoTools.length})</span></h3>
               <PagedTable compact headers={['Title', 'Cards', 'Visibility', 'Created']} empty="You haven't created any repositories yet."
                 rows={repoTools.map((t: any) => [t.title, t.cardCount || 0, t.visibility, fmtDate(t.createdAt)])} /></div>
-            <div className="card"><h3 style={{ margin: '0 0 6px' }}>▶️ Runs of my tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({runs.length})</span></h3>
+            <div className="card" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>▶️ Runs of my tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({runs.length})</span></h3>
               <PagedTable compact headers={['Tool', 'User', 'Topic', 'Score', 'When']} empty="No one has played your tools yet."
                 rows={runs.map((r: any) => [r.toolTitle, r.user, r.topic, r.score == null ? '—' : String(r.score), fmtDate(r.createdAt)])} /></div>
           </div>

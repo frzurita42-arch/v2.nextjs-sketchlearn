@@ -40,5 +40,11 @@ export async function POST(req: Request) {
   const safeRole = role === 'admin' ? 'admin' : role === 'moderator' ? 'moderator' : 'user';
   users.push(makeUser(uname, password, safeRole));   // password is hashed by makeUser (scrypt)
   await persistUsers(users);
+  // A new moderator is created WITH a starter wallet so their creator buttons work
+  // right away (a moderator with 0 tokens would make no sense). They fall back to a
+  // plain user if they later spend into the negative.
+  if (safeRole === 'moderator') {
+    try { const { addUserTokens } = require('@/src/db/platform'); await addUserTokens(uname, 500); } catch { /* ignore */ }
+  }
   return NextResponse.json({ ok: true });
 }
