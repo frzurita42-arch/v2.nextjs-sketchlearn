@@ -1239,6 +1239,24 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     if (!canEdit) return;
     API.get('/api/users').then((r: any) => { if (Array.isArray(r)) setKnownUsers(r.map((u: any) => String(u.username || '')).filter(Boolean)); }).catch(() => { /* not an admin — manual entry only */ });
   }, [canEdit]);
+  // 🎬 Study-path tool picker: the list of presentation (lesson) tools the owner
+  // can point the 🎬 buttons at, plus a search box. Beats typing a raw slug.
+  const [studyToolList, setStudyToolList] = useState<{ slug: string; title: string }[]>([]);
+  const [studyToolSearch, setStudyToolSearch] = useState('');
+  useEffect(() => {
+    if (!canEdit) return;
+    API.get('/api/tools').then((r: any) => {
+      const list = Array.isArray(r?.tools) ? r.tools : [];
+      // Presentations = the 'lesson' archetype (the scored slide deck). These are
+      // the tools a study prompt should open.
+      const slides = list.filter((t: any) => (t.archetype || t.definition?.archetype) === 'lesson')
+        .map((t: any) => ({ slug: String(t.slug || ''), title: String(t.title || t.definition?.title || t.slug || '') }))
+        .filter((t: any) => t.slug);
+      // De-dupe by slug (featured examples + owned can overlap).
+      const seen = new Set<string>();
+      setStudyToolList(slides.filter((t: any) => (seen.has(t.slug) ? false : (seen.add(t.slug), true))));
+    }).catch(() => { /* keep manual entry */ });
+  }, [canEdit]);
   // "AI question" — a repo-wide toggle (owner/admin). On: every card gets a 🤖
   // prompt icon, and adding a card inside (➕) generates an AI answer from the
   // card + page + prompt + attachments. Off: ➕ makes a blank card as before.
@@ -1407,8 +1425,15 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     appState.slideSeed = { topic };
     const s = (studyToolSlug || '').trim();
     if (s) {
-      try { const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(s)}`); if (r?.tool) { appState.activeTool = r.tool; app.nav('tool'); return; } } catch { /* fall through */ }
-      alert(`Could not open the study tool "${s}". Check the slug in this repo's Study-path settings.`);
+      // NOTE: the repo page IS itself the 'tool' view, so app.nav('tool') alone is a
+      // no-op state change (same view string) and never remounts — the page just
+      // scrolls to the top. Setting activeTool to the NEW tool then rerender() bumps
+      // the <main key={tool:slug}>, forcing a remount onto the slide tool.
+      try {
+        const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(s)}`);
+        if (r?.tool) { appState.activeTool = r.tool; app.nav('tool'); app.rerender(); return; }
+      } catch { /* fall through */ }
+      alert(`Could not open the study tool "${s}". Pick it from the list in this repo's Study-path settings.`);
       return;
     }
     if (canEdit) { alert('Set which slide tool the study button opens in this repo’s 🎬 Study-path settings.'); return; }
@@ -1579,12 +1604,32 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               {canEdit && studyMode && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', maxWidth: 780, padding: '10px 12px', border: '1.5px dashed var(--ink)', borderRadius: 10 }}>
                   <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center' }}>🎬 STUDY-PATH COMMAND CENTER</span>
-                  <label style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>Slide tool slug
-                    <input value={studyToolSlug} onChange={(e) => setStudyToolSlug(e.target.value)} onBlur={() => saveStudyTool(studyToolSlug.trim())}
-                      onKeyDown={(e) => { if (e.key === 'Enter') saveStudyTool(studyToolSlug.trim()); }}
-                      placeholder="e.g. cybersecurity-foundations" style={{ fontSize: 12, width: 200 }} title="The presentation tool the 🎬 study buttons open (its URL slug)." />
-                  </label>
+                  {/* Currently selected tool + a search box + a filtered dropdown of
+                      presentation tools — no more typing a raw slug. */}
+                  <div style={{ width: '100%', maxWidth: 460 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4, textAlign: 'center' }}>
+                      Slide tool: {studyToolSlug.trim()
+                        ? <span style={{ color: 'var(--accent, #2d6cdf)' }}>{(studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug}</span>
+                        : <span style={{ opacity: 0.6, fontWeight: 400 }}>none picked yet</span>}
+                    </div>
+                    <input value={studyToolSearch} onChange={(e) => setStudyToolSearch(e.target.value)}
+                      placeholder="🔎 Search your presentations by name…" style={{ fontSize: 12, width: '100%' }} />
+                    <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, marginTop: 4 }}>
+                      {studyToolList
+                        .filter((t) => { const q = studyToolSearch.trim().toLowerCase(); return !q || t.title.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q); })
+                        .slice(0, 40)
+                        .map((t) => (
+                          <button key={t.slug} type="button" className="btn small ghost"
+                            style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, background: t.slug === studyToolSlug ? 'rgba(45,108,223,0.12)' : undefined }}
+                            title={t.slug} onClick={() => { saveStudyTool(t.slug); setStudyToolSearch(''); }}>
+                            {t.slug === studyToolSlug ? '✓ ' : ''}{t.title} <span style={{ opacity: 0.45, fontSize: 10 }}>· {t.slug}</span>
+                          </button>
+                        ))}
+                      {studyToolList.length === 0 && <div style={{ fontSize: 11, opacity: 0.6, padding: '8px 10px' }}>No presentation tools found yet — build one first (Slides ▸ Build).</div>}
+                    </div>
+                  </div>
                   {studyToolSlug.trim() && <button className="btn small blue" title="Open the slide tool now" onClick={() => openStudy('')}>🎬 Open the slide tool</button>}
+                  {studyToolSlug.trim() && <button className="btn small ghost" title="Clear the selected tool" onClick={() => saveStudyTool('')}>✕ Clear</button>}
                   <span style={{ fontSize: 11, opacity: 0.6, width: '100%', textAlign: 'center' }}>Cards whose description starts with 🔵 show a 🎬 button that opens this tool with the prompt preset.</span>
                 </div>
               )}
