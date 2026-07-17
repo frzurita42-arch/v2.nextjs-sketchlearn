@@ -81,7 +81,7 @@ const blankCard = (kind: 'card' | 'section' = 'card'): RepoCard => {
 };
 
 const sameCardShape = (a: RepoCard | undefined, b: RepoCard | undefined): boolean => {
-  const strip = (c?: RepoCard) => {
+  const strip = (c?: RepoCard): unknown => {
     if (!c) return null;
     const { lastEdited, children, ...rest } = c;
     return { ...rest, children: Array.isArray(children) ? children.map(strip) : [] };
