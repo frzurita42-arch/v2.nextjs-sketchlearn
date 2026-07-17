@@ -18,6 +18,7 @@ const CACHE = 'sl_site_settings';
 
 export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEADERS | string; left?: React.ReactNode; right?: React.ReactNode }) {
   const def = PAGE_HEADERS[page as string];
+  const hidePageEmoji = page === 'repos' || page === 'slides';
   // Seed synchronously from the shared site-settings cache so the DB copy paints
   // on the first frame (no flash of the default), then refresh from the server.
   const [site, setSite] = useState<Record<string, string | undefined>>(() => {
@@ -35,7 +36,7 @@ export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEAD
   const title = site[def.titleKey] || def.defaultTitle;
   const subtitle = site[def.subtitleKey] || def.defaultSubtitle;
   const emoji = site[def.emojiKey] || def.defaultEmoji;
-  const emojiOff = site[def.emojiOffKey] === '1';
+  const emojiOff = hidePageEmoji || site[def.emojiOffKey] === '1';
 
   const save = async (key: string, value: string) => {
     setSite((s) => { const n = { ...s, [key]: value }; try { localStorage.setItem(CACHE, JSON.stringify(n)); } catch { /* ignore */ } return n; });
@@ -78,10 +79,14 @@ export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEAD
             )}
             {title}
           </span>
-          {isAdmin && <>
+          {isAdmin && !hidePageEmoji && <>
             <button title="Edit the title" onClick={() => { setDraft(title); setEditing('title'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>
             <button title="AI reword the title" disabled={!!mix[def.titleKey]} onClick={() => remix(def.titleKey, 'title')} style={{ ...headIcon, fontSize: 15 }}>{mix[def.titleKey] ? '…' : '🎨'}</button>
             <button title={emojiOff ? 'Show the emoji' : 'Hide the emoji'} onClick={toggleEmoji} style={{ ...headIcon, fontSize: 15, opacity: emojiOff ? 0.4 : 1 }}>👁</button>
+          </>}
+          {isAdmin && hidePageEmoji && <>
+            <button title="Edit the title" onClick={() => { setDraft(title); setEditing('title'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>
+            <button title="AI reword the title" disabled={!!mix[def.titleKey]} onClick={() => remix(def.titleKey, 'title')} style={{ ...headIcon, fontSize: 15 }}>{mix[def.titleKey] ? '…' : '🎨'}</button>
           </>}
         </h1>
       )}
