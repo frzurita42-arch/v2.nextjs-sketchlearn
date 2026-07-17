@@ -61,11 +61,14 @@ function PagedTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][
         )) : <tr><td colSpan={headers.length}>{empty}</td></tr>}
       </tbody></table></div>
       {pages > 1 && (
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
-          <button className="btn small ghost" disabled={p <= 0} onClick={() => setPage(p - 1)}>‹ Prev</button>
-          <span style={{ fontSize: 12, opacity: 0.7 }}>Rows {p * ROWS_PER_PAGE + 1}–{Math.min(rows.length, (p + 1) * ROWS_PER_PAGE)} of {rows.length}</span>
-          <button className="btn small ghost" disabled={p >= pages - 1} onClick={() => setPage(p + 1)}>Next ›</button>
-        </div>
+        <>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+            <button className="btn small ghost" disabled={p <= 0} onClick={() => setPage(p - 1)}>‹ Prev</button>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Rows {p * ROWS_PER_PAGE + 1}–{Math.min(rows.length, (p + 1) * ROWS_PER_PAGE)} of {rows.length}</span>
+            <button className="btn small ghost" disabled={p >= pages - 1} onClick={() => setPage(p + 1)}>Next ›</button>
+          </div>
+          <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, marginTop: 10 }} />
+        </>
       )}
       {view && (
         <div onClick={() => setView(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -256,15 +259,18 @@ export function DashboardView() {
 
   return (
     <>
+      {/* Title + subtitle container. */}
       <h1 className="view-title">Teacher’s <span className="scribble-underline">dashboard</span></h1>
       <p className="view-sub" style={{ textAlign: 'center' }}>One page at a time — pick a section below.</p>
+      {rule}
 
-      {/* Page picker. */}
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '0 0 12px' }}>
+      {/* Section picker container (the filtering buttons). */}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '0 0 4px' }}>
         {pageLabels.map((lbl, i) => (
           <button key={i} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => setTab(i)}>{lbl}{i < TABLE_PAGES ? <span style={{ opacity: 0.6 }}> ({sections[i].count})</span> : null}</button>
         ))}
       </div>
+      {rule}
 
       {cur < TABLE_PAGES ? (() => {
         const sec = sections[cur];
@@ -342,12 +348,13 @@ export function DashboardView() {
       )}
 
       {rule}
-      {/* Page pager. */}
+      {/* Page pager container. */}
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
         <button className="btn small ghost" disabled={cur <= 0} onClick={() => setTab(cur - 1)}>‹ Prev</button>
         <span style={{ fontSize: 12, opacity: 0.7 }}>Page {cur + 1} / {totalPages}</span>
         <button className="btn small ghost" disabled={cur >= totalPages - 1} onClick={() => setTab(cur + 1)}>Next ›</button>
       </div>
+      {rule}
     </>
   );
 }
