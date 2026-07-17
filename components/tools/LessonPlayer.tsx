@@ -744,7 +744,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // so the presentation reads like a focused player.
   const immersive = phase !== 'hub';
   useEffect(() => { onImmersiveChange?.(immersive); }, [immersive, onImmersiveChange]);
-  const [form, setForm] = useState<Cfg>(() => defaultsFor(settings));
+  const [form, setForm] = useState<Cfg>(() => {
+    // Defaults: tone & category default to "Any (AI picks)" so the AI chooses
+    // them unless the author overrides; tooltips default OFF.
+    const d: any = defaultsFor(settings);
+    return { ...d, tone: 'Any (AI picks)', category: 'Any (AI picks)', tooltips: false };
+  });
   // Upgrade a legacy CEFR default (A1…C2) to the new academic scale so the
   // Difficulty dropdown always presents a current option.
   useEffect(() => {
@@ -1151,6 +1156,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // flags) is stashed so the finish handler can save it.
   const recordAndPlay = async (c: Cfg, extra?: Record<string, any>) => {
     const cc: Cfg = { ...c, level: c.level || c.difficulty || levels[0], topic: c.topic || '', category: c.category || defaultCat(), ...extra };
+    // "Any (AI picks)" tone means: don't constrain the AI — drop it so the generator
+    // chooses the voice itself.
+    if ((cc as any).tone === 'Any (AI picks)') delete (cc as any).tone;
     playedEntryId.current = null; savedRunEntry.current = false;
     play(cc);
   };
@@ -1197,6 +1205,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [addMsg, setAddMsg] = useState('');
   const addToHistory = async (c: Cfg, extra?: Record<string, any>) => {
     const cc: Cfg = { ...c, level: c.level || c.difficulty || levels[0], topic: c.topic || '', category: c.category || defaultCat(), ...extra };
+    if ((cc as any).tone === 'Any (AI picks)') delete (cc as any).tone;
     try {
       await API.post('/api/tools/entries', { slug, data: cc });
       setAddMsg('Added to the gallery below ✓'); setTimeout(() => setAddMsg(''), 4000);
@@ -1453,22 +1462,31 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     //  • topic     → dropdown of AI-suggested topics (when we have them)
     //  • level/diff → the academic scale Zero…PhD, always
     //  • slides     → an editable dropdown of preset counts
+    const TONE_OPTIONS = ['Any (AI picks)', 'Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling'];
     const normField = (f: any) => {
       if (f.id === 'topic' && topicIdeas.length) return { ...f, type: 'select-or-custom', options: topicIdeas };
       if (f.id === 'level' || f.id === 'difficulty') return { ...f, type: 'select-or-custom', options: TEXT_LEVELS };
       if (f.id === 'slides') return { ...f, type: 'select-or-custom', options: SLIDE_COUNTS };
+      // Tone always offers "Any (AI picks)" first (the default), then any tones the
+      // tool's own schema defined.
+      if (f.id === 'tone') return { ...f, type: 'select-or-custom', options: ['Any (AI picks)', ...((f.options && f.options.length) ? f.options : TONE_OPTIONS.slice(1))] };
       return f;
     };
+    const hasTone = settings.some((f: any) => f.id === 'tone');
     const formFields = [
+      // A name for THIS presentation run (shown as its card title). Always visible.
+      { id: 'title', label: '📝 Title', type: 'text', placeholder: 'Name this presentation… (optional)' },
       ...settings.map(normField),
-      { id: 'category', label: 'Category', type: 'select-or-custom', options: GEN_CATEGORIES },
+      // If the tool schema didn't define a tone, offer a global one (AI-picks default).
+      ...(hasTone ? [] : [{ id: 'tone', label: 'Tone', type: 'select-or-custom', options: TONE_OPTIONS }]),
+      { id: 'category', label: 'Category', type: 'select-or-custom', options: ['Any (AI picks)', ...GEN_CATEGORIES] },
       // A free-text box for anything else the author wants woven into the lesson.
       { id: 'custom', label: 'Custom instructions (optional)', type: 'text', placeholder: 'e.g. focus on real-world examples, add a fun fact each slide…' },
     ];
-    // The essentials shown when the settings card is COLLAPSED: topic, level and
-    // slide count only (in that order), each pulled from the full field list so
-    // they keep their dropdown/suggest behavior.
-    const ESSENTIAL_IDS = ['topic', 'level', 'difficulty', 'slides'];
+    // The essentials shown when the settings card is COLLAPSED: the title, then
+    // topic, level and slide count (in that order), each pulled from the full field
+    // list so they keep their dropdown/suggest behavior.
+    const ESSENTIAL_IDS = ['title', 'topic', 'level', 'difficulty', 'slides'];
     const collapsedFields = ESSENTIAL_IDS
       .map((id) => formFields.find((f: any) => f.id === id))
       .filter(Boolean) as any[];
