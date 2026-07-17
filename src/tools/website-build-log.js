@@ -107,6 +107,16 @@ const WEBSITE_BUILD_LOG = [
     summary: 'The 🧱 Components tab got a search bar (instant substring filter across all columns) and an ✨ AI-search toggle: describe what you need, 🤖 Ask AI calls the new /api/dashboard/registry-search and only the rows the model picks stay visible.',
     recommendations: 'Generalize plain + AI search into PagedTable so every dashboard table gets it for free.',
     context: 'First AI-powered filter on the dashboard — natural-language queries over the site’s own component catalogue.' }),
+  entry({ date: '2026-07-17T16:10:00Z', commit: 'eb0d2d5', tokens: 40000, files: 3, status: 'done',
+    prompt: 'Components table needs an Inputs field (clipped with … + popup, still fully searchable).',
+    summary: 'Every registry entry documents its inputs (props, fields, buttons/toggles) in a new Inputs column; long cells clip to … with the 👁 popup while search matches the full hidden text.',
+    recommendations: 'Keep the inputs text updated when a component’s props change.',
+    context: 'The component catalogue now says HOW to drive each piece, not just what it is.' }),
+  entry({ date: '2026-07-17T16:30:00Z', commit: '3d49c0c', tokens: 25000, files: 4, status: 'done',
+    prompt: 'The double font was meant for the front-page Gallery title; keep its ✎ 🎨 👁 controls — the container will be reused on other sections.',
+    summary: 'SectionHeader (the shared section-title container) now defaults to a 36px double-size title with scaled ✎/🎨/👁 controls, applied everywhere it is used; the dashboard table double-font was reverted.',
+    recommendations: 'Reuse SectionHeader + useShelfTitle for any new section title.',
+    context: 'One shared header container now sets the look of every section title on the site.' }),
 ];
 
 module.exports = { WEBSITE_BUILD_LOG };
