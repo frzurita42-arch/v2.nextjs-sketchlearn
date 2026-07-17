@@ -735,25 +735,27 @@ async function getUserTokens(username) {
     return rows[0] ? Number(rows[0].balance) || 0 : 0;
   } catch (e) { console.error('Get tokens failed:', e.message); return 0; }
 }
-// Add (or subtract, with a negative delta) tokens; never drops below 0. Returns
-// the new balance.
+// Add (or subtract, with a negative delta) tokens. The balance MAY go negative —
+// a moderator's last generation is allowed to finish even if it overspends; once
+// negative they're dropped back to a plain user (handled by the usage logger).
+// Returns the new balance.
 async function addUserTokens(username, delta) {
   username = String(username || ''); delta = Math.trunc(Number(delta) || 0);
   if (!username) return 0;
   if (!db.pool) {
     const all = readJSON('user_tokens.json', {});
-    const next = Math.max(0, (Number(all[username]) || 0) + delta);
+    const next = (Number(all[username]) || 0) + delta;
     all[username] = next; writeJSON('user_tokens.json', all);
     return next;
   }
   try {
     const { rows } = await withDbTimeout(dbQuery(
-      `INSERT INTO user_tokens (username, balance, updated_at) VALUES ($1, GREATEST($2, 0), NOW())
-       ON CONFLICT (username) DO UPDATE SET balance = GREATEST(user_tokens.balance + $2, 0), updated_at = NOW()
+      `INSERT INTO user_tokens (username, balance, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (username) DO UPDATE SET balance = user_tokens.balance + $2, updated_at = NOW()
        RETURNING balance`,
       [username, delta]
     ), 6000, 'Add tokens');
-    return rows[0] ? Number(rows[0].balance) || 0 : 0;
+    return rows[0] ? Number(rows[0].balance) : 0;
   } catch (e) { console.error('Add tokens failed:', e.message); return 0; }
 }
 async function listUserTokens() {

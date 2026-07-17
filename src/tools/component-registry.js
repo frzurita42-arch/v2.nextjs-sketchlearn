@@ -156,7 +156,7 @@ const COMPONENT_REGISTRY = [
     location: 'src/db/platform.js (user_tokens) + app/api/tokens + app/api/dashboard (role scoping)',
     description: 'The backend behind roles & tokens: a user_tokens wallet table (per-user balance), /api/tokens (read your window; admin grants tokens & sees platform totals), and a role-scoped /api/dashboard (admin = all; moderator = only their own tools/runs/usage; user = none). Three roles: admin (no token cost, sees all), moderator (creates & edits only own work, spends tokens), user (navigates + non-token actions, token window only).',
     inputs: 'GET /api/tokens → { balance, myMonthly, (admin) platformMonthly + wallets }. POST /api/tokens { username, add } (admin) grants tokens & promotes user→moderator. /api/dashboard returns role-scoped data.',
-    recommendations: 'Deduct tokens per token-costing action server-side; block the action when balance hits 0.' }),
+    recommendations: 'Wallets debit per action (logUsage); a moderator’s LAST run may overspend into a negative balance, after which they auto-drop to a plain user until an admin tops them back to positive (which re-promotes them). Token-costing routes block at balance ≤ 0.' }),
   item({ name: 'Activity table', uses: 1, kind: 'component', createdAt: '2026-07-17T13:00:00Z',
     location: 'components/views/DashboardView.tsx (🕘 Activity) + src/db/activity.js',
     description: 'Audit trail of navigation and saved setting changes (who, what, before→after), backed by the activity_log DB table.',

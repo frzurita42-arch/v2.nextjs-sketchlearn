@@ -89,10 +89,11 @@ export async function POST(req: Request) {
 
   const balance = await addUserTokens(username, add);
 
-  // Promote a plain user to moderator once they have tokens (their "purchase"
-  // unlocks the creator tools). Never demote admins/moderators here.
+  // Promote a plain user to moderator once their wallet is actually POSITIVE
+  // (their "purchase" unlocks the creator tools). Topping up a user who is still
+  // in the red doesn't promote them until the debt is cleared. Never demote here.
   let promoted = false;
-  if (add > 0) {
+  if (add > 0 && balance > 0) {
     try {
       const users: any[] = await loadUsers();
       const idx = users.findIndex((u: any) => u.username === username);

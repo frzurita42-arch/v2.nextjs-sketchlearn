@@ -25,12 +25,26 @@ async function logUsage(rec = {}) {
     meta: (rec.meta && typeof rec.meta === 'object') ? rec.meta : {},
     createdAt: new Date().toISOString(),
   };
-  // Debit the user's token wallet by what this event cost. Admins are effectively
-  // unlimited (their balance is floored at 0 and never shown/enforced), so debiting
-  // them is harmless; a non-admin's balance actually goes down here. Best-effort —
-  // a wallet failure must never break logging or the generation.
+  // Debit the user's token wallet by what this event cost. Admins are unlimited
+  // (never debited). A moderator's last run is allowed to overspend into a NEGATIVE
+  // balance; once negative they drop back to a plain 'user' (their creator
+  // privileges lapse until an admin tops them up again). Best-effort — a wallet
+  // failure must never break logging or the generation.
   if (row.username && row.username !== 'anon' && row.totalTokens > 0) {
-    try { const { addUserTokens } = require('./platform'); await addUserTokens(row.username, -row.totalTokens); } catch { /* ignore */ }
+    try {
+      const { userState, loadUsers, persistUsers } = require('./users');
+      const users = (Array.isArray(userState.users) && userState.users.length) ? userState.users : await loadUsers();
+      const i = users.findIndex((u) => u.username === row.username);
+      const role = i >= 0 ? users[i].role : 'user';
+      if (role !== 'admin') {
+        const { addUserTokens } = require('./platform');
+        const bal = await addUserTokens(row.username, -row.totalTokens);
+        if (bal < 0 && role === 'moderator' && i >= 0) {
+          users[i] = { ...users[i], role: 'user' };
+          await persistUsers(users);
+        }
+      }
+    } catch { /* ignore */ }
   }
   if (!db.pool) { fileAppend(row); return row; }
   try {
