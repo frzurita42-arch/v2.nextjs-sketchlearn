@@ -43,6 +43,23 @@ export async function requireAuth(req: Request): Promise<AuthResult> {
   }
 }
 
+// Like requireAuth but NEVER fails: returns the verified user or null (a guest).
+// Read endpoints use this so non-signed-in visitors can browse public content.
+export async function optionalAuth(req: Request): Promise<{ user: LegacyUser | null }> {
+  await ensureReady();
+  try {
+    const payload: any = verifyAuthToken(bearer(req));
+    if (!payload) return { user: null };
+    const username = payload.u;
+    let user = userState.users.find((u: any) => u.username === username) || null;
+    if (!user && db.pool) {
+      userState.users = await loadUsers();
+      user = userState.users.find((u: any) => u.username === username) || null;
+    }
+    return { user: user || null };
+  } catch { return { user: null }; }
+}
+
 export async function requireAdmin(req: Request): Promise<AuthResult> {
   const result = await requireAuth(req);
   if (!result.ok) return result;

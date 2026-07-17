@@ -11,6 +11,9 @@ export interface SessionUser {
 class ApiClient {
   token: string | null = null;
   user: SessionUser | null = null;
+  // Registered by AppRoot: called when a GUEST (no token) hits a 401, so a
+  // sign-in / create-account prompt can pop up for gated actions like playing.
+  onAuthRequired: (() => void) | null = null;
 
   private hydrate() {
     if (typeof window === 'undefined') return;
@@ -77,6 +80,13 @@ class ApiClient {
       this.clearSession();
       location.reload();
       throw new Error('Session expired. Please sign in again.');
+    }
+    // A guest tried a signed-in-only action — prompt them to sign in / register.
+    if (res.status === 401 && !this.token) {
+      try { this.onAuthRequired?.(); } catch { /* ignore */ }
+      const e: any = new Error((data && data.error) || 'Please sign in to continue.');
+      e.status = 401; e.needsAuth = true;
+      throw e;
     }
     if (!res.ok) {
       const e: any = new Error((data && data.error) || `Request failed (${res.status})`);

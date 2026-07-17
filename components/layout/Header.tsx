@@ -4,7 +4,7 @@
 import { useApp } from '@/components/AppContext';
 
 export function Header() {
-  const { nav, user, logout, view } = useApp();
+  const { nav, user, logout, view, requireLogin } = useApp();
   // The current page gets an orange underline (the same orange as the ✏️ pencil)
   // so you always know where you are. A tool opened from a gallery keeps that
   // gallery highlighted.
@@ -26,8 +26,12 @@ export function Header() {
         {user && link('dashboard', 'Dashboard', 'nav-dashboard')}
       </div>
       <div className="topbar-user">
-        <span id="whoami">☺ {user?.username}</span>
-        <button id="logout-btn" className="btn small ghost" onClick={logout}>Sign out</button>
+        {user ? (<>
+          <span id="whoami">☺ {user.username}</span>
+          <button id="logout-btn" className="btn small ghost" onClick={logout}>Sign out</button>
+        </>) : (
+          <button className="btn small primary" onClick={requireLogin}>Sign in / Create account</button>
+        )}
       </div>
     </nav>
   );

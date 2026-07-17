@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuth, optionalAuth } from '@/lib/auth-guard';
 import { validateToolDefinition, slugify } from '@/lib/tool-schema';
 import { emojiThumb, defaultEmojiFor } from '@/lib/emoji-thumb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -36,8 +36,10 @@ function slimForList(def: any): any {
 // GET /api/tools            -> list visible tools (public + your own)
 // GET /api/tools?slug=xyz   -> one tool by slug
 export async function GET(req: Request) {
-  const a = await requireAuth(req);
-  if (!a.ok) return a.response;
+  // Guests (no token) may BROWSE public/unlisted content — the app lets them look
+  // around and only prompts sign-in when they try to play. So this read allows an
+  // optional user.
+  const { user } = await optionalAuth(req);
   const url = new URL(req.url);
   const slug = url.searchParams.get('slug');
   if (slug) {
@@ -50,14 +52,14 @@ export async function GET(req: Request) {
     if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // Private tools are visible only to their owner (or an admin). Unlisted tools
     // stay reachable by link (that's the point of the share button).
-    if (tool.visibility === 'private' && tool.owner !== a.user.username && a.user.role !== 'admin') {
+    if (tool.visibility === 'private' && tool.owner !== user?.username && user?.role !== 'admin') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ tool }, { headers: { 'Cache-Control': 'no-cache' } });
   }
-  const viewerIsAdmin = a.user.role === 'admin';
+  const viewerIsAdmin = user?.role === 'admin';
   const adminOwners = (userState.users || []).filter((u: any) => u.role === 'admin').map((u: any) => u.username);
-  const tools = await listTools({ includePrivateFor: a.user.username, adminOwners, viewerIsAdmin, limit: 60 });
+  const tools = await listTools({ includePrivateFor: user?.username || null, adminOwners, viewerIsAdmin, limit: 60 });
   // Flag tools an admin has liked (for the "liked by admin" gallery filter) and
   // drop the raw liker list from the public payload. Also SLIM the definition:
   // the gallery only needs the top-level fields (title, description, thumbnail,

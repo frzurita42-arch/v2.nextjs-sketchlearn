@@ -60,6 +60,8 @@ export interface AppContextValue {
   viewAs: ViewAs;
   setViewAs: (v: ViewAs) => void;
   eff: (owner?: string) => EffPerms;
+  // Open the sign-in / create-account screen (for guests hitting a gated action).
+  requireLogin: () => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

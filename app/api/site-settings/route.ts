@@ -34,10 +34,9 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   ...PAGE_HEADER_KEYS];
 const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner']);
 
-// GET /api/site-settings -> the editable page copy (any signed-in viewer reads it).
-export async function GET(req: Request) {
-  const a = await requireAuth(req);
-  if (!a.ok) return a.response;
+// GET /api/site-settings -> the editable page copy. Public (guests need it too, to
+// render the gallery banners/titles); it only exposes allow-listed page copy.
+export async function GET() {
   const all = await getSiteSettings();
   const out: Record<string, string> = {};
   for (const k of KEYS) if (typeof all?.[k] === 'string') out[k] = all[k];

@@ -40,6 +40,9 @@ export default function AppRoot() {
   const [view, setViewState] = useState<ViewName>('tools');   // Tools is the home page
   const [tick, setTick] = useState(0);
   const [demo, setDemo] = useState(false);
+  // Sign-in / create-account overlay (shown to guests who hit a gated action, or
+  // who tap "Sign in"). Guests otherwise browse the app freely.
+  const [authOpen, setAuthOpen] = useState(false);
   // "View as" preview (admins only) — render pages as a plain user / the OP / an
   // admin would see them, without changing the real session. Resets to self on
   // navigation so a preview never silently leaks across pages.
@@ -79,6 +82,10 @@ export default function AppRoot() {
   }, []);
   // Opt out of the browser's own scroll restoration — we do it ourselves.
   useEffect(() => { try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch { /* ignore */ } }, []);
+
+  // A guest hitting a signed-in-only endpoint (401) pops the auth overlay.
+  const requireLogin = useCallback(() => setAuthOpen(true), []);
+  useEffect(() => { API.onAuthRequired = () => setAuthOpen(true); return () => { API.onAuthRequired = null; }; }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -233,13 +240,10 @@ export default function AppRoot() {
 
   if (!mounted) return <main id="app" />;
 
-  if (!user) {
-    return (
-      <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner) }}>
-        <main id="app"><LoginView /></main>
-      </AppContext.Provider>
-    );
-  }
+  // NOTE: guests (no user) are NOT bounced to the login screen anymore — they can
+  // browse the app with plain-user privileges. The sign-in / create-account screen
+  // opens as an overlay when they tap "Sign in" or hit a gated action (see the
+  // authOpen overlay in the main return).
 
   const views: Record<ViewName, React.ReactNode> = {
     home: <HomeView />,
@@ -260,8 +264,19 @@ export default function AppRoot() {
   };
 
   return (
-    <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner) }}>
+    <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner), requireLogin }}>
       <Header />
+      {/* Sign-in / create-account overlay for guests. Dismissible so they can keep
+          browsing; closes automatically once they're signed in. */}
+      {authOpen && !user && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'auto', padding: '4vh 12px' }}
+          onClick={() => setAuthOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
+            <button aria-label="Close" onClick={() => setAuthOpen(false)} style={{ position: 'absolute', top: 6, right: 6, zIndex: 1, background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink)' }}>✕</button>
+            <LoginView onDone={() => setAuthOpen(false)} initialMode="register" />
+          </div>
+        </div>
+      )}
       {/* "View as" preview bar — admins can render any page as a plain user, the
           creator (OP), or an admin would see it (client-side preview only; server
           permissions are unchanged). Resets to "You" when you change pages.

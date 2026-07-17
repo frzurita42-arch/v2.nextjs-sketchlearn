@@ -1793,7 +1793,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           </div>
           )}
           <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-            {canPlay
+            {!app.user
+              ? <button className="btn green" onClick={() => app.requireLogin()}>▶ Sign in to play this lesson</button>
+              : canPlay
               ? <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
               : <p style={{ margin: 0, fontSize: 13, opacity: 0.7, fontStyle: 'italic' }}>Only moderators can generate a lesson. Browse the saved lessons below and open one to view it.</p>}
             {/* 💡 Per-play tooltip switch: some students don't have access to the
