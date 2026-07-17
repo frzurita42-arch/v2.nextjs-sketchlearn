@@ -113,7 +113,10 @@ export default function AppRoot() {
       appState.game = null;
       if (slug) {
         API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
-          if (r?.tool) { appState.activeTool = r.tool; setView('tool'); }
+          // tool→tool Back: the view string stays 'tool', so setView is a no-op and
+          // nothing would re-render (the page would appear "stuck"). rerender() bumps
+          // the keyed <main key={tool:slug}> so it remounts onto the restored tool.
+          if (r?.tool) { appState.activeTool = r.tool; setView('tool'); rerender(); }
         }).catch(() => { /* ignore */ });
       } else {
         setView(RESTORABLE.includes(v) ? v : 'tools');
@@ -122,7 +125,7 @@ export default function AppRoot() {
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [setView]);
+  }, [setView, rerender]);
 
   const login = useCallback((token: string, u: SessionUser) => {
     API.setSession(token, u);

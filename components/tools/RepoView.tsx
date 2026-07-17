@@ -1426,12 +1426,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  // Navigate the repo('tool' view) → a slide tool('tool' view). Because the view
-  // string doesn't change, we (a) pin THIS repo as an explicit browser-history
-  // entry first, so Back returns here (not to the home page), then (b) swap
-  // activeTool and rerender() to force the <main key={tool:slug}> to remount.
+  // Navigate the repo('tool' view) → a slide tool('tool' view). nav() pushes a
+  // single history entry for the slide tool (the repo is already the CURRENT
+  // entry), so Back pops straight to this repo; rerender() forces the keyed
+  // <main key={tool:slug}> to remount since the view string is unchanged.
   const goToTool = (tool: any) => {
-    try { window.history.pushState({ view: 'tool', tool: slug }, '', `?view=tool&tool=${encodeURIComponent(slug)}`); } catch { /* ignore */ }
     appState.activeTool = tool;
     app.nav('tool');
     app.rerender();
