@@ -16,7 +16,7 @@ import { PAGE_HEADERS } from '@/lib/page-settings';
 const headIcon: React.CSSProperties = { marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, verticalAlign: 'middle' };
 const CACHE = 'sl_site_settings';
 
-export function PageHeader({ page }: { page: keyof typeof PAGE_HEADERS | string }) {
+export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEADERS | string; left?: React.ReactNode; right?: React.ReactNode }) {
   const def = PAGE_HEADERS[page as string];
   // Seed synchronously from the shared site-settings cache so the DB copy paints
   // on the first frame (no flash of the default), then refresh from the server.
@@ -53,6 +53,12 @@ export function PageHeader({ page }: { page: keyof typeof PAGE_HEADERS | string 
 
   return (
     <div className="page-header-block">
+      {/* Optional corner slots — the banner is divided into three: the title stays
+          centered (untouched) while these float in the free left/right quarters
+          (e.g. the ☕ donations link and a ✈ share link). Absolutely positioned so
+          the centered banner never shifts. */}
+      {left && <div className="page-header-slot page-header-slot--left">{left}</div>}
+      {right && <div className="page-header-slot page-header-slot--right">{right}</div>}
       {editing === 'title' ? (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '0 auto' }}>
           <input value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus

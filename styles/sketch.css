@@ -104,6 +104,28 @@ h3 { font-size: 1.5rem; }
 }
 .view-sub { text-align: center; opacity: .8; margin-bottom: 26px; }
 
+/* ---------- page banner corner slots ----------
+   The banner is divided into three: the title/subtitle stay centered while these
+   two slots float in the free left/right quarters (☕ donations, ✈ share). They
+   are absolutely positioned so the centered banner never moves. */
+.page-header-block { position: relative; }
+.page-header-slot {
+  position: absolute;
+  top: 2px;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+}
+.page-header-slot--left { left: 4px; }
+.page-header-slot--right { right: 4px; }
+.banner-link { transition: transform .12s ease; }
+.banner-link:hover { transform: translateY(-2px) rotate(-2deg); }
+/* Phone screens: the big centered title needs the full width, so hide the corner
+   objects entirely. They show only on tablets and larger (≥ 640px). */
+@media (max-width: 639px) {
+  .page-header-slot { display: none; }
+}
+
 /* ---------- demo-mode banner (shown when no AI provider is connected) ---------- */
 .demo-banner {
   display: flex;

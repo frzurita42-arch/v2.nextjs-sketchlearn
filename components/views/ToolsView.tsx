@@ -6,6 +6,7 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { perPageOf } from '@/lib/page-settings';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { CoffeeMugLink, PaperPlaneLink } from '@/components/ui/BannerLinks';
 import { useApp } from '@/components/AppContext';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { type FilterKey } from '@/components/ui/Collection';
@@ -313,8 +314,12 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
           </div>
         </div>
       )}
-      {/* Both landing pages use the one reusable DB-driven <PageHeader>. */}
-      <PageHeader page={isSlides ? 'slides' : 'repos'} />
+      {/* Both landing pages use the one reusable DB-driven <PageHeader>. The
+          Repositories banner also fills its free left/right quarters with the ✈
+          share and ☕ donation corner links. */}
+      <PageHeader page={isSlides ? 'slides' : 'repos'}
+        left={isSlides ? undefined : <PaperPlaneLink />}
+        right={isSlides ? undefined : <CoffeeMugLink />} />
       {(!loading && tools.length === 0) ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>
