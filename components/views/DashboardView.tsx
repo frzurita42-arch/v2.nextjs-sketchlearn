@@ -229,6 +229,13 @@ export function DashboardView() {
   // first, 'asc' = least used first.
   const [regSort, setRegSort] = useState<'' | 'desc' | 'asc'>('');
   const [repoPreview, setRepoPreview] = useState<{ title: string; cardTitle: string; kind: string; url: string; lastEdited: string } | null>(null);
+  // Clean password-edit popup (admin): pick a user, type a new password (hashed
+  // server-side; the plain text is never stored). Replaces the old prompt().
+  const [pwEdit, setPwEdit] = useState<{ username: string } | null>(null);
+  const [pwVal, setPwVal] = useState('');
+  const [pwShow, setPwShow] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState('');
   // Soft-deleted rows: server-persisted "table:id" keys + any deleted this session.
   const hiddenRows = dash?.hiddenRows || [];
   const [hiddenExtra, setHiddenExtra] = useState<Set<string>>(new Set());
@@ -285,11 +292,14 @@ export function DashboardView() {
       setNewUser(''); setNewPass(''); setUserErr(''); setReload(n => n + 1);
     } catch (e: any) { setUserErr(e.message); }
   };
-  const setPassword = async (username: string) => {
-    const p = prompt(`New password for ${username}:`);
-    if (!p) return;
-    try { await API.post(`/api/users/${encodeURIComponent(username)}/password`, { password: p }); alert('Password updated.'); }
-    catch (e: any) { alert(e.message); }
+  // Open the clean password popup for a user.
+  const setPassword = (username: string) => { setPwEdit({ username }); setPwVal(''); setPwShow(false); setPwMsg(''); };
+  const savePassword = async () => {
+    if (!pwEdit || !pwVal) return;
+    setPwBusy(true); setPwMsg('');
+    try { await API.post(`/api/users/${encodeURIComponent(pwEdit.username)}/password`, { password: pwVal }); setPwMsg('✓ Password updated (stored hashed).'); setPwVal(''); setTimeout(() => setPwEdit(null), 900); }
+    catch (e: any) { setPwMsg(e?.message || 'Could not update the password.'); }
+    setPwBusy(false);
   };
   const delUser = async (username: string) => {
     if (!confirm(`Delete user ${username}? Their game history stays in the records.`)) return;
@@ -401,7 +411,7 @@ export function DashboardView() {
   const userHeaders = ['Username', 'Role', 'Created', 'Games', 'Actions'];
   const userRows: Cell[][] = vUsers.map((u: any) => [u.username, u.role, fmtDay(u.createdAt), u.gamesPlayed, {
     node: <>
-      <button className="btn small" onClick={() => setPassword(u.username)}>Set password</button>
+      <button className="btn small" onClick={() => setPassword(u.username)}>🔑 Password</button>
       {u.username !== app.user?.username && <button className="btn small ghost" onClick={() => delUser(u.username)}>✘ delete</button>}
     </>,
   }]);
@@ -534,6 +544,26 @@ export function DashboardView() {
 
   return (
     <>
+      {/* Clean password-edit popup (admin). The new password is hashed on the
+          server (scrypt) — the plain text is only used to compute the hash. */}
+      {pwEdit && (
+        <div onClick={() => setPwEdit(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 420, width: '100%', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><b>🔑 Set password — @{pwEdit.username}</b><button className="btn small ghost" onClick={() => setPwEdit(null)}>✕</button></div>
+            <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>Stored hashed (scrypt + salt) — the platform never keeps the plain password.</p>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type={pwShow ? 'text' : 'password'} value={pwVal} autoFocus placeholder="New password"
+                onChange={e => setPwVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') savePassword(); }}
+                style={{ flex: 1, padding: '6px 9px', borderRadius: 8, border: '2px solid var(--ink)' }} />
+              <button className="btn small ghost" title={pwShow ? 'Hide' : 'Show'} onClick={() => setPwShow(s => !s)}>{pwShow ? '🙈' : '👁'}</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+              <button className="btn green" disabled={pwBusy || !pwVal} onClick={savePassword}>{pwBusy ? 'Saving…' : 'Save password'}</button>
+              {pwMsg && <span style={{ fontSize: 12, opacity: 0.8 }}>{pwMsg}</span>}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Title + subtitle container (reusable, DB-driven header). */}
       <PageHeader page="dashboard" />
       {dbOn === false && (
