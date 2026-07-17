@@ -766,6 +766,67 @@ async function listUserTokens() {
   } catch (e) { console.error('List tokens failed:', e.message); return {}; }
 }
 
+// ---------------------------------------------------------------------------
+// coupons — admin-generated redeemable credit codes.
+// ---------------------------------------------------------------------------
+async function createCoupon({ code, credits, image, createdBy }) {
+  code = String(code || ''); credits = Math.trunc(Number(credits) || 0);
+  if (!code || credits <= 0) return null;
+  const row = { code, credits, image: image || '', createdBy: createdBy || '', createdAt: new Date().toISOString(), redeemedBy: null, redeemedAt: null };
+  if (!db.pool) {
+    const all = readJSON('coupons.json', {});
+    all[code] = row; writeJSON('coupons.json', all);
+    return row;
+  }
+  try {
+    await withDbTimeout(dbQuery(
+      `INSERT INTO coupons (code, credits, image, created_by) VALUES ($1,$2,$3,$4)`,
+      [code, credits, image || '', createdBy || '']
+    ), 8000, 'Create coupon');
+    return row;
+  } catch (e) { console.error('Create coupon failed:', e.message); return null; }
+}
+async function listCoupons({ limit = 100 } = {}) {
+  if (!db.pool) {
+    const all = readJSON('coupons.json', {});
+    return Object.values(all).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, limit);
+  }
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT code, credits, created_by, created_at, redeemed_by, redeemed_at FROM coupons ORDER BY created_at DESC LIMIT $1', [limit]), 8000, 'List coupons');
+    return rows.map(r => ({ code: r.code, credits: Number(r.credits) || 0, createdBy: r.created_by, createdAt: r.created_at ? new Date(r.created_at).toISOString() : null, redeemedBy: r.redeemed_by, redeemedAt: r.redeemed_at ? new Date(r.redeemed_at).toISOString() : null }));
+  } catch (e) { console.error('List coupons failed:', e.message); return []; }
+}
+// Redeem a coupon for `username` exactly once. Returns { ok, credits } or an error
+// reason. The DB path uses a conditional UPDATE so two people can't both redeem it.
+async function redeemCoupon(code, username) {
+  code = String(code || '').trim().toUpperCase(); username = String(username || '');
+  if (!code) return { ok: false, error: 'Enter a coupon code.' };
+  if (!username) return { ok: false, error: 'Sign in to redeem a coupon.' };
+  if (!db.pool) {
+    const all = readJSON('coupons.json', {});
+    const c = all[code];
+    if (!c) return { ok: false, error: 'No such coupon.' };
+    if (c.redeemedBy) return { ok: false, error: 'This coupon was already redeemed.' };
+    c.redeemedBy = username; c.redeemedAt = new Date().toISOString();
+    all[code] = c; writeJSON('coupons.json', all);
+    return { ok: true, credits: Number(c.credits) || 0 };
+  }
+  try {
+    const { rows } = await withDbTimeout(dbQuery(
+      `UPDATE coupons SET redeemed_by = $2, redeemed_at = NOW()
+       WHERE code = $1 AND redeemed_by IS NULL
+       RETURNING credits`,
+      [code, username]
+    ), 8000, 'Redeem coupon');
+    if (!rows.length) {
+      const { rows: exist } = await withDbTimeout(dbQuery('SELECT redeemed_by FROM coupons WHERE code = $1', [code]), 6000, 'Coupon check');
+      if (!exist.length) return { ok: false, error: 'No such coupon.' };
+      return { ok: false, error: 'This coupon was already redeemed.' };
+    }
+    return { ok: true, credits: Number(rows[0].credits) || 0 };
+  } catch (e) { console.error('Redeem coupon failed:', e.message); return { ok: false, error: 'Could not redeem right now — try again.' }; }
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, listRecentEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
@@ -777,4 +838,5 @@ module.exports = {
   getDonation, setDonation,
   getTtsCache, setTtsCache,
   getUserTokens, addUserTokens, listUserTokens,
+  createCoupon, listCoupons, redeemCoupon,
 };

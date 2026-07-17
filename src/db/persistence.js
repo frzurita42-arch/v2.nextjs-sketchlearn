@@ -274,6 +274,22 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // coupons — admin-generated redeemable codes worth a number of credits (tokens).
+  // `image` is the generated coupon art (data URI / blob URL). Redeeming credits a
+  // user's wallet once, then the coupon is spent.
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS coupons (
+      code TEXT PRIMARY KEY,
+      credits BIGINT NOT NULL,
+      image TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      redeemed_by TEXT,
+      redeemed_at TIMESTAMPTZ
+    )
+  `);
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_coupons_created ON coupons(created_at DESC)');
 }
 
 // Persist every AI generation to a JSON file, as the site's content source of record.
