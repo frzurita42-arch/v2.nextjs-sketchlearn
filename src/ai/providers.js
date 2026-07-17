@@ -545,7 +545,11 @@ async function generateImageWithMeta(prompt, opts = {}) {
     gemini: () => (geminiEnabled ? geminiImage(prompt) : null),
     pollinations: () => (pollinationsEnabled ? pollinationsImage(prompt) : null),
   };
-  const defaultOrder = ['openai', 'grok', 'replicate', 'leonardo', 'gemini', 'pollinations'];
+  // Preferred order: Gemini (Nano Banana) → OpenAI (gpt-image-1) → Leonardo → then
+  // the rest, with keyless Pollinations always last as the free fallback. Each is
+  // skipped unless its API key is configured, so this is the priority among the
+  // providers that ARE enabled.
+  const defaultOrder = ['gemini', 'openai', 'leonardo', 'grok', 'replicate', 'pollinations'];
   const pick = opts && opts.provider;
   const order = (pick && backends[pick]) ? [pick, ...defaultOrder.filter((p) => p !== pick)] : defaultOrder;
   for (const p of order) {
