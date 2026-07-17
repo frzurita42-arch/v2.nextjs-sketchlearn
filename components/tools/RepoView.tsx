@@ -967,9 +967,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const permanentControls: React.ReactNode[] = [favBtn, copyBtn];
   // 🔀 Order this card's own nested cards. One button whose BOTTOM line changes
   // colour per mode (manual = none, ascending = green, descending = blue,
-  // random = orange); the hover title spells out each state. Shown only when
-  // there is more than one nested card to reorder.
-  if (kids.length > 1) {
+  // random = orange); the hover title spells out each state. Moderator/admin
+  // only, and only when there is more than one nested card to reorder.
+  if (ctx.canEdit && kids.length > 1) {
     const CS_COLOR: Record<typeof childSort, string> = { manual: 'transparent', asc: '#2e9e57', desc: '#5c80bc', random: '#f0a202' };
     const CS_TIP: Record<typeof childSort, string> = {
       manual: 'Order of nested cards: Manual (as arranged) — click to sort',
@@ -1650,8 +1650,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           searchPlaceholder="🔍 search cards"
           belowToolbar={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-              {/* Row 1 — display & add controls (everyone). */}
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {/* Row 1 — USER CONTROLS: the display & add buttons, grouped in the
+                  same labelled dashed OutlineBox as the other filter sections. */}
+              <OutlineBox title="USER CONTROLS" maxWidth={1000}>
                 {cards.some((c) => (c.children || []).length > 0) && (
                   <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
                     onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
@@ -1660,7 +1661,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   title="Sort the cards — click to cycle: Manual (as arranged) → ↑ Oldest first → ↓ Newest first → 🔀 Random"
                   onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
                 {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
-              </div>
+              </OutlineBox>
 
               {/* Row 2 — owner feature toggles, grouped in the labelled dashed
                   OutlineBox (the reusable panel the gallery filters also use). */}
