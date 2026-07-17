@@ -57,7 +57,7 @@ export function CardShell(p: CardShellProps) {
         </div>
       : hasImg
       ? <div style={{ position: 'relative', cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
-          <img src={thumbnail as string} alt="" loading="lazy" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
+          <img src={thumbnail as string} alt="" loading="eager" decoding="async" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
           {p.overlay}
         </div>
       : <div style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', textAlign: 'center', padding: 6, cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>

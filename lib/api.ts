@@ -49,6 +49,10 @@ class ApiClient {
     try {
       res = await fetch(url, {
         method,
+        // Always hit the network — never let the browser/CDN serve a stale cached
+        // API response (which caused e.g. the repo gallery to show only some cards
+        // on the first load after a deploy until a manual refresh).
+        cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
