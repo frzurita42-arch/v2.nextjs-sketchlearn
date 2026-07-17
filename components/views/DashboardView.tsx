@@ -12,6 +12,7 @@ import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
 import { PAGE_FIELDS, type PageTextField } from '@/lib/page-settings';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { SLIDE_ACTIVITIES } from '@/lib/slide-activities';
 import { logActivity, rememberPreset, recallPreset } from '@/lib/activity-log';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
@@ -286,6 +287,12 @@ export function DashboardView() {
     e.name, e.kind, e.description || '—', e.location || '—', e.recommendations || '—', fmtDate(e.createdAt),
   ]);
   const regIds = vReg.map((e: any) => String(e.id));
+  // The catalogue of slide activities a generated slide-tool is built from — the
+  // record of "templates & activities" behind the study-path tool generator.
+  const vAct = SLIDE_ACTIVITIES.filter((a: any) => notHidden('activities')(a.key));
+  const actHeaders = ['Activity', 'Type', 'Description'];
+  const actRows: (string | number)[][] = vAct.map((a: any) => [a.label, a.kind, a.description]);
+  const actIds = vAct.map((a: any) => String(a.key));
   const gameHeaders = ['User', 'Date', 'Topic', 'Concept', 'Level', 'Score', 'Time'];
   const gameRows: (string | number)[][] = vGames.map((g: any) => [g.username, fmtDate(g.finishedAt), g.topic, g.concept, g.level, `${g.correct}/${g.total}`, `${Math.floor(g.durationSec / 60)}:${String(g.durationSec % 60).padStart(2, '0')}`]);
   const gameIds = vGames.map((g: any, i: number) => String(g.id || g.finishedAt || i));
@@ -352,6 +359,7 @@ export function DashboardView() {
     { key: 'components', label: '🧩 Component usage', count: vComp.length, headers: compHeaders, rows: compRows, rowIds: compIds, empty: 'No component usage yet.', csv: () => exportRows('component-usage', compHeaders, compRows), chart: { type: 'donut', data: compChart, title: 'Which components are used' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Every row is one component used on a played slide — its type, how it was used, whether the learner got it right, and the slide template. Real rows come from saved decks; clearly-marked (example) rows backfill so the AI can learn which components suit which subjects.</p> },
     { key: 'build', label: '🏗️ Website building', count: vBuild.length, headers: buildHeaders, rows: buildRows, rowIds: buildIds, empty: 'No build log yet.', csv: () => exportRows('website-build-log', buildHeaders, buildRows), chart: { type: 'bar', data: buildChart, title: 'Est. tokens per change' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The site’s own construction log: each request (prompt), a short result summary, future recommendations, a context note on what the site is/does, plus estimated tokens, files and the commit. Estimated build tokens so far: <b>{buildTokens.toLocaleString()}</b>.</p> },
     { key: 'registry', label: '🧱 Components', count: vReg.length, headers: regHeaders, rows: regRows, rowIds: regIds, empty: 'No components registered yet.', csv: () => exportRows('component-registry', regHeaders, regRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Your containers & components: what each is, where it lives, a usage/improvement note, and when it was added. Tell me to add or remove entries and I’ll update this table.</p> },
+    { key: 'activities', label: '🎛️ Slide activities', count: vAct.length, headers: actHeaders, rows: actRows, rowIds: actIds, empty: 'No activities.', csv: () => exportRows('slide-activities', actHeaders, actRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The engaging activities (no tooltips) a generated slide tool is built from. “Create a slide tool from this repo” in a study path wires all of these into the new presentation generator, then its prompts generate the slides.</p> },
     {
       key: 'users', label: '👥 Users', count: vUsers.length, headers: userHeaders, rows: userRows, rowIds: vUsers.map((u: any) => String(u.username)), empty: 'No users.',
       chart: { type: 'donut', data: userChart, title: 'Users by role' },
