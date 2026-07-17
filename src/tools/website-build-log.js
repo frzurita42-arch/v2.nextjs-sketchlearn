@@ -127,6 +127,11 @@ const WEBSITE_BUILD_LOG = [
     summary: 'RepoView shows 6 cards at a time in depth-first order (nested cards count; subtrees trim mid-branch), 📖 Read more reveals the next 6 with a Showing X of Y counter; the AI topic-picks and More-like-this end-of-page shelves were removed.',
     recommendations: 'Optionally remember the revealed chunk count per repo; add a Show less.',
     context: 'Repo reading flow is now progressive; tool pages end at the discussion.' }),
+  entry({ date: '2026-07-17T19:20:00Z', commit: '0b7688e', tokens: 60000, files: 3, status: 'done',
+    prompt: 'Too many card buttons — put them behind a ⚙️ settings popup (mod/admin only) with names, descriptions, active states, hover effect and pagination; user buttons stay on the card.',
+    summary: 'Repo cards now show one ⚙️ (canEdit only) opening the Card-settings popup: hoverable tiles (emoji + name + description + green state chip), 8 per page with Prev/Next; every moderator icon moved in. ★ 📋 status chip 📎/📁 open 🖼️ view 🎬 stay on the card.',
+    recommendations: 'Extract the popup into a reusable <ControlPanel> for other card types.',
+    context: 'Cards went from ~12 mixed icons to 3 for moderators — and stayed unchanged for normal users.' }),
 ];
 
 module.exports = { WEBSITE_BUILD_LOG };
