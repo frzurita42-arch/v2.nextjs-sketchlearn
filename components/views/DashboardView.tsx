@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
 import { PAGE_FIELDS, type PageTextField } from '@/lib/page-settings';
+import { logActivity, rememberPreset, recallPreset } from '@/lib/activity-log';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
 import { MiniChart, type ChartType, type Datum } from '@/components/ui/MiniChart';
@@ -90,7 +91,10 @@ export function DashboardView() {
   const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[] } | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
-  const [tab, setTab] = useState(0);
+  // Remember the last dashboard section so it reopens where you left off, and log
+  // the navigation to the activity trail.
+  const [tab, setTab] = useState<number>(() => { const v = parseInt(recallPreset('dash_tab', '0'), 10); return Number.isFinite(v) && v >= 0 ? v : 0; });
+  const selectTab = (i: number, label?: string) => { setTab(i); rememberPreset('dash_tab', String(i)); logActivity('nav', 'dashboard', { section: label || `#${i}` }); };
   const [newUser, setNewUser] = useState('');
   const [newPass, setNewPass] = useState('');
   const [newRole, setNewRole] = useState('user');
@@ -135,6 +139,7 @@ export function DashboardView() {
     try {
       const r: any = await API.put('/api/tools/settings', { slug: editTool.slug, title, description: editTool.description.trim() });
       if (r?.ok === false) { setEditErr('Save failed — you may not own this tool.'); setEditBusy(false); return; }
+      logActivity('edit', `tool: ${editTool.slug}`, { title, description: editTool.description.trim() });
       // Reflect the change locally without a full reload.
       setDash(d => d ? { ...d, tools: d.tools.map((t: any) => t.slug === editTool.slug ? { ...t, title, description: editTool.description.trim() } : t) } : d);
       setEditTool(null);
@@ -145,6 +150,9 @@ export function DashboardView() {
   // the Repositories & Slides landing pages — stored in the site_settings DB table.
   const [pageText, setPageText] = useState<Record<string, string>>({});
   useEffect(() => { API.get('/api/site-settings').then((r: any) => setPageText(r?.settings || {})).catch(() => { /* ignore */ }); }, [reload]);
+  // Activity trail (navigation + preset/setting changes across the app).
+  const [activity, setActivity] = useState<any[]>([]);
+  useEffect(() => { API.get('/api/activity?limit=300').then((r: any) => setActivity(Array.isArray(r?.items) ? r.items : [])).catch(() => { /* ignore */ }); }, [reload, tab]);
   const [editField, setEditField] = useState<{ field: PageTextField; value: string } | null>(null);
   const [fieldBusy, setFieldBusy] = useState(false);
   const [fieldErr, setFieldErr] = useState('');
@@ -158,6 +166,7 @@ export function DashboardView() {
     try {
       const r: any = await API.put('/api/site-settings', { key: f.key, value });
       if (r?.error) { setFieldErr(r.error); setFieldBusy(false); return; }
+      logActivity('edit', `page-text: ${f.key}`, { page: f.page, field: f.label, from: pageText[f.key] ?? f.default, to: value });
       setPageText(s => ({ ...s, [f.key]: value }));
       setEditField(null);
     } catch (e: any) { setFieldErr(e?.message || 'Could not save.'); }
@@ -310,10 +319,10 @@ export function DashboardView() {
   // Pages in the pager: the data tables, then a Data-analysis page and an AI-visual
   // page (each with a dropdown to pick which table / all tables).
   const TABLE_PAGES = sections.length;
-  const ANALYSIS = TABLE_PAGES, VISUALS = TABLE_PAGES + 1, PAGETEXT = TABLE_PAGES + 2;
-  const totalPages = TABLE_PAGES + 3;
+  const ANALYSIS = TABLE_PAGES, VISUALS = TABLE_PAGES + 1, PAGETEXT = TABLE_PAGES + 2, ACTIVITY = TABLE_PAGES + 3;
+  const totalPages = TABLE_PAGES + 4;
   const cur = Math.min(tab, totalPages - 1);
-  const pageLabels = [...sections.map(s => s.label), '📊 Data analysis', '🎨 AI visuals', '📝 Page text'];
+  const pageLabels = [...sections.map(s => s.label), '📊 Data analysis', '🎨 AI visuals', '📝 Page text', '🕘 Activity'];
   const tableOptions = [{ key: 'none', label: '— none —' }, { key: 'all', label: '🗂️ All tables' }, ...sections.map(s => ({ key: s.key, label: s.label }))];
 
   // Generate an AI visual from the selected table (or all tables) + output style
@@ -352,7 +361,7 @@ export function DashboardView() {
       {/* Section picker container (the filtering buttons). */}
       <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '0 0 4px' }}>
         {pageLabels.map((lbl, i) => (
-          <button key={i} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => setTab(i)}>{lbl}{i < TABLE_PAGES ? <span style={{ opacity: 0.6 }}> ({sections[i].count})</span> : null}</button>
+          <button key={i} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => selectTab(i, lbl)}>{lbl}{i < TABLE_PAGES ? <span style={{ opacity: 0.6 }}> ({sections[i].count})</span> : null}</button>
         ))}
       </div>
       {rule}
@@ -455,12 +464,33 @@ export function DashboardView() {
         </div>
       )}
 
+      {cur === ACTIVITY && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+            <h3 style={{ margin: 0 }}>🕘 Activity <span style={{ opacity: 0.5, fontWeight: 400 }}>({activity.length})</span></h3>
+            {activity.length > 0 && <button className="btn small" onClick={() => exportRows('activity', ['When', 'User', 'Action', 'Target', 'Detail'], activity.map((e: any) => [fmtDate(e.createdAt), e.username || '', e.action || '', e.target || '', JSON.stringify(e.detail || {})]))}>⬇ CSV</button>}
+          </div>
+          <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>Navigation + every saved setting/preset change across the site (who, what, old→new), newest first — from the <code>activity_log</code> database table.</p>
+          <PagedTable
+            headers={['When', 'User', 'Action', 'Target', 'Detail']}
+            rows={activity.map((e: any) => {
+              const d = e.detail || {};
+              const detail = d.from !== undefined || d.to !== undefined
+                ? `${d.from ?? '—'} → ${d.to ?? '—'}`
+                : Object.keys(d).length ? Object.entries(d).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ') : '—';
+              return [fmtDate(e.createdAt), `@${e.username || 'anon'}`, e.action || '—', e.target || '—', detail];
+            })}
+            empty="No activity yet — navigate the dashboard or change a setting and it lands here."
+          />
+        </div>
+      )}
+
       {rule}
       {/* Page pager container. */}
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
-        <button className="btn small ghost" disabled={cur <= 0} onClick={() => setTab(cur - 1)}>‹ Prev</button>
+        <button className="btn small ghost" disabled={cur <= 0} onClick={() => selectTab(cur - 1, pageLabels[cur - 1])}>‹ Prev</button>
         <span style={{ fontSize: 12, opacity: 0.7 }}>Page {cur + 1} / {totalPages}</span>
-        <button className="btn small ghost" disabled={cur >= totalPages - 1} onClick={() => setTab(cur + 1)}>Next ›</button>
+        <button className="btn small ghost" disabled={cur >= totalPages - 1} onClick={() => selectTab(cur + 1, pageLabels[cur + 1])}>Next ›</button>
       </div>
       {rule}
 

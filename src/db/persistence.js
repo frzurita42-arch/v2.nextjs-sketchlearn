@@ -227,6 +227,21 @@ async function initDatabase() {
     )
   `);
   await dbQuery('CREATE INDEX IF NOT EXISTS idx_ai_usage_user ON ai_usage(username, created_at DESC)');
+
+  // activity_log — a trail of navigation + setting/preset changes across the app,
+  // shown as the dashboard's Activity table. `detail` holds the specifics
+  // (old→new value, filter chosen, tab opened…).
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id TEXT PRIMARY KEY,
+      username TEXT,
+      action TEXT,
+      target TEXT,
+      detail JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await dbQuery('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at DESC)');
 }
 
 // Persist every AI generation to a JSON file, as the site's content source of record.
