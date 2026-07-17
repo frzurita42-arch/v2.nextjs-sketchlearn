@@ -20,6 +20,7 @@ import { logActivity, rememberPreset, recallPreset } from '@/lib/activity-log';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
 import { MiniChart, type ChartType, type Datum } from '@/components/ui/MiniChart';
+import { TokenWindow } from '@/components/dashboard/TokenWindow';
 
 // Output styles for the AI visual generator (matches the API's KINDS).
 const VISUAL_KINDS: { key: string; label: string }[] = [
@@ -105,6 +106,7 @@ export function DashboardView() {
   const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[]; buildLog?: any[]; registry?: any[]; hiddenRows?: string[] } | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [tokens, setTokens] = useState<any>(null);
   // Remember the last dashboard section so it reopens where you left off, and log
   // the navigation to the activity trail.
   const [tab, setTab] = useState<number>(() => { const v = parseInt(recallPreset('dash_tab', '0'), 10); return Number.isFinite(v) && v >= 0 ? v : 0; });
@@ -191,11 +193,20 @@ export function DashboardView() {
   };
 
   useEffect(() => {
-    if (app.user?.role !== 'admin') { app.nav('home'); return; }
+    if (!app.user) { app.nav('home'); return; }
+    const role = app.user.role;
     let cancelled = false;
-    Promise.all([API.get('/api/users'), API.get('/api/games'), API.get('/api/dashboard')])
-      .then(([u, g, d]: any[]) => { if (!cancelled) { setUsersList(u); setGames(g); setDash(d && Array.isArray(d.tools) ? d : { tools: [], runs: [] }); } })
-      .catch((e: any) => { if (!cancelled) setError(e.message); });
+    // Everyone gets their token window.
+    API.get('/api/tokens').then((t: any) => { if (!cancelled) setTokens(t); }).catch(() => { /* ignore */ });
+    if (role === 'admin') {
+      Promise.all([API.get('/api/users'), API.get('/api/games'), API.get('/api/dashboard')])
+        .then(([u, g, d]: any[]) => { if (!cancelled) { setUsersList(u); setGames(g); setDash(d && Array.isArray(d.tools) ? d : { tools: [], runs: [] }); } })
+        .catch((e: any) => { if (!cancelled) setError(e.message); });
+    } else if (role === 'moderator') {
+      // Moderators get their OWN work (server-scoped); no users/games access.
+      API.get('/api/dashboard').then((d: any) => { if (!cancelled) setDash(d && Array.isArray(d.tools) ? d : { tools: [], runs: [] }); }).catch((e: any) => { if (!cancelled) setError(e.message); });
+    }
+    // Plain users: token window only.
     return () => { cancelled = true; };
   }, [reload, app]);
 
@@ -222,6 +233,40 @@ export function DashboardView() {
   const hiddenRows = dash?.hiddenRows || [];
   const [hiddenExtra, setHiddenExtra] = useState<Set<string>>(new Set());
   const hidden = useMemo(() => new Set<string>([...hiddenRows, ...Array.from(hiddenExtra)]), [hiddenRows, hiddenExtra]);
+
+  // Non-admins get a focused dashboard: a plain USER sees only their 🎟 token
+  // window; a MODERATOR also sees their own work (tools they built + runs of those
+  // tools). None of the site-internal / other-users' tables are shown. (All hooks
+  // above have run, so this early return is safe.)
+  const myRole = app.user?.role || 'user';
+  if (myRole !== 'admin') {
+    const isMod = myRole === 'moderator';
+    const rule = <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '18px auto', maxWidth: 820 }} />;
+    return (
+      <>
+        <PageHeader page="dashboard" />
+        <SectionHeader title="🎟 My tokens" maxWidth={820} />
+        <TokenWindow tokens={tokens} isAdmin={false} />
+        {error && <p style={{ color: 'var(--danger,#e4572e)', textAlign: 'center', fontSize: 13 }}>{error}</p>}
+        {isMod && (<>
+          {rule}
+          <SectionHeader title="🗂 My work" maxWidth={820} />
+          <div style={{ maxWidth: 820, margin: '0 auto', display: 'grid', gap: 14 }}>
+            <div className="card"><h3 style={{ margin: '0 0 6px' }}>🎬 My slide tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({slideTools.length})</span></h3>
+              <PagedTable compact headers={['Title', 'Slides', 'Visibility', 'Created']} empty="You haven't created any slide tools yet."
+                rows={slideTools.map((t: any) => [t.title, t.slideCount || 0, t.visibility, fmtDate(t.createdAt)])} /></div>
+            <div className="card alt"><h3 style={{ margin: '0 0 6px' }}>📁 My repositories <span style={{ opacity: 0.5, fontWeight: 400 }}>({repoTools.length})</span></h3>
+              <PagedTable compact headers={['Title', 'Cards', 'Visibility', 'Created']} empty="You haven't created any repositories yet."
+                rows={repoTools.map((t: any) => [t.title, t.cardCount || 0, t.visibility, fmtDate(t.createdAt)])} /></div>
+            <div className="card"><h3 style={{ margin: '0 0 6px' }}>▶️ Runs of my tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({runs.length})</span></h3>
+              <PagedTable compact headers={['Tool', 'User', 'Topic', 'Score', 'When']} empty="No one has played your tools yet."
+                rows={runs.map((r: any) => [r.toolTitle, r.user, r.topic, r.score == null ? '—' : String(r.score), fmtDate(r.createdAt)])} /></div>
+          </div>
+        </>)}
+      </>
+    );
+  }
+
   const rowKey = (table: string, id: string) => `${table}:${id}`;
   const notHidden = (table: string) => (id: string) => !hidden.has(rowKey(table, id));
   const hideRow = (table: string, id: string) => {
@@ -461,10 +506,10 @@ export function DashboardView() {
   // Pages in the pager: the data tables, then a Data-analysis page and an AI-visual
   // page (each with a dropdown to pick which table / all tables).
   const TABLE_PAGES = sections.length;
-  const ANALYSIS = TABLE_PAGES, VISUALS = TABLE_PAGES + 1, PAGETEXT = TABLE_PAGES + 2, ACTIVITY = TABLE_PAGES + 3;
-  const totalPages = TABLE_PAGES + 4;
+  const TOKENS = TABLE_PAGES, ANALYSIS = TABLE_PAGES + 1, VISUALS = TABLE_PAGES + 2, PAGETEXT = TABLE_PAGES + 3, ACTIVITY = TABLE_PAGES + 4;
+  const totalPages = TABLE_PAGES + 5;
   const cur = Math.min(tab, totalPages - 1);
-  const pageLabels = [...sections.map(s => s.label), '📊 Data analysis', '🎨 AI visuals', '📝 Page text', '🕘 Activity'];
+  const pageLabels = [...sections.map(s => s.label), '🎟 Tokens', '📊 Data analysis', '🎨 AI visuals', '📝 Page text', '🕘 Activity'];
   const tableOptions = [{ key: 'none', label: '— none —' }, { key: 'all', label: '🗂️ All tables' }, ...sections.map(s => ({ key: s.key, label: s.label }))];
 
   // Generate an AI visual from the selected table (or all tables) + output style
@@ -547,7 +592,9 @@ export function DashboardView() {
             {sec.footer}
           </div>
         );
-      })() : cur === ANALYSIS ? (
+      })() : cur === TOKENS ? (
+        <TokenWindow tokens={tokens} isAdmin onChanged={() => setReload(r => r + 1)} />
+      ) : cur === ANALYSIS ? (
         <div className="card">
           <h3 style={{ margin: '0 0 8px' }}>📊 Data analysis</h3>
           <label className="field" style={{ maxWidth: 280 }}><span>Table to chart</span>

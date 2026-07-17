@@ -722,6 +722,48 @@ async function setTtsCache(key, audio, voice) {
   } catch (e) { console.error('TTS cache write failed:', e.message); return false; }
 }
 
+// ---------------------------------------------------------------------------
+// user_tokens — the per-user token WALLET (available balance). Admins grant
+// tokens (setUserTokens/addUserTokens); token-costing actions draw it down.
+// ---------------------------------------------------------------------------
+async function getUserTokens(username) {
+  username = String(username || '');
+  if (!username) return 0;
+  if (!db.pool) { const all = readJSON('user_tokens.json', {}); return Number(all[username]) || 0; }
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT balance FROM user_tokens WHERE username = $1', [username]), 6000, 'Get tokens');
+    return rows[0] ? Number(rows[0].balance) || 0 : 0;
+  } catch (e) { console.error('Get tokens failed:', e.message); return 0; }
+}
+// Add (or subtract, with a negative delta) tokens; never drops below 0. Returns
+// the new balance.
+async function addUserTokens(username, delta) {
+  username = String(username || ''); delta = Math.trunc(Number(delta) || 0);
+  if (!username) return 0;
+  if (!db.pool) {
+    const all = readJSON('user_tokens.json', {});
+    const next = Math.max(0, (Number(all[username]) || 0) + delta);
+    all[username] = next; writeJSON('user_tokens.json', all);
+    return next;
+  }
+  try {
+    const { rows } = await withDbTimeout(dbQuery(
+      `INSERT INTO user_tokens (username, balance, updated_at) VALUES ($1, GREATEST($2, 0), NOW())
+       ON CONFLICT (username) DO UPDATE SET balance = GREATEST(user_tokens.balance + $2, 0), updated_at = NOW()
+       RETURNING balance`,
+      [username, delta]
+    ), 6000, 'Add tokens');
+    return rows[0] ? Number(rows[0].balance) || 0 : 0;
+  } catch (e) { console.error('Add tokens failed:', e.message); return 0; }
+}
+async function listUserTokens() {
+  if (!db.pool) return readJSON('user_tokens.json', {});
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT username, balance FROM user_tokens', []), 6000, 'List tokens');
+    const o = {}; for (const r of rows) o[r.username] = Number(r.balance) || 0; return o;
+  } catch (e) { console.error('List tokens failed:', e.message); return {}; }
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, listRecentEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
@@ -732,4 +774,5 @@ module.exports = {
   getExampleOverrides, setExampleOverride,
   getDonation, setDonation,
   getTtsCache, setTtsCache,
+  getUserTokens, addUserTokens, listUserTokens,
 };

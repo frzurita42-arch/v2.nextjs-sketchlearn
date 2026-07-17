@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth-guard';
+import { requireAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listTools, listRecentEntries } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -28,8 +28,11 @@ export const runtime = 'nodejs';
 // The underlying storage stays normalised (separate tools / entries / users /
 // comments tables); this endpoint just joins what the dashboard needs to display.
 export async function GET(req: Request) {
-  const a = await requireAdmin(req);
+  const a = await requireAuth(req);
   if (!a.ok) return a.response;
+  const role = a.user.role;
+  const isAdmin = role === 'admin';
+  const me = a.user.username;
 
   const rawTools: any[] = await listTools({ viewerIsAdmin: true, limit: 200 });
   const tools = rawTools.map((t: any) => {
@@ -147,7 +150,25 @@ export async function GET(req: Request) {
   const settings = await getSiteSettings();
   const hiddenRows = Array.isArray(settings?.dashHiddenRows) ? settings.dashHiddenRows : [];
 
-  return NextResponse.json({ tools, runs, usage, usageByUser, componentUsage, buildLog: WEBSITE_BUILD_LOG, registry: COMPONENT_REGISTRY, hiddenRows }, { headers: { 'Cache-Control': 'no-cache' } });
+  // Role scoping. Admin sees everything (all users' work + the site's own
+  // component/build-log/page-text tables). A MODERATOR sees ONLY their own work —
+  // their tools, the runs of those tools, and the tokens THEY spent — and none of
+  // the site-internal tables. A plain USER gets no tables here (their dashboard is
+  // just the token window, fed by /api/tokens).
+  if (!isAdmin) {
+    if (role !== 'moderator') {
+      return NextResponse.json({ tools: [], runs: [], usage: [], usageByUser: [], componentUsage: [], buildLog: [], registry: [], hiddenRows: [], role, scope: 'none' }, { headers: { 'Cache-Control': 'no-cache' } });
+    }
+    const myTools = tools.filter((t: any) => t.owner === me);
+    const mySlugs = new Set(myTools.map((t: any) => t.slug));
+    const myRuns = runs.filter((r: any) => mySlugs.has(r.toolSlug));
+    const myUsage = usage.filter((u: any) => u.user === me);
+    const myByUser = [{ user: me, events: myUsage.length, tokens: myUsage.reduce((s: number, u: any) => s + (u.totalTokens || 0), 0), images: myUsage.filter((u: any) => u.kind.includes('image') || u.kind === 'thumbnail').length, cost: myUsage.reduce((s: number, u: any) => s + (u.costUsd || 0), 0) }];
+    const myComponentUsage = componentUsage.filter((c: any) => c.user === me);
+    return NextResponse.json({ tools: myTools, runs: myRuns, usage: myUsage, usageByUser: myByUser, componentUsage: myComponentUsage, buildLog: [], registry: [], hiddenRows: [], role, scope: 'own' }, { headers: { 'Cache-Control': 'no-cache' } });
+  }
+
+  return NextResponse.json({ tools, runs, usage, usageByUser, componentUsage, buildLog: WEBSITE_BUILD_LOG, registry: COMPONENT_REGISTRY, hiddenRows, role, scope: 'all' }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 function countCards(cards: any[]): number {

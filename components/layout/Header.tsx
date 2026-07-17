@@ -16,7 +16,9 @@ export function Header() {
         <button onClick={() => nav('stats')}>My stats</button>
         */}
         <button onClick={() => nav('chat')}>Coach chat</button>
-        {user?.role === 'admin' && <button id="nav-dashboard" onClick={() => nav('dashboard')}>Dashboard</button>}
+        {/* Everyone signed in can open the Dashboard now — a plain user sees only
+            their 🎟 token window, a moderator their own work, an admin everything. */}
+        {user && <button id="nav-dashboard" onClick={() => nav('dashboard')}>Dashboard</button>}
       </div>
       <div className="topbar-user">
         <span id="whoami">☺ {user?.username}</span>

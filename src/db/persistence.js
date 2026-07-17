@@ -263,6 +263,17 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // user_tokens — a simple per-user token WALLET (available balance). Admins grant
+  // tokens here (standing in for a purchase); token-costing actions draw it down.
+  // Kept separate from the users table so auth load/persist is untouched.
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS user_tokens (
+      username TEXT PRIMARY KEY,
+      balance BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 // Persist every AI generation to a JSON file, as the site's content source of record.

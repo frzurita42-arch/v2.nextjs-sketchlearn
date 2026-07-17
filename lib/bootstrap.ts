@@ -8,6 +8,25 @@ import { db, dbQuery } from '@/src/db/pool';
 import { readJSON, writeJSON, ensureDataDirs, initDatabase } from '@/src/db/persistence';
 import { userState, makeUser, loadUsers, persistUsers } from '@/src/db/users';
 import { insertGame } from '@/src/db/games';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { addUserTokens, getUserTokens } = require('@/src/db/platform');
+
+// Idempotently ensure a couple of TEST users exist so the three roles can be
+// tried out: a moderator (with a token wallet) and a plain student. Simple
+// passwords on purpose. Returns true if the user list changed.
+async function ensureTestUsers(): Promise<boolean> {
+  const want: [string, string, 'moderator' | 'user'][] = [
+    ['moderator1', 'moderator', 'moderator'],
+    ['student1', 'student', 'user'],
+  ];
+  let changed = false;
+  for (const [uname, pass, role] of want) {
+    if (!userState.users.some((u: any) => u.username === uname)) { userState.users.push(makeUser(uname, pass, role)); changed = true; }
+  }
+  // Give the test moderator a starter wallet so token-costing actions work.
+  try { if ((await getUserTokens('moderator1')) <= 0) await addUserTokens('moderator1', 5000); } catch { /* ignore */ }
+  return changed;
+}
 import { normalizeStoreShape, writeSuggestedStore, writeHomeTopicsStore } from '@/src/db/caches';
 
 /* One-time persistence bootstrap, ported from server.js.
@@ -40,6 +59,7 @@ async function bootstrapPersistence(): Promise<void> {
       writeJSON('users.json', userState.users);
       console.log('Seeded default admin user (admin / 123456)');
     }
+    if (await ensureTestUsers()) writeJSON('users.json', userState.users);
     return;
   }
 
@@ -65,6 +85,7 @@ async function bootstrapPersistence(): Promise<void> {
       }
     }
     userState.users = dbUsers;
+    if (await ensureTestUsers()) { await persistUsers(userState.users); }
 
     const gameCount = await dbQuery('SELECT COUNT(*)::int AS count FROM games');
     const totalGames = gameCount.rows?.[0]?.count || 0;
