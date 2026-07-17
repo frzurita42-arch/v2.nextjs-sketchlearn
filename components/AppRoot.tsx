@@ -8,6 +8,7 @@ import { appState } from '@/lib/app-state';
 import { AppContext, computeEff, type ViewName, type ViewAs } from '@/components/AppContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Header } from '@/components/layout/Header';
+import { ViewAsBar } from '@/components/ui/ViewAsBar';
 import { Footer } from '@/components/layout/Footer';
 import { LoginView } from '@/components/views/LoginView';
 import { HomeView } from '@/components/views/HomeView';
@@ -250,28 +251,9 @@ export default function AppRoot() {
       <Header />
       {/* "View as" preview bar — admins can render any page as a plain user, the
           creator (OP), or an admin would see it (client-side preview only; server
-          permissions are unchanged). Resets to "You" when you change pages. */}
-      {user?.role === 'admin' && (
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', margin: '6px 0 0', fontSize: 12 }}>
-          <span style={{ opacity: 0.6, fontWeight: 700 }}>👁 View as</span>
-          {/* The admin's own view IS "Admin" (mapped to the neutral `self`), so there
-              is no separate "You". Admin can preview the page as a Guest (not signed
-              in), a plain User, a Moderator, or (soon) a Languages / STEM view.
-              Guest, Languages and STEM are placeholders for now — shown but disabled. */}
-          {([
-            ['guest', 'Guest', true, 'A visitor who is NOT signed in — coming soon'],
-            ['user', 'User', false, 'As a plain signed-in visitor'],
-            ['op', 'Moderators', false, 'As a moderator (the content owner)'],
-            ['self', 'Admin', false, 'Your admin view'],
-            ['languages', 'Languages', true, 'Language view — coming soon'],
-            ['stem', 'STEM', true, 'STEM view — coming soon'],
-          ] as [string, string, boolean, string][]).map(([v, label, disabled, title]) => (
-            <button key={v} className={`btn small ${!disabled && viewAs === v ? 'blue' : 'ghost'}`}
-              style={{ padding: '2px 10px', ...(disabled ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
-              disabled={disabled} onClick={disabled ? undefined : () => setViewAs(v as ViewAs)} title={title}>{label}</button>
-          ))}
-        </div>
-      )}
+          permissions are unchanged). Resets to "You" when you change pages.
+          Its own container (ViewAsBar) closing in a dashed rule. */}
+      {user?.role === 'admin' && <ViewAsBar viewAs={viewAs} onSetViewAs={setViewAs} />}
       {demo && (
         <div id="demo-banner" className="demo-banner">
           <span><b>Demo mode</b> — no AI provider is connected, so lessons, charts and suggestions use built-in placeholder content. Set <b>GEMINI_API_KEY</b> or <b>DEEPSEEK_API_KEY</b> in your deployment for real AI lessons.</span>
