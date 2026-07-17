@@ -523,6 +523,9 @@ table.sketch th, table.sketch td {
 }
 table.sketch th { background: var(--yellow); font-family: var(--font-title); font-size: 1.15rem; }
 table.sketch tr:nth-child(even) td { background: #fffbe8; }
+/* Double-size variant (PagedTable's `big` prop — the 🧱 Components table). */
+table.sketch.big { font-size: 1.9rem; }
+table.sketch.big th { font-size: 2.3rem; }
 
 /* ---------- chat ---------- */
 .chat-shell { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 380px; }

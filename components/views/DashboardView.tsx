@@ -38,8 +38,10 @@ const CELL_LIMIT = 100;
 type Cell = string | number | null | undefined | { node: React.ReactNode };
 
 // A table that shows ROWS_PER_PAGE rows at a time (Prev/Next) and clips any text
-// cell over CELL_LIMIT chars, revealing the full value in a popup via 👁.
-function PagedTable({ headers, rows, empty, rowIds, onDelete }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void }) {
+// cell over CELL_LIMIT chars, revealing the full value in a popup via 👁. The
+// full text stays in the row data, so search/CSV always see it — only the
+// on-screen cell is clipped. `big` doubles the table font (the .big CSS class).
+function PagedTable({ headers, rows, empty, rowIds, onDelete, big }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; big?: boolean }) {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<{ title: string; text: string } | null>(null);
   const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
@@ -47,9 +49,11 @@ function PagedTable({ headers, rows, empty, rowIds, onDelete }: { headers: strin
   const slice = rows.slice(p * ROWS_PER_PAGE, p * ROWS_PER_PAGE + ROWS_PER_PAGE);
   const canDelete = !!(onDelete && rowIds);
   const totalCols = headers.length + (canDelete ? 1 : 0);
+  // At double font size, clip sooner so each row stays a small readable subset.
+  const limit = big ? 60 : CELL_LIMIT;
   return (
     <>
-      <div className="table-wrap"><table className="sketch"><tbody>
+      <div className="table-wrap"><table className={`sketch${big ? ' big' : ''}`}><tbody>
         <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
         {slice.length ? slice.map((r, ri) => {
           const abs = p * ROWS_PER_PAGE + ri;
@@ -59,8 +63,8 @@ function PagedTable({ headers, rows, empty, rowIds, onDelete }: { headers: strin
             {r.map((c, ci) => {
               if (c && typeof c === 'object' && 'node' in c) return <td key={ci}>{c.node}</td>;
               const s = String(c ?? '');
-              if (s.length > CELL_LIMIT) return (
-                <td key={ci}>{s.slice(0, CELL_LIMIT)}…{' '}
+              if (s.length > limit) return (
+                <td key={ci}>{s.slice(0, limit)}…{' '}
                   <button type="button" title="Show the full text" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
                 </td>
               );
@@ -264,7 +268,7 @@ export function DashboardView() {
   const vRegShown = vReg.filter((e: any) => {
     if (regAi) return !regAiIds || regAiIds.includes(String(e.id));
     if (!regNeedle) return true;
-    return [e.name, e.kind, e.description, e.location, e.recommendations].join(' ').toLowerCase().includes(regNeedle);
+    return [e.name, e.kind, e.description, e.inputs, e.location, e.recommendations].join(' ').toLowerCase().includes(regNeedle);
   });
   const runRegAi = async () => {
     const q = regQuery.trim();
@@ -273,7 +277,7 @@ export function DashboardView() {
     try {
       const r: any = await API.post('/api/dashboard/registry-search', {
         query: q,
-        rows: vReg.map((e: any) => ({ id: String(e.id), text: `${e.name} (${e.kind}) — ${e.description} Location: ${e.location}. Notes: ${e.recommendations}` })),
+        rows: vReg.map((e: any) => ({ id: String(e.id), text: `${e.name} (${e.kind}) — ${e.description} Inputs: ${e.inputs || '—'}. Location: ${e.location}. Notes: ${e.recommendations}` })),
       });
       if (Array.isArray(r?.ids)) setRegAiIds(r.ids.map(String));
       else setRegAiErr(r?.error || 'AI search failed — try again.');
@@ -311,9 +315,9 @@ export function DashboardView() {
     e.tokens || 0, e.files || 0, e.commit || '—', e.status || '—',
   ]);
   const buildIds = vBuild.map((e: any) => String(e.id));
-  const regHeaders = ['Name', 'Kind', 'Description', 'File location', 'Recommendations', 'Added'];
+  const regHeaders = ['Name', 'Kind', 'Description', 'Inputs', 'File location', 'Recommendations', 'Added'];
   const regRows: (string | number)[][] = vRegShown.map((e: any) => [
-    e.name, e.kind, e.description || '—', e.location || '—', e.recommendations || '—', fmtDate(e.createdAt),
+    e.name, e.kind, e.description || '—', e.inputs || '—', e.location || '—', e.recommendations || '—', fmtDate(e.createdAt),
   ]);
   const regIds = vRegShown.map((e: any) => String(e.id));
   // The catalogue of slide activities a generated slide-tool is built from — the
@@ -484,7 +488,7 @@ export function DashboardView() {
                 {regAi && regAiIds && !regAiErr && <span style={{ fontSize: 12, opacity: 0.65 }}>🤖 showing {vRegShown.length} of {vReg.length}</span>}
               </div>
             )}
-            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} />
+            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} big={sec.key === 'registry'} />
             {sec.footer}
           </div>
         );
