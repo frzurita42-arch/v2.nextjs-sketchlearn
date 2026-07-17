@@ -115,6 +115,10 @@ async function initDatabase() {
       visibility TEXT NOT NULL DEFAULT 'private',
       tags JSONB,
       thumbnail TEXT,
+      repo_last_edited TIMESTAMPTZ,
+      repo_image_url TEXT,
+      repo_image_title TEXT,
+      repo_image_kind TEXT,
       like_count INTEGER NOT NULL DEFAULT 0,
       ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -129,6 +133,10 @@ async function initDatabase() {
   // Per-user like attribution (who liked each tool) — powers the "liked by admin"
   // gallery filter. Kept alongside the like_count for the visible tally.
   await dbQuery(`ALTER TABLE tools ADD COLUMN IF NOT EXISTS liked_by JSONB DEFAULT '[]'::jsonb`);
+  await dbQuery('ALTER TABLE tools ADD COLUMN IF NOT EXISTS repo_last_edited TIMESTAMPTZ');
+  await dbQuery('ALTER TABLE tools ADD COLUMN IF NOT EXISTS repo_image_url TEXT');
+  await dbQuery('ALTER TABLE tools ADD COLUMN IF NOT EXISTS repo_image_title TEXT');
+  await dbQuery('ALTER TABLE tools ADD COLUMN IF NOT EXISTS repo_image_kind TEXT');
 
   // ---------- site settings: small admin-editable key/value store (page copy) ----------
   await dbQuery(`

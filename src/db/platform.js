@@ -15,6 +15,31 @@ function parseJsonb(v, fallback) {
 }
 function asArr(v) { const p = parseJsonb(v, []); return Array.isArray(p) ? p : []; }
 
+function repoMetaFromDefinition(definition) {
+  const cards = definition?.repo && Array.isArray(definition.repo.cards) ? definition.repo.cards : [];
+  let lastEdited = null;
+  let imageUrl = '';
+  let imageTitle = '';
+  let imageKind = '';
+  const walk = (nodes) => {
+    for (const card of (Array.isArray(nodes) ? nodes : [])) {
+      const edited = String(card?.lastEdited || card?.createdAt || '').trim();
+      if (edited && (!lastEdited || new Date(edited).getTime() > new Date(lastEdited).getTime())) lastEdited = edited;
+      if (!imageUrl) {
+        const url = String(card?.genImage || card?.image || '').trim();
+        if (url) {
+          imageUrl = url;
+          imageTitle = String(card?.title || 'Untitled card');
+          imageKind = card?.genImage ? 'AI-generated image' : 'Attached image';
+        }
+      }
+      if (Array.isArray(card?.children)) walk(card.children);
+    }
+  };
+  walk(cards);
+  return { lastEdited, imageUrl, imageTitle, imageKind };
+}
+
 // Strip owner-only secrets before returning a tool through any PUBLIC read
 // (the file-storage path stores the whole object, incl. apiKeys, on disk).
 function stripSecret(t) {
@@ -41,6 +66,10 @@ function mapToolRow(r) {
     likeCount: r.like_count,
     likedBy: asArr(r.liked_by),
     aiGenerated: r.ai_generated,
+    repoLastEdited: r.repo_last_edited ? new Date(r.repo_last_edited).toISOString() : null,
+    repoImageUrl: r.repo_image_url || '',
+    repoImageTitle: r.repo_image_title || '',
+    repoImageKind: r.repo_image_kind || '',
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
   };
@@ -53,17 +82,24 @@ function insertToolFile(record) {
 }
 
 async function insertTool(record) {
+  const repoMeta = repoMetaFromDefinition(record.definition || {});
+  record.repoLastEdited = repoMeta.lastEdited;
+  record.repoImageUrl = repoMeta.imageUrl;
+  record.repoImageTitle = repoMeta.imageTitle;
+  record.repoImageKind = repoMeta.imageKind;
   if (!db.pool) { insertToolFile(record); return; }
   try {
     await withDbTimeout(dbQuery(
       `INSERT INTO tools (id, slug, owner, title, description, archetype, definition,
-         visibility, tags, thumbnail, like_count, ai_generated)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11,$12)`,
+         visibility, tags, thumbnail, repo_last_edited, repo_image_url, repo_image_title, repo_image_kind,
+         like_count, ai_generated)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16)`,
       [
         record.id, record.slug, record.owner, record.title, record.description || null,
         record.archetype, JSON.stringify(record.definition || {}), record.visibility || 'private',
-        JSON.stringify(record.tags || []), record.thumbnail || null, record.likeCount || 0,
-        !!record.aiGenerated,
+        JSON.stringify(record.tags || []), record.thumbnail || null,
+        repoMeta.lastEdited || null, repoMeta.imageUrl || null, repoMeta.imageTitle || null, repoMeta.imageKind || null,
+        record.likeCount || 0, !!record.aiGenerated,
       ]
     ), 8000, 'Save tool');
   } catch (e) {
@@ -112,6 +148,13 @@ async function updateTool(slug, patch) {
     if (patch.thumbnail !== undefined) t.thumbnail = patch.thumbnail;
     if (patch.visibility !== undefined) t.visibility = patch.visibility;
     if (patch.apiKeys !== undefined) t.apiKeys = patch.apiKeys;
+    if (patch.definition !== undefined) {
+      const repoMeta = repoMetaFromDefinition(patch.definition || {});
+      t.repoLastEdited = repoMeta.lastEdited;
+      t.repoImageUrl = repoMeta.imageUrl;
+      t.repoImageTitle = repoMeta.imageTitle;
+      t.repoImageKind = repoMeta.imageKind;
+    }
     t.updatedAt = new Date().toISOString();
     writeJSON('tools.json', tools);
     return true;
@@ -120,7 +163,10 @@ async function updateTool(slug, patch) {
     const sets = []; const vals = []; let i = 1;
     if (patch.definition !== undefined) {
       sets.push(`definition = $${i++}::jsonb`, `title = $${i++}`, `description = $${i++}`, `archetype = $${i++}`, `tags = $${i++}::jsonb`);
+      const repoMeta = repoMetaFromDefinition(patch.definition || {});
       vals.push(JSON.stringify(patch.definition), patch.definition.title || '', patch.definition.description || '', patch.definition.archetype || 'app', JSON.stringify(patch.definition.tags || []));
+      sets.push(`repo_last_edited = $${i++}`, `repo_image_url = $${i++}`, `repo_image_title = $${i++}`, `repo_image_kind = $${i++}`);
+      vals.push(repoMeta.lastEdited || null, repoMeta.imageUrl || null, repoMeta.imageTitle || null, repoMeta.imageKind || null);
     }
     if (patch.title !== undefined) { sets.push(`title = $${i++}`); vals.push(patch.title); }
     if (patch.description !== undefined) { sets.push(`description = $${i++}`); vals.push(patch.description); }

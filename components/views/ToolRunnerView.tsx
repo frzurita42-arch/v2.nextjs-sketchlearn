@@ -258,15 +258,30 @@ export function ToolRunnerView() {
   const saveTitle = async (t: string) => {
     setEditField(null);
     if (!t || t === tool.title) return;
+    const prevTitle = tool.title;
     tool.title = t;                                        // optimistic (shared singleton)
-    try { await API.post('/api/tools/rename', { slug: tool.slug, title: t }); } catch { /* ignore */ }
+    try {
+      const r = await API.post('/api/tools/rename', { slug: tool.slug, title: t });
+      if (r?.error) throw new Error(r.error);
+    } catch (e: any) {
+      tool.title = prevTitle;
+      alert(e?.message || 'Could not save the title.');
+    }
   };
   const saveDesc = async (d: string) => {
     setEditField(null);
     setDescDraft(d);
+    const prevDesc = tool.description;
     if (def) def.description = d;                           // optimistic (shared singleton)
     tool.description = d;
-    try { await API.post('/api/tools/rename', { slug: tool.slug, description: d }); } catch { /* ignore */ }
+    try {
+      const r = await API.post('/api/tools/rename', { slug: tool.slug, description: d });
+      if (r?.error) throw new Error(r.error);
+    } catch (e: any) {
+      if (def) def.description = prevDesc;
+      tool.description = prevDesc;
+      alert(e?.message || 'Could not save the description.');
+    }
   };
   const dashRule = { maxWidth: 820, margin: '10px auto', borderTop: '2px dashed var(--ink)', opacity: 0.45 } as const;
 

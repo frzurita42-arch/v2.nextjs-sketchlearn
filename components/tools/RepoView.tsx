@@ -75,7 +75,37 @@ function timeAgo(iso: string): string {
 // ---- immutable tree helpers (operate by card id) --------------------------
 let _seq = 0;
 const newId = () => `c${Date.now().toString(36)}${(_seq++).toString(36)}`;
-const blankCard = (kind: 'card' | 'section' = 'card'): RepoCard => ({ id: newId(), kind, title: kind === 'section' ? 'New section' : 'New card', links: [], createdAt: new Date().toISOString() });
+const blankCard = (kind: 'card' | 'section' = 'card'): RepoCard => {
+  const now = new Date().toISOString();
+  return { id: newId(), kind, title: kind === 'section' ? 'New section' : 'New card', links: [], createdAt: now, lastEdited: now };
+};
+
+const sameCardShape = (a: RepoCard | undefined, b: RepoCard | undefined): boolean => {
+  const strip = (c?: RepoCard) => {
+    if (!c) return null;
+    const { lastEdited, children, ...rest } = c;
+    return { ...rest, children: Array.isArray(children) ? children.map(strip) : [] };
+  };
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+};
+
+const stampEditedTree = (prev: RepoCard[], next: RepoCard[], now: string): RepoCard[] => {
+  const walk = (prevCards: RepoCard[], nextCards: RepoCard[]): RepoCard[] => {
+    const prevById = new Map(prevCards.map((c) => [c.id, c] as const));
+    return nextCards.map((card) => {
+      const prevCard = prevById.get(card.id);
+      const prevChildren = Array.isArray(prevCard?.children) ? prevCard!.children : [];
+      const nextChildren = Array.isArray(card.children) ? card.children : [];
+      const stampedChildren = nextChildren.length ? walk(prevChildren, nextChildren) : undefined;
+      const changed = !prevCard || !sameCardShape(prevCard, { ...card, children: stampedChildren || [] });
+      const out: RepoCard = { ...card };
+      if (stampedChildren) out.children = stampedChildren;
+      if (changed) out.lastEdited = now;
+      return out;
+    });
+  };
+  return walk(prev, next);
+};
 
 function mapTree(cards: RepoCard[], id: string, fn: (c: RepoCard) => RepoCard): RepoCard[] {
   return cards.map((c) => {
@@ -1362,11 +1392,19 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     // Editing is gated by canEdit at the UI level (the User preview has no edit
     // controls), so both the Admin and Moderators views can persist changes —
     // a moderator needs to actually set/cycle statuses, not just look.
-    setCards(next);
+    const prev = cards;
+    const stamped = stampEditedTree(prev, next, new Date().toISOString());
+    setCards(stamped);
     try {
-      const r = await postRepo({ cards: next });
-      if (r?.repo) setCards(r.repo.cards || next);
-    } catch { /* keep the optimistic copy */ }
+      const r = await postRepo({ cards: stamped });
+      if (r?.error) throw new Error(r.error);
+      if (r?.repo) setCards(r.repo.cards || stamped);
+      dirty.current = false;
+    } catch (e: any) {
+      setCards(prev);
+      dirty.current = false;
+      alert(e?.message || 'Could not save this repository.');
+    }
   };
   // A returned repo (from the normal-user attach endpoint) reconciled into state.
   const applyRepo = (nextRepo: RepoSpec) => { if (!nextRepo) return; setCards(nextRepo.cards || []); if (def) def.repo = nextRepo; };

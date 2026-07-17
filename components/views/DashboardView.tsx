@@ -217,6 +217,7 @@ export function DashboardView() {
   // Sort the Components table by usage count: '' = as-listed, 'desc' = most used
   // first, 'asc' = least used first.
   const [regSort, setRegSort] = useState<'' | 'desc' | 'asc'>('');
+  const [repoPreview, setRepoPreview] = useState<{ title: string; cardTitle: string; kind: string; url: string; lastEdited: string } | null>(null);
   // Soft-deleted rows: server-persisted "table:id" keys + any deleted this session.
   const hiddenRows = dash?.hiddenRows || [];
   const [hiddenExtra, setHiddenExtra] = useState<Set<string>>(new Set());
@@ -302,8 +303,17 @@ export function DashboardView() {
   const slideHeaders = ['Title', 'Owner', 'Visibility', 'Slides', 'Saved deck', 'AI', 'Created'];
   const slideRows: (string | number)[][] = vSlide.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.slideCount || '—', t.hasSavedDeck ? '📖 yes' : '—', t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
   const slideIds = vSlide.map((t: any) => String(t.slug));
-  const repoHeaders = ['Title', 'Owner', 'Visibility', 'Cards', 'Kind', 'AI', 'Created'];
-  const repoRows: (string | number)[][] = vRepo.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.cardCount || '—', t.archetype, t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+  const repoHeaders = ['Title', 'Owner', 'Visibility', 'Cards', 'Kind', 'AI', 'Last edited', 'Image'];
+  const repoRows: (string | number)[][] = vRepo.map((t: any) => [
+    t.title,
+    `@${t.owner}`,
+    t.visibility,
+    t.cardCount || '—',
+    t.archetype,
+    t.aiGenerated ? '✦' : '—',
+    fmtDate(t.repoLastEdited || t.updatedAt || t.createdAt),
+    t.repoImageUrl ? `${t.repoImageKind || 'Saved image'} — ${t.repoImageTitle || 'card'}` : '—',
+  ]);
   const repoIds = vRepo.map((t: any) => String(t.slug));
   const runHeaders = ['User', 'Presentation', 'Topic', 'Level', 'Theme', 'Slides', 'Grade', 'Date'];
   const runRows: (string | number)[][] = vRuns.map((r: any) => [`@${r.user}`, r.toolTitle, r.topic || '—', r.level || '—', r.theme || '—', r.slides || '—', r.score == null ? '—' : `${r.score}%`, fmtDate(r.createdAt)]);
@@ -359,10 +369,30 @@ export function DashboardView() {
       </span>
     ),
   });
+  const repoImageCell = (t: any): Cell => {
+    if (!t.repoImageUrl) return '—';
+    return {
+      node: (
+        <button
+          type="button"
+          className="btn small ghost"
+          onClick={() => setRepoPreview({
+            title: t.title || 'Repository image',
+            cardTitle: t.repoImageTitle || 'Untitled card',
+            kind: t.repoImageKind || 'Saved image',
+            url: t.repoImageUrl,
+            lastEdited: fmtDate(t.repoLastEdited || t.updatedAt || t.createdAt),
+          })}
+        >
+          View image
+        </button>
+      ),
+    };
+  };
   // Display rows: same as the plain rows but with an editable title cell in col 0.
   // (The plain rows stay for CSV export + the AI-visual text summary.)
   const slideDisplayRows: Cell[][] = vSlide.map((t: any, i: number) => [titleCell(t), ...slideRows[i].slice(1)]);
-  const repoDisplayRows: Cell[][] = vRepo.map((t: any, i: number) => [titleCell(t), ...repoRows[i].slice(1)]);
+  const repoDisplayRows: Cell[][] = vRepo.map((t: any, i: number) => [titleCell(t), ...repoRows[i].slice(1, 6), repoRows[i][6], repoImageCell(t)]);
 
   const totalCost = vCost.reduce((s: number, u: any) => s + (Number(u.cost) || 0), 0);
 
@@ -661,6 +691,23 @@ export function DashboardView() {
               <button className="btn small ghost" disabled={editBusy} onClick={() => setEditTool(null)}>Cancel</button>
               <button className="btn green" disabled={editBusy} onClick={saveEdit}>{editBusy ? 'Saving…' : '💾 Save'}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {repoPreview && (
+        <div onClick={() => setRepoPreview(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 155, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 760, width: '100%', padding: '18px 20px', maxHeight: '86vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 12 }}>
+              <b>{repoPreview.title}</b>
+              <button className="btn small ghost" onClick={() => setRepoPreview(null)}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 10px' }}>{repoPreview.kind} from {repoPreview.cardTitle} · last edited {repoPreview.lastEdited}</p>
+            {/^data:image\//i.test(repoPreview.url) || /^https?:\/\//i.test(repoPreview.url) ? (
+              <img src={repoPreview.url} alt={repoPreview.cardTitle} style={{ maxWidth: '100%', maxHeight: '68vh', objectFit: 'contain', display: 'block', margin: '0 auto', borderRadius: 10, border: '2px solid var(--ink)' }} />
+            ) : (
+              <p style={{ wordBreak: 'break-word', margin: 0 }}>{repoPreview.url}</p>
+            )}
           </div>
         </div>
       )}

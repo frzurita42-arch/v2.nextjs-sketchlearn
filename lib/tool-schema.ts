@@ -151,6 +151,9 @@ export interface RepoCard {
   // ISO timestamp stamped when a card is created (manual or AI-generated). Shown
   // on the card and used by the ascending / descending sort.
   createdAt?: string;
+  // ISO timestamp stamped when the card was last changed (title, text, image,
+  // links, status, or nested content).
+  lastEdited?: string;
   children?: RepoCard[];     // nested cards / sections one level deeper
 }
 
@@ -291,6 +294,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (c.paywall) card.paywall = true;
   if (c.aiPrompt) card.aiPrompt = String(c.aiPrompt).slice(0, 2000);
   if (c.createdAt) card.createdAt = String(c.createdAt).slice(0, 40);
+  if (c.lastEdited) card.lastEdited = String(c.lastEdited).slice(0, 40);
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
   if (!title && !subtitle && !text && !image && !icon && !links.length && !children.length && !card.completable && !card.collect) return null;

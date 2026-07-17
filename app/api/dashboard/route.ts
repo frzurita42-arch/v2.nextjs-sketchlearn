@@ -35,15 +35,21 @@ export async function GET(req: Request) {
   const tools = rawTools.map((t: any) => {
     const def = t.definition || {};
     const cardCount = (def.repo && Array.isArray(def.repo.cards)) ? countCards(def.repo.cards) : 0;
+    const repoMeta = def.repo && Array.isArray(def.repo.cards) ? collectRepoMeta(def.repo.cards) : { lastEdited: null, imageUrl: '', imageTitle: '', imageKind: '' };
     const slideCount = def.lesson ? (parseInt(def.lesson.totalSlides, 10) || (Array.isArray(def.lesson.pages) ? def.lesson.pages.length : 0)) : 0;
     const hasSavedDeck = !!(def.lesson && def.lesson.savedDeck && Array.isArray(def.lesson.savedDeck.slides) && def.lesson.savedDeck.slides.length);
     return {
       id: t.id, slug: t.slug, title: t.title, owner: t.owner,
       archetype: t.archetype, visibility: t.visibility,
       createdAt: t.createdAt || t.updatedAt || null,
+      updatedAt: t.updatedAt || null,
       tags: Array.isArray(t.tags) ? t.tags : [],
       aiGenerated: !!t.aiGenerated, likeCount: t.likeCount || 0,
       cardCount, slideCount, hasSavedDeck,
+      repoLastEdited: repoMeta.lastEdited,
+      repoImageUrl: repoMeta.imageUrl,
+      repoImageTitle: repoMeta.imageTitle,
+      repoImageKind: repoMeta.imageKind,
     };
   });
   const byId: Record<string, any> = {};
@@ -136,4 +142,28 @@ function countCards(cards: any[]): number {
   let n = 0;
   for (const c of (Array.isArray(cards) ? cards : [])) { n += 1; if (Array.isArray(c.children)) n += countCards(c.children); }
   return n;
+}
+
+function collectRepoMeta(cards: any[]): { lastEdited: string | null; imageUrl: string; imageTitle: string; imageKind: string } {
+  let lastEdited: string | null = null;
+  let imageUrl = '';
+  let imageTitle = '';
+  let imageKind = '';
+  const walk = (nodes: any[]) => {
+    for (const c of (Array.isArray(nodes) ? nodes : [])) {
+      const edited = String(c?.lastEdited || c?.createdAt || '').trim();
+      if (edited && (!lastEdited || new Date(edited).getTime() > new Date(lastEdited).getTime())) lastEdited = edited;
+      if (!imageUrl) {
+        const url = String(c?.genImage || c?.image || '').trim();
+        if (url) {
+          imageUrl = url;
+          imageTitle = String(c?.title || 'Untitled card');
+          imageKind = c?.genImage ? 'AI-generated image' : 'Attached image';
+        }
+      }
+      if (Array.isArray(c?.children)) walk(c.children);
+    }
+  };
+  walk(cards);
+  return { lastEdited, imageUrl, imageTitle, imageKind };
 }
