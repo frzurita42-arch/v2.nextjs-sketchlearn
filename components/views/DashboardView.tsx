@@ -208,6 +208,9 @@ export function DashboardView() {
   const [regAiBusy, setRegAiBusy] = useState(false);
   const [regAiIds, setRegAiIds] = useState<string[] | null>(null); // null = AI filter not run yet
   const [regAiErr, setRegAiErr] = useState('');
+  // Sort the Components table by usage count: '' = as-listed, 'desc' = most used
+  // first, 'asc' = least used first.
+  const [regSort, setRegSort] = useState<'' | 'desc' | 'asc'>('');
   // Soft-deleted rows: server-persisted "table:id" keys + any deleted this session.
   const hiddenRows = dash?.hiddenRows || [];
   const [hiddenExtra, setHiddenExtra] = useState<Set<string>>(new Set());
@@ -267,6 +270,10 @@ export function DashboardView() {
     if (regAi) return !regAiIds || regAiIds.includes(String(e.id));
     if (!regNeedle) return true;
     return [e.name, e.kind, e.description, e.inputs, e.location, e.recommendations].join(' ').toLowerCase().includes(regNeedle);
+  }).slice().sort((a: any, b: any) => {
+    if (!regSort) return 0;
+    const d = (Number(a.uses) || 0) - (Number(b.uses) || 0);
+    return regSort === 'asc' ? d : -d;
   });
   const runRegAi = async () => {
     const q = regQuery.trim();
@@ -313,9 +320,9 @@ export function DashboardView() {
     e.tokens || 0, e.files || 0, e.commit || '—', e.status || '—',
   ]);
   const buildIds = vBuild.map((e: any) => String(e.id));
-  const regHeaders = ['Name', 'Kind', 'Description', 'Inputs', 'File location', 'Recommendations', 'Added'];
+  const regHeaders = ['Name', 'Kind', 'Uses', 'Description', 'Inputs', 'File location', 'Recommendations', 'Added'];
   const regRows: (string | number)[][] = vRegShown.map((e: any) => [
-    e.name, e.kind, e.description || '—', e.inputs || '—', e.location || '—', e.recommendations || '—', fmtDate(e.createdAt),
+    e.name, e.kind, Number(e.uses) || 0, e.description || '—', e.inputs || '—', e.location || '—', e.recommendations || '—', fmtDate(e.createdAt),
   ]);
   const regIds = vRegShown.map((e: any) => String(e.id));
   // The catalogue of slide activities a generated slide-tool is built from — the
@@ -482,6 +489,12 @@ export function DashboardView() {
                   ✨ AI search {regAi ? 'ON' : 'off'}
                 </button>
                 {(regQuery || regAiIds) && <button className="btn small ghost" onClick={() => { setRegQuery(''); setRegAiIds(null); setRegAiErr(''); }}>✕ clear</button>}
+                {/* Sort by usage count — cycles: off → most-used first → least-used first. */}
+                <button className={`btn small ${regSort ? 'blue' : 'ghost'}`}
+                  title="Sort by how many times each component is used on the website"
+                  onClick={() => setRegSort(s => s === '' ? 'desc' : s === 'desc' ? 'asc' : '')}>
+                  📊 Uses{regSort === 'desc' ? ' ↓ (most first)' : regSort === 'asc' ? ' ↑ (least first)' : ''}
+                </button>
                 {regAiErr && <span style={{ fontSize: 12, color: '#b23' }}>{regAiErr}</span>}
                 {regAi && regAiIds && !regAiErr && <span style={{ fontSize: 12, opacity: 0.65 }}>🤖 showing {vRegShown.length} of {vReg.length}</span>}
               </div>
