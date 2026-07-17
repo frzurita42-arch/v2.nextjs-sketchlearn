@@ -15,8 +15,6 @@ import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
 import { SharePanel } from '@/components/tools/SharePanel';
-import { SuggestionCarousel } from '@/components/tools/SuggestionCarousel';
-import { TopicSuggestions } from '@/components/tools/TopicSuggestions';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
@@ -462,13 +460,6 @@ export function ToolRunnerView() {
         <DiscussionSection titleKey="toolDiscussionTitle" collapseKey="toolDiscussionCollapsed"
           targetType="tool" targetId={tool.slug} />
 
-        {/* On a REPOSITORY: 10 AI-recommended TOPICS drawn from its subjects, each a
-            preset that opens the presentation builder. On other non-lesson tools:
-            the usual "more like this" feed. A LESSON (presentation) page shows NO
-            "more like this" — it's just noise on a play page. */}
-        {isRepo
-          ? <><div style={dashRule} /><TopicSuggestions repoSlug={tool.slug} repoTitle={tool.title} /></>
-          : (!isLesson && <><div style={dashRule} /><SuggestionCarousel likeSlug={tool.slug} title="✨ More like this" /></>)}
       </>)}
     </>
   );

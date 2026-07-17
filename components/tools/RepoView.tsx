@@ -1286,6 +1286,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     return arr.sort((a, b) => (sortMode === 'asc' ? key(a) - key(b) : key(b) - key(a)));
   }, [sortMode, sortNonce]);
   const SORT_LABEL: Record<typeof sortMode, string> = { manual: '↕ Order: Manual', asc: '↑ Order: Oldest', desc: '↓ Order: Newest', random: '🔀 Order: Random' };
+  // 📖 Read-more pagination: the repo renders READ_MORE_STEP cards at a time,
+  // counting EVERY card in display (depth-first) order — nested cards included.
+  // Each "Read more" click reveals the next chunk until the whole tree is shown.
+  const READ_MORE_STEP = 6;
+  const [readChunks, setReadChunks] = useState(1);
   // Default per-level numbering (recomputed whenever the card tree changes).
   const levelIndex = useMemo(() => buildLevelIndex(cards), [cards]);
   const [editing, setEditing] = useState(false);
@@ -1548,6 +1553,28 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     setAiBusy(false);
   };
 
+  // Read-more bookkeeping: count all visible cards (nested included) in display
+  // order, then trim the tree to the revealed budget — a card past the limit is
+  // dropped even mid-subtree, so exactly N×6 cards show at a time.
+  const countTree = (list: RepoCard[]): number =>
+    list.reduce((s, c) => s + 1 + countTree((c.children || []).filter((k) => canEdit || !k.hidden)), 0);
+  const takeTree = (list: RepoCard[], budget: { n: number }): RepoCard[] => {
+    const out: RepoCard[] = [];
+    for (const c of list) {
+      if (budget.n <= 0) break;
+      budget.n -= 1;
+      const kids = (c.children || []).filter((k) => canEdit || !k.hidden);
+      out.push(kids.length ? { ...c, children: takeTree(kids, budget) } : c);
+    }
+    return out;
+  };
+  const visibleTop = cards.filter((c) => canEdit || !c.hidden);
+  const orderedTop = isCollection ? sortCards(visibleTop) : visibleTop;
+  const totalCards = countTree(orderedTop);
+  const shownCards = Math.min(totalCards, readChunks * READ_MORE_STEP);
+  const prunedTop = takeTree(orderedTop, { n: readChunks * READ_MORE_STEP });
+  const remainingCards = totalCards - shownCards;
+
   return (
     <div>
 
@@ -1574,7 +1601,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         <GallerySection
           titleKey="collectionShelfTitle" titleFallback="🗂️ Cards"
           bannerKey="collectionBanner" bannerDefault="🗂️ Your saved cards — search by name, favorite them (★ / liked by admin / Moderators), switch grid ▦ or rows ☰ (the owner can 🔒 lock the layout), and page through. Tap a card to open its attachment."
-          items={sortCards(cards.filter((c) => canEdit || !c.hidden))}
+          items={prunedTop}
           id={(c: RepoCard) => c.id}
           searchText={(c: RepoCard) => `${c.title || ''} ${c.subtitle || ''} ${c.text || ''}`}
           defaultView={display === 'grid' ? 'grid' : 'row'}
@@ -1585,7 +1612,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           showCollapse
           storageKey={`sl_repo_view_${slug}`}
           gridMinPx={260}
-          perPage={8}
+          perPage={9999} /* the 📖 Read more button below paginates instead */
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
           belowToolbar={
@@ -1772,7 +1799,17 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         <div style={display === 'grid'
           ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }
           : { display: 'grid', gap: 12 }}>
-          {cards.filter((c) => canEdit || !c.hidden).map((c) => <CardView key={c.id} card={c} depth={0} defaultDisplay={display} ctx={ctx} />)}
+          {prunedTop.map((c) => <CardView key={c.id} card={c} depth={0} defaultDisplay={display} ctx={ctx} />)}
+        </div>
+      )}
+
+      {/* 📖 Read more — reveals the next chunk of cards (nested ones count too). */}
+      {!editing && remainingCards > 0 && (
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <button className="btn blue" onClick={() => setReadChunks((n) => n + 1)}>
+            📖 Read more · {Math.min(READ_MORE_STEP, remainingCards)} of {remainingCards} more card{remainingCards === 1 ? '' : 's'}
+          </button>
+          <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>Showing {shownCards} of {totalCards} cards</div>
         </div>
       )}
     </div>
