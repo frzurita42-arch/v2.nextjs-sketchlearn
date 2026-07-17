@@ -43,6 +43,7 @@ type ViewCtx = {
   docUpload: boolean;                              // 📄 file uploads enabled — the "Attach a document" button is active
   showDates: boolean;                              // 🕒 show each card's created date/time
   imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
+  emojiApprove: boolean;                           // ✅ show the per-card emoji that cycles the assignment status (no upload)
   authorizedUsers: string[];                       // usernames that bypass a card's paywall (plus owner/admin)
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
@@ -162,6 +163,10 @@ const MODE_LABEL: Record<CardMode, string> = {
 };
 const modeOf = (m?: string): CardMode => (MODE_ORDER.includes(m as CardMode) ? (m as CardMode) : 'enabled');
 const nextMode = (m?: string): CardMode => MODE_ORDER[(MODE_ORDER.indexOf(modeOf(m)) + 1) % MODE_ORDER.length];
+// The ✅ emoji-approval cycle: just the workflow statuses (skips disabled/preview),
+// so a tap advances Set status → Assigned → Pending → Approved → Rejected → back.
+const APPROVE_ORDER: CardMode[] = ['enabled', 'assigned', 'pending', 'approved', 'rejected'];
+const nextApprove = (m?: string): CardMode => { const i = APPROVE_ORDER.indexOf(modeOf(m)); return APPROVE_ORDER[i < 0 ? 1 : (i + 1) % APPROVE_ORDER.length]; };
 
 // Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
 const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
@@ -986,6 +991,16 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       style={{ ...iconBtn, borderBottom: '3px solid #c0392b', borderRadius: 3, paddingBottom: 1, opacity: card.userOff ? 1 : 0.45 }}
       onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>📁</button>,
   );
+  // ✅ Emoji approval — a one-tap status cycle (Set status → Assigned → Pending →
+  // Approved → Rejected → back) that changes the card's assignment state WITHOUT a
+  // document upload. Owner/admin only, and only when the repo toggle is on. The
+  // emoji IS the current status; a 'Set status' card shows nothing to normal users.
+  if (ctx.canEdit && ctx.emojiApprove) permanentControls.push(
+    <button key="approve" type="button"
+      title={`Approval: ${MODE_LABEL[mode]} — tap to advance (Set status → Assigned → Pending → Approved → Rejected). No upload needed.`}
+      style={{ ...iconBtn, borderBottom: `3px solid ${isStatus ? (STATUS_META[mode]?.bg || '#2e9e57') : 'transparent'}`, borderRadius: 3, paddingBottom: 1 }}
+      onClick={() => { const nm = nextApprove(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); }}>{MODE_BTN[mode]}</button>,
+  );
   // 🔒 Paywall — grey the card out and block its content for anyone who is not the
   // owner/admin or on the repo's Authorized users list. Amber underline when on.
   if (ctx.canEdit) permanentControls.push(
@@ -1187,6 +1202,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // Authorized users — usernames that can view PAYWALLED cards without the lock
   // (in addition to the owner/admin). Persisted repo-wide.
   const [authorizedUsers, setAuthorizedUsers] = useState<string[]>(repo.authorizedUsers || []);
+  // ✅ Emoji approval — show the per-card one-tap status-cycle emoji. Persisted.
+  const [emojiApprove, setEmojiApprove] = useState(!!repo.emojiApprove);
   // Known usernames for the Authorized-users picker dropdown. Best-effort: the
   // /api/users list is admin-only, so a non-admin owner just types a username.
   const [knownUsers, setKnownUsers] = useState<string[]>([]);
@@ -1273,7 +1290,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     const body = {
       layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport,
       imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown,
-      docUpload, showDates, authorizedUsers, cards, ...over,
+      docUpload, showDates, authorizedUsers, emojiApprove, cards, ...over,
     };
     const r = await API.post('/api/tools/repo', { slug, repo: body });
     if (r?.repo && def) def.repo = r.repo;
@@ -1356,7 +1373,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, authorizedUsers, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, emojiApprove, authorizedUsers, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => { setImageGen(next); try { await postRepo({ imageGen: next }); } catch { /* keep the optimistic toggle */ } };
@@ -1370,6 +1387,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveShowDates = async (next: boolean) => { setShowDates(next); try { await postRepo({ showDates: next }); } catch { /* keep the optimistic toggle */ } };
   // Persist the 🔒 Authorized-users list (usernames that bypass card paywalls).
   const saveAuthorized = async (next: string[]) => { setAuthorizedUsers(next); try { await postRepo({ authorizedUsers: next }); } catch { /* keep the optimistic list */ } };
+  // Persist the ✅ Emoji-approval switch.
+  const saveEmojiApprove = async (next: boolean) => { setEmojiApprove(next); try { await postRepo({ emojiApprove: next }); } catch { /* keep the optimistic toggle */ } };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
@@ -1482,6 +1501,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
                     title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'}
                     onClick={() => saveAssign(!assignShown)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${emojiApprove ? 'blue' : 'ghost'}`}
+                    title={emojiApprove ? 'Turn off the one-tap emoji status control on cards.' : 'Show a per-card emoji that cycles the assignment status (Set status → Assigned → Pending → Approved → Rejected) with a tap — no document upload needed. A card left on “Set status” shows nothing to viewers.'}
+                    onClick={() => saveEmojiApprove(!emojiApprove)}>✅ Emoji approval: {emojiApprove ? 'On' : 'Off'}</button>
                   <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`}
                     title="Enable the Moderator 📎 link on every card. When off, the clip only stays on cards that already have a link (viewers can still open those)."
                     onClick={() => saveUploads(!posterUpload, userUpload)}>📎 Moderator upload: {posterUpload ? 'On' : 'Off'}</button>
