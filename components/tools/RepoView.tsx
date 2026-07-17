@@ -24,7 +24,7 @@ import { isRenderableImage } from '@/lib/img';
 import { buildRepoZip } from '@/lib/lesson-export';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { OutlineBox } from '@/components/ui/OutlineBox';
-import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
+import { CardShell, iconBtn, overlayIcon } from '@/components/ui/CardShell';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -620,6 +620,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const [aiOpen, setAiOpen] = useState(false);         // 🤖 AI-question prompt editor open
   const [aiDraft, setAiDraft] = useState('');          // 🤖 prompt draft
   const [aiBusy, setAiBusy] = useState(false);         // 🤖 generating an answer child
+  const [settingsOpen, setSettingsOpen] = useState(false); // ⚙️ card-settings popup open
+  const [settingsPage, setSettingsPage] = useState(0);     // ⚙️ popup pagination
   // 🔀 per-card order for THIS card's nested cards: manual → ascending → descending
   // → random (a nonce reshuffles "random"). Falls back to the repo-wide order when
   // manual, so the global toggle still governs cards left on manual.
@@ -852,9 +854,10 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const editorRow = { display: 'inline-flex', gap: 6, marginLeft: 8, verticalAlign: 'middle', alignItems: 'center' } as const;
 
-  // Pencil (+ palette) rendered RIGHT NEXT TO the title; when editing, the input
-  // takes its place inline.
-  const afterTitle = ctx.canEdit ? (editingTitle ? (
+  // Inline title / description editors. The ✎ / 🎨 / 🔢 / 🎲 triggers moved into
+  // the ⚙️ Card-settings popup — only the input row still renders inline, in
+  // place, once editing starts (from the popup).
+  const afterTitle = ctx.canEdit && editingTitle ? (
     <span style={editorRow} onClick={stop}>
       <input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
@@ -862,22 +865,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       <button className="btn small green" onClick={saveTitle}>Save</button>
       <button className="btn small ghost" onClick={() => setEditingTitle(false)}>✕</button>
     </span>
-  ) : (
-    <span style={{ display: 'inline-flex', gap: 8, marginLeft: 8, verticalAlign: 'middle' }}>
-      <button type="button" title="Edit title" style={iconBtn} onClick={openTitle}>✎</button>
-      <button type="button" title="Rewrite the title with AI" disabled={distorting} style={{ ...iconBtn, opacity: distorting ? 0.4 : 1 }} onClick={distort}>🎨</button>
-      {/* 🔢 number this card — sets its icon to a number emoji (top card = 0️⃣). */}
-      <button type="button" title="Number this card (icon)" style={iconBtn} onClick={() => ctx.numberCard(card.id)}>🔢</button>
-      {/* 🎲 random emoji icon — a fresh suggestion every click. */}
-      <button type="button" title="Random emoji icon — click for a new one" style={iconBtn} onClick={() => ctx.setIcon(card.id, { icon: randomEmoji(card.icon), image: undefined })}>🎲</button>
-      {/* 📎 upload an icon image — nested cards only (the first card uses grid view). */}
-      {nested && <button type="button" title="Upload an icon image" disabled={imgBusy} style={{ ...iconBtn, opacity: imgBusy ? 0.4 : 1 }} onClick={uploadImage}>📎</button>}
-    </span>
-  )) : null;
+  ) : null;
 
-  // Pencil (+ palette) next to the DESCRIPTION (the card's subtitle text). The
-  // 🎨 AI-rewords it the same meaning, said differently; typed edits cap at 300.
-  const afterSubtitle = ctx.canEdit ? (editingSub ? (
+  const afterSubtitle = ctx.canEdit && editingSub ? (
     <span style={editorRow} onClick={stop}>
       <input autoFocus value={subDraft} placeholder="Description" maxLength={300} onChange={(e) => setSubDraft(e.target.value.slice(0, 300))}
         onKeyDown={(e) => { if (e.key === 'Enter') saveSub(); if (e.key === 'Escape') setEditingSub(false); }}
@@ -885,12 +875,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       <button className="btn small green" onClick={saveSub}>Save</button>
       <button className="btn small ghost" onClick={() => setEditingSub(false)}>✕</button>
     </span>
-  ) : (
-    <span style={{ display: 'inline-flex', gap: 6, marginLeft: 6, verticalAlign: 'middle' }}>
-      <button type="button" title="Edit description" style={iconBtn} onClick={openSub}>✎</button>
-      <button type="button" title="Rewrite the description with AI" disabled={distorting} style={{ ...iconBtn, opacity: distorting ? 0.4 : 1 }} onClick={distortSub}>🎨</button>
-    </span>
-  )) : null;
+  ) : null;
 
   // The Moderator link (blue) and the current user's OWN upload (green) are now
   // reached through the 📎 / 📁 icons themselves (which carry a green underline
@@ -919,24 +904,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const statusChip = stMeta ? (
     <span style={{ borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: '#fff', background: stMeta.bg, flex: '0 0 auto' }}>{stMeta.label}</span>
   ) : null;
-  // Owner/admin cycle button: Enabled → Assigned → Pending → Approved → Rejected
-  // → Disabled → Preview. Setting it back to Enabled clears the field.
+  // Owner/admin cycle: Enabled → Assigned → Pending → Approved → Rejected
+  // → Disabled → Preview. Setting it back to Enabled clears the field. The cycle
+  // now lives in the ⚙️ Card-settings popup; the card shows only the read-only
+  // status chip (which everyone sees on cards with a real workflow status).
   const cycleMode = () => { const nm = nextMode(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); };
-  // The assignment-status CYCLE button — a clearly LABELLED button (emoji + word).
-  const assignBtn = (
-    <button type="button" title={`Assignment status: ${mode} — click to cycle (Set status → Assigned → Pending → Approved → Rejected → Disabled → Preview)`}
-      onClick={cycleMode} className={`btn small ${isStatus ? 'blue' : 'ghost'}`} style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}>{MODE_BTN[mode]} {MODE_LABEL[mode]}</button>
-  );
-  // What the card shows for assignment:
-  //  • Feature ON (owner/admin): the cycling button on EVERY card (incl. Set status).
-  //  • Feature OFF, or a normal viewer: a READ-ONLY status chip — but ONLY on cards
-  //    that carry a real workflow status. A 'Set status' (enabled) card shows nothing
-  //    when the feature is off, so cards left un-assigned simply drop off.
-  // Show the cycle button whenever you can edit (your own view OR the Moderators
-  // preview) so the control is always visible. Actual writes are what preview
-  // blocks (saveCards no-ops), so clicking it in a preview role changes nothing.
-  const showCycle = ctx.canEdit && ctx.assignShown;
-  const assignControl = showCycle ? assignBtn : (isStatus ? statusChip : null);
+  const assignControl = isStatus ? statusChip : null;
 
   // The control icons laid out in a tidy 3-per-row grid.
   const favBtn = (
@@ -962,34 +935,25 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   const dlAnchor = (key: string, url: string, label: string, title: string) => (
     <a key={key} href={url} target="_blank" rel="noopener noreferrer" download title={title} onClick={stop} style={attachIcon(true)}>{label}</a>
   );
-  const showClip = canPoster || (posterLinkIdx >= 0 && !card.posterOff);
-  const showFolder = canUser || myUserLinkIdx >= 0;
-  // Clip: a moderator (canPoster) edits the link; everyone else opens it.
-  if (showClip) {
-    if (canPoster) activeControls.push(<button key="clip" type="button" title={posterLinkIdx >= 0 ? 'Edit or delete the Moderator link' : 'Add a Moderator link'} style={attachIcon(posterLinkIdx >= 0)} onClick={eat(clipAction)}>📎</button>);
-    else if (posterLinkIdx >= 0) activeControls.push(dlAnchor('clip', links[posterLinkIdx].url, '📎', 'Open the Moderator link'));
-  }
+  // Clip: everyone (moderators included) can OPEN a saved Moderator link straight
+  // from the card; ADDING/EDITING the link moved to the ⚙️ Card-settings popup.
+  if (posterLinkIdx >= 0 && !card.posterOff) activeControls.push(dlAnchor('clip', links[posterLinkIdx].url, '📎', 'Open the Moderator link'));
   // Folder: the owner of the link (canUser) edits their own; anyone else opens it.
-  if (showFolder) {
+  // This is a normal-user control, so it stays on the card.
+  if (canUser || myUserLinkIdx >= 0) {
     if (canUser) activeControls.push(<button key="folder" type="button" title={myUserLinkIdx >= 0 ? 'Edit or delete your link' : 'Add your own link'} style={attachIcon(myUserLinkIdx >= 0)} onClick={eat(folderAction)}>📁</button>);
     else if (myUserLinkIdx >= 0) activeControls.push(dlAnchor('folder', links[myUserLinkIdx].url, '📁', 'Open the link'));
   }
-  // 🤖 AI question — owner/admin only, when the repo-wide AI feature is on. Click
-  // to write/edit the prompt that guides the answer generated by ➕ (add inside).
-  // Green underline when this card already has a saved prompt.
+  // 🤖 AI-question editing moved to the ⚙️ popup; these save/clear handlers back it.
   const saveAi = () => { ctx.editField(card.id, { aiPrompt: aiDraft.trim() || undefined }); setAiOpen(false); };
   const clearAi = () => { ctx.editField(card.id, { aiPrompt: undefined }); setAiDraft(''); setAiOpen(false); };
-  if (ctx.canEdit && ctx.aiShown) activeControls.push(<button key="robot" type="button" title={card.aiPrompt ? 'Edit the AI question for this card' : 'Add an AI question for this card (guides the answer when you ➕ add a card inside)'} style={attachIcon(!!card.aiPrompt)} onClick={eat(() => { setAiDraft(card.aiPrompt || ''); setAiOpen((o) => !o); })}>🤖</button>);
 
-  // 🖼️ card picture — lives in the ACTIVE group (beside the clip/folder), shown to
-  // a moderator when the repo-wide "Card picture" toggle is on (to generate) and to
-  // ANYONE once a picture exists (to view). A green underline marks that a picture
-  // is saved. Clicking opens the popup (view; regenerate/delete for owner/admin).
-  const showFrame = (ctx.canEdit && ctx.imageGen) || hasGen;
-  if (showFrame) activeControls.push(
+  // 🖼️ card picture — the card keeps the VIEW button once a picture exists (any
+  // viewer); generating/regenerating moved to the ⚙️ popup.
+  if (hasGen) activeControls.push(
     <button key="img" type="button" onClick={eat(frameClick)} disabled={genBusy}
-      title={hasGen ? (ctx.canEdit ? 'View the picture — regenerate or delete it' : 'View the picture') : (ctx.canEdit ? 'Generate an AI picture of this item (saved for everyone)' : 'No picture yet')}
-      style={attachIcon(hasGen)}>{genBusy ? '⏳' : '🖼️'}</button>
+      title={ctx.canEdit ? 'View the picture — regenerate or delete it' : 'View the picture'}
+      style={attachIcon(true)}>{genBusy ? '⏳' : '🖼️'}</button>
   );
 
   // PERMANENT controls — always available (per role). These never move.
@@ -1019,26 +983,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
         onClick={eat(cycleChildSort)}>🔀</button>,
     );
   }
-  // When an AI prompt is set (aiGen), the ⚙️ / ➕ keep their plain emoji but gain a
-  // green underline — the same "there's something here" cue as the robot, clip and
-  // folder — so there aren't two emojis crammed onto one button.
-  const aiIcon = (on: boolean) => ({ ...iconBtn, borderBottom: `3px solid ${on ? '#2e9e57' : 'transparent'}`, borderRadius: 3, paddingBottom: 1, opacity: aiBusy ? 0.4 : 1 });
-  if (ctx.canEdit) permanentControls.push(
-    <button key="sib" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card at this level (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card at this level'} style={aiIcon(aiGen)} onClick={() => (aiGen ? genSibling() : ctx.addSibling(card.id))}>{aiBusy ? '⏳' : '⚙️'}</button>,
-    <button key="child" type="button" disabled={aiBusy} title={aiGen ? 'Generate an AI answer card inside (from this card, the page, your 🤖 prompt and attachments)' : 'Add a card inside'} style={aiIcon(aiGen)} onClick={() => (aiGen ? genChild() : ctx.addSubcard(card.id))}>{aiBusy ? '⏳' : '➕'}</button>,
-    <button key="hide" type="button" title={card.hidden ? 'Hidden from viewers — click to show' : 'Hide from normal viewers'} style={{ ...iconBtn, opacity: card.hidden ? 0.5 : 1 }} onClick={() => ctx.editField(card.id, { hidden: !card.hidden })}>👁︎</button>,
-    <button key="del" type="button" title="Delete this card" style={delIcon} onClick={() => ctx.deleteCard(card.id)}>🗑</button>,
-  );
-  // 📁 with a RED underline — turn the User upload folder OFF for THIS card only.
-  // Shown to owner/admin whenever the repo-wide user-upload feature is on; when
-  // active (card.userOff) the folder button is suppressed on this card even though
-  // the feature is on elsewhere.
-  if (ctx.canEdit && ctx.userUpload) permanentControls.push(
-    <button key="useroff" type="button"
-      title={card.userOff ? 'User upload folder is OFF for this card — click to allow it again' : 'Hide the user upload folder on this card only (the feature stays on for other cards)'}
-      style={{ ...iconBtn, borderBottom: '3px solid #c0392b', borderRadius: 3, paddingBottom: 1, opacity: card.userOff ? 1 : 0.45 }}
-      onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>📁</button>,
-  );
   // 🎬 Study — on a 🔵 PROMPT card (repo study-mode on), a button that opens the
   // slide tool with this card's prompt preset as the topic. Shown to EVERYONE so
   // students can jump straight from the study path to generating that lesson.
@@ -1046,23 +990,45 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     <button key="study" type="button" title="Generate a slide activity from this prompt — opens the slide tool with the topic preset (you press Generate)."
       style={{ ...iconBtn, fontSize: 16 }} onClick={eat(() => ctx.openStudy(promptTextOf(card)))}>🎬</button>,
   );
-  // ✅ Emoji approval — a one-tap status cycle (Set status → Assigned → Pending →
-  // Approved → Rejected → back) that changes the card's assignment state WITHOUT a
-  // document upload. Owner/admin only, and only when the repo toggle is on. The
-  // emoji IS the current status; a 'Set status' card shows nothing to normal users.
-  if (ctx.canEdit && ctx.emojiApprove) permanentControls.push(
-    <button key="approve" type="button"
-      title={`Approval: ${MODE_LABEL[mode]} — tap to advance (Set status → Assigned → Pending → Approved → Rejected). No upload needed.`}
-      style={{ ...iconBtn, borderBottom: `3px solid ${isStatus ? (STATUS_META[mode]?.bg || '#2e9e57') : 'transparent'}`, borderRadius: 3, paddingBottom: 1 }}
-      onClick={() => { const nm = nextApprove(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); }}>{MODE_BTN[mode]}</button>,
-  );
-  // 🔒 Paywall — grey the card out and block its content for anyone who is not the
-  // owner/admin or on the repo's Authorized users list. Amber underline when on.
+
+  // ── ⚙️ Card settings — ALL owner/moderator controls for this card, gathered in
+  // one popup instead of a pile of icons. Each entry: emoji, name, description
+  // (also the hover title), a state chip when it's a toggle/status, and the same
+  // handler the old inline icon ran. `keepOpen` keeps the popup up for toggles.
+  type CtlEntry = { key: string; icon: string; label: string; desc: string; state?: string; on?: boolean; keepOpen?: boolean; disabled?: boolean; run: () => void };
+  const settingsEntries: CtlEntry[] = [];
+  if (ctx.canEdit) {
+    settingsEntries.push(
+      { key: 'title', icon: '✎', label: 'Edit title', desc: 'Rename this card — an inline editor opens next to the title.', run: openTitle },
+      { key: 'title-ai', icon: '🎨', label: 'AI reword title', desc: 'The AI rephrases the title (same meaning, new wording).', disabled: distorting, run: distort },
+      { key: 'desc', icon: '✎', label: 'Edit description', desc: 'Change the card’s description text (up to 300 characters).', run: openSub },
+      { key: 'desc-ai', icon: '🎨', label: 'AI reword description', desc: 'The AI rephrases the description in place.', disabled: distorting, run: distortSub },
+      { key: 'number', icon: '🔢', label: 'Number icon', desc: 'Set the icon to this card’s number within its level.', keepOpen: true, run: () => ctx.numberCard(card.id) },
+      { key: 'dice', icon: '🎲', label: 'Random emoji icon', desc: 'Roll a fresh emoji icon — click again for another.', keepOpen: true, run: () => ctx.setIcon(card.id, { icon: randomEmoji(card.icon), image: undefined }) },
+    );
+    if (nested) settingsEntries.push({ key: 'icon-up', icon: '📎', label: 'Upload icon image', desc: 'Use your own picture as this card’s icon.', disabled: imgBusy, run: uploadImage });
+    if (canPoster) settingsEntries.push({ key: 'clip', icon: '📎', label: 'Moderator link', desc: 'Attach a link or document every viewer can open from the card.', state: posterLinkIdx >= 0 ? 'Set' : 'Empty', on: posterLinkIdx >= 0, run: clipAction });
+    if (ctx.aiShown) settingsEntries.push({ key: 'robot', icon: '🤖', label: 'AI question', desc: 'Write the prompt that guides the AI answer generated by “Add card inside”.', state: card.aiPrompt ? 'Set' : 'Empty', on: !!card.aiPrompt, run: () => { setAiDraft(card.aiPrompt || ''); setAiOpen(true); } });
+    if (ctx.imageGen) settingsEntries.push({ key: 'pic', icon: '🖼️', label: 'Card picture', desc: hasGen ? 'View, regenerate or delete the saved AI picture.' : 'Generate an AI picture of this item (saved for everyone).', state: hasGen ? 'Saved' : 'None', on: hasGen, disabled: genBusy, run: frameClick });
+    settingsEntries.push(
+      { key: 'sib', icon: '🆕', label: aiGen ? 'AI answer at this level' : 'Add card at this level', desc: aiGen ? 'Generate an AI answer card beside this one (uses your 🤖 prompt).' : 'Insert a new blank card right after this one.', disabled: aiBusy, run: () => (aiGen ? genSibling() : ctx.addSibling(card.id)) },
+      { key: 'child', icon: '➕', label: aiGen ? 'AI answer inside' : 'Add card inside', desc: aiGen ? 'Generate an AI answer card nested inside (uses your 🤖 prompt).' : 'Insert a new blank card nested inside this one.', disabled: aiBusy, run: () => (aiGen ? genChild() : ctx.addSubcard(card.id)) },
+      { key: 'hide', icon: '👁︎', label: 'Hidden from viewers', desc: 'Hide this card from normal users — you still see it greyed.', state: card.hidden ? 'On' : 'Off', on: !!card.hidden, keepOpen: true, run: () => ctx.editField(card.id, { hidden: !card.hidden }) },
+    );
+    if (ctx.assignShown) settingsEntries.push({ key: 'assign', icon: MODE_BTN[mode], label: 'Assignment status', desc: 'Cycle: Set status → Assigned → Pending → Approved → Rejected → Disabled → Preview.', state: MODE_LABEL[mode], on: isStatus, keepOpen: true, run: cycleMode });
+    if (ctx.emojiApprove) settingsEntries.push({ key: 'approve', icon: '✅', label: 'Emoji approval', desc: 'One-tap status cycle (no upload needed): Assigned → Pending → Approved → Rejected.', state: MODE_LABEL[mode], on: isStatus, keepOpen: true, run: () => { const nm = nextApprove(card.mode); ctx.editField(card.id, { mode: nm === 'enabled' ? undefined : nm }); } });
+    settingsEntries.push({ key: 'paywall', icon: '🔒', label: 'Paywall', desc: 'Grey the card out and block its content for anyone not on the Authorized users list.', state: card.paywall ? 'On' : 'Off', on: !!card.paywall, keepOpen: true, run: () => ctx.editField(card.id, { paywall: !card.paywall }) });
+    if (ctx.userUpload) settingsEntries.push({ key: 'useroff', icon: '📁', label: 'User folder on this card', desc: 'Allow or block the per-user 📁 upload folder on this card only.', state: card.userOff ? 'Off here' : 'On', on: !card.userOff, keepOpen: true, run: () => ctx.editField(card.id, { userOff: !card.userOff }) });
+    settingsEntries.push(
+      { key: 'up', icon: '▲', label: 'Move up', desc: 'Swap this card with the one above it (same level).', keepOpen: true, run: () => ctx.moveCard(card.id, -1) },
+      { key: 'down', icon: '▼', label: 'Move down', desc: 'Swap this card with the one below it (same level).', keepOpen: true, run: () => ctx.moveCard(card.id, 1) },
+      { key: 'del', icon: '🗑', label: 'Delete card', desc: 'Remove this card and everything nested inside it.', run: () => ctx.deleteCard(card.id) },
+    );
+  }
+  // The single ⚙ trigger replaces the old icon pile (owner/moderator/admin only).
   if (ctx.canEdit) permanentControls.push(
-    <button key="paywall" type="button"
-      title={card.paywall ? 'Paywall is ON — only authorized users see this card’s content (click to unlock)' : 'Lock this card behind a paywall — greys it out and blocks the content for anyone who is not an authorized user'}
-      style={{ ...iconBtn, borderBottom: `3px solid ${card.paywall ? '#f0a202' : 'transparent'}`, borderRadius: 3, paddingBottom: 1, opacity: card.paywall ? 1 : 0.7 }}
-      onClick={() => ctx.editField(card.id, { paywall: !card.paywall })}>🔒</button>,
+    <button key="settings" type="button" title="Card settings — every moderator control for this card, organized in one panel"
+      style={{ ...iconBtn, fontSize: 16 }} onClick={eat(() => { setSettingsPage(0); setSettingsOpen(true); })}>⚙️</button>,
   );
 
   // The control cluster. The icon buttons (active + permanent) are laid out on a
@@ -1080,14 +1046,6 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       )}
     </div>
   );
-  // ▲ / ▼ reorder this card within its own level (swap with the sibling above /
-  // below). Owner/admin only. A vertical pair, sitting to the side of the card.
-  const moveBtns = ctx.canEdit ? (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1, flex: '0 0 auto', lineHeight: 1 }} onClick={stop}>
-      <button type="button" title="Move this card up (within its level)" style={{ ...iconBtn, fontSize: 12, padding: 0 }} onClick={() => ctx.moveCard(card.id, -1)}>▲</button>
-      <button type="button" title="Move this card down (within its level)" style={{ ...iconBtn, fontSize: 12, padding: 0 }} onClick={() => ctx.moveCard(card.id, 1)}>▼</button>
-    </span>
-  ) : null;
   // Collapse toggle — hides this card's nested cards (the card itself stays). Only
   // meaningful in rows view where the tree is drawn; available to every viewer.
   const collapseBtn = (view === 'row' && kids.length > 0) ? (
@@ -1193,18 +1151,53 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
     </div>
   ) : null;
 
+  // ⚙️ Card-settings popup — the organized panel of every moderator control for
+  // this card: paper card + dashed rule, a grid of hoverable tiles (emoji, name,
+  // short description, state chip), paginated when they don't all fit.
+  const TILES_PER_PAGE = 8;
+  const settingsPopup = settingsOpen && ctx.canEdit ? (() => {
+    const pages = Math.max(1, Math.ceil(settingsEntries.length / TILES_PER_PAGE));
+    const p = Math.min(settingsPage, pages - 1);
+    const slice = settingsEntries.slice(p * TILES_PER_PAGE, (p + 1) * TILES_PER_PAGE);
+    return (
+      <div onClick={eat(() => setSettingsOpen(false))} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div className="card" onClick={stop} style={{ maxWidth: 640, width: '100%', padding: '14px 16px', maxHeight: '86vh', overflow: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <b style={{ fontSize: 15 }}>⚙️ Card settings <span style={{ opacity: 0.55, fontWeight: 400 }}>— {card.title || 'Untitled'}</span></b>
+            <button className="btn small ghost" onClick={eat(() => setSettingsOpen(false))}>✕</button>
+          </div>
+          <p style={{ fontSize: 12, opacity: 0.65, margin: '2px 0 8px' }}>Every moderator control for this card. Green chips show what’s active; toggles keep the panel open.</p>
+          <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '0 0 10px' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 8 }}>
+            {slice.map((en) => (
+              <button key={en.key} type="button" className="ctl-tile" disabled={en.disabled} title={en.desc}
+                onClick={eat(() => { en.run(); if (!en.keepOpen) setSettingsOpen(false); })}>
+                <span style={{ fontSize: 22, lineHeight: 1.2, flex: '0 0 auto' }} aria-hidden>{en.icon}</span>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <span style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <b style={{ fontSize: 13 }}>{en.label}</b>
+                    {en.state && <span style={{ borderRadius: 999, padding: '1px 8px', fontSize: 10.5, fontWeight: 700, lineHeight: 1.5, color: en.on ? '#fff' : 'var(--ink)', background: en.on ? '#2e9e57' : 'rgba(0,0,0,0.08)', flex: '0 0 auto' }}>{en.state}</span>}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 11.5, opacity: 0.65, lineHeight: 1.35, marginTop: 2 }}>{en.desc}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          {pages > 1 && (
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
+              <button className="btn small ghost" disabled={p <= 0} onClick={eat(() => setSettingsPage(p - 1))}>‹ Prev</button>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>Page {p + 1} / {pages}</span>
+              <button className="btn small ghost" disabled={p >= pages - 1} onClick={eat(() => setSettingsPage(p + 1))}>Next ›</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  })() : null;
+
   // A disabled card is greyed + unclickable for viewers; a hidden card (owner/
   // admin preview) is just greyed.
-  // The ▲ / ▼ reorder arrows sit OUTSIDE the card, to its right (row view only),
-  // so they don't crowd the in-card icon cluster. The card takes the remaining
-  // width; the arrows hug the right edge, aligned to the top of the card.
-  const cardRow = (view === 'row' && moveBtns) ? (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-      <div style={{ flex: '1 1 auto', minWidth: 0 }}>{shell}</div>
-      {moveBtns}
-    </div>
-  ) : shell;
-  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{cardRow}{attachForm}{aiForm}{imgPopup}</div>;
+  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{attachForm}{aiForm}{imgPopup}{settingsPopup}</div>;
 
   // GRID view: a card is shown ALONE — no nested cards beneath it (clicking a
   // card with children flips to the rows view to reveal the tree). ROWS view

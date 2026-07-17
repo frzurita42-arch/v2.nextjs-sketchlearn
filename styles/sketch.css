@@ -53,6 +53,17 @@ h3 { font-size: 1.5rem; }
   padding-bottom: 8px;
 }
 
+/* ---------- ⚙️ card-settings popup tiles (repo cards) ---------- */
+.ctl-tile {
+  display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left;
+  padding: 10px 12px; border: 1.5px dashed var(--ink); border-radius: 10px;
+  background: var(--paper-2); color: var(--ink); cursor: pointer;
+  font-family: var(--font-hand);
+  transition: background .12s ease, transform .12s ease, box-shadow .12s ease;
+}
+.ctl-tile:hover:not(:disabled) { background: var(--yellow); transform: translateY(-2px); box-shadow: var(--shadow); }
+.ctl-tile:disabled { opacity: .45; cursor: default; }
+
 /* ---------- top bar ---------- */
 .topbar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
