@@ -199,6 +199,13 @@ export function DashboardView() {
   const componentUsage = dash?.componentUsage || [];
   const buildLog = dash?.buildLog || [];
   const registry = dash?.registry || [];
+  // 🧱 Components table search: a plain text filter, or (toggled) an AI search
+  // where the admin describes what they need and only the matching rows stay.
+  const [regQuery, setRegQuery] = useState('');
+  const [regAi, setRegAi] = useState(false);
+  const [regAiBusy, setRegAiBusy] = useState(false);
+  const [regAiIds, setRegAiIds] = useState<string[] | null>(null); // null = AI filter not run yet
+  const [regAiErr, setRegAiErr] = useState('');
   // Soft-deleted rows: server-persisted "table:id" keys + any deleted this session.
   const hiddenRows = dash?.hiddenRows || [];
   const [hiddenExtra, setHiddenExtra] = useState<Set<string>>(new Set());
@@ -251,6 +258,28 @@ export function DashboardView() {
   const vComp = componentUsage.filter((c: any) => notHidden('components')(c.id));
   const vBuild = buildLog.filter((e: any) => notHidden('build')(e.id));
   const vReg = registry.filter((e: any) => notHidden('registry')(e.id));
+  // Apply the Components search: AI mode keeps only the ids the AI picked
+  // (all rows until it runs); plain mode is a substring match across all fields.
+  const regNeedle = regQuery.trim().toLowerCase();
+  const vRegShown = vReg.filter((e: any) => {
+    if (regAi) return !regAiIds || regAiIds.includes(String(e.id));
+    if (!regNeedle) return true;
+    return [e.name, e.kind, e.description, e.location, e.recommendations].join(' ').toLowerCase().includes(regNeedle);
+  });
+  const runRegAi = async () => {
+    const q = regQuery.trim();
+    if (!q) { setRegAiIds(null); return; }
+    setRegAiBusy(true); setRegAiErr('');
+    try {
+      const r: any = await API.post('/api/dashboard/registry-search', {
+        query: q,
+        rows: vReg.map((e: any) => ({ id: String(e.id), text: `${e.name} (${e.kind}) — ${e.description} Location: ${e.location}. Notes: ${e.recommendations}` })),
+      });
+      if (Array.isArray(r?.ids)) setRegAiIds(r.ids.map(String));
+      else setRegAiErr(r?.error || 'AI search failed — try again.');
+    } catch (e: any) { setRegAiErr(e?.message || 'AI search failed — try again.'); }
+    setRegAiBusy(false);
+  };
   const vGames = games.slice().reverse().filter((g: any, i: number) => notHidden('games')(String(g.id || g.finishedAt || i)));
   const vUsers = usersList.filter((u: any) => notHidden('users')(u.username));
 
@@ -283,10 +312,10 @@ export function DashboardView() {
   ]);
   const buildIds = vBuild.map((e: any) => String(e.id));
   const regHeaders = ['Name', 'Kind', 'Description', 'File location', 'Recommendations', 'Added'];
-  const regRows: (string | number)[][] = vReg.map((e: any) => [
+  const regRows: (string | number)[][] = vRegShown.map((e: any) => [
     e.name, e.kind, e.description || '—', e.location || '—', e.recommendations || '—', fmtDate(e.createdAt),
   ]);
-  const regIds = vReg.map((e: any) => String(e.id));
+  const regIds = vRegShown.map((e: any) => String(e.id));
   // The catalogue of slide activities a generated slide-tool is built from — the
   // record of "templates & activities" behind the study-path tool generator.
   const vAct = SLIDE_ACTIVITIES.filter((a: any) => notHidden('activities')(a.key));
@@ -358,7 +387,7 @@ export function DashboardView() {
     { key: 'cost', label: '📉 Cost by user', count: vCost.length, headers: costHeaders, rows: costRows, rowIds: costIds, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
     { key: 'components', label: '🧩 Component usage', count: vComp.length, headers: compHeaders, rows: compRows, rowIds: compIds, empty: 'No component usage yet.', csv: () => exportRows('component-usage', compHeaders, compRows), chart: { type: 'donut', data: compChart, title: 'Which components are used' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Every row is one component used on a played slide — its type, how it was used, whether the learner got it right, and the slide template. Real rows come from saved decks; clearly-marked (example) rows backfill so the AI can learn which components suit which subjects.</p> },
     { key: 'build', label: '🏗️ Website building', count: vBuild.length, headers: buildHeaders, rows: buildRows, rowIds: buildIds, empty: 'No build log yet.', csv: () => exportRows('website-build-log', buildHeaders, buildRows), chart: { type: 'bar', data: buildChart, title: 'Est. tokens per change' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The site’s own construction log: each request (prompt), a short result summary, future recommendations, a context note on what the site is/does, plus estimated tokens, files and the commit. Estimated build tokens so far: <b>{buildTokens.toLocaleString()}</b>.</p> },
-    { key: 'registry', label: '🧱 Components', count: vReg.length, headers: regHeaders, rows: regRows, rowIds: regIds, empty: 'No components registered yet.', csv: () => exportRows('component-registry', regHeaders, regRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Your containers & components: what each is, where it lives, a usage/improvement note, and when it was added. Tell me to add or remove entries and I’ll update this table.</p> },
+    { key: 'registry', label: '🧱 Components', count: vRegShown.length, headers: regHeaders, rows: regRows, rowIds: regIds, empty: vReg.length ? 'No components match your search.' : 'No components registered yet.', csv: () => exportRows('component-registry', regHeaders, regRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Your containers & components: what each is, where it lives, a usage/improvement note, and when it was added. Tell me to add or remove entries and I’ll update this table.</p> },
     { key: 'activities', label: '🎛️ Slide activities', count: vAct.length, headers: actHeaders, rows: actRows, rowIds: actIds, empty: 'No activities.', csv: () => exportRows('slide-activities', actHeaders, actRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The engaging activities (no tooltips) a generated slide tool is built from. “Create a slide tool from this repo” in a study path wires all of these into the new presentation generator, then its prompts generate the slides.</p> },
     {
       key: 'users', label: '👥 Users', count: vUsers.length, headers: userHeaders, rows: userRows, rowIds: vUsers.map((u: any) => String(u.username)), empty: 'No users.',
@@ -437,6 +466,24 @@ export function DashboardView() {
               <h3 style={{ margin: 0 }}>{sec.label} <span style={{ opacity: 0.5, fontWeight: 400 }}>({sec.count})</span></h3>
               {sec.csv && sec.count > 0 && <button className="btn small" onClick={sec.csv}>⬇ CSV</button>}
             </div>
+            {sec.key === 'registry' && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                <input type="text" value={regQuery}
+                  onChange={e => { setRegQuery(e.target.value); if (regAiIds) setRegAiIds(null); }}
+                  onKeyDown={e => { if (e.key === 'Enter' && regAi) runRegAi(); }}
+                  placeholder={regAi ? 'Describe what you need — e.g. “tables I could reuse on other pages”' : '🔍 Search components…'}
+                  style={{ flex: '1 1 260px', minWidth: 200, fontSize: 13, padding: '6px 10px', borderRadius: 8, border: '2px solid var(--ink)' }} />
+                {regAi && <button className="btn small blue" disabled={regAiBusy || !regQuery.trim()} onClick={runRegAi}>{regAiBusy ? '🤖 thinking…' : '🤖 Ask AI'}</button>}
+                <button className={`btn small ${regAi ? 'green' : 'ghost'}`}
+                  title="Toggle AI search: describe what you need in plain words and the AI keeps only the matching rows"
+                  onClick={() => { setRegAi(a => !a); setRegAiIds(null); setRegAiErr(''); }}>
+                  ✨ AI search {regAi ? 'ON' : 'off'}
+                </button>
+                {(regQuery || regAiIds) && <button className="btn small ghost" onClick={() => { setRegQuery(''); setRegAiIds(null); setRegAiErr(''); }}>✕ clear</button>}
+                {regAiErr && <span style={{ fontSize: 12, color: '#b23' }}>{regAiErr}</span>}
+                {regAi && regAiIds && !regAiErr && <span style={{ fontSize: 12, opacity: 0.65 }}>🤖 showing {vRegShown.length} of {vReg.length}</span>}
+              </div>
+            )}
             <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} />
             {sec.footer}
           </div>
