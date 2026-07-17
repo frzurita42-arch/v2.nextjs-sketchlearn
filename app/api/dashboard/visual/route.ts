@@ -36,6 +36,8 @@ export async function POST(req: Request) {
   const includeAll = !!b.includeAll;
   const allSummaries = includeAll ? String(b.allSummaries || '').slice(0, 6000) : '';
   const custom = String(b.custom || '').slice(0, 500);
+  // Which image backend to TRY first (chosen from the dropdown). Empty = default order.
+  const imageProvider = String(b.imageProvider || '').slice(0, 20);
 
   const prompt = [
     `Design ${directive}.`,
@@ -46,7 +48,7 @@ export async function POST(req: Request) {
   ].filter(Boolean).join('\n');
 
   try {
-    const r = await generateImageWithMeta(prompt, {});
+    const r = await generateImageWithMeta(prompt, imageProvider ? { provider: imageProvider } : {});
     if (!r?.url) return NextResponse.json({ error: 'Could not generate an image — try again.' }, { status: 200 });
     await recordImageUsage({ username: a.user.username, kind: 'dashboard-visual', provider: r.provider || '', subject: `${kind} — ${tableName}`, meta: { prompt } });
     return NextResponse.json({ url: r.url, by: r.provider || '' });

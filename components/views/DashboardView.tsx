@@ -101,6 +101,10 @@ export function DashboardView() {
   const [styleCustom, setStyleCustom] = useState(false);
   const [styleText, setStyleText] = useState('');
   const [visCustom, setVisCustom] = useState('');
+  // Which image model to use for the generated visual (from /api/config).
+  const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
+  const [visProvider, setVisProvider] = useState('');
+  useEffect(() => { API.get('/api/config').then((c: any) => setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : [])).catch(() => { /* ignore */ }); }, []);
   const [visImg, setVisImg] = useState<{ url: string; by: string } | null>(null);
   const [visBusy, setVisBusy] = useState(false);
 
@@ -240,7 +244,7 @@ export function DashboardView() {
     const customStyle = styleCustom ? styleText.trim() : '';
     setVisBusy(true);
     try {
-      const r: any = await API.post('/api/dashboard/visual', { kind: customStyle ? 'custom' : visKind, customStyle, tableName, summary, includeAll: all, allSummaries: summary, custom: visCustom.trim() });
+      const r: any = await API.post('/api/dashboard/visual', { kind: customStyle ? 'custom' : visKind, customStyle, tableName, summary, includeAll: all, allSummaries: summary, custom: visCustom.trim(), imageProvider: visProvider });
       if (r?.url) setVisImg({ url: r.url, by: r.by || '' });
       else alert(r?.error || 'Could not generate an image.');
     } catch (e: any) { alert(e?.message || 'Could not generate an image.'); }
@@ -298,29 +302,34 @@ export function DashboardView() {
         <div className="card alt">
           <h3 style={{ margin: '0 0 8px' }}>🎨 AI visuals from your data</h3>
           <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>Pick a table (or all tables) and a style; the AI reads the data and generates an infographic / poster / diagram.</p>
-          <div style={{ display: 'grid', gap: 10 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <label className="field" style={{ margin: 0, maxWidth: 240 }}><span>Data to use</span>
-                <select value={visualSel} onChange={e => setVisualSel(e.target.value)}>
-                  {tableOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-                </select>
-              </label>
-              <label className="field" style={{ margin: 0, maxWidth: 260 }}><span>Output style
-                {/* ✎ pencil flips the preset dropdown to a free-text custom style (▾ back). */}
-                <button type="button" title={styleCustom ? 'Pick from the list' : 'Type a custom style'} onClick={() => setStyleCustom(c => !c)}
-                  style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{styleCustom ? '▾' : '✎'}</button>
-              </span>
-                {styleCustom
-                  ? <input type="text" value={styleText} onChange={e => setStyleText(e.target.value)} placeholder="Describe your own style…" />
-                  : <select value={visKind} onChange={e => setVisKind(e.target.value)}>
-                      {VISUAL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
-                    </select>}
-              </label>
-            </div>
-            <label className="field" style={{ margin: 0 }}><span>Custom instruction (optional)</span>
-              <input type="text" value={visCustom} onChange={e => setVisCustom(e.target.value)} placeholder="e.g. emphasise cost per user and growth" />
+          {/* All controls on ONE row (wraps only on very narrow screens). */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <label className="field" style={{ margin: 0, flex: '0 1 150px', minWidth: 120 }}><span>Data to use</span>
+              <select value={visualSel} onChange={e => setVisualSel(e.target.value)}>
+                {tableOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
             </label>
-            <div><button className="btn blue" disabled={visBusy} onClick={genVisual}>{visBusy ? '🎨 Generating…' : '🎨 Generate visual'}</button></div>
+            <label className="field" style={{ margin: 0, flex: '0 1 170px', minWidth: 130 }}><span>Output style
+              {/* ✎ pencil flips the preset dropdown to a free-text custom style (▾ back). */}
+              <button type="button" title={styleCustom ? 'Pick from the list' : 'Type a custom style'} onClick={() => setStyleCustom(c => !c)}
+                style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{styleCustom ? '▾' : '✎'}</button>
+            </span>
+              {styleCustom
+                ? <input type="text" value={styleText} onChange={e => setStyleText(e.target.value)} placeholder="Custom style…" />
+                : <select value={visKind} onChange={e => setVisKind(e.target.value)}>
+                    {VISUAL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                  </select>}
+            </label>
+            <label className="field" style={{ margin: 0, flex: '0 1 160px', minWidth: 120 }}><span>Image model</span>
+              <select value={visProvider} onChange={e => setVisProvider(e.target.value)} title="Which image generator to use">
+                <option value="">Auto (best available)</option>
+                {imageProviders.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
+            <label className="field" style={{ margin: 0, flex: '1 1 180px', minWidth: 140 }}><span>Custom instruction (optional)</span>
+              <input type="text" value={visCustom} onChange={e => setVisCustom(e.target.value)} placeholder="e.g. emphasise cost per user" />
+            </label>
+            <button className="btn blue" style={{ flex: '0 0 auto' }} disabled={visBusy} onClick={genVisual}>{visBusy ? '🎨 …' : '🎨 Generate'}</button>
           </div>
           {rule}
           {visImg
