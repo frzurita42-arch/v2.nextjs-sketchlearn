@@ -689,6 +689,39 @@ async function setDonation(slug, patch) {
   return next;
 }
 
+// ---------------------------------------------------------------------------
+// tts_cache — cached text-to-speech audio keyed by a hash of (voice + text), so
+// replaying/reviewing a saved lesson reuses the audio instead of re-calling the
+// TTS provider. `audio` is a blob URL (light) or a data URL.
+// ---------------------------------------------------------------------------
+async function getTtsCache(key) {
+  key = String(key || '');
+  if (!key) return null;
+  if (!db.pool) { const all = readJSON('tts_cache.json', {}); return all[key]?.audio || null; }
+  try {
+    const { rows } = await withDbTimeout(dbQuery('SELECT audio FROM tts_cache WHERE key = $1', [key]), 6000, 'TTS cache read');
+    return rows[0]?.audio || null;
+  } catch (e) { console.error('TTS cache read failed:', e.message); return null; }
+}
+async function setTtsCache(key, audio, voice) {
+  key = String(key || ''); audio = String(audio || '');
+  if (!key || !audio) return false;
+  if (!db.pool) {
+    const all = readJSON('tts_cache.json', {});
+    all[key] = { audio, voice: voice || '', createdAt: new Date().toISOString() };
+    writeJSON('tts_cache.json', all);
+    return true;
+  }
+  try {
+    await withDbTimeout(dbQuery(
+      `INSERT INTO tts_cache (key, audio, voice, created_at) VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (key) DO UPDATE SET audio = EXCLUDED.audio, voice = EXCLUDED.voice, created_at = NOW()`,
+      [key, audio, voice || '']
+    ), 6000, 'TTS cache write');
+    return true;
+  } catch (e) { console.error('TTS cache write failed:', e.message); return false; }
+}
+
 module.exports = {
   insertTool, getToolBySlug, listTools, setToolLikeDelta, getToolWithKeys, updateTool, deleteTool,
   insertEntry, listEntries, listRecentEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
@@ -698,4 +731,5 @@ module.exports = {
   getUserPrefs, setUserPref,
   getExampleOverrides, setExampleOverride,
   getDonation, setDonation,
+  getTtsCache, setTtsCache,
 };

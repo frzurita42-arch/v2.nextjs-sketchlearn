@@ -250,6 +250,19 @@ async function initDatabase() {
     )
   `);
   await dbQuery('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at DESC)');
+
+  // tts_cache — text-to-speech audio keyed by a hash of (voice + text), so the
+  // SAME line spoken again (e.g. replaying/reviewing a saved lesson) is served
+  // from here for free instead of re-calling ElevenLabs. `audio` is a blob URL
+  // when the blob store is configured, otherwise a data URL.
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS tts_cache (
+      key TEXT PRIMARY KEY,
+      audio TEXT NOT NULL,
+      voice TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 // Persist every AI generation to a JSON file, as the site's content source of record.
