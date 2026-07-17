@@ -9,6 +9,7 @@ import { AppContext, computeEff, type ViewName, type ViewAs } from '@/components
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Header } from '@/components/layout/Header';
 import { ViewAsBar } from '@/components/ui/ViewAsBar';
+import { BootLoader } from '@/components/ui/BootLoader';
 import { Footer } from '@/components/layout/Footer';
 import { LoginView } from '@/components/views/LoginView';
 import { HomeView } from '@/components/views/HomeView';
@@ -238,7 +239,9 @@ export default function AppRoot() {
     return () => { cancelled = true; };
   }, [user]);
 
-  if (!mounted) return <main id="app" />;
+  // First paint (before hydration, incl. a cold serverless start after a deploy):
+  // show the writing-pencil boot loader instead of a blank page.
+  if (!mounted) return <BootLoader />;
 
   // NOTE: guests (no user) are NOT bounced to the login screen anymore — they can
   // browse the app with plain-user privileges. The sign-in / create-account screen
