@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting, type ChatMessage } from '@/lib/app-state';
 import { downloadCsv } from '@/lib/util';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { MicButton } from '@/components/ui/MicButton';
 
@@ -40,9 +41,10 @@ export function ChatView() {
 
   return (
     <>
-      <h1 className="view-title">Coach <span className="scribble-underline">chat</span></h1>
-      <p className="view-sub">The coach reads your progress spreadsheet and guides your next steps.{' '}
-        <button className="btn small" id="chat-export" onClick={downloadCsv}>⬇ spreadsheet</button></p>
+      <PageHeader page="coach" />
+      <div style={{ textAlign: 'center', margin: '4px 0 10px' }}>
+        <button className="btn small" id="chat-export" onClick={downloadCsv}>⬇ spreadsheet</button>
+      </div>
       <div className="chat-shell">
         <div className="chat-log" id="chat-log" ref={logRef}>
           {messages.map((m, i) => (

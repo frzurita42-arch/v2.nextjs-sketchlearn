@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-guard';
-import { PAGE_FIELD_KEYS } from '@/lib/page-settings';
+import { PAGE_FIELD_KEYS, PAGE_HEADER_KEYS } from '@/lib/page-settings';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getSiteSettings, setSiteSetting } = require('@/src/db/platform');
 
@@ -21,7 +21,9 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   'donateNudge', 'donateNote',
   // Per-page chrome for the Repositories & Slides landing pages (banner title/
   // subtitle, discussion heading, cards-per-page) — edited from the dashboard.
-  ...PAGE_FIELD_KEYS];
+  ...PAGE_FIELD_KEYS,
+  // Reusable <PageHeader> title/subtitle/emoji keys (Slides, Coach, Dashboard).
+  ...PAGE_HEADER_KEYS];
 const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner']);
 
 // GET /api/site-settings -> the editable page copy (any signed-in viewer reads it).

@@ -23,10 +23,10 @@ function item(e) {
 }
 
 const COMPONENT_REGISTRY = [
-  item({ name: 'Page-header block', kind: 'container', createdAt: '2026-07-17T13:35:00Z',
-    location: 'components/views/ToolsView.tsx (.page-header-block)',
-    description: 'Wraps a page title + subtitle and ends with a dashed separator — the reusable header unit at the top of the Repos & Slides pages.',
-    recommendations: 'Promote to a shared <PageHeader> component so every view uses the same header; accept title/subtitle/actions as props.' }),
+  item({ name: 'PageHeader', kind: 'container', createdAt: '2026-07-17T14:10:00Z',
+    location: 'components/ui/PageHeader.tsx',
+    description: 'The reusable DB-driven page header: an optional emoji (👁 to hide, click to change), a scribble-underlined title and subtitle each editable inline (✎) or AI-reworded (🎨), closing with a dashed separator. Drives the Slides, Coach and Dashboard pages via PAGE_HEADERS.',
+    recommendations: 'Adopt it on the Repositories page too (retire its inline header); allow a per-page actions slot (e.g. the Coach ⬇ spreadsheet button) as a prop.' }),
   item({ name: 'Owner controls panel', kind: 'container', createdAt: '2026-07-17T08:10:00Z',
     location: 'components/tools/RepoView.tsx (OWNER CONTROLS dashed box)',
     description: 'Dashed panel grouping a repository’s owner/admin toggles (assignment, emoji approval, study path, uploads, dates…).',

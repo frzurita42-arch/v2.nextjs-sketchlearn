@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { perPageOf } from '@/lib/page-settings';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { useApp } from '@/components/AppContext';
 import { CommentSection } from '@/components/social/CommentSection';
 import { type FilterKey } from '@/components/ui/Collection';
@@ -329,8 +330,9 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
           </div>
         </div>
       )}
-      {/* PAGE HEADER container — title + subtitle + a dashed separator, all in one
-          block so it reads as a single, reusable "page header" component. */}
+      {/* Slides uses the reusable DB-driven <PageHeader>; Repositories keeps its
+          own inline editable header (same title → subtitle → dashed-rule block). */}
+      {isSlides ? <PageHeader page="slides" /> : (
       <div className="page-header-block">
       {editHeading === 'galleryTitle' ? (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '0 auto' }}>
@@ -367,6 +369,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
         {/* Dashed separator closing the page-header block. */}
         <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '12px 0 0' }} />
       </div>
+      )}
       {(!loading && tools.length === 0) ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>

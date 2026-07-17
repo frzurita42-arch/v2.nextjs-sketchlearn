@@ -34,6 +34,43 @@ export const PAGE_FIELDS: PageTextField[] = [
 
 export const PAGE_FIELD_KEYS = PAGE_FIELDS.map((f) => f.key);
 
+// ── Reusable page-header definitions ───────────────────────────────────────
+// A <PageHeader page="…"> reads its title/subtitle/emoji from these site_settings
+// keys (falling back to the defaults), so the same header component drives the
+// Slides, Coach and Dashboard pages — all editable from the DB.
+export interface PageHeaderDef {
+  titleKey: string;
+  subtitleKey: string;
+  emojiKey: string;      // the emoji shown before the title (admin can change it)
+  emojiOffKey: string;   // '1' hides the emoji (the 👁 toggle)
+  defaultEmoji: string;
+  defaultTitle: string;
+  defaultSubtitle: string;
+}
+
+export const PAGE_HEADERS: Record<string, PageHeaderDef> = {
+  slides: {
+    titleKey: 'slideGalleryTitle', subtitleKey: 'slideGallerySubtitle',
+    emojiKey: 'slideEmoji', emojiOffKey: 'slideEmojiOff',
+    defaultEmoji: '🎞️', defaultTitle: 'Slides',
+    defaultSubtitle: 'Browse every slide presentation — open one to play it.',
+  },
+  coach: {
+    titleKey: 'coachTitle', subtitleKey: 'coachSubtitle',
+    emojiKey: 'coachEmoji', emojiOffKey: 'coachEmojiOff',
+    defaultEmoji: '💬', defaultTitle: 'Coach chat',
+    defaultSubtitle: 'The coach reads your progress spreadsheet and guides your next steps.',
+  },
+  dashboard: {
+    titleKey: 'dashTitle', subtitleKey: 'dashSubtitle',
+    emojiKey: 'dashEmoji', emojiOffKey: 'dashEmojiOff',
+    defaultEmoji: '🧑‍🏫', defaultTitle: 'Teacher’s dashboard',
+    defaultSubtitle: 'One page at a time — pick a section below.',
+  },
+};
+
+export const PAGE_HEADER_KEYS = Object.values(PAGE_HEADERS).flatMap((d) => [d.titleKey, d.subtitleKey, d.emojiKey, d.emojiOffKey]);
+
 // Clamp a stored per-page value to a sane integer (falls back to the default).
 export function perPageOf(raw: string | undefined, def = 6): number {
   const n = parseInt(String(raw ?? ''), 10);

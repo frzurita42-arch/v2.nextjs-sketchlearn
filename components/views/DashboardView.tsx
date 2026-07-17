@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
 import { PAGE_FIELDS, type PageTextField } from '@/lib/page-settings';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { logActivity, rememberPreset, recallPreset } from '@/lib/activity-log';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
@@ -403,16 +404,14 @@ export function DashboardView() {
 
   return (
     <>
-      {/* Title + subtitle container. */}
-      <h1 className="view-title">Teacher’s <span className="scribble-underline">dashboard</span></h1>
-      <p className="view-sub" style={{ textAlign: 'center' }}>One page at a time — pick a section below.</p>
+      {/* Title + subtitle container (reusable, DB-driven header). */}
+      <PageHeader page="dashboard" />
       {dbOn === false && (
-        <p style={{ textAlign: 'center', fontSize: 12, color: '#b23', margin: '0 0 8px', maxWidth: 720, marginInline: 'auto' }}>
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#b23', margin: '8px 0', maxWidth: 720, marginInline: 'auto' }}>
           ⚠ Database not writable — the app is on temporary file storage, so edits (titles, page text, etc.) don’t stick and revert on reload.
           {dbErr ? <> Reason: <code>{dbErr}</code></> : null} Fix <code>DATABASE_URL</code> (and that the DB is reachable) to persist changes. See <code>/api/health</code>.
         </p>
       )}
-      {rule}
 
       {/* Section picker container (the filtering buttons). */}
       <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '0 0 4px' }}>
