@@ -523,6 +523,10 @@ table.sketch th, table.sketch td {
 }
 table.sketch th { background: var(--yellow); font-family: var(--font-title); font-size: 1.15rem; }
 table.sketch tr:nth-child(even) td { background: #fffbe8; }
+/* Compact variant: for few-column tables whose wide cells + big title-font
+   headers otherwise read oversized. Brings the font in line with denser tables. */
+table.sketch.compact th { font-size: .98rem; }
+table.sketch.compact td { font-size: .85rem; }
 
 /* ---------- chat ---------- */
 .chat-shell { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 380px; }

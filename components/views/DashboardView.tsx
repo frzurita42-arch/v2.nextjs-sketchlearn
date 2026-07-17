@@ -41,7 +41,7 @@ type Cell = string | number | null | undefined | { node: React.ReactNode };
 // cell over CELL_LIMIT chars, revealing the full value in a popup via 👁. The
 // full text stays in the row data, so search/CSV always see it — only the
 // on-screen cell is clipped.
-function PagedTable({ headers, rows, empty, rowIds, onDelete }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void }) {
+function PagedTable({ headers, rows, empty, rowIds, onDelete, compact }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; compact?: boolean }) {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<{ title: string; text: string } | null>(null);
   const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
@@ -51,7 +51,7 @@ function PagedTable({ headers, rows, empty, rowIds, onDelete }: { headers: strin
   const totalCols = headers.length + (canDelete ? 1 : 0);
   return (
     <>
-      <div className="table-wrap"><table className="sketch"><tbody>
+      <div className="table-wrap"><table className={compact ? 'sketch compact' : 'sketch'}><tbody>
         <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
         {slice.length ? slice.map((r, ri) => {
           const abs = p * ROWS_PER_PAGE + ri;
@@ -381,7 +381,7 @@ export function DashboardView() {
 
   // The tables, one per page. `footer` adds extra UI (the add-user form).
   type Chart = { type: ChartType; data: Datum[]; title: string; unit?: string };
-  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; displayRows?: Cell[][]; rowIds?: string[]; empty: string; csv?: () => void; footer?: React.ReactNode; chart?: Chart }[] = [
+  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; displayRows?: Cell[][]; rowIds?: string[]; empty: string; csv?: () => void; footer?: React.ReactNode; chart?: Chart; compact?: boolean }[] = [
     { key: 'slides', label: '🎞️ Slide tools', count: vSlide.length, headers: slideHeaders, rows: slideRows, displayRows: slideDisplayRows, rowIds: slideIds, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows), chart: { type: 'hbar', data: slideChart, title: 'Slides per tool (top 6)' } },
     { key: 'repos', label: '🗂️ Repositories', count: vRepo.length, headers: repoHeaders, rows: repoRows, displayRows: repoDisplayRows, rowIds: repoIds, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows), chart: { type: 'hbar', data: repoChart, title: 'Cards per repository (top 6)' } },
     { key: 'runs', label: '📊 Presentation runs', count: vRuns.length, headers: runHeaders, rows: runRows, rowIds: runIds, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows), chart: { type: 'bar', data: runChart, title: 'Average grade by user', unit: '%' } },
@@ -389,7 +389,7 @@ export function DashboardView() {
     { key: 'cost', label: '📉 Cost by user', count: vCost.length, headers: costHeaders, rows: costRows, rowIds: costIds, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
     { key: 'components', label: '🧩 Component usage', count: vComp.length, headers: compHeaders, rows: compRows, rowIds: compIds, empty: 'No component usage yet.', csv: () => exportRows('component-usage', compHeaders, compRows), chart: { type: 'donut', data: compChart, title: 'Which components are used' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Every row is one component used on a played slide — its type, how it was used, whether the learner got it right, and the slide template. Real rows come from saved decks; clearly-marked (example) rows backfill so the AI can learn which components suit which subjects.</p> },
     { key: 'build', label: '🏗️ Website building', count: vBuild.length, headers: buildHeaders, rows: buildRows, rowIds: buildIds, empty: 'No build log yet.', csv: () => exportRows('website-build-log', buildHeaders, buildRows), chart: { type: 'bar', data: buildChart, title: 'Est. tokens per change' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The site’s own construction log: each request (prompt), a short result summary, future recommendations, a context note on what the site is/does, plus estimated tokens, files and the commit. Estimated build tokens so far: <b>{buildTokens.toLocaleString()}</b>.</p> },
-    { key: 'registry', label: '🧱 Components', count: vRegShown.length, headers: regHeaders, rows: regRows, rowIds: regIds, empty: vReg.length ? 'No components match your search.' : 'No components registered yet.', csv: () => exportRows('component-registry', regHeaders, regRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Your containers & components: what each is, where it lives, a usage/improvement note, and when it was added. Tell me to add or remove entries and I’ll update this table.</p> },
+    { key: 'registry', label: '🧱 Components', count: vRegShown.length, headers: regHeaders, rows: regRows, rowIds: regIds, compact: true, empty: vReg.length ? 'No components match your search.' : 'No components registered yet.', csv: () => exportRows('component-registry', regHeaders, regRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Your containers & components: what each is, where it lives, a usage/improvement note, and when it was added. Tell me to add or remove entries and I’ll update this table.</p> },
     { key: 'activities', label: '🎛️ Slide activities', count: vAct.length, headers: actHeaders, rows: actRows, rowIds: actIds, empty: 'No activities.', csv: () => exportRows('slide-activities', actHeaders, actRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The engaging activities (no tooltips) a generated slide tool is built from. “Create a slide tool from this repo” in a study path wires all of these into the new presentation generator, then its prompts generate the slides.</p> },
     {
       key: 'users', label: '👥 Users', count: vUsers.length, headers: userHeaders, rows: userRows, rowIds: vUsers.map((u: any) => String(u.username)), empty: 'No users.',
@@ -486,7 +486,7 @@ export function DashboardView() {
                 {regAi && regAiIds && !regAiErr && <span style={{ fontSize: 12, opacity: 0.65 }}>🤖 showing {vRegShown.length} of {vReg.length}</span>}
               </div>
             )}
-            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} />
+            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} compact={sec.compact} />
             {sec.footer}
           </div>
         );
