@@ -300,23 +300,26 @@ export function DashboardView() {
   const vUsers = usersList.filter((u: any) => notHidden('users')(u.username));
 
   // ---- rows for each table (plain strings, reused for table + CSV) ----
-  const slideHeaders = ['Title', 'Owner', 'Visibility', 'Slides', 'Saved deck', 'AI', 'Created'];
-  const slideRows: (string | number)[][] = vSlide.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.slideCount || '—', t.hasSavedDeck ? '📖 yes' : '—', t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+  const joinKeywords = (k: any) => Array.isArray(k) ? k.slice(0, 10).join(', ') : '—';
+  const slideHeaders = ['Title', 'Owner', 'Visibility', 'Created', 'Last edited', 'Keywords', 'Slides', 'Saved deck', 'AI'];
+  const slideRows: (string | number)[][] = vSlide.map((t: any) => [t.title, `@${t.owner}`, t.visibility, fmtDate(t.createdAt), fmtDate(t.slideLastEdited || t.updatedAt || t.createdAt), joinKeywords(t.slideKeywords), t.slideCount || '—', t.hasSavedDeck ? '📖 yes' : '—', t.aiGenerated ? '✦' : '—']);
   const slideIds = vSlide.map((t: any) => String(t.slug));
-  const repoHeaders = ['Title', 'Owner', 'Visibility', 'Cards', 'Kind', 'AI', 'Last edited', 'Image'];
+  const repoHeaders = ['Title', 'Owner', 'Visibility', 'Created', 'Last edited', 'Keywords', 'Cards', 'Kind', 'AI', 'Image'];
   const repoRows: (string | number)[][] = vRepo.map((t: any) => [
     t.title,
     `@${t.owner}`,
     t.visibility,
+    fmtDate(t.createdAt),
+    fmtDate(t.repoLastEdited || t.updatedAt || t.createdAt),
+    joinKeywords(t.repoKeywords),
     t.cardCount || '—',
     t.archetype,
     t.aiGenerated ? '✦' : '—',
-    fmtDate(t.repoLastEdited || t.updatedAt || t.createdAt),
     t.repoImageUrl ? `${t.repoImageKind || 'Saved image'} — ${t.repoImageTitle || 'card'}` : '—',
   ]);
   const repoIds = vRepo.map((t: any) => String(t.slug));
-  const runHeaders = ['User', 'Presentation', 'Topic', 'Level', 'Theme', 'Slides', 'Grade', 'Date'];
-  const runRows: (string | number)[][] = vRuns.map((r: any) => [`@${r.user}`, r.toolTitle, r.topic || '—', r.level || '—', r.theme || '—', r.slides || '—', r.score == null ? '—' : `${r.score}%`, fmtDate(r.createdAt)]);
+  const runHeaders = ['User', 'Presentation', 'Created', 'Last edited', 'Keywords', 'Topic', 'Level', 'Theme', 'Slides', 'Grade'];
+  const runRows: (string | number)[][] = vRuns.map((r: any) => [`@${r.user}`, r.toolTitle, fmtDate(r.createdAt), fmtDate(r.updatedAt || r.createdAt), joinKeywords(r.runKeywords), r.topic || '—', r.level || '—', r.theme || '—', r.slides || '—', r.score == null ? '—' : `${r.score}%`]);
   const runIds = vRuns.map((r: any) => String(r.id));
   const usageHeaders = ['User', 'Component', 'Provider', 'Tokens', 'Cost', 'Subject', 'Prompt', 'Date'];
   const usageRows: (string | number)[][] = vUsage.map((u: any) => [`@${u.user}`, u.kind, u.provider || '—', u.totalTokens || 0, money(u.costUsd), u.subject || '—', u.prompt || '—', fmtDate(u.createdAt)]);
@@ -392,7 +395,7 @@ export function DashboardView() {
   // Display rows: same as the plain rows but with an editable title cell in col 0.
   // (The plain rows stay for CSV export + the AI-visual text summary.)
   const slideDisplayRows: Cell[][] = vSlide.map((t: any, i: number) => [titleCell(t), ...slideRows[i].slice(1)]);
-  const repoDisplayRows: Cell[][] = vRepo.map((t: any, i: number) => [titleCell(t), ...repoRows[i].slice(1, 6), repoRows[i][6], repoImageCell(t)]);
+  const repoDisplayRows: Cell[][] = vRepo.map((t: any, i: number) => [titleCell(t), ...repoRows[i].slice(1, 9), repoImageCell(t)]);
 
   const totalCost = vCost.reduce((s: number, u: any) => s + (Number(u.cost) || 0), 0);
 

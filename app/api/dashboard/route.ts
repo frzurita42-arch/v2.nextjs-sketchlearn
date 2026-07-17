@@ -35,7 +35,8 @@ export async function GET(req: Request) {
   const tools = rawTools.map((t: any) => {
     const def = t.definition || {};
     const cardCount = (def.repo && Array.isArray(def.repo.cards)) ? countCards(def.repo.cards) : 0;
-    const repoMeta = def.repo && Array.isArray(def.repo.cards) ? collectRepoMeta(def.repo.cards) : { lastEdited: null, imageUrl: '', imageTitle: '', imageKind: '' };
+    const repoMeta = def.repo && Array.isArray(def.repo.cards) ? collectRepoMeta(def.repo.cards) : { lastEdited: null, imageUrl: '', imageTitle: '', imageKind: '', keywords: [] as string[] };
+    const lessonMeta = def.lesson ? collectLessonMeta(def.lesson) : { lastEdited: null, keywords: [] as string[] };
     const slideCount = def.lesson ? (parseInt(def.lesson.totalSlides, 10) || (Array.isArray(def.lesson.pages) ? def.lesson.pages.length : 0)) : 0;
     const hasSavedDeck = !!(def.lesson && def.lesson.savedDeck && Array.isArray(def.lesson.savedDeck.slides) && def.lesson.savedDeck.slides.length);
     return {
@@ -50,6 +51,9 @@ export async function GET(req: Request) {
       repoImageUrl: repoMeta.imageUrl,
       repoImageTitle: repoMeta.imageTitle,
       repoImageKind: repoMeta.imageKind,
+      repoKeywords: repoMeta.keywords,
+      slideLastEdited: lessonMeta.lastEdited,
+      slideKeywords: lessonMeta.keywords,
     };
   });
   const byId: Record<string, any> = {};
@@ -63,13 +67,21 @@ export async function GET(req: Request) {
       const tool = byId[e.toolId] || {};
       const d = e.data || {};
       const scoreNum = typeof d.score === 'number' ? d.score : null;
+      const createdAt = e.createdAt || null;
+      const updatedAt = e.updatedAt || e.createdAt || null;
+      const keywords = makeKeywords([
+        tool.title || '', d.topic || '', d.level || d.difficulty || '', d.theme || '', d.imageStyle || '', d.density || '',
+        d.slides ? `slides ${d.slides}` : '',
+        d.subject || '', d.course || '', d.unit || '',
+      ].join(' '), 10);
       return {
         id: e.id, user: e.username || 'anon',
         toolTitle: tool.title || '(deleted tool)', toolSlug: tool.slug || '', archetype: tool.archetype || '',
         topic: d.topic || '', level: d.level || d.difficulty || '', theme: d.theme && d.theme !== 'Any' ? d.theme : '',
         imageStyle: d.imageStyle && d.imageStyle !== 'Any' ? d.imageStyle : '',
         density: d.density || '', slides: parseInt(d.slides, 10) || tool.slideCount || 0,
-        score: scoreNum, createdAt: e.createdAt || null,
+        score: scoreNum, createdAt, updatedAt,
+        runKeywords: keywords,
       };
     })
     .filter((r: any) => r.archetype === 'lesson' || r.score !== null);
@@ -144,15 +156,17 @@ function countCards(cards: any[]): number {
   return n;
 }
 
-function collectRepoMeta(cards: any[]): { lastEdited: string | null; imageUrl: string; imageTitle: string; imageKind: string } {
+function collectRepoMeta(cards: any[]): { lastEdited: string | null; imageUrl: string; imageTitle: string; imageKind: string; keywords: string[] } {
   let lastEdited: string | null = null;
   let imageUrl = '';
   let imageTitle = '';
   let imageKind = '';
+  const keywords = new Set<string>();
   const walk = (nodes: any[]) => {
     for (const c of (Array.isArray(nodes) ? nodes : [])) {
       const edited = String(c?.lastEdited || c?.createdAt || '').trim();
       if (edited && (!lastEdited || new Date(edited).getTime() > new Date(lastEdited).getTime())) lastEdited = edited;
+      addKeywords(keywords, [c?.title, c?.subtitle, c?.text, c?.aiPrompt, c?.icon, c?.mode]);
       if (!imageUrl) {
         const url = String(c?.genImage || c?.image || '').trim();
         if (url) {
@@ -165,5 +179,44 @@ function collectRepoMeta(cards: any[]): { lastEdited: string | null; imageUrl: s
     }
   };
   walk(cards);
-  return { lastEdited, imageUrl, imageTitle, imageKind };
+  return { lastEdited, imageUrl, imageTitle, imageKind, keywords: takeKeywords(keywords, 10) };
+}
+
+function collectLessonMeta(lesson: any): { lastEdited: string | null; keywords: string[] } {
+  const keywords = new Set<string>();
+  const deck = lesson?.savedDeck;
+  let lastEdited: string | null = null;
+  if (deck && deck.savedAt) lastEdited = String(deck.savedAt);
+  addKeywords(keywords, [lesson?.title, lesson?.description, lesson?.subjectKind, lesson?.mode, lesson?.totalSlides]);
+  const pages = Array.isArray(lesson?.pages) ? lesson.pages : [];
+  for (const p of pages) addKeywords(keywords, [p?.title, p?.subtitle, p?.text, p?.kind, p?.type]);
+  if (deck && Array.isArray(deck.slides)) {
+    for (const s of deck.slides) {
+      addKeywords(keywords, [s?.title, s?.subtitle, s?.text, s?.template]);
+      if (Array.isArray(s?.questions)) for (const q of s.questions) addKeywords(keywords, [q?.prompt, q?.kind, q?.answer]);
+    }
+  }
+  return { lastEdited, keywords: takeKeywords(keywords, 10) };
+}
+
+function addKeywords(set: Set<string>, values: any[]) {
+  const words = makeKeywords(values.join(' '), 40);
+  for (const w of words) set.add(w);
+}
+
+function makeKeywords(text: string, limit = 10): string[] {
+  const stop = new Set(['the','and','for','with','from','that','this','your','you','are','was','were','will','have','has','had','not','but','into','onto','about','slide','slides','tool','tools','presentation','presentations','repo','repository','run','runs','card','cards','lesson','lessons']);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of String(text || '').toLowerCase().match(/[a-z0-9]+/g) || []) {
+    if (raw.length < 3 || stop.has(raw) || seen.has(raw)) continue;
+    seen.add(raw);
+    out.push(raw);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function takeKeywords(set: Set<string>, limit = 10): string[] {
+  return Array.from(set).slice(0, limit);
 }
