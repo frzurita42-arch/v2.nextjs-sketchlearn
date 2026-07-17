@@ -33,28 +33,42 @@ export const ENGAGING_ACTIVITY_TYPES = SLIDE_ACTIVITIES.filter((a) => a.kind ===
 // charts/diagrams via images, code, math). `audio` stays off (not an activity).
 export const ENGAGING_SUPPORT = { images: true, code: true, tables: true, formulas: true, geogebra: true, audio: false };
 
+// Difficulty options a study tool can default to (matches the app's LEVELS).
+export const STUDY_LEVELS = ['Beginner', 'Lower Intermediate', 'Upper Intermediate', 'Advanced', 'PhD'];
+// "Length" = how much text sits on each slide.
+export const STUDY_LENGTHS: { key: 'brief' | 'medium' | 'detailed'; label: string }[] = [
+  { key: 'brief', label: 'Brief' },
+  { key: 'medium', label: 'Medium' },
+  { key: 'detailed', label: 'Detailed' },
+];
+
 // Build a lesson tool definition from a repo (its title/description/context),
-// wired to use all the engaging activities and NO tooltips.
-export function buildStudyToolDefinition(opts: { title: string; context?: string; slides?: number }): any {
+// wired to use all the engaging activities and NO tooltips. `level` sets the
+// default difficulty; `slides` the deck length; `length` the per-slide text depth.
+export function buildStudyToolDefinition(opts: { title: string; context?: string; slides?: number; level?: string; length?: 'brief' | 'medium' | 'detailed' }): any {
   const base = (opts.title || 'Study').trim().slice(0, 60);
   const context = (opts.context || '').trim().slice(0, 400);
+  const level = STUDY_LEVELS.includes(opts.level || '') ? opts.level : 'Beginner';
+  const length = (['brief', 'medium', 'detailed'] as const).includes(opts.length as any) ? opts.length : 'medium';
+  const slides = Math.max(3, Math.min(15, opts.slides || 8));
   return {
     version: 1,
     archetype: 'lesson',
     title: `${base} — Slide Activities`,
-    description: `Slide generator for “${base}”. Uses ${SLIDE_ACTIVITIES.length} engaging activity types (no tooltips).`,
+    description: `Slide generator for “${base}”. ${slides} slides · ${level} · ${length}. Uses ${SLIDE_ACTIVITIES.length} engaging activity types (no tooltips).`,
     tags: ['study-path', 'generated'],
     lesson: {
       subject: base,
       subjectKind: 'general',
-      totalSlides: Math.max(3, Math.min(15, opts.slides || 8)),
+      level,
+      totalSlides: slides,
       translateTo: 'English',
-      paragraphsPerSlide: 1,
-      paragraphLength: 'medium',
+      paragraphsPerSlide: length === 'detailed' ? 2 : 1,
+      paragraphLength: length,
       support: ENGAGING_SUPPORT,
       activityTypes: ENGAGING_ACTIVITY_TYPES,
       style: [
-        `Teach one idea per slide, then check it with a VARIED, engaging activity — rotate through: ${SLIDE_ACTIVITIES.map((a) => a.label).join(', ')}.`,
+        `Teach one idea per slide at a ${level} level, then check it with a VARIED, engaging activity — rotate through: ${SLIDE_ACTIVITIES.map((a) => a.label).join(', ')}.`,
         'Never rely on tooltips or hover-hints (some students can’t use them).',
         context ? `Base the content on this study path: ${context}` : '',
       ].filter(Boolean).join(' '),

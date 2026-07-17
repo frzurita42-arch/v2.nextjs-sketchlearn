@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
-import { buildStudyToolDefinition, SLIDE_ACTIVITIES } from '@/lib/slide-activities';
+import { buildStudyToolDefinition, SLIDE_ACTIVITIES, STUDY_LEVELS, STUDY_LENGTHS } from '@/lib/slide-activities';
 import { useApp } from '@/components/AppContext';
 import { RichText } from '@/components/tools/RichText';
 import { ImageField } from '@/components/tools/ImageField';
@@ -1245,6 +1245,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const [studyToolList, setStudyToolList] = useState<{ slug: string; title: string }[]>([]);
   // Command-center mode: reuse an existing tool, create one from this repo, or ask AI.
   const [ccMode, setCcMode] = useState<'existing' | 'create' | 'ai'>('existing');
+  // Defaults for a newly created slide tool: difficulty (level), deck length, text depth.
+  const [ccLevel, setCcLevel] = useState('Beginner');
+  const [ccSlides, setCcSlides] = useState(8);
+  const [ccLength, setCcLength] = useState<'brief' | 'medium' | 'detailed'>('medium');
   useEffect(() => {
     if (!canEdit) return;
     API.get('/api/tools').then((r: any) => {
@@ -1469,7 +1473,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const createStudyTool = async () => {
     setCreatingTool(true);
     try {
-      const definition = buildStudyToolDefinition({ title: def?.title || 'Study', context: def?.description || '' });
+      const definition = buildStudyToolDefinition({ title: def?.title || 'Study', context: def?.description || '', level: ccLevel, slides: ccSlides, length: ccLength });
       const r: any = await API.post('/api/tools', { definition, visibility: 'unlisted' });
       if (r?.slug) {
         await saveStudyTool(r.slug);
@@ -1656,10 +1660,27 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
                   {ccMode === 'create' && (
                     <div style={{ width: '100%', maxWidth: 460, textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 8 }}>
+                        <label style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>🎚️ Difficulty
+                          <select value={ccLevel} onChange={(e) => setCcLevel(e.target.value)} style={{ fontSize: 12 }}>
+                            {STUDY_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>📄 Slides
+                          <input type="number" min={3} max={15} value={ccSlides}
+                            onChange={(e) => setCcSlides(Math.max(3, Math.min(15, parseInt(e.target.value, 10) || 8)))}
+                            style={{ fontSize: 12, width: 56 }} />
+                        </label>
+                        <label style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>📏 Length
+                          <select value={ccLength} onChange={(e) => setCcLength(e.target.value as any)} style={{ fontSize: 12 }}>
+                            {STUDY_LENGTHS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
+                          </select>
+                        </label>
+                      </div>
                       <button className="btn small green" disabled={creatingTool} onClick={createStudyTool}>
                         {creatingTool ? 'Creating…' : `✨ Create a slide tool (${SLIDE_ACTIVITIES.length} activities)`}
                       </button>
-                      <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Builds a new presentation generator from this repo’s title &amp; description, wired to {SLIDE_ACTIVITIES.length} engaging activities (no tooltips), and points the study buttons at it.</div>
+                      <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Builds a new presentation generator from this repo’s title &amp; description at {ccLevel} · {ccSlides} slides · {ccLength} text, wired to {SLIDE_ACTIVITIES.length} engaging activities (no tooltips). These are the tool’s defaults — each play can still tweak them.</div>
                     </div>
                   )}
 
