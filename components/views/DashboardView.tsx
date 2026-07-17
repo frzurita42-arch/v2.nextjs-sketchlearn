@@ -87,7 +87,7 @@ export function DashboardView() {
   const app = useApp();
   const [usersList, setUsersList] = useState<any[] | null>(null);
   const [games, setGames] = useState<any[]>([]);
-  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[] } | null>(null);
+  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[] } | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [tab, setTab] = useState(0);
@@ -172,6 +172,7 @@ export function DashboardView() {
   const runs = dash?.runs || [];
   const usage = dash?.usage || [];
   const usageByUser = dash?.usageByUser || [];
+  const componentUsage = dash?.componentUsage || [];
 
   if (error) return <div className="card">{error}</div>;
   if (usersList === null || dash === null) return <Loading text="Opening the teacher’s desk…" />;
@@ -213,6 +214,11 @@ export function DashboardView() {
   const usageRows: (string | number)[][] = usage.map((u: any) => [`@${u.user}`, u.kind, u.provider || '—', u.totalTokens || 0, money(u.costUsd), u.subject || '—', u.prompt || '—', fmtDate(u.createdAt)]);
   const costHeaders = ['User', 'Generations', 'Tokens', 'Images', 'Total cost'];
   const costRows: (string | number)[][] = usageByUser.map((u: any) => [`@${u.user}`, u.events, u.tokens, u.images, money(u.cost)]);
+  const compHeaders = ['Component', 'How used', 'Correct?', 'Template', 'Tool', 'Topic', 'Level', 'Kind', 'Date'];
+  const compRows: (string | number)[][] = componentUsage.map((c: any) => [
+    c.component, c.role || '—', c.correct === true ? '✓' : c.correct === false ? '✗' : '—',
+    c.template || '—', c.tool || '—', c.topic || '—', c.level || '—', c.subjectKind || '—', fmtDate(c.createdAt),
+  ]);
   const gameHeaders = ['User', 'Date', 'Topic', 'Concept', 'Level', 'Score', 'Time'];
   const gameRows: (string | number)[][] = games.slice().reverse().map((g: any) => [g.username, fmtDate(g.finishedAt), g.topic, g.concept, g.level, `${g.correct}/${g.total}`, `${Math.floor(g.durationSec / 60)}:${String(g.durationSec % 60).padStart(2, '0')}`]);
   const userHeaders = ['Username', 'Role', 'Created', 'Games', 'Actions'];
@@ -256,6 +262,9 @@ export function DashboardView() {
   usersList.forEach((u: any) => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
   const userChart: Datum[] = Object.entries(roleCount).map(([k, v]) => ({ label: k, value: v }));
   const gameChart: Datum[] = games.slice(-12).map((g: any, i: number) => ({ label: String(i + 1), value: g.total ? Math.round((g.correct / g.total) * 100) : 0 }));
+  const compByType: Record<string, number> = {};
+  componentUsage.forEach((c: any) => { compByType[c.component] = (compByType[c.component] || 0) + 1; });
+  const compChart: Datum[] = topN(Object.entries(compByType).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value), 10);
 
   // Turn a table into a compact text summary for the AI visual generator.
   const summarize = (name: string, headers: string[], rows: Cell[][]) =>
@@ -270,6 +279,7 @@ export function DashboardView() {
     { key: 'runs', label: '📊 Presentation runs', count: runs.length, headers: runHeaders, rows: runRows, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows), chart: { type: 'bar', data: runChart, title: 'Average grade by user', unit: '%' } },
     { key: 'usage', label: '💸 Token usage', count: usage.length, headers: usageHeaders, rows: usageRows, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows), chart: { type: 'donut', data: usageChart, title: 'Tokens by component' } },
     { key: 'cost', label: '📉 Cost by user', count: usageByUser.length, headers: costHeaders, rows: costRows, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
+    { key: 'components', label: '🧩 Component usage', count: componentUsage.length, headers: compHeaders, rows: compRows, empty: 'No component usage yet.', csv: () => exportRows('component-usage', compHeaders, compRows), chart: { type: 'donut', data: compChart, title: 'Which components are used' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Every row is one component used on a played slide — its type, how it was used, whether the learner got it right, and the slide template. Real rows come from saved decks; clearly-marked (example) rows backfill so the AI can learn which components suit which subjects.</p> },
     {
       key: 'users', label: '👥 Users', count: usersList.length, headers: userHeaders, rows: userRows, empty: 'No users.',
       chart: { type: 'donut', data: userChart, title: 'Users by role' },

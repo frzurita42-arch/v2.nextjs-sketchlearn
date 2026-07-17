@@ -7,6 +7,8 @@ const { listTools, listRecentEntries } = require('@/src/db/platform');
 const { listUsage } = require('@/src/db/usage');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { EXAMPLE_USAGE } = require('@/src/tools/example-usage');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { EXAMPLE_COMPONENT_USAGE } = require('@/src/tools/example-component-usage');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -82,7 +84,41 @@ export async function GET(req: Request) {
   }
   const usageByUser = Object.values(byUser).sort((a: any, b: any) => b.cost - a.cost);
 
-  return NextResponse.json({ tools, runs, usage, usageByUser }, { headers: { 'Cache-Control': 'no-cache' } });
+  // Component usage — which slide components are actually being used, how, and how
+  // learners do on them. Derive REAL rows from every tool's saved deck (its slides
+  // carry the components + the author's results), then backfill with clearly-marked
+  // EXAMPLE rows so the table/chart are never empty.
+  const realComponentUsage: any[] = [];
+  for (const t of rawTools) {
+    const deck = t.definition?.lesson?.savedDeck;
+    if (!deck || !Array.isArray(deck.slides)) continue;
+    const subjectKind = t.definition?.lesson?.subjectKind || 'general';
+    const results = (deck.results && typeof deck.results === 'object') ? deck.results : {};
+    deck.slides.forEach((sl: any, si: number) => {
+      const template = String(sl?.template || sl?.layout || 'default');
+      const topic = String(deck.config?.topic || t.title || '');
+      const level = String(deck.config?.level || deck.config?.difficulty || t.definition?.lesson?.level || '');
+      const base = { tool: t.title, slug: t.slug, user: deck.savedBy || t.owner || 'anon', topic, level, subjectKind, template, createdAt: deck.savedAt || t.createdAt || null };
+      // Content components on the slide.
+      for (const comp of (Array.isArray(sl?.components) ? sl.components : [])) {
+        const type = String(comp?.type || comp?.kind || '').trim();
+        if (type) realComponentUsage.push({ id: `cu-${t.slug}-${si}-${type}-${realComponentUsage.length}`, component: type, role: (type === 'image' || type === 'svg' || type === 'chart') ? 'visual' : 'teaching', correct: null, ...base });
+      }
+      // Question components — correctness from the saved results.
+      (Array.isArray(sl?.questions) ? sl.questions : []).forEach((q: any, qi: number) => {
+        const kind = String(q?.kind || 'mcq');
+        const ans = results[si]?.answers?.[qi];
+        realComponentUsage.push({ id: `cu-${t.slug}-${si}-q${qi}`, component: kind, role: 'question', correct: typeof ans?.correct === 'boolean' ? ans.correct : null, ...base });
+      });
+    });
+  }
+  const componentUsage = [...realComponentUsage, ...EXAMPLE_COMPONENT_USAGE].map((c: any) => ({
+    id: c.id, component: c.component || '', role: c.role || '', correct: c.correct,
+    template: c.template || '', tool: c.tool || '', topic: c.topic || '', level: c.level || '',
+    subjectKind: c.subjectKind || '', createdAt: c.createdAt || null, user: c.user || 'anon',
+  }));
+
+  return NextResponse.json({ tools, runs, usage, usageByUser, componentUsage }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 function countCards(cards: any[]): number {
