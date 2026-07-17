@@ -88,6 +88,19 @@ export default function AppRoot() {
       API.token = token;
       try { API.user = JSON.parse(localStorage.getItem('sl_user') || 'null'); } catch { API.user = null; }
       setUser(API.user);
+      // Re-verify the role against the server: it may have CHANGED since login (e.g.
+      // a moderator who spent past zero was dropped back to a plain user, or an
+      // admin granted tokens and promoted them). This keeps role-gated buttons in
+      // sync after a refresh instead of trusting the cached login role forever.
+      API.get('/api/me').then((me: any) => {
+        if (!me?.username) return;
+        const fresh = { username: me.username, role: me.role } as SessionUser;
+        if (!API.user || API.user.role !== fresh.role || API.user.username !== fresh.username) {
+          API.user = fresh;
+          try { localStorage.setItem('sl_user', JSON.stringify(fresh)); } catch { /* ignore */ }
+          setUser(fresh);
+        }
+      }).catch(() => { /* offline / expired token — keep the cached user */ });
     }
   }, []);
 
