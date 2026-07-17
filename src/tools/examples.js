@@ -41,6 +41,10 @@ function exLesson(o) {
 
 const EXAMPLE_TOOLS = [
   exLesson({ slug: 'example-easy-french', title: 'Easy French — Example Lesson', subject: 'French', kind: 'language', language: 'French', levels: ['A1', 'A2', 'B1'], tags: ['language', 'french'], support: { images: true, audio: true }, desc: 'A ready-made beginner French lesson you can play right now. Hit “Generate & play” to see how lesson tools work.' }),
+  // Chinese character TRACING lesson: each slide shows a character and asks you to
+  // trace/write it on a canvas — the AI checks your handwriting (the 'writing'
+  // activity). A guided beginner path, playable right away.
+  exLesson({ slug: 'example-chinese-characters', title: 'Chinese Characters — Trace & Learn', subject: 'Chinese Characters', kind: 'language', language: 'Chinese', levels: ['HSK 1', 'HSK 2', 'HSK 3'], tags: ['language', 'chinese'], support: { images: true, audio: true }, acts: ['writing', 'mcq', 'input'], style: 'Teach common Chinese characters. On most slides ask the learner to TRACE/write the character on the canvas (the writing activity), showing the character, its pinyin and meaning as support. Mix in a few multiple-choice or typed recall questions.', desc: 'Learn Chinese characters by tracing them on a canvas — the AI checks your handwriting. Shows the character, pinyin and meaning, then you write it. A guided beginner path, ready to play.' }),
   exLesson({ slug: 'example-easy-math', title: 'Easy Math — Example Lesson', subject: 'Basic Math', kind: 'math', levels: ['Beginner', 'Intermediate'], tags: ['math'], support: { tables: true, formulas: true }, desc: 'A ready-made beginner math lesson with formulas and quick questions. A simple example of a playable lesson tool.' }),
   exLesson({ slug: 'example-spanish', title: 'Spanish Starter — Example Lesson', subject: 'Spanish', kind: 'language', language: 'Spanish', levels: ['A1', 'A2', 'B1'], tags: ['language', 'spanish'], support: { images: true, audio: true }, desc: 'Everyday Spanish phrases you can hear, translate and practice — a friendly example lesson.' }),
   exLesson({ slug: 'example-biology', title: 'Intro Biology — Example Lesson', subject: 'Biology', kind: 'general', tags: ['science', 'biology'], support: { images: true, tables: true }, desc: 'Cells, life and the basics of biology, one clear idea per slide with quick checks.' }),
@@ -141,11 +145,28 @@ function exRepo(o) {
     definition: {
       version: 1, archetype: 'repo', title: o.title, description: o.desc, tags,
       settings: [],
-      repo: { layout: 'post', display: 'bars', offlineExport: false, imageGen: false, showDates: true, cards: o.cards },
+      repo: { layout: 'post', display: 'bars', offlineExport: false, imageGen: false, showDates: true,
+        ...(o.studyMode ? { studyMode: true } : {}), ...(o.studyToolSlug ? { studyToolSlug: o.studyToolSlug } : {}),
+        cards: o.cards },
     },
   };
 }
 const REPO_EXAMPLES = [
+  // A guided STUDY-PATH repo: study-path mode is on, so each 🔵 prompt card gets a
+  // 🎬 button that opens the Chinese tracing lesson tool preset with that unit's
+  // prompt. The clearest example of "a repo that guides you through learning
+  // something, feeding prompts into a lesson tool."
+  exRepo({
+    slug: 'example-chinese-study-path', title: 'Chinese Characters — Study Path', tags: ['language', 'chinese', 'education'],
+    studyMode: true, studyToolSlug: 'example-chinese-characters',
+    desc: 'A guided path to learn Chinese characters. Each 🔵 unit card opens the tracing lesson tool with that unit preset — trace the characters and the AI checks your handwriting.',
+    cards: [
+      { id: 'u1', kind: 'card', title: 'Unit 1 — Numbers 一 二 三', text: '🔵 Teach the Chinese characters for numbers 1–10 (一 二 三 四 五 六 七 八 九 十). Show each character with its pinyin and meaning, then have me trace/write it on the canvas.' },
+      { id: 'u2', kind: 'card', title: 'Unit 2 — People 人 大 小', text: '🔵 Teach basic people & size characters (人 大 小 男 女 子). Show pinyin and meaning for each, then have me trace it.' },
+      { id: 'u3', kind: 'card', title: 'Unit 3 — Nature 日 月 水 火', text: '🔵 Teach nature characters (日 月 水 火 山 木 土). Trace each one, with pinyin and meaning shown as support.' },
+      { id: 'u4', kind: 'card', title: 'How to use this study path', text: 'Tap a 🔵 unit card’s 🎬 button to open the tracing lesson with that unit preset, then play through — tracing each character as the AI checks your handwriting.', mode: 'approved' },
+    ],
+  }),
   exRepo({
     slug: 'example-study-hub', title: 'Study Resources Hub — Example Repository', tags: ['education'],
     desc: 'A ready-made collection of free study resources — open it to see how a repository of link cards works.',
