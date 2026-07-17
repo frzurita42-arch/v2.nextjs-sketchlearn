@@ -88,7 +88,7 @@ export function DashboardView() {
   const app = useApp();
   const [usersList, setUsersList] = useState<any[] | null>(null);
   const [games, setGames] = useState<any[]>([]);
-  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[] } | null>(null);
+  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[]; buildLog?: any[] } | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   // Remember the last dashboard section so it reopens where you left off, and log
@@ -188,6 +188,7 @@ export function DashboardView() {
   const usage = dash?.usage || [];
   const usageByUser = dash?.usageByUser || [];
   const componentUsage = dash?.componentUsage || [];
+  const buildLog = dash?.buildLog || [];
 
   if (error) return <div className="card">{error}</div>;
   if (usersList === null || dash === null) return <Loading text="Opening the teacher’s desk…" />;
@@ -233,6 +234,11 @@ export function DashboardView() {
   const compRows: (string | number)[][] = componentUsage.map((c: any) => [
     c.component, c.role || '—', c.correct === true ? '✓' : c.correct === false ? '✗' : '—',
     c.template || '—', c.tool || '—', c.topic || '—', c.level || '—', c.subjectKind || '—', fmtDate(c.createdAt),
+  ]);
+  const buildHeaders = ['Date', 'Request (prompt)', 'Result / progress', 'Recommendations', 'Context', 'Tokens', 'Files', 'Commit', 'Status'];
+  const buildRows: (string | number)[][] = buildLog.map((e: any) => [
+    fmtDate(e.date), e.prompt || '—', e.summary || '—', e.recommendations || '—', e.context || '—',
+    e.tokens || 0, e.files || 0, e.commit || '—', e.status || '—',
   ]);
   const gameHeaders = ['User', 'Date', 'Topic', 'Concept', 'Level', 'Score', 'Time'];
   const gameRows: (string | number)[][] = games.slice().reverse().map((g: any) => [g.username, fmtDate(g.finishedAt), g.topic, g.concept, g.level, `${g.correct}/${g.total}`, `${Math.floor(g.durationSec / 60)}:${String(g.durationSec % 60).padStart(2, '0')}`]);
@@ -280,6 +286,8 @@ export function DashboardView() {
   const compByType: Record<string, number> = {};
   componentUsage.forEach((c: any) => { compByType[c.component] = (compByType[c.component] || 0) + 1; });
   const compChart: Datum[] = topN(Object.entries(compByType).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value), 10);
+  const buildTokens = buildLog.reduce((s: number, e: any) => s + (Number(e.tokens) || 0), 0);
+  const buildChart: Datum[] = buildLog.filter((e: any) => e.status !== 'context').slice(0, 10).map((e: any) => ({ label: e.commit || fmtDate(e.date), value: Number(e.tokens) || 0 }));
 
   // Turn a table into a compact text summary for the AI visual generator.
   const summarize = (name: string, headers: string[], rows: Cell[][]) =>
@@ -295,6 +303,7 @@ export function DashboardView() {
     { key: 'usage', label: '💸 Token usage', count: usage.length, headers: usageHeaders, rows: usageRows, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows), chart: { type: 'donut', data: usageChart, title: 'Tokens by component' } },
     { key: 'cost', label: '📉 Cost by user', count: usageByUser.length, headers: costHeaders, rows: costRows, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
     { key: 'components', label: '🧩 Component usage', count: componentUsage.length, headers: compHeaders, rows: compRows, empty: 'No component usage yet.', csv: () => exportRows('component-usage', compHeaders, compRows), chart: { type: 'donut', data: compChart, title: 'Which components are used' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Every row is one component used on a played slide — its type, how it was used, whether the learner got it right, and the slide template. Real rows come from saved decks; clearly-marked (example) rows backfill so the AI can learn which components suit which subjects.</p> },
+    { key: 'build', label: '🏗️ Website building', count: buildLog.length, headers: buildHeaders, rows: buildRows, empty: 'No build log yet.', csv: () => exportRows('website-build-log', buildHeaders, buildRows), chart: { type: 'bar', data: buildChart, title: 'Est. tokens per change' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The site’s own construction log: each request (prompt), a short result summary, future recommendations, a context note on what the site is/does, plus estimated tokens, files and the commit. Estimated build tokens so far: <b>{buildTokens.toLocaleString()}</b>.</p> },
     {
       key: 'users', label: '👥 Users', count: usersList.length, headers: userHeaders, rows: userRows, empty: 'No users.',
       chart: { type: 'donut', data: userChart, title: 'Users by role' },

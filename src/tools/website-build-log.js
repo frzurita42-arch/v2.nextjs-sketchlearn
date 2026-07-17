@@ -1,0 +1,102 @@
+/* Website-building progress log — a ledger of the development requests made to
+ * the AI builder and what came of each: a short summary of the result/progress,
+ * future recommendations, a context note (what kind of site this is / what the
+ * change means for it), an estimate of tokens spent, the commit, and files
+ * touched. Surfaced as the dashboard's "Website building" tab so the site's own
+ * construction is tracked like any other analytic.
+ *
+ * Curated (authored per build session) — new rows are appended as work continues.
+ * Text fields are capped at 300 characters; use extra rows to say more. */
+
+const cap = (s) => String(s || '').slice(0, 300);
+
+function entry(e) {
+  return {
+    id: `wb-${e.commit || Math.random().toString(36).slice(2, 8)}`,
+    date: e.date,
+    prompt: cap(e.prompt),
+    summary: cap(e.summary),
+    recommendations: cap(e.recommendations),
+    context: cap(e.context),
+    tokens: e.tokens || 0,
+    commit: e.commit || '',
+    files: e.files || 0,
+    status: e.status || 'done',
+  };
+}
+
+const WEBSITE_BUILD_LOG = [
+  // A couple of context-only rows up top so the table alone explains the product.
+  entry({ date: '2026-07-17T08:00:00Z', commit: 'context-1', tokens: 0, files: 0, status: 'context',
+    prompt: '(context) What is this website?',
+    summary: 'SketchLearn — an AI teaching platform built on Next.js 15 (App Router, React 19, TS) with a Neon Postgres DB, deployed on Vercel.',
+    recommendations: 'Keep the DB the single source of truth; avoid file-storage fallback in production.',
+    context: 'Two artifact types: SLIDE TOOLS (reusable AI generators that make scored 9:16 slide decks with mixed activities) and REPOSITORIES (nested card trees used as study paths or menus). Students play; teachers build.' }),
+  entry({ date: '2026-07-17T08:02:00Z', commit: 'context-2', tokens: 0, files: 0, status: 'context',
+    prompt: '(context) Main surfaces',
+    summary: 'Landing pages: Repositories & Slides galleries (title banner → filters → gallery → discussion). A tool page renders either a RepoView or a LessonPlayer. An admin Teacher’s dashboard aggregates everything.',
+    recommendations: 'Unify page chrome behind reusable containers (PageHeader) so new pages compose quickly.',
+    context: 'Dashboard tracks: slide tools, repositories, presentation runs, token usage & cost, component usage, users, activity log, page-text editing, data-analysis & AI-visual generators.' }),
+  entry({ date: '2026-07-17T08:10:00Z', commit: '93bf79c', tokens: 42000, files: 3, status: 'done',
+    prompt: 'Study path: 🔵 prompt cards get a 🎬 button that opens the slide tool with the prompt preset (no auto-generate); a studyMode toggle marks a repo as a prompt-study type; a per-play tooltip on/off toggle.',
+    summary: 'Repo studyMode toggle + 🎬 on 🔵 cards presetting the slide-tool topic (no auto-run), study command center, and per-play 💡 Tooltips On/Off gating on-slide hints.',
+    recommendations: 'Add per-card tool override (different generator per prompt); persist last tooltip choice per student.',
+    context: 'Makes repositories into guided study paths that feed prompts into slide generators — the core teacher→student workflow.' }),
+  entry({ date: '2026-07-17T08:45:00Z', commit: '8e7cdab', tokens: 21000, files: 1, status: 'done',
+    prompt: 'A command center on the slide-generation tool page to view/attach documents, update the repo, and update the activity-layout settings.',
+    summary: 'Owner-only command center on the lesson hub: a study-source/AI-guidance field persisted into lesson.style (feeds generation) + a jump to full tool settings.',
+    recommendations: 'Add true file-upload attachments (store + feed extracted text) — currently text-only.',
+    context: 'Lets teachers steer what a generator produces without rebuilding it — the tool is a reusable generator, not a static deck.' }),
+  entry({ date: '2026-07-17T09:20:00Z', commit: '21b30e3', tokens: 18000, files: 2, status: 'done',
+    prompt: 'A way to change a page title from the dashboard as well as on the page; confirm titles are saved in a database.',
+    summary: 'Dashboard tool tables got an inline ✎ to edit title + banner description, saved to the tools DB row, plus a DB-status banner.',
+    recommendations: 'Real health probe needed (added later) — a URL being set does not mean the DB works.',
+    context: 'Begins the admin content-management surface: edit the site’s text from one place.' }),
+  entry({ date: '2026-07-17T09:55:00Z', commit: '6e44e14', tokens: 15000, files: 1, status: 'done',
+    prompt: 'The "Open the slide tool" button did nothing (jumped to top). Add a dropdown + search of created slides instead of a raw slug.',
+    summary: 'Fixed tool→tool navigation (forced remount) and replaced the slug box with a searchable dropdown of presentation tools.',
+    recommendations: 'Cache the tool list; badge private/unlisted tools in the picker.',
+    context: 'Connects study-path repos to their generators reliably — key to the study workflow.' }),
+  entry({ date: '2026-07-17T10:30:00Z', commit: '6db2328', tokens: 36000, files: 4, status: 'done',
+    prompt: 'A dashboard table to edit banner title/subtitle, discussion heading, and pagination for both Repos and Slides pages; make dashboard icons bare.',
+    summary: 'Page-text dashboard table editing every landing-page chrome field for both pages via site_settings; ToolsView renders those from the DB. Bare pencil/eye icons.',
+    recommendations: 'Extract a reusable PageHeader component to compose new pages.',
+    context: 'The landing pages become fully admin-configurable from the DB — no hard-coded copy.' }),
+  entry({ date: '2026-07-17T11:05:00Z', commit: 'b9166b3', tokens: 28000, files: 3, status: 'done',
+    prompt: 'A component-usage table for slide tools: which components, when, correctness, template type, plus analytics; seed example values.',
+    summary: 'Component-usage table + donut chart. Rows from saved decks (component, role, correctness, template, subject) + a seeded example set.',
+    recommendations: 'Log component usage live at play-time for real-time analytics.',
+    context: 'Analytics to learn which slide components suit which lessons — feeds better AI composition.' }),
+  entry({ date: '2026-07-17T11:40:00Z', commit: '610d079', tokens: 16000, files: 3, status: 'done',
+    prompt: 'Edited a title, it showed then reverted on reload. Prove it is saved in a database.',
+    summary: 'Root-caused silent write failures (DB reported "connected" whenever the URL was set). Added /api/health (real query + write→read probe); banner + saves now report the truth.',
+    recommendations: 'Extend honest write-result reporting to all settings routes.',
+    context: 'Data-integrity milestone: the app now tells the truth about whether edits persist.' }),
+  entry({ date: '2026-07-17T12:15:00Z', commit: '2d194e5', tokens: 12000, files: 1, status: 'done',
+    prompt: 'The /api/health error showed "wrote a value but read a different one back."',
+    summary: 'Fixed the revert bug: site_settings JSONB was decoded by the driver then JSON.parsed AGAIN, nulling bare strings. Now trusts the driver; saved values resurface.',
+    recommendations: 'Audit other jsonb readers for the same double-parse pattern.',
+    context: 'The actual persistence fix — edits (titles, page text) now stick across reloads.' }),
+  entry({ date: '2026-07-17T12:35:00Z', commit: 'c7936ff', tokens: 6000, files: 1, status: 'done',
+    prompt: 'The orange scribble-underline disappeared when I set a custom gallery title.',
+    summary: 'Wrapped custom banner titles (both pages) in the scribble-underline span so custom titles match the default styling.',
+    recommendations: 'Optionally underline only the last word to match the default exactly.',
+    context: 'Visual consistency polish on the configurable banners.' }),
+  entry({ date: '2026-07-17T13:00:00Z', commit: 'cddf037', tokens: 34000, files: 6, status: 'done',
+    prompt: 'Dashboard should reopen the last tab, and log navigation + setting changes across all fields in an Activity history table.',
+    summary: 'Dashboard remembers the last tab; new Activity tab backed by an activity_log DB table + /api/activity; page-text and tool edits logged before→after.',
+    recommendations: 'Instrument more controls (gallery filters, per-tool settings); add per-user filtering.',
+    context: 'Adds an audit trail + UX memory — the admin can see who changed what, when.' }),
+  entry({ date: '2026-07-17T13:20:00Z', commit: 'ef8e6a5', tokens: 7000, files: 1, status: 'done',
+    prompt: 'The custom title flashes the default first, then the DB value. Render from the DB from the very start.',
+    summary: 'Seeded page copy synchronously from a localStorage cache so DB title/subtitle paint on the first frame; the fetch refreshes the cache.',
+    recommendations: 'Server-render the page copy to remove the flash even on a first-ever visit.',
+    context: 'Perceived-performance polish for the configurable banners.' }),
+  entry({ date: '2026-07-17T13:35:00Z', commit: '578806d', tokens: 6000, files: 1, status: 'done',
+    prompt: 'Put a dashed line below the title+subtitle inside the same container; make these reusable containers to compose other pages.',
+    summary: 'Wrapped Repos/Slides title+subtitle in a single page-header block ending in a dashed separator — a reusable header unit.',
+    recommendations: 'Promote to a shared <PageHeader> component reused on every view.',
+    context: 'First step toward a component/layout system for composing new pages.' }),
+];
+
+module.exports = { WEBSITE_BUILD_LOG };
