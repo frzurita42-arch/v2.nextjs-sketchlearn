@@ -39,6 +39,11 @@ export async function PUT(req: Request) {
     if (!ok || !def) return NextResponse.json({ error: 'Invalid definition', details: errors }, { status: 400 });
     patch.definition = def;
   }
+  // Bare title / description edits (e.g. the dashboard's inline ✎ pencil). These
+  // write straight to the tools row AND sync into definition.title/description via
+  // updateTool, so a rename persists in the DB — not just the ephemeral file store.
+  if (typeof b.title === 'string') { const t = b.title.trim().slice(0, 120); if (t) patch.title = t; }
+  if (typeof b.description === 'string') patch.description = b.description.trim().slice(0, 400);
   if (b.visibility !== undefined && ['private', 'unlisted', 'public'].includes(b.visibility)) patch.visibility = b.visibility;
   if (Array.isArray(b.apiKeys)) {
     patch.apiKeys = b.apiKeys

@@ -107,9 +107,33 @@ export function DashboardView() {
   // Which image model to use for the generated visual (from /api/config).
   const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
   const [visProvider, setVisProvider] = useState('');
-  useEffect(() => { API.get('/api/config').then((c: any) => setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : [])).catch(() => { /* ignore */ }); }, []);
+  // Whether a real database is connected. When false the app runs on ephemeral
+  // file storage, so edits (like a title rename) silently revert on the next
+  // deploy — we surface that here so it's not a mystery.
+  const [dbOn, setDbOn] = useState<boolean | null>(null);
+  useEffect(() => { API.get('/api/config').then((c: any) => { setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : []); setDbOn(!!c?.dbEnabled); }).catch(() => { /* ignore */ }); }, []);
   const [visImg, setVisImg] = useState<{ url: string; by: string } | null>(null);
   const [visBusy, setVisBusy] = useState(false);
+  // Inline title/description editor (the ✎ pencil on a tool-table title cell).
+  // Edits the page's Title and banner Description in one popup; persists via the
+  // owner/admin settings route straight into the tools row.
+  const [editTool, setEditTool] = useState<{ slug: string; title: string; description: string } | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editErr, setEditErr] = useState('');
+  const saveEdit = async () => {
+    if (!editTool) return;
+    const title = editTool.title.trim();
+    if (!title) { setEditErr('Title can’t be empty.'); return; }
+    setEditBusy(true); setEditErr('');
+    try {
+      const r: any = await API.put('/api/tools/settings', { slug: editTool.slug, title, description: editTool.description.trim() });
+      if (r?.ok === false) { setEditErr('Save failed — you may not own this tool.'); setEditBusy(false); return; }
+      // Reflect the change locally without a full reload.
+      setDash(d => d ? { ...d, tools: d.tools.map((t: any) => t.slug === editTool.slug ? { ...t, title, description: editTool.description.trim() } : t) } : d);
+      setEditTool(null);
+    } catch (e: any) { setEditErr(e?.message || 'Could not save.'); }
+    setEditBusy(false);
+  };
 
   useEffect(() => {
     if (app.user?.role !== 'admin') { app.nav('home'); return; }
@@ -176,6 +200,21 @@ export function DashboardView() {
     </>,
   }]);
 
+  // A title cell with a ✎ pencil that opens the edit popup for that tool.
+  const titleCell = (t: any): Cell => ({
+    node: (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span>{t.title || '—'}</span>
+        <button className="btn small ghost" style={{ padding: '0 5px' }} title="Edit this page’s title & description"
+          onClick={() => { setEditErr(''); setEditTool({ slug: t.slug, title: t.title || '', description: t.description || '' }); }}>✎</button>
+      </span>
+    ),
+  });
+  // Display rows: same as the plain rows but with an editable title cell in col 0.
+  // (The plain rows stay for CSV export + the AI-visual text summary.)
+  const slideDisplayRows: Cell[][] = slideTools.map((t: any, i: number) => [titleCell(t), ...slideRows[i].slice(1)]);
+  const repoDisplayRows: Cell[][] = repoTools.map((t: any, i: number) => [titleCell(t), ...repoRows[i].slice(1)]);
+
   const totalCost = usageByUser.reduce((s: number, u: any) => s + (Number(u.cost) || 0), 0);
 
   // ---- one best-fit chart per table (relevant slice of the data) ----
@@ -201,9 +240,9 @@ export function DashboardView() {
 
   // The tables, one per page. `footer` adds extra UI (the add-user form).
   type Chart = { type: ChartType; data: Datum[]; title: string; unit?: string };
-  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; empty: string; csv?: () => void; footer?: React.ReactNode; chart?: Chart }[] = [
-    { key: 'slides', label: '🎞️ Slide tools', count: slideTools.length, headers: slideHeaders, rows: slideRows, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows), chart: { type: 'hbar', data: slideChart, title: 'Slides per tool (top 6)' } },
-    { key: 'repos', label: '🗂️ Repositories', count: repoTools.length, headers: repoHeaders, rows: repoRows, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows), chart: { type: 'hbar', data: repoChart, title: 'Cards per repository (top 6)' } },
+  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; displayRows?: Cell[][]; empty: string; csv?: () => void; footer?: React.ReactNode; chart?: Chart }[] = [
+    { key: 'slides', label: '🎞️ Slide tools', count: slideTools.length, headers: slideHeaders, rows: slideRows, displayRows: slideDisplayRows, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows), chart: { type: 'hbar', data: slideChart, title: 'Slides per tool (top 6)' } },
+    { key: 'repos', label: '🗂️ Repositories', count: repoTools.length, headers: repoHeaders, rows: repoRows, displayRows: repoDisplayRows, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows), chart: { type: 'hbar', data: repoChart, title: 'Cards per repository (top 6)' } },
     { key: 'runs', label: '📊 Presentation runs', count: runs.length, headers: runHeaders, rows: runRows, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows), chart: { type: 'bar', data: runChart, title: 'Average grade by user', unit: '%' } },
     { key: 'usage', label: '💸 Token usage', count: usage.length, headers: usageHeaders, rows: usageRows, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows), chart: { type: 'donut', data: usageChart, title: 'Tokens by component' } },
     { key: 'cost', label: '📉 Cost by user', count: usageByUser.length, headers: costHeaders, rows: costRows, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
@@ -262,6 +301,11 @@ export function DashboardView() {
       {/* Title + subtitle container. */}
       <h1 className="view-title">Teacher’s <span className="scribble-underline">dashboard</span></h1>
       <p className="view-sub" style={{ textAlign: 'center' }}>One page at a time — pick a section below.</p>
+      {dbOn === false && (
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#b23', margin: '0 0 8px' }}>
+          ⚠ No database connected — the app is on temporary file storage, so edits (titles, etc.) revert on the next deploy. Set <code>DATABASE_URL</code> in the hosting env to persist changes.
+        </p>
+      )}
       {rule}
 
       {/* Section picker container (the filtering buttons). */}
@@ -280,7 +324,7 @@ export function DashboardView() {
               <h3 style={{ margin: 0 }}>{sec.label} <span style={{ opacity: 0.5, fontWeight: 400 }}>({sec.count})</span></h3>
               {sec.csv && sec.count > 0 && <button className="btn small" onClick={sec.csv}>⬇ CSV</button>}
             </div>
-            <PagedTable key={sec.key} headers={sec.headers} rows={sec.rows} empty={sec.empty} />
+            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} empty={sec.empty} />
             {sec.footer}
           </div>
         );
@@ -355,6 +399,34 @@ export function DashboardView() {
         <button className="btn small ghost" disabled={cur >= totalPages - 1} onClick={() => setTab(cur + 1)}>Next ›</button>
       </div>
       {rule}
+
+      {/* ✎ Edit a page's title & banner description (from the tool tables). */}
+      {editTool && (
+        <div onClick={() => !editBusy && setEditTool(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480, width: '100%', padding: '18px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <b>✎ Edit page</b>
+              <button className="btn small ghost" onClick={() => !editBusy && setEditTool(null)}>✕</button>
+            </div>
+            <label className="field" style={{ display: 'block' }}><span>Title</span>
+              <input type="text" autoFocus value={editTool.title} disabled={editBusy} maxLength={120}
+                onChange={e => setEditTool(s => s && { ...s, title: e.target.value })}
+                onKeyDown={e => { if (e.key === 'Enter') saveEdit(); }} style={{ width: '100%' }} />
+            </label>
+            <label className="field" style={{ display: 'block', marginTop: 10 }}><span>Banner description</span>
+              <textarea value={editTool.description} disabled={editBusy} maxLength={400}
+                onChange={e => setEditTool(s => s && { ...s, description: e.target.value })}
+                placeholder="The subtitle shown under the page title…" style={{ width: '100%', minHeight: 72 }} />
+            </label>
+            {editErr && <p style={{ color: '#b23', fontSize: 12, margin: '8px 0 0' }}>{editErr}</p>}
+            {dbOn === false && <p style={{ color: '#b23', fontSize: 11, margin: '8px 0 0' }}>⚠ No database connected — this will revert on the next deploy.</p>}
+            <div className="slide-actions" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button className="btn small ghost" disabled={editBusy} onClick={() => setEditTool(null)}>Cancel</button>
+              <button className="btn green" disabled={editBusy} onClick={saveEdit}>{editBusy ? 'Saving…' : '💾 Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
