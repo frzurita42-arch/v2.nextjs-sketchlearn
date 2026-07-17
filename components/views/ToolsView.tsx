@@ -314,12 +314,12 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
           </div>
         </div>
       )}
-      {/* Both landing pages use the one reusable DB-driven <PageHeader>. The
-          Repositories banner also fills its free left/right quarters with the ✈
-          share and ☕ donation corner links. */}
+      {/* Both landing pages use the one reusable DB-driven <PageHeader>. Each
+          banner carries a single big corner object on the SAME (right) side,
+          centered in the free space beside the title: ☕ Donate on Repositories,
+          ✈ Share on Slides. */}
       <PageHeader page={isSlides ? 'slides' : 'repos'}
-        left={isSlides ? undefined : <PaperPlaneLink />}
-        right={isSlides ? undefined : <CoffeeMugLink />} />
+        right={isSlides ? <PaperPlaneLink width={190} height={158} /> : <CoffeeMugLink width={190} height={158} />} />
       {(!loading && tools.length === 0) ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>

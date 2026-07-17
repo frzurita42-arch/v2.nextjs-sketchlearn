@@ -109,17 +109,20 @@ h3 { font-size: 1.5rem; }
    two slots float in the free left/right quarters (☕ donations, ✈ share). They
    are absolutely positioned so the centered banner never moves. */
 .page-header-block { position: relative; }
+/* One big object sits in the free space beside the centered title, vertically
+   centered and pulled in from the edge toward the middle of that gap. */
 .page-header-slot {
   position: absolute;
-  top: 2px;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 2;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
 }
-.page-header-slot--left { left: 4px; }
-.page-header-slot--right { right: 4px; }
+.page-header-slot--left { left: 7%; }
+.page-header-slot--right { right: 7%; }
 .banner-link { transition: transform .12s ease; }
-.banner-link:hover { transform: translateY(-2px) rotate(-2deg); }
+.banner-link:hover { transform: translateY(-3px) rotate(-3deg); }
 /* Phone screens: the big centered title needs the full width, so hide the corner
    objects entirely. They show only on tablets and larger (≥ 640px). */
 @media (max-width: 639px) {

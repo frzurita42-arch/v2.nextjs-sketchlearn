@@ -36,7 +36,7 @@ const files = SRC_DIRS.flatMap((d) => walk(path.join(ROOT, d)));
 const fileText = new Map(files.map((f) => [f, fs.readFileSync(f, 'utf8')]));
 
 const EMOJI = /(\p{Extended_Pictographic}(?:‍\p{Extended_Pictographic})*)/gu;
-const PROP = /\b(?:title|titleFallback|titleKey|label|ownerLabel|ownerTitle|placeholder|aria-label)\s*=\s*["'`]([^"'`\n]{1,60})["'`]/g;
+const PROP = /\b(?:title|titleFallback|titleKey|bannerDefault|bannerKey|shelfTitle|label|ownerLabel|ownerTitle|placeholder|aria-label)\s*=\s*["'`]([^"'`\n]{1,80})["'`]/g;
 const JSXTEXT = />\s*([^<>{}\n]{1,50})</g;
 
 // Turn a raw candidate string into clean, human-facing tokens (emojis kept whole;
@@ -52,11 +52,17 @@ function collect(text, set) {
       let e; const er = new RegExp(EMOJI);
       while ((e = er.exec(raw))) set.add(e[1]);
       const worded = raw.replace(EMOJI, ' ').replace(/\s+/g, ' ').trim();
-      if (!worded || worded.length > 50) continue;
+      if (!worded || worded.length > 80) continue;
       if (!/[A-Za-z]/.test(worded)) continue;
       // Skip code-ish / css-ish / path-ish fragments.
       if (/[{}=<>|]|=>|https?:|\.[a-z]{2,4}\b|\/\w|^[a-z][a-z-]*$/.test(worded)) continue;
-      set.add(worded.toLowerCase());
+      // Add the whole short phrase (titles read best whole)…
+      if (worded.length <= 40) set.add(worded.toLowerCase());
+      // …and, for any phrase, its individual meaningful words, so a banner like
+      // "Your saved cards — search by name" is found by "search", "cards", "name".
+      for (const w of worded.toLowerCase().split(/[^a-z0-9]+/)) {
+        if (w.length >= 4) set.add(w);
+      }
     }
   }
 }
@@ -83,16 +89,24 @@ for (const e of COMPONENT_REGISTRY) {
   out[e.id] = Array.from(set);
 }
 
-// Title-family literals → the canonical SectionHeader entry (it renders them all).
-const secHeader = COMPONENT_REGISTRY.find((e) => e.name === 'SectionHeader');
-if (secHeader) {
-  const set = new Set(out[secHeader.id] || []);
-  for (const txt of fileText.values()) {
-    if (!TITLE_FAMILY.some((n) => txt.includes('<' + n))) continue;
-    let m; const re = new RegExp(TITLE_PROP);
-    while ((m = re.exec(txt))) collect('>' + m[1] + '<', set);
-  }
-  out[secHeader.id] = Array.from(set);
+// Title-family literals (every editable section title + how-to banner across the
+// app) → attached to EVERY gallery-related registry entry that renders them, so a
+// word from any section's title/banner finds these shared containers. This is the
+// "all instance content is searchable" rule for the gallery family.
+const TITLE_PROP_WIDE = /\b(?:titleFallback|shelfTitle|titleKey|bannerDefault|bannerKey)\s*=\s*["'`]([^"'`\n]{1,80})["'`]/g;
+const galleryNames = ['SectionHeader', 'GallerySection', 'Gallery header + banner container', 'Gallery filters container', 'Gallery cards container'];
+const galleryTitleWords = new Set();
+for (const txt of fileText.values()) {
+  if (!TITLE_FAMILY.some((n) => txt.includes('<' + n))) continue;
+  let m; const re = new RegExp(TITLE_PROP_WIDE);
+  while ((m = re.exec(txt))) collect('>' + m[1] + '<', galleryTitleWords);
+}
+for (const name of galleryNames) {
+  const entry = COMPONENT_REGISTRY.find((e) => e.name === name);
+  if (!entry) continue;
+  const set = new Set(out[entry.id] || []);
+  for (const w of galleryTitleWords) set.add(w);
+  out[entry.id] = Array.from(set);
 }
 
 // Serialize as a space-joined keyword string per id (deduped, bounded).
