@@ -170,10 +170,15 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
   // Admin-editable page copy (heading + subtitle), saved for everyone. Follows
   // the "View as" preview so an admin can see the non-admin gallery.
   const isAdmin = gEff.isAdmin;
-  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string; [k: string]: string | undefined }>({});
+  // Seed page copy SYNCHRONOUSLY from the last-known values cached in localStorage
+  // so the DB-driven title/subtitle paint on the very first frame (no flash of the
+  // default title before the fetch resolves). The fetch below then refreshes it.
+  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string; [k: string]: string | undefined }>(() => {
+    try { return JSON.parse(localStorage.getItem('sl_site_settings') || '{}'); } catch { return {}; }
+  });
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
-  useEffect(() => { API.get('/api/site-settings').then((r: any) => setSite(r?.settings || {})).catch(() => { /* ignore */ }); }, []);
+  useEffect(() => { API.get('/api/site-settings').then((r: any) => { const s = r?.settings || {}; setSite(s); try { localStorage.setItem('sl_site_settings', JSON.stringify(s)); } catch { /* ignore */ } }).catch(() => { /* ignore */ }); }, []);
   const saveHeading = async (key: 'galleryTitle' | 'gallerySubtitle', val: string) => {
     setEditHeading(null);
     const v = val.trim();
