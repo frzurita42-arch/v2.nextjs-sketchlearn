@@ -13,6 +13,8 @@ export const runtime = 'nodejs';
 const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle', 'collectionShelfTitle',
   // Dashboard section titles (SectionHeader over the section-picker buttons and over the tables area).
   'dashSectionsShelfTitle', 'dashTablesShelfTitle',
+  // Owner toggle: hide the lesson page's 🎛 slide-tool command center ('1' = hidden).
+  'slideCommandCenterHidden',
   // Section how-to banners (longer text).
   'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner',
   // Home-page section visibility ('1' = collapsed/hidden for regular users). The

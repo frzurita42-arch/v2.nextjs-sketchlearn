@@ -214,6 +214,33 @@ h3 { font-size: 1.5rem; }
 }
 .card.alt { border-radius: var(--wobble-2); }
 
+/* Author/share header card (components/social/AuthorBar.tsx). Identity (avatar +
+   name + meta) and the action buttons sit side-by-side on wide screens and stack
+   into two full-width rows on phones, so nothing gets crushed. */
+.author-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.author-bar__id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.author-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 560px) {
+  .author-bar__id { flex: 1 1 100%; }
+  .author-bar__actions { flex: 1 1 100%; justify-content: flex-start; }
+}
+
 /* ---------- buttons ---------- */
 .btn {
   font-family: var(--font-hand); font-size: 1.05rem;

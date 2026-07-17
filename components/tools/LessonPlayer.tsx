@@ -903,6 +903,25 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [ccOpen, setCcOpen] = useState(false);
   useEffect(() => { try { setCcOpen(localStorage.getItem('sl_lesson_cc_open') === '1'); } catch { /* ignore */ } }, []);
   const toggleCc = () => setCcOpen((o) => { const n = !o; try { localStorage.setItem('sl_lesson_cc_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
+  // Whether the owner has HIDDEN the whole command center (DB-persisted, admin-wide).
+  // Default hidden — the panel is opt-in via the small "👁 Show" link, so it no
+  // longer clutters the generator page. Seed from a localStorage cache to avoid a
+  // flash, then confirm from site_settings.
+  const [ccHidden, setCcHidden] = useState(true);
+  useEffect(() => {
+    try { const c = localStorage.getItem('sl_lesson_cc_hidden'); if (c === '0' || c === '1') setCcHidden(c === '1'); } catch { /* ignore */ }
+    API.get('/api/site-settings').then((r: any) => {
+      const v = r?.settings?.slideCommandCenterHidden;
+      const hidden = v === undefined || v === null || v === '' ? true : String(v) === '1';
+      setCcHidden(hidden);
+      try { localStorage.setItem('sl_lesson_cc_hidden', hidden ? '1' : '0'); } catch { /* ignore */ }
+    }).catch(() => { /* ignore */ });
+  }, []);
+  const setCcHiddenPersist = async (hidden: boolean) => {
+    setCcHidden(hidden);
+    try { localStorage.setItem('sl_lesson_cc_hidden', hidden ? '1' : '0'); } catch { /* ignore */ }
+    try { await API.put('/api/site-settings', { key: 'slideCommandCenterHidden', value: hidden ? '1' : '0' }); } catch { /* ignore */ }
+  };
   const [studyDoc, setStudyDoc] = useState<string>(lesson.style || '');
   const [ccMsg, setCcMsg] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
@@ -1641,14 +1660,24 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             the study source / AI guidance the generator uses, jump into full tool
             settings (the AI-edit chat that reshapes the activity layout), and manage
             the tool. Collapsed by default. */}
-        {canEdit && (
+        {/* When hidden, only a small opt-in link remains (owner/admin only). */}
+        {canEdit && ccHidden && (
+          <div style={{ marginBottom: 14 }}>
+            <button className="btn small ghost" onClick={() => setCcHiddenPersist(false)} title="Show the owner-only slide-tool command center (study source, tool settings & activity layout)">👁 Show slide-tool command center</button>
+          </div>
+        )}
+        {canEdit && !ccHidden && (
           <div style={{ border: '1.5px dashed var(--ink)', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', cursor: 'pointer', userSelect: 'none' }}
-              onClick={toggleCc} title={ccOpen ? 'Collapse the command center' : 'Expand the command center'}>
-              <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.6, cursor: 'pointer', userSelect: 'none' }}
+                onClick={toggleCc} title={ccOpen ? 'Collapse the command center' : 'Expand the command center'}>
                 <span style={{ display: 'inline-block', width: 14 }}>{ccOpen ? '▾' : '▸'}</span>🎛 SLIDE-TOOL COMMAND CENTER
               </span>
-              <span style={{ fontSize: 11, opacity: 0.55 }}>attachments · settings · activity layout</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, opacity: 0.55 }}>attachments · settings · activity layout</span>
+                <button title="Hide this command center (owner-only; you can bring it back later)" onClick={() => setCcHiddenPersist(true)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: 1, opacity: 0.7 }}>👁</button>
+              </span>
             </div>
             {ccOpen && (
               <div style={{ marginTop: 10 }}>
