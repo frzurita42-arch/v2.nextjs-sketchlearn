@@ -61,6 +61,7 @@ export interface CollectionProps<T> {
   bottomRule?: boolean;                    // draw a dashed rule BELOW the bottom pager (closes the section)
   emptyAll?: string;                       // message when there are no items at all
   emptyFiltered?: string;                  // message when filters hide everything
+  emptyState?: ReactNode;                  // rich empty-state (e.g. a get-started CTA + example card); replaces the plain empty text when the gallery shows nothing
   loading?: boolean;                       // items still loading — show skeleton cards in the item area (title + banner + toolbar stay visible)
   searchPlaceholder?: string;
   maxWidth?: number;
@@ -102,7 +103,7 @@ export function Collection<T>({
   favs, likedByAdmin, likedByOwner, ownerLabel = '💛 Moderators', ownerTitle = 'Only tools moderators favorited', perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
   viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
-  extra, belowToolbar, showRefresh = true, bottomRule, loading = false, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.',
+  extra, belowToolbar, showRefresh = true, bottomRule, loading = false, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.', emptyState,
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
   banner, showCollapse, collapsed, onToggleCollapse,
@@ -289,9 +290,9 @@ export function Collection<T>({
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyAll}</p>
+        emptyState ?? <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyAll}</p>
       ) : shown.length === 0 ? (
-        <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyFiltered}</p>
+        emptyState ?? <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyFiltered}</p>
       ) : (
         <div style={view === 'grid'
           // alignItems:start keeps each card at its own content height — without it

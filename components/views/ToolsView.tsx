@@ -7,6 +7,7 @@ import { appState } from '@/lib/app-state';
 import { perPageOf } from '@/lib/page-settings';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { CoffeeMugLink, PaperPlaneLink } from '@/components/ui/BannerLinks';
+import { DemoStamp } from '@/components/ui/DemoStamp';
 import { useApp } from '@/components/AppContext';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { type FilterKey } from '@/components/ui/Collection';
@@ -298,6 +299,33 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
       canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
   );
 
+  // Empty-gallery state: a get-started CTA card (the looping ✏️ writing animation
+  // + a prompt to create), and — when a free, already-saved example of this page's
+  // type exists — an advert/DEMO card so visitors can see how the page works
+  // WITHOUT spending tokens (examples are pre-saved: view results / open a repo).
+  const emptyExample = catItems.find(isExample);
+  const galleryEmptyState = (
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'stretch', margin: '4px auto 6px' }}>
+      <div className="card" style={{ width: 260, minHeight: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
+        <span className="sl-pencil" style={{ fontSize: 42, color: 'var(--ink)' }} aria-hidden>
+          <span className="sl-pencil__line" />
+          <span className="sl-pencil__tip">✏️</span>
+        </span>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4 }}>Make a repository or create a Slide Tool to get started.</p>
+        {canBuild && <button className="btn green" onClick={openBuilder}>＋ Build a {isSlides ? 'presentation' : 'repository'}</button>}
+      </div>
+      {emptyExample && (
+        <div style={{ width: 260, position: 'relative' }}>
+          {card(emptyExample, 'grid')}
+          {/* DEMO stamp over the example image so it reads as an advert, not real data. */}
+          <div style={{ position: 'absolute', top: 44, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 4 }}>
+            <DemoStamp width={160} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       {editTool && <CardEditor tool={editTool} onClose={() => setEditTool(null)} onSaved={(title, description) => patchTool(editTool.slug, { title, description })} />}
@@ -321,10 +349,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
       <PageHeader page={isSlides ? 'slides' : 'repos'}
         right={isSlides ? <PaperPlaneLink width={190} height={158} /> : <CoffeeMugLink width={190} height={158} />} />
       {(!loading && tools.length === 0) ? (
-          <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
-            <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>
-            {isAdmin && <button className="btn green" onClick={openBuilder}>＋ Build a {isSlides ? 'presentation' : 'repository'}</button>}
-          </div>
+          <div style={{ margin: '10px auto 0' }}>{galleryEmptyState}</div>
         ) : (!loading && galleryCollapsed && !isAdmin) ? null : (
           <>
             {/* Same shared container as the History feed: title → banner → filter →
@@ -358,6 +383,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
               onSaveFilter={(f) => { setSite(s => ({ ...s, galleryFilter: f })); API.put('/api/site-settings', { key: 'galleryFilter', value: f }).catch(() => { /* ignore */ }); }}
               emptyFiltered="No tools match these filters."
               emptyAll="No tools in this category yet."
+              emptyState={galleryEmptyState}
               renderGrid={(t: any) => card(t, 'grid')}
               renderRow={(t: any) => card(t, 'row')}
             />
