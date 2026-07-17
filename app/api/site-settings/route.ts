@@ -43,6 +43,7 @@ export async function PUT(req: Request) {
   const key = String(b.key || '');
   if (!KEYS.includes(key)) return NextResponse.json({ error: 'Unknown setting.' }, { status: 400 });
   const value = String(b.value ?? '').slice(0, BANNER_KEYS.has(key) ? 600 : 240);
-  await setSiteSetting(key, value);
+  const ok = await setSiteSetting(key, value);
+  if (!ok) return NextResponse.json({ ok: false, error: 'The database write did not land — the value was not saved. Check /api/health.' }, { status: 200 });
   return NextResponse.json({ ok: true, key, value });
 }

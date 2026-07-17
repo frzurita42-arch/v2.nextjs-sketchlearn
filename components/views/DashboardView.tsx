@@ -108,11 +108,17 @@ export function DashboardView() {
   // Which image model to use for the generated visual (from /api/config).
   const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
   const [visProvider, setVisProvider] = useState('');
-  // Whether a real database is connected. When false the app runs on ephemeral
-  // file storage, so edits (like a title rename) silently revert on the next
-  // deploy — we surface that here so it's not a mystery.
+  // Whether the database ACTUALLY works (a real query + write round-trip), not just
+  // whether a DATABASE_URL is set. When false the app is on ephemeral per-request
+  // file storage, so edits silently revert — we surface that (with the real error).
   const [dbOn, setDbOn] = useState<boolean | null>(null);
-  useEffect(() => { API.get('/api/config').then((c: any) => { setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : []); setDbOn(!!c?.dbEnabled); }).catch(() => { /* ignore */ }); }, []);
+  const [dbErr, setDbErr] = useState('');
+  useEffect(() => { API.get('/api/config').then((c: any) => setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : [])).catch(() => { /* ignore */ }); }, []);
+  useEffect(() => {
+    API.get('/api/health')
+      .then((h: any) => { setDbOn(!!(h?.dbLive && h?.canWrite)); setDbErr(String(h?.error || '')); })
+      .catch(() => { setDbOn(null); });
+  }, [reload]);
   const [visImg, setVisImg] = useState<{ url: string; by: string } | null>(null);
   const [visBusy, setVisBusy] = useState(false);
   // Inline title/description editor (the ✎ pencil on a tool-table title cell).
@@ -336,8 +342,9 @@ export function DashboardView() {
       <h1 className="view-title">Teacher’s <span className="scribble-underline">dashboard</span></h1>
       <p className="view-sub" style={{ textAlign: 'center' }}>One page at a time — pick a section below.</p>
       {dbOn === false && (
-        <p style={{ textAlign: 'center', fontSize: 12, color: '#b23', margin: '0 0 8px' }}>
-          ⚠ No database connected — the app is on temporary file storage, so edits (titles, etc.) revert on the next deploy. Set <code>DATABASE_URL</code> in the hosting env to persist changes.
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#b23', margin: '0 0 8px', maxWidth: 720, marginInline: 'auto' }}>
+          ⚠ Database not writable — the app is on temporary file storage, so edits (titles, page text, etc.) don’t stick and revert on reload.
+          {dbErr ? <> Reason: <code>{dbErr}</code></> : null} Fix <code>DATABASE_URL</code> (and that the DB is reachable) to persist changes. See <code>/api/health</code>.
         </p>
       )}
       {rule}
