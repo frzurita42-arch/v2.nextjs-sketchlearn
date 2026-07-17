@@ -23,6 +23,7 @@ import { ImageField } from '@/components/tools/ImageField';
 import { isRenderableImage } from '@/lib/img';
 import { buildRepoZip } from '@/lib/lesson-export';
 import { GallerySection } from '@/components/ui/GallerySection';
+import { OutlineBox } from '@/components/ui/OutlineBox';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
@@ -1630,10 +1631,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
               </div>
 
-              {/* Row 2 — owner feature toggles, grouped in a labelled panel. */}
+              {/* Row 2 — owner feature toggles, grouped in the labelled dashed
+                  OutlineBox (the reusable panel the gallery filters also use). */}
               {canEdit && (
-                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', padding: '10px 12px 8px', border: '1.5px dashed var(--ink)', borderRadius: 10, width: '100%', maxWidth: 1000, marginInline: 'auto', boxSizing: 'border-box' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center', marginBottom: 2 }}>OWNER CONTROLS</span>
+                <OutlineBox title="OWNER CONTROLS" maxWidth={1000}>
                   <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
                     title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'}
                     onClick={() => saveAssign(!assignShown)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
@@ -1661,7 +1662,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   <button className={`btn small ${showDates ? 'blue' : 'ghost'}`}
                     title={showDates ? 'Hide each card’s created date & time' : 'Show each card’s created date & time'}
                     onClick={() => saveShowDates(!showDates)}>{showDates ? '👁 Dates: On' : '🙈 Dates: Off'}</button>
-                </div>
+                </OutlineBox>
               )}
 
               {/* Two-column row: the Study-path command center and Authorized users,

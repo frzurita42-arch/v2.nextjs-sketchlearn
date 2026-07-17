@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { API } from '@/lib/api';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { OutlineBox } from '@/components/ui/OutlineBox';
 
 // The mutually-exclusive status filter: everything, only-my-favorites,
 // only-liked-by-admin, or only-favorited-by-the-owner (OP).
@@ -220,8 +221,9 @@ export function Collection<T>({
       {/* How-to banner sits between the title and the filter toolbar, so every
           section reads: title → banner → filter → items. */}
       {banner}
-      {/* Toolbar */}
-      <div style={{ ...wrap, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+      {/* Toolbar — grouped in the labelled dashed OutlineBox (same look as the
+          repo OWNER CONTROLS): search + status filters + sort + display toggle. */}
+      <OutlineBox title="FILTERS &amp; DISPLAY" maxWidth={maxWidth} style={{ marginBottom: 8 }}>
         <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
           style={{ flex: '0 1 150px', maxWidth: 150, minWidth: 100 }} />
         {extra}
@@ -244,7 +246,7 @@ export function Collection<T>({
             onClick={toggleLock}
             style={{ background: 'none', border: 'none', cursor: canLockView ? 'pointer' : 'default', padding: '0 2px', fontSize: 15, lineHeight: 1, opacity: canLockView ? 1 : 0.55 }}>{locked ? '🔒' : '🔓'}</button>
         )}
-      </div>
+      </OutlineBox>
       {/* An optional row directly below the filter toolbar (e.g. Build a tool +
           category chips), before the item count. */}
       {belowToolbar && <div style={{ ...wrap, marginBottom: 8 }}>{belowToolbar}</div>}

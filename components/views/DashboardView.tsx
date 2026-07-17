@@ -13,6 +13,7 @@ import { downloadCsv } from '@/lib/util';
 import { PAGE_FIELDS, type PageTextField } from '@/lib/page-settings';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { OutlineBox } from '@/components/ui/OutlineBox';
 import { useShelfTitle } from '@/components/tools/useShelfTitle';
 import { SLIDE_ACTIVITIES } from '@/lib/slide-activities';
 import { logActivity, rememberPreset, recallPreset } from '@/lib/activity-log';
@@ -464,13 +465,14 @@ export function DashboardView() {
         </p>
       )}
 
-      {/* Section picker: a SectionHeader title, then the filtering buttons. */}
+      {/* Section picker: a SectionHeader title, then the section buttons grouped in
+          the labelled dashed OutlineBox (same look as the gallery filters). */}
       <SectionHeader title={sectionsHdr.title} canEditTitle={sectionsHdr.canEditTitle} onRenameTitle={sectionsHdr.onRenameTitle} onRemixTitle={sectionsHdr.onRemixTitle} remixingTitle={sectionsHdr.remixingTitle} maxWidth={780} />
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '8px 0 4px' }}>
+      <OutlineBox title="SECTIONS" maxWidth={900} style={{ margin: '8px auto 4px' }}>
         {pageLabels.map((lbl, i) => (
           <button key={i} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => selectTab(i, lbl)}>{lbl}{i < TABLE_PAGES ? <span style={{ opacity: 0.6 }}> ({sections[i].count})</span> : null}</button>
         ))}
-      </div>
+      </OutlineBox>
       {rule}
 
       {/* Tables area: a SectionHeader title above the current table/section. */}
