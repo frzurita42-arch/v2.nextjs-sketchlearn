@@ -190,6 +190,10 @@ export function Collection<T>({
 
   const wrap = { maxWidth, margin: '0 auto' } as const;
   const fullDash = { borderTop: '2px dashed var(--ink)', opacity: 0.5, width: '100%' } as const;
+  // Dashed separator marking the END of one of the gallery's three containers
+  // (header+banner · filters+display · cards). Constrained to the content width so
+  // it lines up with the rows above/below it.
+  const sectionRule = { ...wrap, borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '14px auto' } as const;
   // The pager row (buttons + count). It shows whenever pagination is configured —
   // even on a single page (both buttons disabled) — so it's always visibly there.
   const pagerRow = perPage ? (
@@ -209,18 +213,23 @@ export function Collection<T>({
   return (
     <div>
       <div ref={topRef} style={{ scrollMarginTop: 8 }} />
-      {/* Shared section title row (same ✎ · 🎨 · 🔄 · 👁 order as carousels). No
-          slider buttons here — the pager handles paging. */}
-      {title && (
-        <SectionHeader title={title} maxWidth={maxWidth}
-          canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
-          onRefresh={showRefresh ? doRefresh : undefined} refreshing={refreshing} refreshTitle="Shuffle into a fresh random order"
-          showCollapse={showCollapse} collapsed={collapsed} onToggleCollapse={onToggleCollapse} />
-      )}
+      {/* ═══ Container 1: section header + how-to banner ═══
+          The title row (✎ · 🎨 · 🔄 · 👁) and the how-to banner form one unit,
+          closed off by a dashed rule below. */}
+      <section aria-label="Section header and banner">
+        {title && (
+          <SectionHeader title={title} maxWidth={maxWidth}
+            canEditTitle={canEditTitle} onRenameTitle={onRenameTitle} onRemixTitle={onRemixTitle} remixingTitle={remixingTitle}
+            onRefresh={showRefresh ? doRefresh : undefined} refreshing={refreshing} refreshTitle="Shuffle into a fresh random order"
+            showCollapse={showCollapse} collapsed={collapsed} onToggleCollapse={onToggleCollapse} />
+        )}
+        {!collapsed && banner}
+      </section>
       {collapsed ? null : (<>
-      {/* How-to banner sits between the title and the filter toolbar, so every
-          section reads: title → banner → filter → items. */}
-      {banner}
+      {/* Closing dashed rule — end of the header + banner container. */}
+      {(title || banner) && <div style={sectionRule} />}
+      {/* ═══ Container 2: filters & display ═══ */}
+      <section aria-label="Filters and display controls">
       {/* Toolbar — grouped in the labelled dashed OutlineBox (same look as the
           repo OWNER CONTROLS): search + status filters + sort + display toggle. */}
       <OutlineBox title="FILTERS &amp; DISPLAY" maxWidth={maxWidth} style={{ marginBottom: 8 }}>
@@ -254,11 +263,14 @@ export function Collection<T>({
         {filtered.length} item{filtered.length === 1 ? '' : 's'}
         {canSaveFilter && (favs || likedByAdmin || likedByOwner) && <span style={{ marginLeft: 6, fontStyle: 'italic' }}>· your filter is saved as this page&apos;s default</span>}
       </div>
+      </section>
+      {/* Closing dashed rule — end of the filters container, right before the
+          cards. When a pager is configured it already frames itself in dashes and
+          serves as the divider instead. */}
+      {pagerTop ? <div style={{ margin: '4px 0 12px' }}>{pagerTop}</div> : <div style={sectionRule} />}
 
-      {/* Top pager — right after the filter toolbar */}
-      {pagerTop && <div style={{ marginBottom: 12 }}>{pagerTop}</div>}
-
-      {/* Items */}
+      {/* ═══ Container 3: the cards / nested items ═══ */}
+      <section aria-label="Cards">
       {loading && items.length === 0 ? (
         // Skeleton cards while the data loads — the title, banner and toolbar above
         // are already on screen, so only this area shows a loading shimmer.
@@ -293,6 +305,7 @@ export function Collection<T>({
 
       {/* Bottom pager — scrolls back up to the toolbar on Prev/Next */}
       {pagerBottom && <div style={{ marginTop: 14 }}>{pagerBottom}</div>}
+      </section>
       </>)}
     </div>
   );
