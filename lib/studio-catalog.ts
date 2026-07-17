@@ -263,6 +263,9 @@ function inferKind(subject: string, language: boolean): string {
 export function assembleDefinition(cfg: StudioConfig): any {
   const title = String(cfg.title || cfg.subject || 'My tool').slice(0, 70);
   const context = String(cfg.context || '').trim();
+  // Keep the raw editable studio config on the definition so the "✏️ Edit tool"
+  // button can reload the exact card/slide plan later (lossless round-trip).
+  const studioConfig = cfg;
 
   if (cfg.artifact === 'repository') {
     // A repository is a TREE of link/resource cards. Each card the owner designs
@@ -295,6 +298,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
         imageGen: !!cfg.imageGen,   // "Suggest AI" per-card picture button
         cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },
+      studioConfig,
     };
   }
 
@@ -370,5 +374,6 @@ export function assembleDefinition(cfg: StudioConfig): any {
       offlineExport: false,   // presentations don't expose the offline-copy button
       pages,
     },
+    studioConfig,
   };
 }

@@ -1709,6 +1709,23 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
                   <button className="btn small blue" disabled={ccBusy || studyDoc.trim() === (lesson.style || '')} onClick={saveStudyDoc}>{ccBusy ? <><Spinner />Saving…</> : '💾 Save guidance'}</button>
                   <button className="btn small ghost" title="Open the full tool settings: the AI-edit chat that reshapes the activity layout (add/remove activity types), API keys and visibility." onClick={() => { appState.activeTool = appState.activeTool || { slug, definition: def }; app.nav('toolsettings'); }}>⚙ Tool settings &amp; activity layout →</button>
+                  {/* Reopen the card-templated Studio pre-loaded with this tool; publishing
+                      there UPDATES this same tool instead of creating a new one. */}
+                  <button className="btn small ghost" title="Edit this tool's card-templated settings in the Studio. Loads its slide/card plan; saving updates THIS tool (no new copy)."
+                    onClick={() => {
+                      const sc: any = (def as any).studioConfig;
+                      appState.builderSeed = sc && sc.artifact
+                        ? { ...sc, editSlug: slug }
+                        : {
+                            artifact: 'presentation',
+                            title: String(def.title || '').replace(/^(Presentation|Collection) — /, ''),
+                            subject: (lesson as any).subject || '',
+                            context: (def as any).description || '',
+                            editSlug: slug,
+                          };
+                      appState.activeTool = appState.activeTool || { slug, definition: def };
+                      app.nav('toolbuilder');
+                    }}>✏️ Edit tool (card settings) →</button>
                   {ccMsg && <span style={{ fontSize: 11, opacity: 0.7 }}>{ccMsg}</span>}
                 </div>
                 <p style={{ fontSize: 11, opacity: 0.55, margin: '8px 0 0' }}>Tip: this tool is a reusable generator — paste a unit&apos;s prompt into the topic below (or use a study-path repo&apos;s 🎬 button) and pick how many slides; it composes that many from your activity layout, at random, for variety.</p>

@@ -48,9 +48,10 @@ export interface AppState {
   builderDraft?: any;
   // A one-shot seed for the tool builder: prefill the artifact type + subject/
   // title from a suggested topic. Consumed once by BuilderStudioView on mount.
-  // `pages` (+ tone) let a topic pick hand the builder a ready-made, AI-designed
-  // slide plan the user can review and edit before generating.
-  builderSeed?: { artifact?: 'presentation' | 'repository'; subject?: string; title?: string; context?: string; tone?: string; pages?: any[] } | null;
+  // `pages`/`cards` (+ tone) let a topic pick — or the "✏️ Edit tool" button —
+  // hand the builder a ready-made plan to review and edit. When `editSlug` is set
+  // the Studio UPDATES that existing tool on publish instead of creating a new one.
+  builderSeed?: { artifact?: 'presentation' | 'repository'; subject?: string; title?: string; context?: string; tone?: string; pages?: any[]; cards?: any[]; editSlug?: string } | null;
   suggestedSettings: any;
   suggestedGuidance: string;
   concept: string | null;

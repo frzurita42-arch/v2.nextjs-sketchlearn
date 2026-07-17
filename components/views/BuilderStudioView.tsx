@@ -72,6 +72,9 @@ export function BuilderStudioView() {
   // A one-shot seed (from a repository's "topic pick") prefills the artifact +
   // subject/title. Read synchronously so the first render already reflects it.
   const seed = appState.builderSeed;
+  // When set, we are EDITING an existing tool: publishing UPDATES it (same slug)
+  // instead of creating a new one. Seeded by the "✏️ Edit tool" button.
+  const [editSlug] = useState<string | undefined>(seed?.editSlug);
   const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
   const [title, setTitle] = useState(seed?.title || '');
   const [subject, setSubject] = useState(seed?.subject || '');
@@ -101,7 +104,7 @@ export function BuilderStudioView() {
   const [pages, setPages] = useState<StudioPage[]>(seed?.pages && seed.pages.length ? (seed.pages as StudioPage[]) : [newPage()]);
   useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
-  const [repoCards, setRepoCards] = useState<RepoCard[]>([{ name: '', link: '', description: '', children: [] }]);
+  const [repoCards, setRepoCards] = useState<RepoCard[]>(seed?.cards && seed.cards.length ? (seed.cards as RepoCard[]) : [{ name: '', link: '', description: '', children: [] }]);
   // The user's HAND-AUTHORED cards, captured once, used as the seed for every AI
   // suggestion. This is the fix for the "Suggest with AI appends instead of
   // replacing" bug: we must never feed a previous AI batch back in as the seed
@@ -197,12 +200,9 @@ export function BuilderStudioView() {
       const mapped = mapAiCards(r?.cards || []);
       const finalCards = mapped.length ? mapped : repoCards;
       setRepoCards(finalCards);
-      const def = assembleDefinition({ artifact: 'repository', title, subject, context, cards: finalCards, imageGen: false });
-      const pub = await API.post('/api/tools', { definition: def, visibility, aiGenerated: true });
-      const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
-      if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
-      app.nav('tools');
-    } catch (e: any) { setErr(e?.message || 'Could not generate the tool.'); }
+      const cfg: StudioConfig = { artifact: 'repository', title, subject, tone, context, cards: finalCards, imageGen: false };
+      await publishDef(assembleDefinition(cfg), true, cfg);
+    } catch (e: any) { setErr(e?.message || (editSlug ? 'Could not update the tool.' : 'Could not generate the tool.')); }
     setBusy(false);
   };
   const [visibility, setVisibility] = useState('unlisted');
@@ -283,27 +283,41 @@ export function BuilderStudioView() {
     ? { artifact, title, subject, tone, context, pages }
     : { artifact, title, subject, tone, context, cards: repoCards, imageGen: false };
 
+  // Publish the finished definition — either UPDATE the tool we're editing
+  // (editSlug set, via the settings PUT) or CREATE a new one. Either way we stash
+  // the editable studio config on the definition so "✏️ Edit tool" can reload the
+  // exact card state later, then open the resulting tool.
+  const publishDef = async (def: any, aiGenerated: boolean, cfgOverride?: StudioConfig) => {
+    def.studioConfig = cfgOverride || config();
+    if (editSlug) {
+      await API.put('/api/tools/settings', { slug: editSlug, definition: def });
+      const one = await API.get(`/api/tools?slug=${encodeURIComponent(editSlug)}`);
+      if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
+      app.nav('tools'); return;
+    }
+    const pub = await API.post('/api/tools', { definition: def, visibility, aiGenerated });
+    const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
+    if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
+    app.nav('tools');
+  };
+
+  // Button copy reflects create vs. update.
+  const genLabel = editSlug ? '✅ Update the tool →' : '✨ Generate the tool →';
+  const genBusyLabel = editSlug ? 'Updating…' : 'Generating…';
+
   const generate = async () => {
     if (busy) return;
     setBusy(true); setErr('');
     try {
       // A repository is user-authored (no AI): publish the layered card tree directly.
       if (artifact === 'repository') {
-        const def = assembleDefinition(config());
-        const pub = await API.post('/api/tools', { definition: def, visibility });
-        const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
-        if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
-        app.nav('tools');
+        await publishDef(assembleDefinition(config()), false);
         return;
       }
       const assembled = assembleDefinition(config());
       const r = await API.post('/api/tools/studio-build', { definition: assembled, messages }, { retries: 1 });
-      const def = r?.definition || assembled;
-      const pub = await API.post('/api/tools', { definition: def, visibility, aiGenerated: true });
-      const one = await API.get(`/api/tools?slug=${encodeURIComponent(pub.slug)}`);
-      if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
-      app.nav('tools');
-    } catch (e: any) { setErr(e?.message || 'Could not generate the tool.'); }
+      await publishDef(r?.definition || assembled, true);
+    } catch (e: any) { setErr(e?.message || (editSlug ? 'Could not update the tool.' : 'Could not generate the tool.')); }
     setBusy(false);
   };
 
@@ -384,9 +398,14 @@ export function BuilderStudioView() {
 
   return (
     <>
-      <h1 className="view-title">Build a <span className="scribble-underline">tool</span></h1>
+      <h1 className="view-title">{editSlug ? <>Edit <span className="scribble-underline">tool</span></> : <>Build a <span className="scribble-underline">tool</span></>}</h1>
       <p className="view-sub">Compose it visually, or chat — the two combine.{' '}
-        <button className="btn small ghost" onClick={() => app.nav('tools')}>← Gallery</button></p>
+        <button className="btn small ghost" onClick={() => app.nav(editSlug ? 'tool' : 'tools')}>← Back</button></p>
+      {editSlug && (
+        <p className="view-sub" style={{ marginTop: -12, fontSize: 13, opacity: 0.8 }}>
+          ✏️ Editing an existing tool — the card settings below are loaded from it, and publishing <b>updates the same tool</b> (it won’t create a new one).
+        </p>
+      )}
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
         <button className={`btn ${tab === 'studio' ? 'blue' : 'ghost'}`} onClick={() => setTab('studio')}>🧩 Studio</button>
@@ -602,13 +621,13 @@ export function BuilderStudioView() {
               <>
                 {/* AI builds the whole plan from your goal/chat/document and publishes it. */}
                 <button className="btn ghost" disabled={busy || suggesting} onClick={generateWithAI}
-                  title="Let the AI build the whole plan from your goal, chat and document — and publish it.">{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
+                  title="Let the AI build the whole plan from your goal, chat and document — and publish it.">{busy ? genBusyLabel : genLabel}</button>
                 {/* Publishes EXACTLY the current cards — no AI changes. */}
                 <button className="btn green" disabled={busy || suggesting} onClick={generate}
-                  title="Publish exactly what is in the cards above right now (no AI changes).">📮 Post</button>
+                  title="Publish exactly what is in the cards above right now (no AI changes).">{editSlug ? '📮 Update' : '📮 Post'}</button>
               </>
             ) : (
-              <button className="btn green" disabled={busy || suggesting} onClick={generate}>{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
+              <button className="btn green" disabled={busy || suggesting} onClick={generate}>{busy ? genBusyLabel : genLabel}</button>
             )}
           </div>
         </div>
@@ -631,7 +650,7 @@ export function BuilderStudioView() {
             <button className="btn primary" disabled={chatBusy} onClick={() => sendChat(input)}>Send</button>
           </div>
           <div style={{ textAlign: 'center', marginTop: 10 }}>
-            <button className="btn green" disabled={busy} onClick={generate}>{busy ? 'Generating…' : '✨ Generate the tool →'}</button>
+            <button className="btn green" disabled={busy} onClick={generate}>{busy ? genBusyLabel : genLabel}</button>
           </div>
         </div>
       )}
