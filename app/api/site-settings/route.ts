@@ -1,6 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-guard';
+import { PAGE_FIELD_KEYS } from '@/lib/page-settings';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getSiteSettings, setSiteSetting } = require('@/src/db/platform');
 
@@ -17,7 +18,10 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   'galleryCollapsed', 'toolsCollapsed', 'adminToolsCollapsed',
   // Donation prompt copy (admin-editable, like the section titles). The wallet
   // address + 👁 collapse are per-tool (owner/admin) via /api/tools/donation.
-  'donateNudge', 'donateNote'];
+  'donateNudge', 'donateNote',
+  // Per-page chrome for the Repositories & Slides landing pages (banner title/
+  // subtitle, discussion heading, cards-per-page) — edited from the dashboard.
+  ...PAGE_FIELD_KEYS];
 const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner']);
 
 // GET /api/site-settings -> the editable page copy (any signed-in viewer reads it).

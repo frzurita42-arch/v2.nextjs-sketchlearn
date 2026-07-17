@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
+import { PAGE_FIELDS, type PageTextField } from '@/lib/page-settings';
 import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
 import { MiniChart, type ChartType, type Datum } from '@/components/ui/MiniChart';
@@ -52,7 +53,7 @@ function PagedTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][
               const s = String(c ?? '');
               if (s.length > CELL_LIMIT) return (
                 <td key={ci}>{s.slice(0, CELL_LIMIT)}…{' '}
-                  <button className="btn small ghost" style={{ padding: '0 5px' }} title="Show the full text" onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
+                  <button type="button" title="Show the full text" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
                 </td>
               );
               return <td key={ci}>{s || '—'}</td>;
@@ -134,6 +135,28 @@ export function DashboardView() {
     } catch (e: any) { setEditErr(e?.message || 'Could not save.'); }
     setEditBusy(false);
   };
+  // Page-chrome (banner titles/subtitles, discussion heading, cards-per-page) for
+  // the Repositories & Slides landing pages — stored in the site_settings DB table.
+  const [pageText, setPageText] = useState<Record<string, string>>({});
+  useEffect(() => { API.get('/api/site-settings').then((r: any) => setPageText(r?.settings || {})).catch(() => { /* ignore */ }); }, [reload]);
+  const [editField, setEditField] = useState<{ field: PageTextField; value: string } | null>(null);
+  const [fieldBusy, setFieldBusy] = useState(false);
+  const [fieldErr, setFieldErr] = useState('');
+  const savePageField = async () => {
+    if (!editField) return;
+    const f = editField.field;
+    let value = editField.value.trim();
+    if (f.type === 'number') { const n = Math.max(f.min ?? 1, Math.min(f.max ?? 60, parseInt(value, 10) || (f.min ?? 1))); value = String(n); }
+    if (f.type === 'text' && !value) { setFieldErr('Can’t be empty.'); return; }
+    setFieldBusy(true); setFieldErr('');
+    try {
+      const r: any = await API.put('/api/site-settings', { key: f.key, value });
+      if (r?.error) { setFieldErr(r.error); setFieldBusy(false); return; }
+      setPageText(s => ({ ...s, [f.key]: value }));
+      setEditField(null);
+    } catch (e: any) { setFieldErr(e?.message || 'Could not save.'); }
+    setFieldBusy(false);
+  };
 
   useEffect(() => {
     if (app.user?.role !== 'admin') { app.nav('home'); return; }
@@ -205,7 +228,8 @@ export function DashboardView() {
     node: (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
         <span>{t.title || '—'}</span>
-        <button className="btn small ghost" style={{ padding: '0 5px' }} title="Edit this page’s title & description"
+        <button type="button" title="Edit this page’s title & description"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}
           onClick={() => { setEditErr(''); setEditTool({ slug: t.slug, title: t.title || '', description: t.description || '' }); }}>✎</button>
       </span>
     ),
@@ -270,10 +294,10 @@ export function DashboardView() {
   // Pages in the pager: the data tables, then a Data-analysis page and an AI-visual
   // page (each with a dropdown to pick which table / all tables).
   const TABLE_PAGES = sections.length;
-  const ANALYSIS = TABLE_PAGES, VISUALS = TABLE_PAGES + 1;
-  const totalPages = TABLE_PAGES + 2;
+  const ANALYSIS = TABLE_PAGES, VISUALS = TABLE_PAGES + 1, PAGETEXT = TABLE_PAGES + 2;
+  const totalPages = TABLE_PAGES + 3;
   const cur = Math.min(tab, totalPages - 1);
-  const pageLabels = [...sections.map(s => s.label), '📊 Data analysis', '🎨 AI visuals'];
+  const pageLabels = [...sections.map(s => s.label), '📊 Data analysis', '🎨 AI visuals', '📝 Page text'];
   const tableOptions = [{ key: 'none', label: '— none —' }, { key: 'all', label: '🗂️ All tables' }, ...sections.map(s => ({ key: s.key, label: s.label }))];
 
   // Generate an AI visual from the selected table (or all tables) + output style
@@ -391,6 +415,29 @@ export function DashboardView() {
         </div>
       )}
 
+      {cur === PAGETEXT && (
+        <div className="card">
+          <h3 style={{ margin: '0 0 4px' }}>📝 Page text &amp; layout</h3>
+          <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>
+            The banner title, subtitle, discussion heading and cards-per-page for the two landing pages.
+            Each row is a live value from the <code>site_settings</code> database table — edit it here and the page renders from the DB.
+          </p>
+          <div className="table-wrap"><table className="sketch"><tbody>
+            <tr><th>Page</th><th>Field</th><th>Current value</th><th>Edit</th></tr>
+            {PAGE_FIELDS.map((f) => (
+              <tr key={f.key}>
+                <td>{f.page === 'presentation' ? '🎞️ Slides' : '🗂️ Repositories'}</td>
+                <td>{f.label}</td>
+                <td style={{ opacity: pageText[f.key] ? 1 : 0.55 }}>{pageText[f.key] || `${f.default} (default)`}</td>
+                <td><button type="button" title={`Edit ${f.label}`} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}
+                  onClick={() => { setFieldErr(''); setEditField({ field: f, value: pageText[f.key] ?? f.default }); }}>✎</button></td>
+              </tr>
+            ))}
+          </tbody></table></div>
+          <p style={{ fontSize: 11, opacity: 0.55, marginTop: 8 }}>Tip: keep an emoji in the banner title if you want one (e.g. “🎞️ Slides”). Cards-per-page accepts 1–60.</p>
+        </div>
+      )}
+
       {rule}
       {/* Page pager container. */}
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
@@ -423,6 +470,31 @@ export function DashboardView() {
             <div className="slide-actions" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
               <button className="btn small ghost" disabled={editBusy} onClick={() => setEditTool(null)}>Cancel</button>
               <button className="btn green" disabled={editBusy} onClick={saveEdit}>{editBusy ? 'Saving…' : '💾 Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✎ Edit a page-text / layout field (from the Page text table). */}
+      {editField && (
+        <div onClick={() => !fieldBusy && setEditField(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480, width: '100%', padding: '18px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <b>✎ {editField.field.page === 'presentation' ? 'Slides' : 'Repositories'} — {editField.field.label}</b>
+              <button className="btn small ghost" onClick={() => !fieldBusy && setEditField(null)}>✕</button>
+            </div>
+            <label className="field" style={{ display: 'block' }}><span>Value</span>
+              <input type={editField.field.type === 'number' ? 'number' : 'text'} autoFocus value={editField.value} disabled={fieldBusy}
+                min={editField.field.min} max={editField.field.max} maxLength={editField.field.type === 'number' ? undefined : 240}
+                onChange={e => setEditField(s => s && { ...s, value: e.target.value })}
+                onKeyDown={e => { if (e.key === 'Enter') savePageField(); }} style={{ width: '100%' }} />
+            </label>
+            <p style={{ fontSize: 11, opacity: 0.55, margin: '6px 0 0' }}>Default: {editField.field.default}</p>
+            {fieldErr && <p style={{ color: '#b23', fontSize: 12, margin: '8px 0 0' }}>{fieldErr}</p>}
+            {dbOn === false && <p style={{ color: '#b23', fontSize: 11, margin: '8px 0 0' }}>⚠ No database connected — this will revert on the next deploy.</p>}
+            <div className="slide-actions" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button className="btn small ghost" disabled={fieldBusy} onClick={() => setEditField(null)}>Cancel</button>
+              <button className="btn green" disabled={fieldBusy} onClick={savePageField}>{fieldBusy ? 'Saving…' : '💾 Save'}</button>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
+import { perPageOf } from '@/lib/page-settings';
 import { useApp } from '@/components/AppContext';
 import { CommentSection } from '@/components/social/CommentSection';
 import { type FilterKey } from '@/components/ui/Collection';
@@ -169,7 +170,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
   // Admin-editable page copy (heading + subtitle), saved for everyone. Follows
   // the "View as" preview so an admin can see the non-admin gallery.
   const isAdmin = gEff.isAdmin;
-  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string }>({});
+  const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string; [k: string]: string | undefined }>({});
   const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
   const [headingDraft, setHeadingDraft] = useState('');
   useEffect(() => { API.get('/api/site-settings').then((r: any) => setSite(r?.settings || {})).catch(() => { /* ignore */ }); }, []);
@@ -333,7 +334,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
         </div>
       ) : (
         <h1 className="view-title">
-          {isSlides ? <>🎞️ <span className="scribble-underline">Slides</span></> : (site.galleryTitle ? site.galleryTitle : <>Tool <span className="scribble-underline">gallery</span></>)}
+          {isSlides ? (site.slideGalleryTitle ? site.slideGalleryTitle : <>🎞️ <span className="scribble-underline">Slides</span></>) : (site.galleryTitle ? site.galleryTitle : <>Tool <span className="scribble-underline">gallery</span></>)}
           {isAdmin && !isSlides && <button title="Edit heading (admin)" onClick={() => { setHeadingDraft(site.galleryTitle || 'Tool gallery'); setEditHeading('galleryTitle'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>}
           {isAdmin && !isSlides && <button title="AI tap-mixer — reword the heading" disabled={!!headMix.galleryTitle} onClick={() => remixHeading('galleryTitle')} style={{ ...headIcon, fontSize: 15 }}>{headMix.galleryTitle ? '…' : '🎨'}</button>}
         </h1>
@@ -348,7 +349,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
         </div>
       ) : (
         <p className="view-sub" style={{ textAlign: 'center' }}>
-          {isSlides ? 'Browse every slide presentation — open one to play it.' : (site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.')}
+          {isSlides ? (site.slideGallerySubtitle || 'Browse every slide presentation — open one to play it.') : (site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.')}
           {isAdmin && !isSlides && <button title="Edit subtitle (admin)" onClick={() => { setHeadingDraft(site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.'); setEditHeading('gallerySubtitle'); }} style={{ ...headIcon, fontSize: 13 }}>✎</button>}
           {isAdmin && !isSlides && <button title="AI tap-mixer — reword the subtitle" disabled={!!headMix.gallerySubtitle} onClick={() => remixHeading('gallerySubtitle')} style={{ ...headIcon, fontSize: 13 }}>{headMix.gallerySubtitle ? '…' : '🎨'}</button>}
         </p>
@@ -383,7 +384,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
               likedByOwner={(t: any) => !!app.user?.username && t.owner === app.user.username}
               ownerLabel="💛 Moderators"
               ownerTitle="Only tools you created (you moderate)"
-              perPage={6}
+              perPage={perPageOf(isSlides ? site.slidePerPage : site.repoPerPage)}
               storageKey="sl_tools_view"
               sortPrefKey="gallery"
               defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(site.galleryFilter || '') ? site.galleryFilter : 'all') as FilterKey}
@@ -433,7 +434,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
           gallery (one thread per page: repositories vs slides). The dashed rule sits
           at the BOTTOM of the section, not the top. */}
       <div style={{ maxWidth: 820, margin: '18px auto 0' }}>
-        <h3 style={{ textAlign: 'center', margin: '0 0 10px' }}>💬 Discussion</h3>
+        <h3 style={{ textAlign: 'center', margin: '0 0 10px' }}>{(isSlides ? site.slideDiscussionTitle : site.repoDiscussionTitle) || '💬 Discussion'}</h3>
         <CommentSection targetType="tool" targetId={isSlides ? '__gallery_slides__' : '__gallery_repos__'} />
         <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, marginTop: 12 }} />
       </div>
