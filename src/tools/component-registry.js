@@ -49,7 +49,7 @@ const COMPONENT_REGISTRY = [
     recommendations: 'Add pagination for long threads and an admin “lock thread” toggle.' }),
   item({ name: 'AuthorBar', uses: 1, kind: 'container', createdAt: '2026-07-17T18:00:00Z',
     location: 'components/social/AuthorBar.tsx',
-    description: 'The platform-provided social header card at the top of every tool/repo page: the author’s avatar + @name, a metadata line (created · type · visibility · ✦AI-built), the ❤ like button and the 🔗 Share / QR panel, with an optional slot for owner controls (⚙️ Settings). Tools never build their own author/like/share chrome. Responsive — identity and actions stack into two rows on mobile. (The old ← Tools button was removed; the header navigates back.)',
+    description: 'The platform-provided social header card at the top of every tool/repo page: the author’s avatar + @name, a metadata line (created · type · visibility · ✦AI-built), the ❤ like button and the 🔗 Share / QR panel, with an optional slot for owner controls (⚙️ Settings), closing with a dashed rule that marks the end of the container. Tools never build their own author/like/share chrome. Responsive — identity and actions stack into two rows on mobile. (The old ← Tools button was removed; the header navigates back.)',
     inputs: 'Props: owner, meta, liked, likes, onToggleLike, shareSlug, shareTitle, showShare (hide Share on private tools), actions (owner-control slot). UI inputs: 🤍/❤️ like toggle, 🔗 Share / QR button (opens the share panel), optional ⚙️ Settings.',
     recommendations: 'Add a follow/subscribe action; show the author’s role badge (admin/moderator) next to the name.' }),
   item({ name: 'ViewAsBar', uses: 1, kind: 'container', createdAt: '2026-07-17T17:30:00Z',

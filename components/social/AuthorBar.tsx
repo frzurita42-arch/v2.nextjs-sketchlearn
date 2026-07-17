@@ -36,19 +36,23 @@ export function AuthorBar({
 }) {
   const av = avatarFor(owner);
   return (
-    <div className="card author-bar" style={{ maxWidth: 820, margin: '0 auto', padding: '12px 16px' }}>
-      <div className="author-bar__id">
-        <span aria-hidden style={{ display: 'inline-flex', flex: '0 0 auto', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: av.color, border: '2px solid var(--ink)', fontSize: 20 }}>{av.emoji}</span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700 }}>@{owner}</div>
-          <div style={{ fontSize: 12, opacity: 0.65 }}>{meta}</div>
+    <div style={{ maxWidth: 820, margin: '0 auto' }}>
+      <div className="card author-bar" style={{ padding: '12px 16px' }}>
+        <div className="author-bar__id">
+          <span aria-hidden style={{ display: 'inline-flex', flex: '0 0 auto', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: av.color, border: '2px solid var(--ink)', fontSize: 20 }}>{av.emoji}</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700 }}>@{owner}</div>
+            <div style={{ fontSize: 12, opacity: 0.65 }}>{meta}</div>
+          </div>
+        </div>
+        <div className="author-bar__actions">
+          <button className="btn small ghost" onClick={onToggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
+          {showShare && <SharePanel slug={shareSlug} title={shareTitle} />}
+          {actions}
         </div>
       </div>
-      <div className="author-bar__actions">
-        <button className="btn small ghost" onClick={onToggleLike} aria-pressed={liked}>{liked ? '❤️' : '🤍'} {likes}</button>
-        {showShare && <SharePanel slug={shareSlug} title={shareTitle} />}
-        {actions}
-      </div>
+      {/* Closing dashed rule — marks the end of the author/share container. */}
+      <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '10px 0 0' }} />
     </div>
   );
 }
