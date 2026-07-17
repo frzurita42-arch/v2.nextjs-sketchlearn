@@ -117,6 +117,16 @@ const WEBSITE_BUILD_LOG = [
     summary: 'SectionHeader (the shared section-title container) now defaults to a 36px double-size title with scaled ✎/🎨/👁 controls, applied everywhere it is used; the dashboard table double-font was reverted.',
     recommendations: 'Reuse SectionHeader + useShelfTitle for any new section title.',
     context: 'One shared header container now sets the look of every section title on the site.' }),
+  entry({ date: '2026-07-17T17:20:00Z', commit: 'cffce38', tokens: 35000, files: 6, status: 'done',
+    prompt: 'Put the Discussion heading and the comment box in one container, editable in one file, reusable on other pages.',
+    summary: 'New DiscussionSection container (title via SectionHeader/useShelfTitle with ✎ 🎨 👁, CommentSection, closing dashed rule); adopted on both galleries and every tool page — tool pages gained the missing Discussion title.',
+    recommendations: 'Consider per-tool (owner-level) discussion hide flags.',
+    context: 'The discussion area is now a one-line drop-in like PageHeader and SectionHeader.' }),
+  entry({ date: '2026-07-17T18:00:00Z', commit: '1e1966d', tokens: 50000, files: 5, status: 'done',
+    prompt: 'Repo pages: paginate with a Read more button every 6 cards, counting nested cards too; remove the “Learn any of these — AI topic picks” shelf from page bottoms.',
+    summary: 'RepoView shows 6 cards at a time in depth-first order (nested cards count; subtrees trim mid-branch), 📖 Read more reveals the next 6 with a Showing X of Y counter; the AI topic-picks and More-like-this end-of-page shelves were removed.',
+    recommendations: 'Optionally remember the revealed chunk count per repo; add a Show less.',
+    context: 'Repo reading flow is now progressive; tool pages end at the discussion.' }),
 ];
 
 module.exports = { WEBSITE_BUILD_LOG };
