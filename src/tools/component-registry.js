@@ -34,7 +34,7 @@ const COMPONENT_REGISTRY = [
     recommendations: 'Allow a per-page actions slot (e.g. the Coach ⬇ spreadsheet button) as a prop.' }),
   item({ name: 'SectionHeader', uses: 8, kind: 'container', createdAt: '2026-07-17T16:15:00Z',
     location: 'components/ui/SectionHeader.tsx',
-    description: 'The STANDARD section title row (double-size, 36px) reused by every collection & carousel — e.g. 🖼️ Gallery on the front page. Fixed control order: ✎ edit · 🎨 AI-reword · 🔄 refresh · extra · 👁 hide-from-users, so titles look and behave identically everywhere.',
+    description: 'The STANDARD section title row (double-size, 36px) reused across collections & carousels — it powers the Gallery, Cards, History, Slides, Repositories, Discussion and Comments section titles. Same instance everywhere, different title. Controls: ✎ edit · 🎨 AI-reword · 🔄 refresh · 👁 hide.',
     inputs: 'Props: title, canEditTitle (shows ✎/🎨), onRenameTitle, onRemixTitle, remixingTitle, onRefresh/refreshing/refreshTitle (🔄), extra (custom controls before the eye), showCollapse/collapsed/onToggleCollapse (👁), maxWidth, titleFontSize (default 36). Pair with useShelfTitle for DB-persisted titles.',
     recommendations: 'Reuse it for any new section; spread useShelfTitle(key, fallback) into it for an admin-editable, DB-saved title.' }),
   item({ name: 'Registry search bar', uses: 1, kind: 'component', createdAt: '2026-07-17T15:30:00Z',
