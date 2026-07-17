@@ -334,7 +334,9 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
         </div>
       ) : (
         <h1 className="view-title">
-          {isSlides ? (site.slideGalleryTitle ? site.slideGalleryTitle : <>🎞️ <span className="scribble-underline">Slides</span></>) : (site.galleryTitle ? site.galleryTitle : <>Tool <span className="scribble-underline">gallery</span></>)}
+          {isSlides
+            ? (site.slideGalleryTitle ? <span className="scribble-underline">{site.slideGalleryTitle}</span> : <>🎞️ <span className="scribble-underline">Slides</span></>)
+            : (site.galleryTitle ? <span className="scribble-underline">{site.galleryTitle}</span> : <>Tool <span className="scribble-underline">gallery</span></>)}
           {isAdmin && !isSlides && <button title="Edit heading (admin)" onClick={() => { setHeadingDraft(site.galleryTitle || 'Tool gallery'); setEditHeading('galleryTitle'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>}
           {isAdmin && !isSlides && <button title="AI tap-mixer — reword the heading" disabled={!!headMix.galleryTitle} onClick={() => remixHeading('galleryTitle')} style={{ ...headIcon, fontSize: 15 }}>{headMix.galleryTitle ? '…' : '🎨'}</button>}
         </h1>
