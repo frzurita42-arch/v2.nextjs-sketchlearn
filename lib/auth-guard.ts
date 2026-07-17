@@ -51,3 +51,22 @@ export async function requireAdmin(req: Request): Promise<AuthResult> {
   }
   return result;
 }
+
+// Auth + a token-balance check for token-COSTING actions. Admins are unlimited.
+// Everyone else must have a positive wallet balance; when they're out, the action
+// is blocked with 402 so the client can show "you're out of tokens" instead of
+// letting a generation run (and debit past zero).
+export async function requireTokens(req: Request): Promise<AuthResult> {
+  const result = await requireAuth(req);
+  if (!result.ok) return result;
+  if (result.user.role === 'admin') return result;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getUserTokens } = require('@/src/db/platform');
+    const balance = await getUserTokens(result.user.username);
+    if (!(balance > 0)) {
+      return { ok: false, response: NextResponse.json({ error: 'You are out of tokens. Ask an admin to add more to your wallet.', outOfTokens: true }, { status: 402 }) };
+    }
+  } catch { /* if the wallet check fails, don't block the action */ }
+  return result;
+}

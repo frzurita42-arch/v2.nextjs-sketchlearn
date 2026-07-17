@@ -2,7 +2,7 @@ import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled, imageEnabled } from '@/src/config';
 import { generateStructured, generateImage, generateSvgSketch, geminiDoc, getLastImageError } from '@/src/ai/providers';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireTokens } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug } = require('@/src/db/platform');
 
@@ -21,7 +21,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 //   op 'suggest' { title, subject, goal, docText, docDataUrl, cards } -> { cards }
 //                (AI proposes/extends a plan, ≤20 top-level cards, keeps user cards)
 export async function POST(req: Request) {
-  const a = await requireAuth(req);
+  const a = await requireTokens(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const slug = String(b.slug || '');

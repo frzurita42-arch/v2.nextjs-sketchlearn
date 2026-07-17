@@ -2,7 +2,7 @@ import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireTokens } from '@/lib/auth-guard';
 import { validateToolDefinition } from '@/lib/tool-schema';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export const maxDuration = 45;
 // KEEPING the visual choices. Off-topic chat is ignored. With no AI, or no chat,
 // the visual definition is returned unchanged. Either input alone is valid.
 export async function POST(req: Request) {
-  const a = await requireAuth(req);
+  const a = await requireTokens(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const base = validateToolDefinition(b.definition);

@@ -2,7 +2,7 @@ import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { imageEnabled, geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled } from '@/src/config';
 import { generateImage, generateSvgSketch, getLastImageError } from '@/src/ai/providers';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireTokens } from '@/lib/auth-guard';
 import { emojiThumb, emojiOf, randomEmoji } from '@/lib/emoji-thumb';
 import { NO_TEXT_RULE } from '@/lib/image-styles';
 import { recordImageUsage } from '@/lib/usage-log';
@@ -20,7 +20,7 @@ export const maxDuration = 45;
 // the blob store when configured so the gallery payload stays light), and returns
 // the URL. Each press regenerates/updates the image. Owner/admin only.
 export async function POST(req: Request) {
-  const a = await requireAuth(req);
+  const a = await requireTokens(req);
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const slug = String(b.slug || '');

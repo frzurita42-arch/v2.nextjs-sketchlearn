@@ -14,7 +14,7 @@ import {
   enforceSlideVisualPolicy, enforceLatexNarrativeCadence, decideAdaptiveVisualMode,
   summarizeLearnerVisualProfile, enforceTimeTravelImagePolicy, buildGenericImagePrompt,
 } from '@/src/slides/visual-policy';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireTokens } from '@/lib/auth-guard';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,7 +23,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const a = await requireAuth(req);
+  const a = await requireTokens(req);
   if (!a.ok) return a.response;
   const { gameId, topic, concept, level, settings = {}, slideNumber, totalSlides, history = [], branch } = (await req.json().catch(() => ({}))) || {};
   if (!topic || !concept || !slideNumber || !totalSlides) return NextResponse.json({ error: 'Missing slide context' }, { status: 400 });
