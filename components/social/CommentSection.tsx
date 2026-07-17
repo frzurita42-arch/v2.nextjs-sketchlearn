@@ -174,8 +174,11 @@ export function CommentSection({ targetType, targetId }: { targetType: 'tool' | 
   const [loaded, setLoaded] = useState(false);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'recent' | 'popular'>('recent');
-  const [page, setPage] = useState(0);
-  const PER_PAGE = 10;
+  // Reveal top-level comments 6 at a time — the same "Read more ↓ / Read less ↑"
+  // pattern as the repo cards: start at 6, Read more shows the next 6, Read less
+  // folds 6 back up and stops at the first 6.
+  const READ_STEP = 6;
+  const [shown, setShown] = useState(READ_STEP);
 
   const load = () => API.get(`/api/comments?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(targetId)}`)
     .then((r: any) => { setComments(Array.isArray(r?.comments) ? r.comments : []); setLoaded(true); })
@@ -208,19 +211,26 @@ export function CommentSection({ targetType, targetId }: { targetType: 'tool' | 
     .sort((a, b) => sort === 'popular' ? (b.likedBy?.length || 0) - (a.likedBy?.length || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [comments, idSet, q, sort]);
 
-  // Paginate the TOP-LEVEL comments at 10 per page (replies stay under their
-  // parent). The pager is always shown when there are comments, but its buttons
-  // are inactive while everything fits on one page.
-  const totalPages = Math.max(1, Math.ceil(roots.length / PER_PAGE));
-  useEffect(() => { if (page > totalPages - 1) setPage(0); }, [page, totalPages]);
-  const pageRoots = roots.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
-  const pager = roots.length > 0 ? (
-    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', margin: '8px 0' }}>
-      <button className="btn small ghost" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← Prev</button>
-      <span style={{ fontSize: 12, opacity: 0.7 }}>Page {page + 1} of {totalPages}</span>
-      <button className="btn small ghost" disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>Next →</button>
-    </div>
-  ) : null;
+  // Show the TOP-LEVEL comments up to `shown` (replies stay nested under their
+  // parent). Reset the reveal when the filter/sort/thread changes so you start at
+  // the first 6 again.
+  useEffect(() => { setShown(READ_STEP); }, [q, sort, targetId]);
+  const shownRoots = roots.slice(0, shown);
+  const remaining = Math.max(0, roots.length - shown);
+  const canLess = shown > READ_STEP;
+  const readMore = roots.length > READ_STEP ? (() => {
+    const link = { background: 'none', border: 'none', fontFamily: 'inherit', fontSize: 15, color: 'var(--ink)', textUnderlineOffset: 3, padding: 0 } as const;
+    return (
+      <div style={{ display: 'flex', gap: 22, justifyContent: 'center', marginTop: 12 }}>
+        <button disabled={remaining === 0} onClick={() => setShown((n) => n + READ_STEP)}
+          title={remaining === 0 ? 'All comments are shown' : `Show the next ${Math.min(READ_STEP, remaining)} comments (${shown} of ${roots.length} shown)`}
+          style={{ ...link, cursor: remaining === 0 ? 'default' : 'pointer', opacity: remaining === 0 ? 0.35 : 0.75, textDecoration: remaining === 0 ? 'none' : 'underline' }}>Read more ↓</button>
+        <button disabled={!canLess} onClick={() => setShown((n) => Math.max(READ_STEP, n - READ_STEP))}
+          title={canLess ? `Fold the last ${READ_STEP} comments back up` : `The first ${READ_STEP} comments always stay shown`}
+          style={{ ...link, cursor: canLess ? 'pointer' : 'default', opacity: canLess ? 0.75 : 0.35, textDecoration: canLess ? 'underline' : 'none' }}>Read less ↑</button>
+      </div>
+    );
+  })() : null;
 
   return (
     <div className="card alt" style={{ padding: '14px 16px', marginTop: 16, maxWidth: 680, marginInline: 'auto' }}>
@@ -238,13 +248,12 @@ export function CommentSection({ targetType, targetId }: { targetType: 'tool' | 
 
       {comments.length === 0 && loaded && <p style={{ opacity: 0.6, fontSize: 13, margin: 0 }}>No comments yet — be the first.</p>}
       {comments.length > 0 && roots.length === 0 && <p style={{ opacity: 0.6, fontSize: 13, margin: 0 }}>No comments match your search.</p>}
-      {pager}
-      {pageRoots.map((c) => (
+      {shownRoots.map((c) => (
         <CommentCard key={c.id} c={c} kids={kids} me={me} isAdmin={isAdmin}
           onReply={(parentId, body, links) => post(body, parentId, links)}
           onLike={like} onPoster={poster} onUser={userUpload} onRemoveLink={removeLink} onDelete={remove} />
       ))}
-      {pager}
+      {readMore}
     </div>
   );
 }
