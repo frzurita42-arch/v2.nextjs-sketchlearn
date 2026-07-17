@@ -19,6 +19,10 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   // Donation prompt copy (admin-editable, like the section titles). The wallet
   // address + 👁 collapse are per-tool (owner/admin) via /api/tools/donation.
   'donateNudge', 'donateNote',
+  // DiscussionSection: the tool-page discussion title + per-surface 👁 hide
+  // flags ('1' = hidden from regular users). The gallery titles themselves are
+  // already covered by PAGE_FIELD_KEYS (repoDiscussionTitle/slideDiscussionTitle).
+  'toolDiscussionTitle', 'repoDiscussionCollapsed', 'slideDiscussionCollapsed', 'toolDiscussionCollapsed',
   // Per-page chrome for the Repositories & Slides landing pages (banner title/
   // subtitle, discussion heading, cards-per-page) — edited from the dashboard.
   ...PAGE_FIELD_KEYS,

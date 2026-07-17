@@ -7,7 +7,7 @@ import { appState } from '@/lib/app-state';
 import { perPageOf } from '@/lib/page-settings';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useApp } from '@/components/AppContext';
-import { CommentSection } from '@/components/social/CommentSection';
+import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { ToolCard } from '@/components/tools/ToolCard';
@@ -391,14 +391,12 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
         </>
       )}
 
-      {/* Page-wide discussion — a comment section shared by everyone browsing this
-          gallery (one thread per page: repositories vs slides). The dashed rule sits
-          at the BOTTOM of the section, not the top. */}
-      <div style={{ maxWidth: 820, margin: '18px auto 0' }}>
-        <h3 style={{ textAlign: 'center', margin: '0 0 10px' }}>{(isSlides ? site.slideDiscussionTitle : site.repoDiscussionTitle) || '💬 Discussion'}</h3>
-        <CommentSection targetType="tool" targetId={isSlides ? '__gallery_slides__' : '__gallery_repos__'} />
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, marginTop: 12 }} />
-      </div>
+      {/* Page-wide discussion — title + comments + closing dashed rule, all in the
+          one reusable DiscussionSection container (one thread per page). */}
+      <DiscussionSection
+        titleKey={isSlides ? 'slideDiscussionTitle' : 'repoDiscussionTitle'}
+        collapseKey={isSlides ? 'slideDiscussionCollapsed' : 'repoDiscussionCollapsed'}
+        targetType="tool" targetId={isSlides ? '__gallery_slides__' : '__gallery_repos__'} />
     </>
   );
 }

@@ -10,7 +10,7 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
-import { CommentSection } from '@/components/social/CommentSection';
+import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
@@ -458,8 +458,9 @@ export function ToolRunnerView() {
         {/* ┄ divider: activities/feed ┄ comments ┄ */}
         <div style={dashRule} />
 
-        {/* Platform-provided comment section on every tool. */}
-        <CommentSection targetType="tool" targetId={tool.slug} />
+        {/* Platform-provided discussion (title + comments) on every tool. */}
+        <DiscussionSection titleKey="toolDiscussionTitle" collapseKey="toolDiscussionCollapsed"
+          targetType="tool" targetId={tool.slug} />
 
         {/* On a REPOSITORY: 10 AI-recommended TOPICS drawn from its subjects, each a
             preset that opens the presentation builder. On other non-lesson tools:
