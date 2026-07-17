@@ -11,6 +11,8 @@ export const runtime = 'nodejs';
 // Which page-copy keys admins may edit (allow-list keeps this from becoming a
 // free-form store). Values are short strings.
 const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle', 'collectionShelfTitle',
+  // Dashboard section titles (SectionHeader over the section-picker buttons and over the tables area).
+  'dashSectionsShelfTitle', 'dashTablesShelfTitle',
   // Section how-to banners (longer text).
   'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner',
   // Home-page section visibility ('1' = collapsed/hidden for regular users). The

@@ -12,6 +12,8 @@ import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
 import { PAGE_FIELDS, type PageTextField } from '@/lib/page-settings';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { useShelfTitle } from '@/components/tools/useShelfTitle';
 import { SLIDE_ACTIVITIES } from '@/lib/slide-activities';
 import { logActivity, rememberPreset, recallPreset } from '@/lib/activity-log';
 import { useApp } from '@/components/AppContext';
@@ -106,6 +108,9 @@ export function DashboardView() {
   // the navigation to the activity trail.
   const [tab, setTab] = useState<number>(() => { const v = parseInt(recallPreset('dash_tab', '0'), 10); return Number.isFinite(v) && v >= 0 ? v : 0; });
   const selectTab = (i: number, label?: string) => { setTab(i); rememberPreset('dash_tab', String(i)); logActivity('nav', 'dashboard', { section: label || `#${i}` }); };
+  // Standard, DB-editable SectionHeaders for the two dashboard areas.
+  const sectionsHdr = useShelfTitle('dashSectionsShelfTitle', '📂 Dashboard sections');
+  const tablesHdr = useShelfTitle('dashTablesShelfTitle', '📊 Tables');
   const [newUser, setNewUser] = useState('');
   const [newPass, setNewPass] = useState('');
   const [newRole, setNewRole] = useState('user');
@@ -459,13 +464,17 @@ export function DashboardView() {
         </p>
       )}
 
-      {/* Section picker container (the filtering buttons). */}
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '0 0 4px' }}>
+      {/* Section picker: a SectionHeader title, then the filtering buttons. */}
+      <SectionHeader title={sectionsHdr.title} canEditTitle={sectionsHdr.canEditTitle} onRenameTitle={sectionsHdr.onRenameTitle} onRemixTitle={sectionsHdr.onRemixTitle} remixingTitle={sectionsHdr.remixingTitle} maxWidth={780} />
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '8px 0 4px' }}>
         {pageLabels.map((lbl, i) => (
           <button key={i} className={`btn small ${i === cur ? 'blue' : 'ghost'}`} onClick={() => selectTab(i, lbl)}>{lbl}{i < TABLE_PAGES ? <span style={{ opacity: 0.6 }}> ({sections[i].count})</span> : null}</button>
         ))}
       </div>
       {rule}
+
+      {/* Tables area: a SectionHeader title above the current table/section. */}
+      <SectionHeader title={tablesHdr.title} canEditTitle={tablesHdr.canEditTitle} onRenameTitle={tablesHdr.onRenameTitle} onRemixTitle={tablesHdr.onRemixTitle} remixingTitle={tablesHdr.remixingTitle} maxWidth={780} />
 
       {cur < TABLE_PAGES ? (() => {
         const sec = sections[cur];
