@@ -539,7 +539,18 @@ async function getSiteSettings() {
   try {
     const { rows } = await withDbTimeout(dbQuery('SELECT key, value FROM site_settings', []), 8000, 'Site settings');
     const o = {};
-    for (const r of rows) o[r.key] = parseJsonb(r.value, null);
+    for (const r of rows) {
+      // The jsonb driver already DECODES the value, so a stored string comes back
+      // as a JS string — do NOT JSON.parse it again (that throws on a bare string
+      // like "Tool gallery" and used to null the value out, reverting edits). Only
+      // parse when the driver handed back raw JSON text for an object/array.
+      let val = r.value;
+      if (typeof val === 'string') {
+        const t = val.trim();
+        if (t.startsWith('{') || t.startsWith('[')) { try { val = JSON.parse(t); } catch { /* keep the string */ } }
+      }
+      o[r.key] = val;
+    }
     return o;
   } catch (e) {
     console.error('Site settings read failed; falling back to file:', e.message);
