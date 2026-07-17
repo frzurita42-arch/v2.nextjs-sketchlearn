@@ -97,6 +97,16 @@ const WEBSITE_BUILD_LOG = [
     summary: 'Wrapped Repos/Slides title+subtitle in a single page-header block ending in a dashed separator — a reusable header unit.',
     recommendations: 'Promote to a shared <PageHeader> component reused on every view.',
     context: 'First step toward a component/layout system for composing new pages.' }),
+  entry({ date: '2026-07-17T15:00:00Z', commit: '315df90', tokens: 30000, files: 3, status: 'done',
+    prompt: 'Make the Repos page use the same PageHeader container, and make the orange line go all the way under the emoji.',
+    summary: 'Repositories now renders the shared <PageHeader> (galleryTitle keys carry over; new repoEmoji keys); the scribble underline wraps emoji + title as one stroke; ~45 lines of duplicated inline-header code deleted from ToolsView.',
+    recommendations: 'Add a per-page actions slot to PageHeader (e.g. the Coach ⬇ spreadsheet button).',
+    context: 'All four main pages (Repos, Slides, Coach, Dashboard) now share one header container.' }),
+  entry({ date: '2026-07-17T15:45:00Z', commit: 'e5c8f4a', tokens: 55000, files: 3, status: 'done',
+    prompt: 'Add a search bar on the components table, plus a toggle to search with AI where a prompt filters only the matching rows.',
+    summary: 'The 🧱 Components tab got a search bar (instant substring filter across all columns) and an ✨ AI-search toggle: describe what you need, 🤖 Ask AI calls the new /api/dashboard/registry-search and only the rows the model picks stay visible.',
+    recommendations: 'Generalize plain + AI search into PagedTable so every dashboard table gets it for free.',
+    context: 'First AI-powered filter on the dashboard — natural-language queries over the site’s own component catalogue.' }),
 ];
 
 module.exports = { WEBSITE_BUILD_LOG };
