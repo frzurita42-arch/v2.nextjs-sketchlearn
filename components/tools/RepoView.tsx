@@ -1605,7 +1605,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
               {/* Row 2 — owner feature toggles, grouped in a labelled panel. */}
               {canEdit && (
-                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', padding: '10px 12px 8px', border: '1.5px dashed var(--ink)', borderRadius: 10, maxWidth: 780 }}>
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', padding: '10px 12px 8px', border: '1.5px dashed var(--ink)', borderRadius: 10, width: '100%', maxWidth: 1000, marginInline: 'auto', boxSizing: 'border-box' }}>
                   <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center', marginBottom: 2 }}>OWNER CONTROLS</span>
                   <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
                     title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'}
