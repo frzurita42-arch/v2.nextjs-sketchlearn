@@ -1804,18 +1804,28 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         </div>
       )}
 
-      {/* Read more — plain letters at the foot of the card section, right above
-          the closing dashed rule. Each click reveals the next 6 cards (nested
-          cards count toward the 6). */}
-      {!editing && remainingCards > 0 && (
-        <div style={{ textAlign: 'center', marginTop: 12, marginBottom: 2 }}>
-          <button onClick={() => setReadChunks((n) => n + 1)}
-            title={`Show the next ${Math.min(READ_MORE_STEP, remainingCards)} cards (${shownCards} of ${totalCards} shown)`}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 16, color: 'var(--ink)', opacity: 0.75, textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
-            Read more ↓
-          </button>
-        </div>
-      )}
+      {/* Read more / Read less — plain letters at the foot of the card section,
+          right above the closing dashed rule. "Read more" reveals the next 6
+          cards (nested cards count toward the 6); "Read less" folds the last 6
+          back up, disabled once only the first 6 remain. */}
+      {!editing && totalCards > READ_MORE_STEP && (() => {
+        const link = { background: 'none', border: 'none', fontFamily: 'inherit', fontSize: 16, color: 'var(--ink)', textUnderlineOffset: 3, padding: 0 } as const;
+        const canLess = shownCards > READ_MORE_STEP;
+        return (
+          <div style={{ display: 'flex', gap: 22, justifyContent: 'center', marginTop: 12, marginBottom: 2 }}>
+            <button disabled={remainingCards === 0} onClick={() => setReadChunks((n) => n + 1)}
+              title={remainingCards === 0 ? 'All cards are shown' : `Show the next ${Math.min(READ_MORE_STEP, remainingCards)} cards (${shownCards} of ${totalCards} shown)`}
+              style={{ ...link, cursor: remainingCards === 0 ? 'default' : 'pointer', opacity: remainingCards === 0 ? 0.35 : 0.75, textDecoration: remainingCards === 0 ? 'none' : 'underline' }}>
+              Read more ↓
+            </button>
+            <button disabled={!canLess} onClick={() => setReadChunks((n) => Math.max(1, n - 1))}
+              title={canLess ? `Fold the last ${READ_MORE_STEP} cards back up` : `The first ${READ_MORE_STEP} cards always stay shown`}
+              style={{ ...link, cursor: canLess ? 'pointer' : 'default', opacity: canLess ? 0.75 : 0.35, textDecoration: canLess ? 'underline' : 'none' }}>
+              Read less ↑
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }
