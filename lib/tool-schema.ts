@@ -180,6 +180,10 @@ export interface RepoSpec {
   emojiApprove?: boolean;       // ✅ show a per-card emoji that CYCLES the assignment
                                 // status (Set status → Assigned → Pending → Approved
                                 // → Rejected) with a tap — no document upload needed.
+  studyMode?: boolean;          // 🎬 study path: show a "generate slides" emoji on
+                                // PROMPT cards (a card whose text starts with 🔵). It
+                                // opens the slide tool with the prompt preset as the topic.
+  studyToolSlug?: string;       // which presentation tool the 🎬 study button opens.
   cards: RepoCard[];
 }
 
@@ -317,7 +321,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       .map((c: any) => cleanRepoCard(c, 0)).filter(Boolean) as RepoCard[];
     const authorizedUsers = (Array.isArray(r.authorizedUsers) ? r.authorizedUsers : [])
       .map((u: any) => String(u || '').trim().slice(0, 40)).filter(Boolean).slice(0, 200);
-    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, assignShow: !!r.assignShow, docUpload: !!r.docUpload, showDates: r.showDates !== false, imageGen: !!r.imageGen, emojiApprove: !!r.emojiApprove, authorizedUsers, cards };
+    repo = { layout, display, displayLocked: !!r.displayLocked, offlineExport: r.offlineExport !== false, clipForAll: !!r.clipForAll, folderForAll: !!r.folderForAll, assignShow: !!r.assignShow, docUpload: !!r.docUpload, showDates: r.showDates !== false, imageGen: !!r.imageGen, emojiApprove: !!r.emojiApprove, studyMode: !!r.studyMode, studyToolSlug: String(r.studyToolSlug || '').slice(0, 80), authorizedUsers, cards };
   } else if (archetype === 'lesson') {
     const l = d.lesson || {};
     const subject = String(l.subject || title || '').trim().slice(0, 80);

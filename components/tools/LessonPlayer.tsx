@@ -1131,6 +1131,23 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Consume a study-path "slide seed" once: a 🔵 prompt card (via the 🎬 button)
+  // handed us a topic to PREFILL the create form. We only prefill the topic (and
+  // optional slide count) — the user still presses Generate. We never auto-play.
+  const seedDone = useRef(false);
+  useEffect(() => {
+    if (seedDone.current) return;
+    const seed = appState.slideSeed;
+    if (!seed) return;
+    seedDone.current = true; appState.slideSeed = null;
+    const topic = String(seed.topic || '').trim();
+    if (!topic && !seed.slides) return;
+    setForm(s => ({ ...s, ...(topic ? { topic } : {}), ...(seed.slides ? { slides: seed.slides } : {}) }));
+    // Land on the create form (hub) so the preset topic is visible, and scroll to it.
+    setPhase('hub'); try { window.scrollTo(0, 0); } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Add a preset lesson to the history WITHOUT playing it (and with no image). It
   // shows up as a fresh card in the feed whose no-photo spot carries the usual
   // 🎨/✎/📎 buttons, so an image can be added later.
@@ -1654,10 +1671,22 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             </label>
           </div>
           )}
-          <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
+          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             {canPlay
               ? <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
               : <p style={{ margin: 0, fontSize: 13, opacity: 0.7, fontStyle: 'italic' }}>Only moderators can generate a lesson. Browse the saved lessons below and open one to view it.</p>}
+            {/* 💡 Per-play tooltip switch: some students don't have access to the
+                on-slide helper tooltips (hints/links), so let the player turn them
+                off BEFORE playing. Default on. Saved with the run's config. */}
+            {canPlay && (
+              <button type="button" className={`btn small ${(form as any).tooltips === false ? 'ghost' : 'blue'}`}
+                title={(form as any).tooltips === false
+                  ? 'Tooltips are OFF — the on-slide helper hints/links stay hidden during this presentation. Click to turn them on.'
+                  : 'Tooltips are ON — the on-slide helper hints/links show during the presentation. Click to turn them off (for students without tooltip access).'}
+                onClick={() => setForm(s => ({ ...s, tooltips: (s as any).tooltips === false }))}>
+                💡 Tooltips: {(form as any).tooltips === false ? 'Off' : 'On'}
+              </button>
+            )}
           </div>
         </div>
         )}
@@ -1995,7 +2024,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </div>
             )}
           </div>
-          {curPage?.decorations?.length ? <Decorations items={curPage.decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
+          {/* On-slide helper tooltips (hints/links/ask-AI). Hidden when the player
+              turned Tooltips OFF for this run (some students lack tooltip access). */}
+          {cfg.tooltips !== false && curPage?.decorations?.length ? <Decorations items={curPage.decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
           {/* Reading passage (its own "paper"). */}
           {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} speakable={!!lesson.language} voiceId={cfg.voice} /></p>}
           {/* Support materials — each streams into its own card, dotted-separated. */}

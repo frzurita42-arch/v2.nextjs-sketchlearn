@@ -15,6 +15,7 @@
  * completion ✓ toggles are per-user (kept in localStorage). */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { API } from '@/lib/api';
+import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { RichText } from '@/components/tools/RichText';
 import { ImageField } from '@/components/tools/ImageField';
@@ -44,6 +45,8 @@ type ViewCtx = {
   showDates: boolean;                              // 🕒 show each card's created date/time
   imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
   emojiApprove: boolean;                           // ✅ show the per-card emoji that cycles the assignment status (no upload)
+  studyMode: boolean;                              // 🎬 study path: show the "generate slides" button on 🔵 prompt cards
+  openStudy: (promptText: string) => void;         // open the slide tool with a prompt preset as its topic
   authorizedUsers: string[];                       // usernames that bypass a card's paywall (plus owner/admin)
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
@@ -167,6 +170,19 @@ const nextMode = (m?: string): CardMode => MODE_ORDER[(MODE_ORDER.indexOf(modeOf
 // so a tap advances Set status → Assigned → Pending → Approved → Rejected → back.
 const APPROVE_ORDER: CardMode[] = ['enabled', 'assigned', 'pending', 'approved', 'rejected'];
 const nextApprove = (m?: string): CardMode => { const i = APPROVE_ORDER.indexOf(modeOf(m)); return APPROVE_ORDER[i < 0 ? 1 : (i + 1) % APPROVE_ORDER.length]; };
+
+// A study-path PROMPT card is one whose description (or AI prompt) starts with a
+// blue circle 🔵 — the agreed marker that "this card holds a slide-generation
+// prompt". The 🎬 study button opens the slide tool with that prompt as the topic.
+const PROMPT_MARK = '🔵';
+const promptTextOf = (c: RepoCard): string => {
+  const t = String(c.text || '').trim();
+  if (t.startsWith(PROMPT_MARK)) return t.slice(PROMPT_MARK.length).trim();
+  const p = String(c.aiPrompt || '').trim();
+  if (p.startsWith(PROMPT_MARK)) return p.slice(PROMPT_MARK.length).trim();
+  return '';
+};
+const isPromptCard = (c: RepoCard): boolean => !!promptTextOf(c);
 
 // Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
 const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
@@ -991,6 +1007,13 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
       style={{ ...iconBtn, borderBottom: '3px solid #c0392b', borderRadius: 3, paddingBottom: 1, opacity: card.userOff ? 1 : 0.45 }}
       onClick={() => ctx.editField(card.id, { userOff: !card.userOff })}>📁</button>,
   );
+  // 🎬 Study — on a 🔵 PROMPT card (repo study-mode on), a button that opens the
+  // slide tool with this card's prompt preset as the topic. Shown to EVERYONE so
+  // students can jump straight from the study path to generating that lesson.
+  if (ctx.studyMode && isPromptCard(card)) activeControls.push(
+    <button key="study" type="button" title="Generate a slide activity from this prompt — opens the slide tool with the topic preset (you press Generate)."
+      style={{ ...iconBtn, fontSize: 16 }} onClick={eat(() => ctx.openStudy(promptTextOf(card)))}>🎬</button>,
+  );
   // ✅ Emoji approval — a one-tap status cycle (Set status → Assigned → Pending →
   // Approved → Rejected → back) that changes the card's assignment state WITHOUT a
   // document upload. Owner/admin only, and only when the repo toggle is on. The
@@ -1204,6 +1227,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const [authorizedUsers, setAuthorizedUsers] = useState<string[]>(repo.authorizedUsers || []);
   // ✅ Emoji approval — show the per-card one-tap status-cycle emoji. Persisted.
   const [emojiApprove, setEmojiApprove] = useState(!!repo.emojiApprove);
+  // 🎬 Study path — mark this repo as one that carries 🔵 prompt cards, and set the
+  // slide tool the "generate slides" button opens. Persisted.
+  const [studyMode, setStudyMode] = useState(!!repo.studyMode);
+  const [studyToolSlug, setStudyToolSlug] = useState(repo.studyToolSlug || '');
   // Known usernames for the Authorized-users picker dropdown. Best-effort: the
   // /api/users list is admin-only, so a non-admin owner just types a username.
   const [knownUsers, setKnownUsers] = useState<string[]>([]);
@@ -1290,7 +1317,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     const body = {
       layout: repo.layout, display, displayLocked: repo.displayLocked, offlineExport: repo.offlineExport,
       imageGen, clipForAll: posterUpload, folderForAll: userUpload, assignShow: assignShown,
-      docUpload, showDates, authorizedUsers, emojiApprove, cards, ...over,
+      docUpload, showDates, authorizedUsers, emojiApprove, studyMode, studyToolSlug, cards, ...over,
     };
     const r = await API.post('/api/tools/repo', { slug, repo: body });
     if (r?.repo && def) def.repo = r.repo;
@@ -1373,7 +1400,23 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     } catch { alert('Could not reach the AI.'); }
   };
 
-  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, emojiApprove, authorizedUsers, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
+  // Open the configured slide tool with a prompt PRESET as its topic (the user then
+  // presses Generate). Falls back to the tool builder when no tool is configured.
+  const openStudy = async (promptText: string) => {
+    const topic = String(promptText || '').trim();
+    appState.slideSeed = { topic };
+    const s = (studyToolSlug || '').trim();
+    if (s) {
+      try { const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(s)}`); if (r?.tool) { appState.activeTool = r.tool; app.nav('tool'); return; } } catch { /* fall through */ }
+      alert(`Could not open the study tool "${s}". Check the slug in this repo's Study-path settings.`);
+      return;
+    }
+    if (canEdit) { alert('Set which slide tool the study button opens in this repo’s 🎬 Study-path settings.'); return; }
+    appState.builderSeed = { artifact: 'presentation', subject: topic } as any;
+    app.nav('toolbuilder');
+  };
+
+  const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, emojiApprove, studyMode, openStudy, authorizedUsers, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
 
   // Persist the "Suggest AI" toggle (imageGen) without touching cards.
   const saveImageGen = async (next: boolean) => { setImageGen(next); try { await postRepo({ imageGen: next }); } catch { /* keep the optimistic toggle */ } };
@@ -1389,6 +1432,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const saveAuthorized = async (next: string[]) => { setAuthorizedUsers(next); try { await postRepo({ authorizedUsers: next }); } catch { /* keep the optimistic list */ } };
   // Persist the ✅ Emoji-approval switch.
   const saveEmojiApprove = async (next: boolean) => { setEmojiApprove(next); try { await postRepo({ emojiApprove: next }); } catch { /* keep the optimistic toggle */ } };
+  // Persist the 🎬 Study-path switch + which slide tool it opens.
+  const saveStudyMode = async (next: boolean) => { setStudyMode(next); try { await postRepo({ studyMode: next }); } catch { /* keep the optimistic toggle */ } };
+  const saveStudyTool = async (next: string) => { setStudyToolSlug(next); try { await postRepo({ studyToolSlug: next }); } catch { /* keep the optimistic value */ } };
 
   // Display lock: the owner/admin can lock the grid/rows view for a collection so
   // everyone sees the same layout. Persisted on the repo (display + displayLocked).
@@ -1504,6 +1550,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   <button className={`btn small ${emojiApprove ? 'blue' : 'ghost'}`}
                     title={emojiApprove ? 'Turn off the one-tap emoji status control on cards.' : 'Show a per-card emoji that cycles the assignment status (Set status → Assigned → Pending → Approved → Rejected) with a tap — no document upload needed. A card left on “Set status” shows nothing to viewers.'}
                     onClick={() => saveEmojiApprove(!emojiApprove)}>✅ Emoji approval: {emojiApprove ? 'On' : 'Off'}</button>
+                  <button className={`btn small ${studyMode ? 'blue' : 'ghost'}`}
+                    title={studyMode ? 'Turn off the study-path buttons.' : 'Mark this repo as a STUDY PATH: cards whose description starts with 🔵 are treated as slide-generation prompts and get a 🎬 button that opens the slide tool with the prompt preset. Leave off for a plain menu / collection.'}
+                    onClick={() => saveStudyMode(!studyMode)}>🎬 Study path: {studyMode ? 'On' : 'Off'}</button>
                   <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`}
                     title="Enable the Moderator 📎 link on every card. When off, the clip only stays on cards that already have a link (viewers can still open those)."
                     onClick={() => saveUploads(!posterUpload, userUpload)}>📎 Moderator upload: {posterUpload ? 'On' : 'Off'}</button>
@@ -1525,10 +1574,25 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 </div>
               )}
 
+              {/* 🎬 Study-path command center — which slide tool the 🔵-prompt cards
+                  open, plus a shortcut to it. Shown when Study path is on. */}
+              {canEdit && studyMode && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', maxWidth: 780, padding: '10px 12px', border: '1.5px dashed var(--ink)', borderRadius: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center' }}>🎬 STUDY-PATH COMMAND CENTER</span>
+                  <label style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>Slide tool slug
+                    <input value={studyToolSlug} onChange={(e) => setStudyToolSlug(e.target.value)} onBlur={() => saveStudyTool(studyToolSlug.trim())}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveStudyTool(studyToolSlug.trim()); }}
+                      placeholder="e.g. cybersecurity-foundations" style={{ fontSize: 12, width: 200 }} title="The presentation tool the 🎬 study buttons open (its URL slug)." />
+                  </label>
+                  {studyToolSlug.trim() && <button className="btn small blue" title="Open the slide tool now" onClick={() => openStudy('')}>🎬 Open the slide tool</button>}
+                  <span style={{ fontSize: 11, opacity: 0.6, width: '100%', textAlign: 'center' }}>Cards whose description starts with 🔵 show a 🎬 button that opens this tool with the prompt preset.</span>
+                </div>
+              )}
+
               {/* Row 3 — Authorized users: who can open PAYWALLED (🔒) cards without
                   the lock. Add from the dropdown of known users or by typing one. */}
               {canEdit && (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', maxWidth: 780 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', maxWidth: 780, padding: '10px 12px', border: '1.5px dashed var(--ink)', borderRadius: 10 }}>
                   <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall button.">👥 Authorized users:</span>
                   {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
                   {authorizedUsers.map((u) => (

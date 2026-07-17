@@ -41,6 +41,10 @@ export interface AppState {
   // How to open the next tool: jump straight to its saved results, or replay a
   // specific rendition config. Consumed once by the LessonPlayer on mount.
   openIntent?: { action: 'results' | 'replay' | 'generate'; config?: any } | null;
+  // A one-shot "preset the create form" seed: a study-path prompt card hands the
+  // slide tool a topic (and optional slide count) to PREFILL — the user still
+  // presses Generate. Consumed once by the LessonPlayer create form on mount.
+  slideSeed?: { topic?: string; slides?: number } | null;
   builderDraft?: any;
   // A one-shot seed for the tool builder: prefill the artifact type + subject/
   // title from a suggested topic. Consumed once by BuilderStudioView on mount.
