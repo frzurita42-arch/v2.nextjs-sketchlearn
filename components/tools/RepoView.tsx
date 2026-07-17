@@ -1637,10 +1637,14 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 </div>
               )}
 
-              {/* 🎬 Study-path command center — a fixed-size, mobile-friendly WIZARD:
-                  step 1 asks what you want to do; picking an option slides down to
-                  its compact form. The container keeps one size across steps. */}
-              {canEdit && studyMode && (() => {
+              {/* Two-column row: the Study-path command center and Authorized users,
+                  each in its own dashed container; the columns wrap (stack) on
+                  narrow / mobile screens. */}
+              {canEdit && (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', width: '100%', maxWidth: 1000, marginInline: 'auto', alignItems: 'stretch', justifyContent: 'center' }}>
+
+              {/* 🎬 Study-path command center — a fixed-size, mobile-friendly WIZARD. */}
+              {studyMode && (() => {
                 const selName = studyToolSlug.trim() ? ((studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug) : '';
                 const fieldRow = { display: 'flex', gap: 8, flexWrap: 'wrap' as const, justifyContent: 'center' };
                 const fld = { fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 } as const;
@@ -1657,7 +1661,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 );
                 const Back = () => <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setCcMode('')}>← Back</button>;
                 return (
-                <div style={{ width: '100%', maxWidth: 480, marginInline: 'auto', minHeight: 250, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', border: '1.5px dashed var(--ink)', borderRadius: 12 }}>
+                <div style={{ flex: '1 1 340px', minWidth: 0, maxWidth: 520, minHeight: 250, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', border: '1.5px dashed var(--ink)', borderRadius: 12 }}>
                   <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, textAlign: 'center' }}>🎬 STUDY-PATH COMMAND CENTER</span>
                   <div style={{ fontSize: 12, fontWeight: 700, textAlign: 'center' }}>
                     Slide tool: {selName ? <span style={{ color: 'var(--accent, #2d6cdf)' }}>{selName}</span> : <span style={{ opacity: 0.6, fontWeight: 400 }}>none picked yet</span>}
@@ -1727,11 +1731,11 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 );
               })()}
 
-              {/* Row 3 — Authorized users: who can open PAYWALLED (🔒) cards without
-                  the lock. Add from the dropdown of known users or by typing one. */}
-              {canEdit && (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', maxWidth: 780, padding: '10px 12px', border: '1.5px dashed var(--ink)', borderRadius: 10 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall button.">👥 Authorized users:</span>
+              {/* 👥 Authorized users — its own container, sharing the two-column row.
+                  Who can open PAYWALLED (🔒) cards without the lock. */}
+              <div style={{ flex: '1 1 340px', minWidth: 0, maxWidth: 520, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', alignContent: 'flex-start', justifyContent: 'center', padding: '10px 12px', border: '1.5px dashed var(--ink)', borderRadius: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center' }}>👥 AUTHORIZED USERS</span>
+                  <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall button.">Bypass the 🔒 paywall:</span>
                   {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
                   {authorizedUsers.map((u) => (
                     <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
@@ -1751,6 +1755,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
                   <button className="btn small blue" onClick={() => { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); }}>Add</button>
                 </div>
+
+              </div>
               )}
             </div>
           }
