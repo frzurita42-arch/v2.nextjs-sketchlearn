@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   if (!imageEnabled) return NextResponse.json({ error: 'No image model is configured.' }, { status: 200 });
   const b = (await req.json().catch(() => ({}))) || {};
   const kind = KINDS[String(b.kind)] ? String(b.kind) : 'infographic';
+  // A typed custom style (from the ✎ toggle) overrides the preset directive.
+  const customStyle = String(b.customStyle || '').slice(0, 300).trim();
+  const directive = customStyle || KINDS[kind];
   const tableName = String(b.tableName || 'dashboard data').slice(0, 80);
   const summary = String(b.summary || '').slice(0, 3000);
   const includeAll = !!b.includeAll;
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
   const custom = String(b.custom || '').slice(0, 500);
 
   const prompt = [
-    `Design ${KINDS[kind]}.`,
+    `Design ${directive}.`,
     `It is about the SketchLearn admin dashboard${includeAll ? ' (all tables)' : `: the "${tableName}" table`}.`,
     includeAll ? `ALL DASHBOARD DATA:\n${allSummaries}` : `DATA:\n${summary}`,
     custom ? `Also follow this instruction from the author: "${custom}".` : '',

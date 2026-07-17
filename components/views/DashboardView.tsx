@@ -93,9 +93,13 @@ export function DashboardView() {
   const [userErr, setUserErr] = useState('');
   // Data-analysis + AI-visual sections: which table to chart / feed the AI, the
   // chosen output style, a custom instruction, and the generated image.
-  const [analysisSel, setAnalysisSel] = useState('all');
-  const [visualSel, setVisualSel] = useState('all');
+  // Both table pickers default to "none" so nothing renders until a table is chosen.
+  const [analysisSel, setAnalysisSel] = useState('none');
+  const [visualSel, setVisualSel] = useState('none');
   const [visKind, setVisKind] = useState('infographic');
+  // Output style can be a preset OR a typed custom style (✎ pencil toggles it).
+  const [styleCustom, setStyleCustom] = useState(false);
+  const [styleText, setStyleText] = useState('');
   const [visCustom, setVisCustom] = useState('');
   const [visImg, setVisImg] = useState<{ url: string; by: string } | null>(null);
   const [visBusy, setVisBusy] = useState(false);
@@ -224,17 +228,19 @@ export function DashboardView() {
   const totalPages = TABLE_PAGES + 2;
   const cur = Math.min(tab, totalPages - 1);
   const pageLabels = [...sections.map(s => s.label), '📊 Data analysis', '🎨 AI visuals'];
-  const tableOptions = [{ key: 'all', label: '🗂️ All tables' }, ...sections.map(s => ({ key: s.key, label: s.label }))];
+  const tableOptions = [{ key: 'none', label: '— none —' }, { key: 'all', label: '🗂️ All tables' }, ...sections.map(s => ({ key: s.key, label: s.label }))];
 
-  // Generate an AI visual from the selected table (or all tables) + custom prompt.
+  // Generate an AI visual from the selected table (or all tables) + output style
+  // (a preset OR a typed custom style) + custom instruction.
   const genVisual = async () => {
     const all = visualSel === 'all';
     const chosen = all ? sections : sections.filter(s => s.key === visualSel);
     const summary = chosen.map(s => summarize(s.label, s.headers, s.rows)).join('\n\n');
-    const tableName = all ? 'all tables' : (sections.find(s => s.key === visualSel)?.label || 'data');
+    const tableName = all ? 'all tables' : (sections.find(s => s.key === visualSel)?.label || '(no table)');
+    const customStyle = styleCustom ? styleText.trim() : '';
     setVisBusy(true);
     try {
-      const r: any = await API.post('/api/dashboard/visual', { kind: visKind, tableName, summary, includeAll: all, allSummaries: summary, custom: visCustom.trim() });
+      const r: any = await API.post('/api/dashboard/visual', { kind: customStyle ? 'custom' : visKind, customStyle, tableName, summary, includeAll: all, allSummaries: summary, custom: visCustom.trim() });
       if (r?.url) setVisImg({ url: r.url, by: r.by || '' });
       else alert(r?.error || 'Could not generate an image.');
     } catch (e: any) { alert(e?.message || 'Could not generate an image.'); }
@@ -277,14 +283,16 @@ export function DashboardView() {
             </select>
           </label>
           {rule}
-          {(analysisSel === 'all' ? sections : sections.filter(s => s.key === analysisSel)).map((s, i, arr) => (
-            <div key={s.key}>
-              {s.chart && s.count > 0
-                ? <MiniChart type={s.chart.type} data={s.chart.data} title={`${s.label} — ${s.chart.title}`} unit={s.chart.unit} />
-                : <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center' }}>{s.label}: no data to chart yet.</p>}
-              {i < arr.length - 1 && rule}
-            </div>
-          ))}
+          {analysisSel === 'none'
+            ? <p style={{ fontSize: 13, opacity: 0.6, textAlign: 'center' }}>Pick a table (or all tables) above to see its chart.</p>
+            : (analysisSel === 'all' ? sections : sections.filter(s => s.key === analysisSel)).map((s, i, arr) => (
+              <div key={s.key}>
+                {s.chart && s.count > 0
+                  ? <MiniChart type={s.chart.type} data={s.chart.data} title={`${s.label} — ${s.chart.title}`} unit={s.chart.unit} />
+                  : <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center' }}>{s.label}: no data to chart yet.</p>}
+                {i < arr.length - 1 && rule}
+              </div>
+            ))}
         </div>
       ) : (
         <div className="card alt">
@@ -297,10 +305,16 @@ export function DashboardView() {
                   {tableOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
                 </select>
               </label>
-              <label className="field" style={{ margin: 0, maxWidth: 240 }}><span>Output style</span>
-                <select value={visKind} onChange={e => setVisKind(e.target.value)}>
-                  {VISUAL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
-                </select>
+              <label className="field" style={{ margin: 0, maxWidth: 260 }}><span>Output style
+                {/* ✎ pencil flips the preset dropdown to a free-text custom style (▾ back). */}
+                <button type="button" title={styleCustom ? 'Pick from the list' : 'Type a custom style'} onClick={() => setStyleCustom(c => !c)}
+                  style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{styleCustom ? '▾' : '✎'}</button>
+              </span>
+                {styleCustom
+                  ? <input type="text" value={styleText} onChange={e => setStyleText(e.target.value)} placeholder="Describe your own style…" />
+                  : <select value={visKind} onChange={e => setVisKind(e.target.value)}>
+                      {VISUAL_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                    </select>}
               </label>
             </div>
             <label className="field" style={{ margin: 0 }}><span>Custom instruction (optional)</span>
