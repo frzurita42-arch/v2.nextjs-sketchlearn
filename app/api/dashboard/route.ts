@@ -11,6 +11,10 @@ const { EXAMPLE_USAGE } = require('@/src/tools/example-usage');
 const { EXAMPLE_COMPONENT_USAGE } = require('@/src/tools/example-component-usage');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { WEBSITE_BUILD_LOG } = require('@/src/tools/website-build-log');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { COMPONENT_REGISTRY } = require('@/src/tools/component-registry');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getSiteSettings } = require('@/src/db/platform');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -120,7 +124,12 @@ export async function GET(req: Request) {
     subjectKind: c.subjectKind || '', createdAt: c.createdAt || null, user: c.user || 'anon',
   }));
 
-  return NextResponse.json({ tools, runs, usage, usageByUser, componentUsage, buildLog: WEBSITE_BUILD_LOG }, { headers: { 'Cache-Control': 'no-cache' } });
+  // Rows the admin has hidden from the dashboard (soft-delete). Stored as
+  // "table:id" strings in site_settings; the client filters each table by these.
+  const settings = await getSiteSettings();
+  const hiddenRows = Array.isArray(settings?.dashHiddenRows) ? settings.dashHiddenRows : [];
+
+  return NextResponse.json({ tools, runs, usage, usageByUser, componentUsage, buildLog: WEBSITE_BUILD_LOG, registry: COMPONENT_REGISTRY, hiddenRows }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 function countCards(cards: any[]): number {

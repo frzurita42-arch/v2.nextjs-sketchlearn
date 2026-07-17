@@ -37,17 +37,22 @@ type Cell = string | number | null | undefined | { node: React.ReactNode };
 
 // A table that shows ROWS_PER_PAGE rows at a time (Prev/Next) and clips any text
 // cell over CELL_LIMIT chars, revealing the full value in a popup via 👁.
-function PagedTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][]; empty: string }) {
+function PagedTable({ headers, rows, empty, rowIds, onDelete }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void }) {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<{ title: string; text: string } | null>(null);
   const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
   const p = Math.min(page, pages - 1);
   const slice = rows.slice(p * ROWS_PER_PAGE, p * ROWS_PER_PAGE + ROWS_PER_PAGE);
+  const canDelete = !!(onDelete && rowIds);
+  const totalCols = headers.length + (canDelete ? 1 : 0);
   return (
     <>
       <div className="table-wrap"><table className="sketch"><tbody>
-        <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
-        {slice.length ? slice.map((r, ri) => (
+        <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
+        {slice.length ? slice.map((r, ri) => {
+          const abs = p * ROWS_PER_PAGE + ri;
+          const id = rowIds ? rowIds[abs] : '';
+          return (
           <tr key={ri}>
             {r.map((c, ci) => {
               if (c && typeof c === 'object' && 'node' in c) return <td key={ci}>{c.node}</td>;
@@ -59,8 +64,10 @@ function PagedTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][
               );
               return <td key={ci}>{s || '—'}</td>;
             })}
+            {canDelete && <td><button type="button" title="Delete this row (hides it from the dashboard)" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => { if (id && confirm('Delete this row from the dashboard?')) onDelete!(id); }}>🗑</button></td>}
           </tr>
-        )) : <tr><td colSpan={headers.length}>{empty}</td></tr>}
+          );
+        }) : <tr><td colSpan={totalCols}>{empty}</td></tr>}
       </tbody></table></div>
       {pages > 1 && (
         <>
@@ -88,7 +95,7 @@ export function DashboardView() {
   const app = useApp();
   const [usersList, setUsersList] = useState<any[] | null>(null);
   const [games, setGames] = useState<any[]>([]);
-  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[]; buildLog?: any[] } | null>(null);
+  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[]; buildLog?: any[]; registry?: any[]; hiddenRows?: string[] } | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   // Remember the last dashboard section so it reopens where you left off, and log
@@ -189,6 +196,19 @@ export function DashboardView() {
   const usageByUser = dash?.usageByUser || [];
   const componentUsage = dash?.componentUsage || [];
   const buildLog = dash?.buildLog || [];
+  const registry = dash?.registry || [];
+  // Soft-deleted rows: server-persisted "table:id" keys + any deleted this session.
+  const hiddenRows = dash?.hiddenRows || [];
+  const [hiddenExtra, setHiddenExtra] = useState<Set<string>>(new Set());
+  const hidden = useMemo(() => new Set<string>([...hiddenRows, ...Array.from(hiddenExtra)]), [hiddenRows, hiddenExtra]);
+  const rowKey = (table: string, id: string) => `${table}:${id}`;
+  const notHidden = (table: string) => (id: string) => !hidden.has(rowKey(table, id));
+  const hideRow = (table: string, id: string) => {
+    const key = rowKey(table, id);
+    setHiddenExtra(s => { const n = new Set(s); n.add(key); return n; });
+    logActivity('delete', `${table}: ${id}`, {});
+    API.post('/api/dashboard/hide', { rowKey: key }).catch(() => { /* stays hidden optimistically */ });
+  };
 
   if (error) return <div className="card">{error}</div>;
   if (usersList === null || dash === null) return <Loading text="Opening the teacher’s desk…" />;
@@ -219,31 +239,57 @@ export function DashboardView() {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   };
 
+  // Visible (non-soft-deleted) sources — the tables, ids and counts all derive
+  // from these so a deleted row disappears everywhere consistently.
+  const vSlide = slideTools.filter((t: any) => notHidden('slides')(t.slug));
+  const vRepo = repoTools.filter((t: any) => notHidden('repos')(t.slug));
+  const vRuns = runs.filter((r: any) => notHidden('runs')(r.id));
+  const vUsage = usage.filter((u: any) => notHidden('usage')(u.id));
+  const vCost = usageByUser.filter((u: any) => notHidden('cost')(u.user));
+  const vComp = componentUsage.filter((c: any) => notHidden('components')(c.id));
+  const vBuild = buildLog.filter((e: any) => notHidden('build')(e.id));
+  const vReg = registry.filter((e: any) => notHidden('registry')(e.id));
+  const vGames = games.slice().reverse().filter((g: any, i: number) => notHidden('games')(String(g.id || g.finishedAt || i)));
+  const vUsers = usersList.filter((u: any) => notHidden('users')(u.username));
+
   // ---- rows for each table (plain strings, reused for table + CSV) ----
   const slideHeaders = ['Title', 'Owner', 'Visibility', 'Slides', 'Saved deck', 'AI', 'Created'];
-  const slideRows: (string | number)[][] = slideTools.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.slideCount || '—', t.hasSavedDeck ? '📖 yes' : '—', t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+  const slideRows: (string | number)[][] = vSlide.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.slideCount || '—', t.hasSavedDeck ? '📖 yes' : '—', t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+  const slideIds = vSlide.map((t: any) => String(t.slug));
   const repoHeaders = ['Title', 'Owner', 'Visibility', 'Cards', 'Kind', 'AI', 'Created'];
-  const repoRows: (string | number)[][] = repoTools.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.cardCount || '—', t.archetype, t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+  const repoRows: (string | number)[][] = vRepo.map((t: any) => [t.title, `@${t.owner}`, t.visibility, t.cardCount || '—', t.archetype, t.aiGenerated ? '✦' : '—', fmtDate(t.createdAt)]);
+  const repoIds = vRepo.map((t: any) => String(t.slug));
   const runHeaders = ['User', 'Presentation', 'Topic', 'Level', 'Theme', 'Slides', 'Grade', 'Date'];
-  const runRows: (string | number)[][] = runs.map((r: any) => [`@${r.user}`, r.toolTitle, r.topic || '—', r.level || '—', r.theme || '—', r.slides || '—', r.score == null ? '—' : `${r.score}%`, fmtDate(r.createdAt)]);
+  const runRows: (string | number)[][] = vRuns.map((r: any) => [`@${r.user}`, r.toolTitle, r.topic || '—', r.level || '—', r.theme || '—', r.slides || '—', r.score == null ? '—' : `${r.score}%`, fmtDate(r.createdAt)]);
+  const runIds = vRuns.map((r: any) => String(r.id));
   const usageHeaders = ['User', 'Component', 'Provider', 'Tokens', 'Cost', 'Subject', 'Prompt', 'Date'];
-  const usageRows: (string | number)[][] = usage.map((u: any) => [`@${u.user}`, u.kind, u.provider || '—', u.totalTokens || 0, money(u.costUsd), u.subject || '—', u.prompt || '—', fmtDate(u.createdAt)]);
+  const usageRows: (string | number)[][] = vUsage.map((u: any) => [`@${u.user}`, u.kind, u.provider || '—', u.totalTokens || 0, money(u.costUsd), u.subject || '—', u.prompt || '—', fmtDate(u.createdAt)]);
+  const usageIds = vUsage.map((u: any) => String(u.id));
   const costHeaders = ['User', 'Generations', 'Tokens', 'Images', 'Total cost'];
-  const costRows: (string | number)[][] = usageByUser.map((u: any) => [`@${u.user}`, u.events, u.tokens, u.images, money(u.cost)]);
+  const costRows: (string | number)[][] = vCost.map((u: any) => [`@${u.user}`, u.events, u.tokens, u.images, money(u.cost)]);
+  const costIds = vCost.map((u: any) => String(u.user));
   const compHeaders = ['Component', 'How used', 'Correct?', 'Template', 'Tool', 'Topic', 'Level', 'Kind', 'Date'];
-  const compRows: (string | number)[][] = componentUsage.map((c: any) => [
+  const compRows: (string | number)[][] = vComp.map((c: any) => [
     c.component, c.role || '—', c.correct === true ? '✓' : c.correct === false ? '✗' : '—',
     c.template || '—', c.tool || '—', c.topic || '—', c.level || '—', c.subjectKind || '—', fmtDate(c.createdAt),
   ]);
+  const compIds = vComp.map((c: any) => String(c.id));
   const buildHeaders = ['Date', 'Request (prompt)', 'Result / progress', 'Recommendations', 'Context', 'Tokens', 'Files', 'Commit', 'Status'];
-  const buildRows: (string | number)[][] = buildLog.map((e: any) => [
+  const buildRows: (string | number)[][] = vBuild.map((e: any) => [
     fmtDate(e.date), e.prompt || '—', e.summary || '—', e.recommendations || '—', e.context || '—',
     e.tokens || 0, e.files || 0, e.commit || '—', e.status || '—',
   ]);
+  const buildIds = vBuild.map((e: any) => String(e.id));
+  const regHeaders = ['Name', 'Kind', 'Description', 'File location', 'Recommendations', 'Added'];
+  const regRows: (string | number)[][] = vReg.map((e: any) => [
+    e.name, e.kind, e.description || '—', e.location || '—', e.recommendations || '—', fmtDate(e.createdAt),
+  ]);
+  const regIds = vReg.map((e: any) => String(e.id));
   const gameHeaders = ['User', 'Date', 'Topic', 'Concept', 'Level', 'Score', 'Time'];
-  const gameRows: (string | number)[][] = games.slice().reverse().map((g: any) => [g.username, fmtDate(g.finishedAt), g.topic, g.concept, g.level, `${g.correct}/${g.total}`, `${Math.floor(g.durationSec / 60)}:${String(g.durationSec % 60).padStart(2, '0')}`]);
+  const gameRows: (string | number)[][] = vGames.map((g: any) => [g.username, fmtDate(g.finishedAt), g.topic, g.concept, g.level, `${g.correct}/${g.total}`, `${Math.floor(g.durationSec / 60)}:${String(g.durationSec % 60).padStart(2, '0')}`]);
+  const gameIds = vGames.map((g: any, i: number) => String(g.id || g.finishedAt || i));
   const userHeaders = ['Username', 'Role', 'Created', 'Games', 'Actions'];
-  const userRows: Cell[][] = usersList.map((u: any) => [u.username, u.role, fmtDay(u.createdAt), u.gamesPlayed, {
+  const userRows: Cell[][] = vUsers.map((u: any) => [u.username, u.role, fmtDay(u.createdAt), u.gamesPlayed, {
     node: <>
       <button className="btn small" onClick={() => setPassword(u.username)}>Set password</button>
       {u.username !== app.user?.username && <button className="btn small ghost" onClick={() => delUser(u.username)}>✘ delete</button>}
@@ -263,31 +309,31 @@ export function DashboardView() {
   });
   // Display rows: same as the plain rows but with an editable title cell in col 0.
   // (The plain rows stay for CSV export + the AI-visual text summary.)
-  const slideDisplayRows: Cell[][] = slideTools.map((t: any, i: number) => [titleCell(t), ...slideRows[i].slice(1)]);
-  const repoDisplayRows: Cell[][] = repoTools.map((t: any, i: number) => [titleCell(t), ...repoRows[i].slice(1)]);
+  const slideDisplayRows: Cell[][] = vSlide.map((t: any, i: number) => [titleCell(t), ...slideRows[i].slice(1)]);
+  const repoDisplayRows: Cell[][] = vRepo.map((t: any, i: number) => [titleCell(t), ...repoRows[i].slice(1)]);
 
-  const totalCost = usageByUser.reduce((s: number, u: any) => s + (Number(u.cost) || 0), 0);
+  const totalCost = vCost.reduce((s: number, u: any) => s + (Number(u.cost) || 0), 0);
 
-  // ---- one best-fit chart per table (relevant slice of the data) ----
+  // ---- one best-fit chart per table (relevant slice of the visible data) ----
   const topN = <T,>(a: T[], n = 6) => a.slice(0, n);
-  const slideChart: Datum[] = topN(slideTools).map((t: any) => ({ label: t.title, value: t.slideCount || 0 }));
-  const repoChart: Datum[] = topN(repoTools).map((t: any) => ({ label: t.title, value: t.cardCount || 0 }));
+  const slideChart: Datum[] = topN(vSlide).map((t: any) => ({ label: t.title, value: t.slideCount || 0 }));
+  const repoChart: Datum[] = topN(vRepo).map((t: any) => ({ label: t.title, value: t.cardCount || 0 }));
   const runByUser: Record<string, { sum: number; n: number }> = {};
-  runs.forEach((r: any) => { if (r.score == null) return; (runByUser[r.user] ||= { sum: 0, n: 0 }); runByUser[r.user].sum += r.score; runByUser[r.user].n += 1; });
+  vRuns.forEach((r: any) => { if (r.score == null) return; (runByUser[r.user] ||= { sum: 0, n: 0 }); runByUser[r.user].sum += r.score; runByUser[r.user].n += 1; });
   const runChart: Datum[] = topN(Object.entries(runByUser).map(([u, v]) => ({ label: `@${u}`, value: Math.round(v.sum / v.n) })).sort((a, b) => b.value - a.value));
   const tokByKind: Record<string, number> = {};
-  usage.forEach((u: any) => { tokByKind[u.kind] = (tokByKind[u.kind] || 0) + (u.totalTokens || 0); });
+  vUsage.forEach((u: any) => { tokByKind[u.kind] = (tokByKind[u.kind] || 0) + (u.totalTokens || 0); });
   const usageChart: Datum[] = topN(Object.entries(tokByKind).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value), 8);
-  const costChart: Datum[] = topN(usageByUser).map((u: any) => ({ label: `@${u.user}`, value: Number((u.cost || 0).toFixed(4)) }));
+  const costChart: Datum[] = topN(vCost).map((u: any) => ({ label: `@${u.user}`, value: Number((u.cost || 0).toFixed(4)) }));
   const roleCount: Record<string, number> = {};
-  usersList.forEach((u: any) => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
+  vUsers.forEach((u: any) => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
   const userChart: Datum[] = Object.entries(roleCount).map(([k, v]) => ({ label: k, value: v }));
-  const gameChart: Datum[] = games.slice(-12).map((g: any, i: number) => ({ label: String(i + 1), value: g.total ? Math.round((g.correct / g.total) * 100) : 0 }));
+  const gameChart: Datum[] = vGames.slice(0, 12).map((g: any, i: number) => ({ label: String(i + 1), value: g.total ? Math.round((g.correct / g.total) * 100) : 0 }));
   const compByType: Record<string, number> = {};
-  componentUsage.forEach((c: any) => { compByType[c.component] = (compByType[c.component] || 0) + 1; });
+  vComp.forEach((c: any) => { compByType[c.component] = (compByType[c.component] || 0) + 1; });
   const compChart: Datum[] = topN(Object.entries(compByType).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value), 10);
-  const buildTokens = buildLog.reduce((s: number, e: any) => s + (Number(e.tokens) || 0), 0);
-  const buildChart: Datum[] = buildLog.filter((e: any) => e.status !== 'context').slice(0, 10).map((e: any) => ({ label: e.commit || fmtDate(e.date), value: Number(e.tokens) || 0 }));
+  const buildTokens = vBuild.reduce((s: number, e: any) => s + (Number(e.tokens) || 0), 0);
+  const buildChart: Datum[] = vBuild.filter((e: any) => e.status !== 'context').slice(0, 10).map((e: any) => ({ label: e.commit || fmtDate(e.date), value: Number(e.tokens) || 0 }));
 
   // Turn a table into a compact text summary for the AI visual generator.
   const summarize = (name: string, headers: string[], rows: Cell[][]) =>
@@ -296,16 +342,17 @@ export function DashboardView() {
 
   // The tables, one per page. `footer` adds extra UI (the add-user form).
   type Chart = { type: ChartType; data: Datum[]; title: string; unit?: string };
-  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; displayRows?: Cell[][]; empty: string; csv?: () => void; footer?: React.ReactNode; chart?: Chart }[] = [
-    { key: 'slides', label: '🎞️ Slide tools', count: slideTools.length, headers: slideHeaders, rows: slideRows, displayRows: slideDisplayRows, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows), chart: { type: 'hbar', data: slideChart, title: 'Slides per tool (top 6)' } },
-    { key: 'repos', label: '🗂️ Repositories', count: repoTools.length, headers: repoHeaders, rows: repoRows, displayRows: repoDisplayRows, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows), chart: { type: 'hbar', data: repoChart, title: 'Cards per repository (top 6)' } },
-    { key: 'runs', label: '📊 Presentation runs', count: runs.length, headers: runHeaders, rows: runRows, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows), chart: { type: 'bar', data: runChart, title: 'Average grade by user', unit: '%' } },
-    { key: 'usage', label: '💸 Token usage', count: usage.length, headers: usageHeaders, rows: usageRows, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows), chart: { type: 'donut', data: usageChart, title: 'Tokens by component' } },
-    { key: 'cost', label: '📉 Cost by user', count: usageByUser.length, headers: costHeaders, rows: costRows, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
-    { key: 'components', label: '🧩 Component usage', count: componentUsage.length, headers: compHeaders, rows: compRows, empty: 'No component usage yet.', csv: () => exportRows('component-usage', compHeaders, compRows), chart: { type: 'donut', data: compChart, title: 'Which components are used' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Every row is one component used on a played slide — its type, how it was used, whether the learner got it right, and the slide template. Real rows come from saved decks; clearly-marked (example) rows backfill so the AI can learn which components suit which subjects.</p> },
-    { key: 'build', label: '🏗️ Website building', count: buildLog.length, headers: buildHeaders, rows: buildRows, empty: 'No build log yet.', csv: () => exportRows('website-build-log', buildHeaders, buildRows), chart: { type: 'bar', data: buildChart, title: 'Est. tokens per change' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The site’s own construction log: each request (prompt), a short result summary, future recommendations, a context note on what the site is/does, plus estimated tokens, files and the commit. Estimated build tokens so far: <b>{buildTokens.toLocaleString()}</b>.</p> },
+  const sections: { key: string; label: string; count: number; headers: string[]; rows: Cell[][]; displayRows?: Cell[][]; rowIds?: string[]; empty: string; csv?: () => void; footer?: React.ReactNode; chart?: Chart }[] = [
+    { key: 'slides', label: '🎞️ Slide tools', count: vSlide.length, headers: slideHeaders, rows: slideRows, displayRows: slideDisplayRows, rowIds: slideIds, empty: 'No slide tools yet.', csv: () => exportRows('slide-tools', slideHeaders, slideRows), chart: { type: 'hbar', data: slideChart, title: 'Slides per tool (top 6)' } },
+    { key: 'repos', label: '🗂️ Repositories', count: vRepo.length, headers: repoHeaders, rows: repoRows, displayRows: repoDisplayRows, rowIds: repoIds, empty: 'No repositories yet.', csv: () => exportRows('repositories', repoHeaders, repoRows), chart: { type: 'hbar', data: repoChart, title: 'Cards per repository (top 6)' } },
+    { key: 'runs', label: '📊 Presentation runs', count: vRuns.length, headers: runHeaders, rows: runRows, rowIds: runIds, empty: 'No saved runs yet — a moderator plays a presentation to the end and it lands here.', csv: () => exportRows('presentation-runs', runHeaders, runRows), chart: { type: 'bar', data: runChart, title: 'Average grade by user', unit: '%' } },
+    { key: 'usage', label: '💸 Token usage', count: vUsage.length, headers: usageHeaders, rows: usageRows, rowIds: usageIds, empty: 'No AI usage recorded yet.', csv: () => exportRows('token-usage', usageHeaders, usageRows), chart: { type: 'donut', data: usageChart, title: 'Tokens by component' } },
+    { key: 'cost', label: '📉 Cost by user', count: vCost.length, headers: costHeaders, rows: costRows, rowIds: costIds, empty: 'No usage yet.', csv: () => exportRows('cost-by-user', costHeaders, costRows), chart: { type: 'hbar', data: costChart, title: 'Estimated cost by user ($)' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Estimated total AI spend so far: <b>{money(totalCost)}</b> (token counts & prices are approximate — for profitability estimates, not billing).</p> },
+    { key: 'components', label: '🧩 Component usage', count: vComp.length, headers: compHeaders, rows: compRows, rowIds: compIds, empty: 'No component usage yet.', csv: () => exportRows('component-usage', compHeaders, compRows), chart: { type: 'donut', data: compChart, title: 'Which components are used' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Every row is one component used on a played slide — its type, how it was used, whether the learner got it right, and the slide template. Real rows come from saved decks; clearly-marked (example) rows backfill so the AI can learn which components suit which subjects.</p> },
+    { key: 'build', label: '🏗️ Website building', count: vBuild.length, headers: buildHeaders, rows: buildRows, rowIds: buildIds, empty: 'No build log yet.', csv: () => exportRows('website-build-log', buildHeaders, buildRows), chart: { type: 'bar', data: buildChart, title: 'Est. tokens per change' }, footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>The site’s own construction log: each request (prompt), a short result summary, future recommendations, a context note on what the site is/does, plus estimated tokens, files and the commit. Estimated build tokens so far: <b>{buildTokens.toLocaleString()}</b>.</p> },
+    { key: 'registry', label: '🧱 Components', count: vReg.length, headers: regHeaders, rows: regRows, rowIds: regIds, empty: 'No components registered yet.', csv: () => exportRows('component-registry', regHeaders, regRows), footer: <p style={{ fontSize: 13, opacity: 0.75, marginTop: 8 }}>Your containers & components: what each is, where it lives, a usage/improvement note, and when it was added. Tell me to add or remove entries and I’ll update this table.</p> },
     {
-      key: 'users', label: '👥 Users', count: usersList.length, headers: userHeaders, rows: userRows, empty: 'No users.',
+      key: 'users', label: '👥 Users', count: vUsers.length, headers: userHeaders, rows: userRows, rowIds: vUsers.map((u: any) => String(u.username)), empty: 'No users.',
       chart: { type: 'donut', data: userChart, title: 'Users by role' },
       footer: (
         <>
@@ -323,7 +370,7 @@ export function DashboardView() {
         </>
       ),
     },
-    { key: 'games', label: '📈 Activity stats', count: games.length, headers: gameHeaders, rows: gameRows, empty: 'No games played yet.', chart: { type: 'line', data: gameChart, title: 'Recent scores', unit: '%' }, footer: <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}><button className="btn small" onClick={downloadCsv}>⬇ Export all games as CSV</button></div> },
+    { key: 'games', label: '📈 Activity stats', count: vGames.length, headers: gameHeaders, rows: gameRows, rowIds: gameIds, empty: 'No games played yet.', chart: { type: 'line', data: gameChart, title: 'Recent scores', unit: '%' }, footer: <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}><button className="btn small" onClick={downloadCsv}>⬇ Export all games as CSV</button></div> },
   ];
   // Pages in the pager: the data tables, then a Data-analysis page and an AI-visual
   // page (each with a dropdown to pick which table / all tables).
@@ -383,7 +430,7 @@ export function DashboardView() {
               <h3 style={{ margin: 0 }}>{sec.label} <span style={{ opacity: 0.5, fontWeight: 400 }}>({sec.count})</span></h3>
               {sec.csv && sec.count > 0 && <button className="btn small" onClick={sec.csv}>⬇ CSV</button>}
             </div>
-            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} empty={sec.empty} />
+            <PagedTable key={sec.key} headers={sec.headers} rows={sec.displayRows || sec.rows} rowIds={sec.rowIds} onDelete={(id) => hideRow(sec.key, id)} empty={sec.empty} />
             {sec.footer}
           </div>
         );
@@ -480,17 +527,24 @@ export function DashboardView() {
             {activity.length > 0 && <button className="btn small" onClick={() => exportRows('activity', ['When', 'User', 'Action', 'Target', 'Detail'], activity.map((e: any) => [fmtDate(e.createdAt), e.username || '', e.action || '', e.target || '', JSON.stringify(e.detail || {})]))}>⬇ CSV</button>}
           </div>
           <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 8px' }}>Navigation + every saved setting/preset change across the site (who, what, old→new), newest first — from the <code>activity_log</code> database table.</p>
-          <PagedTable
-            headers={['When', 'User', 'Action', 'Target', 'Detail']}
-            rows={activity.map((e: any) => {
-              const d = e.detail || {};
-              const detail = d.from !== undefined || d.to !== undefined
-                ? `${d.from ?? '—'} → ${d.to ?? '—'}`
-                : Object.keys(d).length ? Object.entries(d).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ') : '—';
-              return [fmtDate(e.createdAt), `@${e.username || 'anon'}`, e.action || '—', e.target || '—', detail];
-            })}
-            empty="No activity yet — navigate the dashboard or change a setting and it lands here."
-          />
+          {(() => {
+            const vAct = activity.filter((e: any) => notHidden('activity')(String(e.id)));
+            return (
+              <PagedTable
+                headers={['When', 'User', 'Action', 'Target', 'Detail']}
+                rows={vAct.map((e: any) => {
+                  const d = e.detail || {};
+                  const detail = d.from !== undefined || d.to !== undefined
+                    ? `${d.from ?? '—'} → ${d.to ?? '—'}`
+                    : Object.keys(d).length ? Object.entries(d).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ') : '—';
+                  return [fmtDate(e.createdAt), `@${e.username || 'anon'}`, e.action || '—', e.target || '—', detail];
+                })}
+                rowIds={vAct.map((e: any) => String(e.id))}
+                onDelete={(id) => hideRow('activity', id)}
+                empty="No activity yet — navigate the dashboard or change a setting and it lands here."
+              />
+            );
+          })()}
         </div>
       )}
 
