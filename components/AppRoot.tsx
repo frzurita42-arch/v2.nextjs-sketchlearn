@@ -31,7 +31,7 @@ import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 // refresh on those returns home instead of showing a broken screen.
 const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 'feed', 'tools', 'slides', 'tool', 'toolbuilder'];
 
-type NavEntry = { view: ViewName; tool: string | null };
+type NavEntry = { view: ViewName; tool: string | null; key?: string };
 
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
@@ -52,6 +52,32 @@ export default function AppRoot() {
   const setView = useCallback((v: ViewName) => { viewRef.current = v; setViewState(v); }, []);
 
   const rerender = useCallback(() => setTick(t => t + 1), []);
+
+  // ── Scroll-position memory ────────────────────────────────────────────────
+  // Remember where you were on each page so Back returns to that spot (not the
+  // top). We key the saved scrollY by a per-history-entry id, save it when
+  // leaving a page, and restore it after the destination renders (with retries,
+  // since tool pages load asynchronously and grow taller over a few frames).
+  const scrollByKey = useRef<Record<string, number>>({});
+  const curScrollKey = useRef<string>('root');
+  const newScrollKey = () => { try { return crypto.randomUUID(); } catch { return `k${Date.now()}${Math.random()}`; } };
+  const restoreScroll = useCallback((y: number) => {
+    if (!y || y <= 0) { window.scrollTo(0, 0); return; }
+    let tries = 0;
+    const tick = () => {
+      window.scrollTo(0, y);
+      tries += 1;
+      // Keep trying until we actually reach y (the page may still be growing) or
+      // we give up after ~1.5s of frames.
+      if (Math.abs(window.scrollY - y) > 2 && tries < 90) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    // A couple of late retries for slow async content (images, fetched tools).
+    setTimeout(() => window.scrollTo(0, y), 400);
+    setTimeout(() => window.scrollTo(0, y), 900);
+  }, []);
+  // Opt out of the browser's own scroll restoration — we do it ourselves.
+  useEffect(() => { try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch { /* ignore */ } }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -91,11 +117,15 @@ export default function AppRoot() {
     }
     if (next !== 'activity') appState.game = null;
     if (next !== cur) setViewAs('self');   // never carry a preview across pages
+    // Save where we are on the page we're LEAVING, so Back can return to this spot.
+    try { scrollByKey.current[curScrollKey.current] = window.scrollY; } catch { /* ignore */ }
     setView(next);
-    window.scrollTo(0, 0);
+    window.scrollTo(0, 0);   // a forward navigation always starts at the top
     // PUSH a browser history entry too so the native Back button also walks back.
     try {
-      const state: NavEntry = { view: next, tool: next === 'tool' ? (appState.activeTool?.slug || null) : null };
+      const key = newScrollKey();
+      curScrollKey.current = key;
+      const state: NavEntry = { view: next, tool: next === 'tool' ? (appState.activeTool?.slug || null) : null, key };
       window.history.pushState(state, '', urlFor(next));
     } catch { /* ignore */ }
   }, [setView]);
@@ -111,21 +141,28 @@ export default function AppRoot() {
       const v = (st.view || (params.get('view') as ViewName | null)) || 'tools';
       if (navStack.current.length) navStack.current.pop();
       appState.game = null;
+      // Save the scroll of the page we're leaving, then aim to restore the scroll
+      // of the entry we're landing on (keyed by its history id).
+      try { scrollByKey.current[curScrollKey.current] = window.scrollY; } catch { /* ignore */ }
+      const destKey = st.key || 'root';
+      curScrollKey.current = destKey;
+      const targetY = scrollByKey.current[destKey] || 0;
       if (slug) {
         API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
           // tool→tool Back: the view string stays 'tool', so setView is a no-op and
           // nothing would re-render (the page would appear "stuck"). rerender() bumps
           // the keyed <main key={tool:slug}> so it remounts onto the restored tool.
           if (r?.tool) { appState.activeTool = r.tool; setView('tool'); rerender(); }
-        }).catch(() => { /* ignore */ });
+          restoreScroll(targetY);
+        }).catch(() => { restoreScroll(targetY); });
       } else {
         setView(RESTORABLE.includes(v) ? v : 'tools');
+        restoreScroll(targetY);
       }
-      window.scrollTo(0, 0);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [setView, rerender]);
+  }, [setView, rerender, restoreScroll]);
 
   const login = useCallback((token: string, u: SessionUser) => {
     API.setSession(token, u);
