@@ -6,7 +6,6 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { perPageOf } from '@/lib/page-settings';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { CoffeeMugLink, PaperPlaneLink } from '@/components/ui/BannerLinks';
 import { DemoStamp } from '@/components/ui/DemoStamp';
 import { useApp } from '@/components/AppContext';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
@@ -342,12 +341,8 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
           </div>
         </div>
       )}
-      {/* Both landing pages use the one reusable DB-driven <PageHeader>. Each
-          banner carries a single big corner object on the SAME (right) side,
-          centered in the free space beside the title: ☕ Donate on Repositories,
-          ✈ Share on Slides. */}
-      <PageHeader page={isSlides ? 'slides' : 'repos'}
-        right={isSlides ? <PaperPlaneLink width={190} height={158} /> : <CoffeeMugLink width={190} height={158} />} />
+      {/* Both landing pages use the one reusable DB-driven <PageHeader>. */}
+      <PageHeader page={isSlides ? 'slides' : 'repos'} />
       {(!loading && tools.length === 0) ? (
           <div style={{ margin: '10px auto 0' }}>{galleryEmptyState}</div>
         ) : (!loading && galleryCollapsed && !isAdmin) ? null : (
