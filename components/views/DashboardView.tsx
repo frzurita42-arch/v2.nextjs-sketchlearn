@@ -269,7 +269,7 @@ export function DashboardView() {
   const vRegShown = vReg.filter((e: any) => {
     if (regAi) return !regAiIds || regAiIds.includes(String(e.id));
     if (!regNeedle) return true;
-    return [e.name, e.kind, e.description, e.inputs, e.location, e.recommendations].join(' ').toLowerCase().includes(regNeedle);
+    return [e.name, e.kind, e.description, e.inputs, e.location, e.recommendations, e.keywords].join(' ').toLowerCase().includes(regNeedle);
   }).slice().sort((a: any, b: any) => {
     if (!regSort) return 0;
     const d = (Number(a.uses) || 0) - (Number(b.uses) || 0);
@@ -282,7 +282,7 @@ export function DashboardView() {
     try {
       const r: any = await API.post('/api/dashboard/registry-search', {
         query: q,
-        rows: vReg.map((e: any) => ({ id: String(e.id), text: `${e.name} (${e.kind}) — ${e.description} Inputs: ${e.inputs || '—'}. Location: ${e.location}. Notes: ${e.recommendations}` })),
+        rows: vReg.map((e: any) => ({ id: String(e.id), text: `${e.name} (${e.kind}) — ${e.description} Inputs: ${e.inputs || '—'}. Seen on page: ${e.keywords || ''}. Location: ${e.location}. Notes: ${e.recommendations}` })),
       });
       if (Array.isArray(r?.ids)) setRegAiIds(r.ids.map(String));
       else setRegAiErr(r?.error || 'AI search failed — try again.');

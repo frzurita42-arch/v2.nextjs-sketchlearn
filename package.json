@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "legacy": "node server.js"
+    "legacy": "node server.js",
+    "scan:components": "node scripts/scan-component-keywords.cjs",
+    "prebuild": "node scripts/scan-component-keywords.cjs"
   },
   "engines": {
     "node": ">=18.18"
