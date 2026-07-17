@@ -168,7 +168,8 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
     setMixing(m => { const n = { ...m }; delete n[t.slug]; return n; });
   };
 
-  // Admin-editable page copy (heading + subtitle), saved for everyone. Follows
+  // Admin-editable page copy (shelf titles, banners, collapse flags), saved for
+  // everyone. The heading + subtitle live in the shared <PageHeader>. Follows
   // the "View as" preview so an admin can see the non-admin gallery.
   const isAdmin = gEff.isAdmin;
   // Seed page copy SYNCHRONOUSLY from the last-known values cached in localStorage
@@ -177,26 +178,8 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
   const [site, setSite] = useState<{ galleryTitle?: string; gallerySubtitle?: string; galleryFilter?: string; toolsShelfTitle?: string; picksShelfTitle?: string; galleryCollapsed?: string; toolsCollapsed?: string; adminToolsCollapsed?: string; [k: string]: string | undefined }>(() => {
     try { return JSON.parse(localStorage.getItem('sl_site_settings') || '{}'); } catch { return {}; }
   });
-  const [editHeading, setEditHeading] = useState<null | 'galleryTitle' | 'gallerySubtitle'>(null);
-  const [headingDraft, setHeadingDraft] = useState('');
   useEffect(() => { API.get('/api/site-settings').then((r: any) => { const s = r?.settings || {}; setSite(s); try { localStorage.setItem('sl_site_settings', JSON.stringify(s)); } catch { /* ignore */ } }).catch(() => { /* ignore */ }); }, []);
-  const saveHeading = async (key: 'galleryTitle' | 'gallerySubtitle', val: string) => {
-    setEditHeading(null);
-    const v = val.trim();
-    setSite(s => ({ ...s, [key]: v }));
-    try { await API.put('/api/site-settings', { key, value: v }); } catch { /* ignore */ }
-  };
   const [headMix, setHeadMix] = useState<Record<string, boolean>>({});
-  const remixHeading = async (key: 'galleryTitle' | 'gallerySubtitle') => {
-    const cur = key === 'galleryTitle' ? (site.galleryTitle || 'Tool gallery') : (site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.');
-    setHeadMix(m => ({ ...m, [key]: true }));
-    try {
-      const r = await API.post('/api/site-settings/remix', { text: cur, kind: key === 'galleryTitle' ? 'title' : 'subtitle' });
-      if (r?.text) await saveHeading(key, r.text); else if (r?.error) alert(r.error);
-    } catch { alert('Could not remix.'); }
-    setHeadMix(m => { const n = { ...m }; delete n[key]; return n; });
-  };
-  const headIcon = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6 } as const;
 
   // Editable, admin-saved titles for the two carousels ("shelves").
   const saveShelf = async (key: 'toolsShelfTitle' | 'picksShelfTitle', val: string) => {
@@ -330,46 +313,8 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
           </div>
         </div>
       )}
-      {/* Slides uses the reusable DB-driven <PageHeader>; Repositories keeps its
-          own inline editable header (same title → subtitle → dashed-rule block). */}
-      {isSlides ? <PageHeader page="slides" /> : (
-      <div className="page-header-block">
-      {editHeading === 'galleryTitle' ? (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '0 auto' }}>
-          <input value={headingDraft} onChange={e => setHeadingDraft(e.target.value)} autoFocus
-            onKeyDown={e => { if (e.key === 'Enter') saveHeading('galleryTitle', headingDraft); if (e.key === 'Escape') setEditHeading(null); }}
-            style={{ fontSize: 24, fontWeight: 700, padding: '4px 8px', borderRadius: 8, border: '2px solid var(--ink)', width: '100%', maxWidth: 460 }} />
-          <button className="btn small green" onClick={() => saveHeading('galleryTitle', headingDraft)}>Save</button>
-          <button className="btn small ghost" onClick={() => setEditHeading(null)}>✕</button>
-        </div>
-      ) : (
-        <h1 className="view-title">
-          {isSlides
-            ? (site.slideGalleryTitle ? <span className="scribble-underline">{site.slideGalleryTitle}</span> : <>🎞️ <span className="scribble-underline">Slides</span></>)
-            : (site.galleryTitle ? <span className="scribble-underline">{site.galleryTitle}</span> : <>Tool <span className="scribble-underline">gallery</span></>)}
-          {isAdmin && !isSlides && <button title="Edit heading (admin)" onClick={() => { setHeadingDraft(site.galleryTitle || 'Tool gallery'); setEditHeading('galleryTitle'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>}
-          {isAdmin && !isSlides && <button title="AI tap-mixer — reword the heading" disabled={!!headMix.galleryTitle} onClick={() => remixHeading('galleryTitle')} style={{ ...headIcon, fontSize: 15 }}>{headMix.galleryTitle ? '…' : '🎨'}</button>}
-        </h1>
-      )}
-      {editHeading === 'gallerySubtitle' ? (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', maxWidth: 620, margin: '4px auto' }}>
-          <input value={headingDraft} onChange={e => setHeadingDraft(e.target.value)} autoFocus
-            onKeyDown={e => { if (e.key === 'Enter') saveHeading('gallerySubtitle', headingDraft); if (e.key === 'Escape') setEditHeading(null); }}
-            style={{ fontSize: 14, padding: '4px 8px', borderRadius: 8, border: '2px solid var(--ink)', width: '100%', maxWidth: 460 }} />
-          <button className="btn small green" onClick={() => saveHeading('gallerySubtitle', headingDraft)}>Save</button>
-          <button className="btn small ghost" onClick={() => setEditHeading(null)}>✕</button>
-        </div>
-      ) : (
-        <p className="view-sub" style={{ textAlign: 'center' }}>
-          {isSlides ? (site.slideGallerySubtitle || 'Browse every slide presentation — open one to play it.') : (site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.')}
-          {isAdmin && !isSlides && <button title="Edit subtitle (admin)" onClick={() => { setHeadingDraft(site.gallerySubtitle || 'Open a tool, or build your own by describing it to the AI.'); setEditHeading('gallerySubtitle'); }} style={{ ...headIcon, fontSize: 13 }}>✎</button>}
-          {isAdmin && !isSlides && <button title="AI tap-mixer — reword the subtitle" disabled={!!headMix.gallerySubtitle} onClick={() => remixHeading('gallerySubtitle')} style={{ ...headIcon, fontSize: 13 }}>{headMix.gallerySubtitle ? '…' : '🎨'}</button>}
-        </p>
-      )}
-        {/* Dashed separator closing the page-header block. */}
-        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '12px 0 0' }} />
-      </div>
-      )}
+      {/* Both landing pages use the one reusable DB-driven <PageHeader>. */}
+      <PageHeader page={isSlides ? 'slides' : 'repos'} />
       {(!loading && tools.length === 0) ? (
           <div className="card alt" style={{ maxWidth: 560, margin: '10px auto', padding: '18px 20px', textAlign: 'center' }}>
             <p style={{ margin: isAdmin ? '0 0 10px' : 0 }}>{isAdmin ? 'No tools yet. Be the first — describe a tool and the AI will assemble it.' : 'No tools yet.'}</p>

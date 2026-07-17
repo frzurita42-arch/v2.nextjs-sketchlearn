@@ -7,7 +7,7 @@
  * ("diffuse") for both the title and the subtitle, an 👁 toggle to hide the emoji,
  * and a click-the-emoji-to-change affordance. Everyone else just sees the header.
  *
- * Used on the Slides, Coach chat and Dashboard pages. Add a page to PAGE_HEADERS
+ * Used on the Repositories, Slides, Coach chat and Dashboard pages. Add a page to PAGE_HEADERS
  * and drop <PageHeader page="…"/> in to give any new page the same header. */
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
@@ -63,12 +63,15 @@ export function PageHeader({ page }: { page: keyof typeof PAGE_HEADERS | string 
         </div>
       ) : (
         <h1 className="view-title">
-          {!emojiOff && (
-            isAdmin
-              ? <button title="Change the emoji" onClick={changeEmoji} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', padding: 0, marginRight: 8 }}>{emoji}</button>
-              : <span style={{ marginRight: 8 }}>{emoji}</span>
-          )}
-          <span className="scribble-underline">{title}</span>
+          {/* The scribble underline spans the emoji AND the title as one stroke. */}
+          <span className="scribble-underline">
+            {!emojiOff && (
+              isAdmin
+                ? <button title="Change the emoji" onClick={changeEmoji} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', padding: 0, marginRight: 8 }}>{emoji}</button>
+                : <span style={{ marginRight: 8 }}>{emoji}</span>
+            )}
+            {title}
+          </span>
           {isAdmin && <>
             <button title="Edit the title" onClick={() => { setDraft(title); setEditing('title'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>
             <button title="AI reword the title" disabled={!!mix[def.titleKey]} onClick={() => remix(def.titleKey, 'title')} style={{ ...headIcon, fontSize: 15 }}>{mix[def.titleKey] ? '…' : '🎨'}</button>

@@ -37,7 +37,7 @@ export const PAGE_FIELD_KEYS = PAGE_FIELDS.map((f) => f.key);
 // ── Reusable page-header definitions ───────────────────────────────────────
 // A <PageHeader page="…"> reads its title/subtitle/emoji from these site_settings
 // keys (falling back to the defaults), so the same header component drives the
-// Slides, Coach and Dashboard pages — all editable from the DB.
+// Repositories, Slides, Coach and Dashboard pages — all editable from the DB.
 export interface PageHeaderDef {
   titleKey: string;
   subtitleKey: string;
@@ -49,6 +49,14 @@ export interface PageHeaderDef {
 }
 
 export const PAGE_HEADERS: Record<string, PageHeaderDef> = {
+  // Repositories reuses the galleryTitle/gallerySubtitle keys the page has
+  // always stored, so existing DB copy carries over unchanged.
+  repos: {
+    titleKey: 'galleryTitle', subtitleKey: 'gallerySubtitle',
+    emojiKey: 'repoEmoji', emojiOffKey: 'repoEmojiOff',
+    defaultEmoji: '🧰', defaultTitle: 'Tool gallery',
+    defaultSubtitle: 'Open a tool, or build your own by describing it to the AI.',
+  },
   slides: {
     titleKey: 'slideGalleryTitle', subtitleKey: 'slideGallerySubtitle',
     emojiKey: 'slideEmoji', emojiOffKey: 'slideEmojiOff',
