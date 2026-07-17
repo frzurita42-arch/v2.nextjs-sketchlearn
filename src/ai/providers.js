@@ -511,11 +511,14 @@ async function pollinationsImage(prompt) {
   try {
     const clean = String(prompt || '').slice(0, 1600);
     const base = String(POLLINATIONS_BASE || 'https://image.pollinations.ai/prompt/').replace(/\/?$/, '/');
-    const url = `${base}${encodeURIComponent(clean)}?width=1024&height=1024&nologo=true&model=${encodeURIComponent(POLLINATIONS_MODEL || 'flux')}`;
+    // A fresh random seed each call so repeated presses don't return a cached
+    // (sometimes blank) image, and a smaller 768² render so it completes faster.
+    const seed = Math.floor(Math.random() * 1e9);
+    const url = `${base}${encodeURIComponent(clean)}?width=768&height=768&nologo=true&seed=${seed}&model=${encodeURIComponent(POLLINATIONS_MODEL || 'flux')}`;
     // Keep this UNDER the serverless maxDuration (45s) so a slow render fails fast
     // and the caller can fall back / report a friendly error instead of the whole
     // function being killed by the platform gateway (a raw 504 to the browser).
-    const res = await fetchWithTimeout(url, { headers: { Accept: 'image/*' } }, 28000, 'Pollinations image');
+    const res = await fetchWithTimeout(url, { headers: { Accept: 'image/*' } }, 18000, 'Pollinations image');
     if (!res.ok) { lastImageError = `pollinations: ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`; return null; }
     const ct = res.headers.get('content-type') || 'image/jpeg';
     if (!/^image\//i.test(ct)) { lastImageError = 'pollinations: non-image response'; return null; }
@@ -571,7 +574,7 @@ async function discoverImageModels() {
   if (_imageModelInfo !== undefined) return _imageModelInfo;
   _imageModelInfo = { generate: [], imagen: [], all: [] };
   try {
-    const res = await fetch(`${GEMINI_API_BASE}/models?pageSize=1000`, { headers: { 'x-goog-api-key': GEMINI_API_KEY } });
+    const res = await fetchWithTimeout(`${GEMINI_API_BASE}/models?pageSize=1000`, { headers: { 'x-goog-api-key': GEMINI_API_KEY } }, 8000, 'Gemini models list');
     if (!res.ok) { lastImageError = `models list: ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`; return _imageModelInfo; }
     const data = await res.json();
     const models = Array.isArray(data.models) ? data.models : [];
@@ -592,11 +595,11 @@ async function discoverImageModels() {
 // data URL or null (setting lastImageError).
 async function geminiGenerateContentImage(model, prompt) {
   try {
-    const res = await fetch(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
+    const res = await fetchWithTimeout(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } })
-    });
+    }, 11000, `Gemini image (${model})`);
     if (!res.ok) { lastImageError = `${model}: ${res.status} ${(await res.text().catch(() => '')).slice(0, 180)}`; return null; }
     const data = await res.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
@@ -611,11 +614,11 @@ async function geminiGenerateContentImage(model, prompt) {
 // One attempt at an Imagen model (the :predict endpoint, different request shape).
 async function imagenPredictImage(model, prompt) {
   try {
-    const res = await fetch(`${GEMINI_API_BASE}/models/${model}:predict`, {
+    const res = await fetchWithTimeout(`${GEMINI_API_BASE}/models/${model}:predict`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
       body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1 } })
-    });
+    }, 11000, `Imagen (${model})`);
     if (!res.ok) { lastImageError = `${model}: ${res.status} ${(await res.text().catch(() => '')).slice(0, 180)}`; return null; }
     const data = await res.json();
     const pred = (data.predictions || [])[0] || {};
@@ -632,16 +635,22 @@ async function imagenPredictImage(model, prompt) {
 // well-known ids as fallbacks. On total failure the error lists the image models
 // the key DOES expose, so the exact name to set in GEMINI_IMAGE_MODEL is visible.
 async function geminiImage(prompt) {
+  // Nano Banana (Gemini image) can hang or be very slow. Cap the WHOLE Gemini
+  // attempt so we stop trying more models and fall through to the next provider
+  // (Pollinations) / the SVG sketch well within the route's budget.
+  const deadline = Date.now() + 16000;
   const info = await discoverImageModels();
   // generateContent candidates: discovered first, then configured + known ids.
   const gcModels = [...new Set([...info.generate, GEMINI_IMAGE_MODEL, 'gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview', 'gemini-2.0-flash-preview-image-generation'].filter(Boolean))];
   for (const model of gcModels) {
+    if (Date.now() > deadline) { lastImageError = 'Gemini image timed out — falling back'; return null; }
     const url = await geminiGenerateContentImage(model, prompt);
     if (url) return url;
   }
   // Imagen candidates (predict endpoint): discovered first, then known ids.
   const imagenModels = [...new Set([...info.imagen, 'imagen-3.0-generate-002', 'imagen-4.0-generate-preview-06-06'].filter(Boolean))];
   for (const model of imagenModels) {
+    if (Date.now() > deadline) { lastImageError = 'Gemini image timed out — falling back'; return null; }
     const url = await imagenPredictImage(model, prompt);
     if (url) return url;
   }
