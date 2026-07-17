@@ -512,7 +512,10 @@ async function pollinationsImage(prompt) {
     const clean = String(prompt || '').slice(0, 1600);
     const base = String(POLLINATIONS_BASE || 'https://image.pollinations.ai/prompt/').replace(/\/?$/, '/');
     const url = `${base}${encodeURIComponent(clean)}?width=1024&height=1024&nologo=true&model=${encodeURIComponent(POLLINATIONS_MODEL || 'flux')}`;
-    const res = await fetchWithTimeout(url, { headers: { Accept: 'image/*' } }, 60000, 'Pollinations image');
+    // Keep this UNDER the serverless maxDuration (45s) so a slow render fails fast
+    // and the caller can fall back / report a friendly error instead of the whole
+    // function being killed by the platform gateway (a raw 504 to the browser).
+    const res = await fetchWithTimeout(url, { headers: { Accept: 'image/*' } }, 28000, 'Pollinations image');
     if (!res.ok) { lastImageError = `pollinations: ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`; return null; }
     const ct = res.headers.get('content-type') || 'image/jpeg';
     if (!/^image\//i.test(ct)) { lastImageError = 'pollinations: non-image response'; return null; }

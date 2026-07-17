@@ -123,13 +123,32 @@ export async function POST(req: Request) {
     instruction ? `IMPORTANT — also weave in the user's specific request and blend it seamlessly into ONE coherent image: "${instruction}".` : '',
   ].filter(Boolean).join(' ');
 
+  // Image providers can hang; each fetch is allowed up to ~45s and the route is
+  // capped at maxDuration=45, so a single slow backend would let the platform
+  // gateway kill the request and return a raw 504 to the browser. Cap the whole
+  // generation to a budget safely UNDER maxDuration and, on timeout, return a
+  // friendly JSON error the UI can show ("try again") instead of a 504.
+  const GEN_BUDGET_MS = 38000;
+  const timeout = <T,>(p: Promise<T>, ms: number) => Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('image-timeout')), ms)),
+  ]);
+
   try {
-    let img = await generateImage(prompt);
-    if (img) await recordImageUsage({ username: a.user.username, kind: 'thumbnail', provider: '', subject: theme, meta: { prompt } });
-    // No image model available (e.g. Gemini image generation is unreachable) —
-    // fall back to a hand-drawn SVG illustration via the TEXT model, so the 🎨
-    // button still produces a picture instead of erroring.
-    if (!img) img = await (generateSvgSketch as any)(instruction ? `${theme} — ${instruction}` : theme);
+    let img: string | null = null;
+    try {
+      img = await timeout(generateImage(prompt), GEN_BUDGET_MS);
+      if (img) await recordImageUsage({ username: a.user.username, kind: 'thumbnail', provider: '', subject: theme, meta: { prompt } });
+      // No image model available (e.g. Gemini image generation is unreachable) —
+      // fall back to a hand-drawn SVG illustration via the TEXT model, so the 🎨
+      // button still produces a picture instead of erroring.
+      if (!img) img = await timeout((generateSvgSketch as any)(instruction ? `${theme} — ${instruction}` : theme), 12000);
+    } catch (e: any) {
+      if (String(e?.message) === 'image-timeout') {
+        return NextResponse.json({ error: 'The image generator is taking too long right now — please try again in a moment.' }, { status: 200 });
+      }
+      throw e;
+    }
     if (!img) {
       const why = (typeof getLastImageError === 'function' && getLastImageError()) || '';
       return NextResponse.json({ error: why ? `Could not generate an image. ${String(why).slice(0, 400)}` : 'Could not generate an image — try again.' }, { status: 200 });
