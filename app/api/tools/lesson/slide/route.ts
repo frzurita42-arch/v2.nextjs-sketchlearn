@@ -277,8 +277,11 @@ export async function POST(req: Request) {
   ].filter(Boolean).join('\n');
   const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "questions": [ { "kind": "mcq|fill-blank|input|writing|annotation|code", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "the expected answer/solution", "accept": ["..."], "target": "for writing", "language": "for code, e.g. python or empty", "starter": "optional code/text scaffold" } ] }. Only include the fields the chosen kind needs.`;
 
+  // Text API: honour a chosen provider (values.textProvider); default to Gemini
+  // when it's configured, else fall back to the normal auto failover.
+  const textProvider = String(b.values?.textProvider || '').trim() || (geminiEnabled ? 'gemini' : 'auto');
   try {
-    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 2600 });
+    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 2600, provider: textProvider });
     const content = cleanContent(r?.content);
     const questions = (Array.isArray(r?.questions) ? r.questions : []).map(cleanQuestion).filter(Boolean);
     // Fall back when the teaching TEXT is missing or too trivial (text is required on

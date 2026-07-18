@@ -845,7 +845,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // Defaults: tone & category default to "Any (AI picks)" so the AI chooses
     // them unless the author overrides; tooltips default OFF.
     const d: any = defaultsFor(settings);
-    return { ...d, tone: 'Any (AI picks)', category: 'Any (AI picks)', tooltips: false };
+    // Gemini is the default TEXT API (falls back to auto if it isn't configured).
+    return { ...d, tone: 'Any (AI picks)', category: 'Any (AI picks)', tooltips: false, textProvider: 'gemini' };
   });
   // Upgrade a legacy CEFR default (A1…C2) to the new academic scale so the
   // Difficulty dropdown always presents a current option.
@@ -1035,12 +1036,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // The study source / AI guidance (lesson.style) is still fed into every slide's
   // generation prompt; it is now edited via the Studio ("✏️ Edit layout &
   // activities"), not an on-page command center.
-  // Available image backends (from /api/config) + the run's chosen one's dropdown.
+  // Available image + text backends (from /api/config) + the run's chosen ones.
   const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
+  const [textProviders, setTextProviders] = useState<{ id: string; label: string }[]>([]);
   const [providerOpen, setProviderOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [suggestingField, setSuggestingField] = useState<Record<string, boolean>>({});
-  useEffect(() => { API.get('/api/config').then((c: any) => setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : [])).catch(() => { /* ignore */ }); }, []);
+  useEffect(() => { API.get('/api/config').then((c: any) => { setImageProviders(Array.isArray(c?.imageProviders) ? c.imageProviders : []); setTextProviders(Array.isArray(c?.textProviders) ? c.textProviders : []); }).catch(() => { /* ignore */ }); }, []);
   const [supportNonce, setSupportNonce] = useState(0);
   // A random emoji per rendition card that has no real image, picked ONCE per page
   // load (kept in a ref keyed by entry id) so cards with no picture keep shuffling
@@ -1852,6 +1854,14 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 title="Which image generator to use — Pollinations is free & keyless">
                 <option value="">Auto (best available)</option>
                 {imageProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
+            <label className="field" style={{ maxWidth: 240 }}><span>🔤 Text API</span>
+              <select value={(form as any).textProvider ?? 'gemini'} onChange={(e) => setForm(s => ({ ...s, textProvider: e.target.value }))}
+                title="Which model writes the slide text & questions — Gemini is the default">
+                <option value="gemini">Gemini (default)</option>
+                <option value="">Auto (best available)</option>
+                {textProviders.filter((p) => p.id !== 'gemini').map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
             </label>
             <label className="field" style={{ maxWidth: 240 }}><span>🎙 Voice</span>
