@@ -109,19 +109,20 @@ export function ChatView() {
   // On every visit: start a brand-new chat. The previously active chat was saved
   // live into history as it was typed. Signed-in users load their history from the
   // DB (so it follows them across devices); guests use the browser cache only.
-  // After the greeting, drop four page sticky notes pointing the visitor to the
-  // main places to explore: Repos (free to view), the Slide Tool (free to view),
-  // Presentation runs (paid to play), and the Lesson feed review (free to view).
-  // These are static navigation cards — no AI cost — appended only while the chat
-  // is still untouched.
+  // After the greeting, drop ONE page sticky note pointing the visitor at a place
+  // to explore — a different one is picked at random on each page load, rotating
+  // through Repos (free), the Slide Tool (free), Presentation runs (paid) and the
+  // Lesson feed review (free). Static navigation card — no AI cost — appended only
+  // while the chat is still untouched.
   const welcomePages = () => {
-    const stickies: ChatMsg[] = WELCOME_PAGES.map((w) => ({
+    const w = WELCOME_PAGES[Math.floor(Math.random() * WELCOME_PAGES.length)];
+    const sticky: ChatMsg = {
       role: 'assistant', content: '', sticky: {
         slug: '', kind: 'page', runCost: 0, page: w.page, view: w.view,
         emoji: w.emoji, title: w.title, reason: w.desc, access: w.access, recommended: true,
       },
-    }));
-    setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, ...stickies] : cur));
+    };
+    setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, sticky] : cur));
   };
 
   useEffect(() => {
