@@ -19,6 +19,8 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   'couponTiers',
   // Editable token packages shown on the dashboard ([{tokens,usd,note}] JSON).
   'tokenPackages',
+  // Pricing/profit knobs: target margin % and how many credits equal one coin.
+  'profitMargin', 'creditsPerCoin',
   // Section how-to banners (longer text).
   'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner',
   // Home-page section visibility ('1' = collapsed/hidden for regular users). The

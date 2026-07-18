@@ -12,6 +12,7 @@ import { MiniChart } from '@/components/ui/MiniChart';
 import { WhatsAppCouponNote } from '@/components/dashboard/WhatsAppCouponNote';
 import { TokenPackagesNote } from '@/components/dashboard/TokenPackagesNote';
 import { ModelPricesPanel } from '@/components/dashboard/ModelPricesPanel';
+import { ProfitPanel } from '@/components/dashboard/ProfitPanel';
 import { UsageHistory } from '@/components/dashboard/UsageHistory';
 
 type Wallet = { username: string; role: string; balance: number; usedThisMonth: number };
@@ -232,6 +233,9 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
 
           {/* AI model catalog + their token/image prices (refreshable from the web). */}
           <ModelPricesPanel />
+
+          {/* Real-cost + profit / coins calculator (uses the model prices above). */}
+          <ProfitPanel />
 
           {/* Editable token packages (also shown to buyers next to the WhatsApp note). */}
           <TokenPackagesNote />
