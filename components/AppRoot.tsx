@@ -38,7 +38,7 @@ type NavEntry = { view: ViewName; tool: string | null; key?: string };
 export default function AppRoot() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [view, setViewState] = useState<ViewName>('tools');   // Tools is the home page
+  const [view, setViewState] = useState<ViewName>('slides');   // Slides is the home page
   const [tick, setTick] = useState(0);
   const [demo, setDemo] = useState(false);
   // Sign-in / create-account overlay (shown to guests who hit a gated action, or
@@ -52,7 +52,7 @@ export default function AppRoot() {
   // The in-app navigation trail — the reliable fallback for "Back" that does not
   // depend on the browser's history (which Next.js also manages). Each `nav`
   // pushes the page you're leaving; `back()` pops and returns to it.
-  const viewRef = useRef<ViewName>('tools');
+  const viewRef = useRef<ViewName>('slides');
   const navStack = useRef<NavEntry[]>([]);
   const setView = useCallback((v: ViewName) => { viewRef.current = v; setViewState(v); }, []);
   // For guests, nudge them to sign in on arrival and again after every 4 page
@@ -90,9 +90,11 @@ export default function AppRoot() {
   // Opt out of the browser's own scroll restoration — we do it ourselves.
   useEffect(() => { try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch { /* ignore */ } }, []);
 
-  // A guest hitting a signed-in-only endpoint (401) pops the auth overlay.
+  // Open the sign-in overlay only for EXPLICIT gated actions (a guest pressing
+  // play, etc.) and the arrival / every-4-navigations nudge — NOT automatically on
+  // every 401. A guest browsing hits signed-in-only endpoints on many pages, and
+  // auto-opening on those made the login pop up on every navigation.
   const requireLogin = useCallback(() => setAuthOpen(true), []);
-  useEffect(() => { API.onAuthRequired = () => setAuthOpen(true); return () => { API.onAuthRequired = null; }; }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -176,7 +178,7 @@ export default function AppRoot() {
       const st = (e.state || {}) as Partial<NavEntry>;
       const params = new URLSearchParams(window.location.search);
       const slug = st.tool || params.get('tool');
-      const v = (st.view || (params.get('view') as ViewName | null)) || 'tools';
+      const v = (st.view || (params.get('view') as ViewName | null)) || 'slides';
       if (navStack.current.length) navStack.current.pop();
       appState.game = null;
       // Save the scroll of the page we're leaving, then aim to restore the scroll
@@ -194,7 +196,7 @@ export default function AppRoot() {
           restoreScroll(targetY);
         }).catch(() => { restoreScroll(targetY); });
       } else {
-        setView(RESTORABLE.includes(v) ? v : 'tools');
+        setView(RESTORABLE.includes(v) ? v : 'slides');
         restoreScroll(targetY);
       }
     };
@@ -206,8 +208,8 @@ export default function AppRoot() {
     API.setSession(token, u);
     setUser(u);
     navStack.current = [];
-    setView('tools');
-    // Fresh sign-in starts on the home (Tools) page; drop any restored view/tool from the URL.
+    setView('slides');
+    // Fresh sign-in starts on the home (Slides) page; drop any restored view/tool from the URL.
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('view');
@@ -241,7 +243,7 @@ export default function AppRoot() {
     }
     if (v && v !== 'tool' && RESTORABLE.includes(v)) setView(v);
     // Seed the current history entry with a state object so the first Back works.
-    try { window.history.replaceState({ view: (v && RESTORABLE.includes(v) ? v : 'tools'), tool: null }, '', window.location.href); } catch { /* ignore */ }
+    try { window.history.replaceState({ view: (v && RESTORABLE.includes(v) ? v : 'slides'), tool: null }, '', window.location.href); } catch { /* ignore */ }
   }, [user]);
 
   // Demo-mode banner: show when the server has no AI provider connected.
@@ -319,7 +321,7 @@ export default function AppRoot() {
           while already on a tool page (e.g. "Make a lesson" from a repo's topic
           shelf) remounts the runner onto the new tool instead of staying put. */}
       <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}>
-        <ErrorBoundary onHome={() => nav('tools')}>{views[view]}</ErrorBoundary>
+        <ErrorBoundary onHome={() => nav('slides')}>{views[view]}</ErrorBoundary>
       </main>
       <Footer />
     </AppContext.Provider>
