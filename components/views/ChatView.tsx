@@ -102,17 +102,24 @@ export function ChatView() {
   // through Repos (free), the Slide Tool (free), Presentation runs (paid) and the
   // Lesson feed review (free). Static navigation card — no AI cost — appended only
   // while the chat is still untouched.
+  // Build a welcome page sticky (with a 🔄 refresh to cycle to another suggestion).
+  // A paid page (Presentation runs) shows the estimated tokens a typical run costs.
+  const makeWelcomeSticky = (w: typeof WELCOME_PAGES[number]): ChatMsg => ({
+    role: 'assistant', content: '', sticky: {
+      slug: '', kind: 'page', runCost: w.access === 'paid' ? estimateLessonTokens({ slides: 5 }) : 0,
+      page: w.page, view: w.view, emoji: w.emoji, title: w.title, reason: w.desc, access: w.access, recommended: true, cycle: true,
+    },
+  });
   const welcomePages = () => {
     const w = WELCOME_PAGES[Math.floor(Math.random() * WELCOME_PAGES.length)];
-    // A paid page (Presentation runs) shows the estimated tokens a typical run costs.
-    const runCost = w.access === 'paid' ? estimateLessonTokens({ slides: 5 }) : 0;
-    const sticky: ChatMsg = {
-      role: 'assistant', content: '', sticky: {
-        slug: '', kind: 'page', runCost, page: w.page, view: w.view,
-        emoji: w.emoji, title: w.title, reason: w.desc, access: w.access, recommended: true,
-      },
-    };
+    const sticky = makeWelcomeSticky(w);
     setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, sticky] : cur));
+  };
+  // 🔄 on a welcome card: replace THIS card with the next suggestion in the cycle.
+  const refreshWelcome = (index: number, currentPage?: string) => {
+    const idx = WELCOME_PAGES.findIndex((p) => p.page === currentPage);
+    const next = WELCOME_PAGES[(idx + 1 + WELCOME_PAGES.length) % WELCOME_PAGES.length];
+    setMessages((cur) => cur.map((m, i) => (i === index ? makeWelcomeSticky(next) : m)));
   };
 
   useEffect(() => {
@@ -491,8 +498,13 @@ export function ChatView() {
                 const access = m.sticky.access;
                 return (
                   <div key={i} style={{ marginRight: 'auto', marginBottom: 14, maxWidth: 320 }}>
-                    <div className="slide-comp comp-sticky sticky-blue" style={{ transform: 'rotate(-1deg)', marginBottom: 0 }}>
-                      <b className="sticky-title" style={{ display: 'block' }}>{emoji} {title}</b>
+                    <div className="slide-comp comp-sticky sticky-blue" style={{ position: 'relative', transform: 'rotate(-1deg)', marginBottom: 0 }}>
+                      {m.sticky.cycle && (
+                        <button title="Recommend another" aria-label="Recommend another"
+                          onClick={() => refreshWelcome(i, m.sticky!.page)}
+                          style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, lineHeight: 1, color: 'var(--ink)' }}>🔄</button>
+                      )}
+                      <b className="sticky-title" style={{ display: 'block', paddingRight: m.sticky.cycle ? 22 : 0 }}>{emoji} {title}</b>
                       {access && (
                         <span style={{ display: 'inline-block', margin: '2px 0 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)', background: access === 'paid' ? 'rgba(255,138,76,0.18)' : 'rgba(102,187,106,0.2)' }}>
                           {access === 'paid'
