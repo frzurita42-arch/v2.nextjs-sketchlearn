@@ -79,6 +79,9 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
         ))}
       </div>
 
+      {/* The chat-history list belongs to the Coach chat only — on the other shell
+          pages (Slides/Repos/…) the rail shows just the logo, New chat + nav links. */}
+      {app.view === 'chat' && (<>
       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 6px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -103,6 +106,7 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
           </button>
         )}
       </div>
+      </>)}
     </aside>
   );
 }
