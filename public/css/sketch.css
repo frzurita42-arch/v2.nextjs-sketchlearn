@@ -348,12 +348,12 @@ label.field > span { display: block; margin-bottom: 4px; }
 .chat-polaroid {
   display: inline-block;
   margin: 0;
-  padding: 10px 10px 0;
-  width: 232px;
+  padding: 5px 5px 0;
+  width: 96px;
   max-width: 100%;
   background: #fffef9;
   border: 1px solid rgba(0,0,0,.08);
-  box-shadow: 2px 5px 12px rgba(40,26,8,.26);
+  box-shadow: 1px 3px 7px rgba(40,26,8,.26);
   transform: rotate(-2deg);
 }
 .chat-polaroid img {
@@ -366,11 +366,11 @@ label.field > span { display: block; margin-bottom: 4px; }
 }
 .chat-polaroid figcaption {
   font-family: var(--font-hand);
-  font-size: 1.02rem;
+  font-size: .74rem;
   color: #3a3320;
   text-align: center;
-  padding: 10px 4px 14px;
-  line-height: 1.2;
+  padding: 5px 2px 8px;
+  line-height: 1.15;
 }
 
 /* ---------- data chart ---------- */
