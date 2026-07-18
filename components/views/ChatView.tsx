@@ -32,6 +32,7 @@ export function ChatView() {
   const [drawing, setDrawing] = useState(false);
   const [building, setBuilding] = useState(false);
   const [recommending, setRecommending] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(false);   // recommend only free (premade) tools
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
   const [sidebar, setSidebar] = useState(true);
@@ -188,15 +189,15 @@ export function ChatView() {
     const topic = messages.filter((m) => m.role === 'user' && m.content).slice(-4).map((m) => m.content).join(' ').slice(0, 400);
     setRecommending(true);
     try {
-      const r: any = await API.post('/api/tools/recommend', { query: topic, favs: loadLikes ? Object.keys(loadLikes() || {}).join(',') : '', limit: 1 });
+      const r: any = await API.post('/api/tools/recommend', { query: topic, favs: loadLikes ? Object.keys(loadLikes() || {}).join(',') : '', limit: 1, free: freeOnly });
       const p = (Array.isArray(r?.picks) ? r.picks : [])[0];
       if (!p) {
-        setMessages((m) => [...m, { role: 'assistant', content: 'No matching presentation or repo yet. Press “🧰 Build a tool from this chat” to make one.' }]);
+        setMessages((m) => [...m, { role: 'assistant', content: freeOnly ? 'No free premade tool matches that yet. Turn off “Free only”, or press “🧰 Build a tool from this chat”.' : 'No matching presentation or repo yet. Press “🧰 Build a tool from this chat” to make one.' }]);
       } else {
         setMessages((m) => [...m, { role: 'assistant', content: '', sticky: {
           slug: p.slug, title: p.title || 'Tool', kind: p.archetype === 'repo' ? 'repo' : 'lesson',
-          runCost: p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0,
-          reason: p.reason || '', recommended: true,
+          runCost: p.free ? 0 : (p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0),
+          reason: p.reason || '', recommended: true, free: !!p.free,
         } }]);
       }
     } catch (e: any) { setMessages((m) => [...m, { role: 'assistant', content: `(Could not fetch a recommendation: ${e.message})` }]); }
@@ -276,7 +277,7 @@ export function ChatView() {
                     <div className={`slide-comp comp-sticky ${color}`} style={{ transform: 'rotate(-1deg)', marginBottom: 0 }}>
                       <b className="sticky-title" style={{ display: 'block' }}>{m.sticky.recommended ? '⭐ ' : '🧰 '}{m.sticky.kind === 'repo' ? '📁' : '🎬'} {m.sticky.title}</b>
                       {m.sticky.reason && <p style={{ margin: '3px 0 0', fontSize: 12, fontStyle: 'italic', opacity: 0.8 }}>{m.sticky.reason}</p>}
-                      <p style={{ margin: '4px 0 8px', fontSize: 13 }}>{m.sticky.recommended ? 'Recommended' : 'Built'} — {m.sticky.kind === 'repo' ? 'open the pathway' : 'play it'}.{m.sticky.runCost ? ` ≈ ${m.sticky.runCost.toLocaleString()} credits to run.` : ''}</p>
+                      <p style={{ margin: '4px 0 8px', fontSize: 13 }}>{m.sticky.recommended ? 'Recommended' : 'Built'} — {m.sticky.kind === 'repo' ? 'open the pathway' : 'play it'}.{m.sticky.free ? ' 🆓 Free to play.' : m.sticky.runCost ? ` ≈ ${m.sticky.runCost.toLocaleString()} credits to run.` : ''}</p>
                       <button className="btn small green" onClick={() => openTool(m.sticky!.slug)}>{m.sticky.kind === 'repo' ? 'Open →' : '▶ Open & play'}</button>
                     </div>
                   </div>
@@ -333,6 +334,7 @@ export function ChatView() {
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
             <button className="btn small green" disabled={building} onClick={buildTool}>{building ? '🧰 Building…' : '🧰 Build a tool from this chat'}</button>
             <button className="btn small" disabled={recommending} onClick={recommend} title="Recommend an existing presentation or repo to play">{recommending ? '⭐ Finding…' : '⭐ Recommend a run to play'}</button>
+            <button className={`btn small ${freeOnly ? 'green' : 'ghost'}`} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)} title="When on, only free premade tools are recommended">{freeOnly ? '🆓 Free only: ON' : '🆓 Free only: off'}</button>
             <button className="btn small" disabled={drawing} onClick={drawImage} title="Generate an AI image from the text box">{drawing ? '🎨 Drawing…' : '🎨 Draw an image'}</button>
           </div>
         </div>

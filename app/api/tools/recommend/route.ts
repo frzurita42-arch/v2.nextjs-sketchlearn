@@ -24,7 +24,7 @@ const wordsOf = (t: any): string[] => {
   return [...(Array.isArray(t.tags) ? t.tags : []), toolCategory(t), ...String(subject).toLowerCase().split(/[^a-z0-9]+/).filter((w: string) => w.length > 3), t.archetype]
     .filter(Boolean).map((s: string) => String(s).toLowerCase());
 };
-const pickFields = (t: any, reason: string) => ({ slug: t.slug, title: t.title, description: t.description || '', thumbnail: t.thumbnail || '', archetype: t.archetype, owner: t.owner, visibility: t.visibility || 'public', tags: Array.isArray(t.tags) ? t.tags : [], category: toolCategory(t), reason });
+const pickFields = (t: any, reason: string, free = false) => ({ slug: t.slug, title: t.title, description: t.description || '', thumbnail: t.thumbnail || '', archetype: t.archetype, owner: t.owner, visibility: t.visibility || 'public', tags: Array.isArray(t.tags) ? t.tags : [], category: toolCategory(t), reason, free });
 
 export async function POST(req: Request) {
   const { user } = await optionalAuth(req);   // public: guests get recommendations too
@@ -38,9 +38,13 @@ export async function POST(req: Request) {
   const queryWords = String(b.query || '').toLowerCase().split(/[^a-z0-9]+/).filter((w: string) => w.length > 3);
   // Optionally restrict to PLAYABLE presentations (a "run to play").
   const playableOnly = !!b.playable;
+  // Optionally restrict to FREE tools — the built-in premade examples, which are
+  // offered at no charge.
+  const freeOnly = !!b.free;
 
   const real: any[] = (await listTools({ viewer: uname, viewerIsAdmin: isAdmin, limit: 300 })) || [];
   const exs = applyOverrides(Array.isArray(EXAMPLE_TOOLS) ? EXAMPLE_TOOLS : [], await getExampleOverrides());
+  const freeSlugs = new Set<string>(exs.map((t: any) => t.slug));   // the premade, free-of-charge tools
   const all = [...real, ...exs].filter(t => t.slug && (t.visibility !== 'private' || t.owner === uname));
 
   // Interest profile from owned + favorited (+ current tool) + the chat query, and
@@ -55,7 +59,7 @@ export async function POST(req: Request) {
   }
   for (const w of queryWords) profile.set(w, (profile.get(w) || 0) + 5);   // topic dominates
   const hasProfile = profile.size > 0;
-  const candidates = all.filter(t => !known.has(t.slug) && (!playableOnly || t.archetype === 'lesson'));
+  const candidates = all.filter(t => !known.has(t.slug) && (!playableOnly || t.archetype === 'lesson') && (!freeOnly || freeSlugs.has(t.slug)));
   // Rank a shortlist deterministically first (bounds the AI prompt).
   const shortlist = candidates
     .map(t => ({ t, s: hasProfile ? wordsOf(t).reduce((n, k) => n + (profile.get(k) || 0), 0) : 0 }))
@@ -84,7 +88,7 @@ export async function POST(req: Request) {
         .map((p: any) => ({ t: bySlug.get(String(p?.slug || '')), reason: String(p?.reason || '').slice(0, 120) }))
         .filter((x: any) => x.t && !seen.has(x.t.slug) && seen.add(x.t.slug))
         .slice(0, limit)
-        .map((x: any) => pickFields(x.t, x.reason || 'A great match for you'));
+        .map((x: any) => pickFields(x.t, x.reason || 'A great match for you', freeSlugs.has(x.t.slug)));
       if (picks.length) return NextResponse.json({ picks, ai: true });
     } catch { /* fall through to deterministic */ }
   }
@@ -92,7 +96,7 @@ export async function POST(req: Request) {
   // Deterministic fallback.
   const picks = shortlist.slice(0, limit).map(t => {
     const shared = wordsOf(t).find(k => (profile.get(k) || 0) > 0 && k !== t.archetype);
-    return pickFields(t, hasProfile && shared ? `Because you like ${shared}` : (t.archetype === 'repo' ? 'A repository to explore' : 'Popular right now'));
+    return pickFields(t, hasProfile && shared ? `Because you like ${shared}` : (t.archetype === 'repo' ? 'A repository to explore' : 'Popular right now'), freeSlugs.has(t.slug));
   });
   return NextResponse.json({ picks, ai: false });
 }
