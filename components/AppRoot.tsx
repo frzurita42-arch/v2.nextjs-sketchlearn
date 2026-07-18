@@ -20,6 +20,7 @@ import { LanguageGameView } from '@/components/game/LanguageGameView';
 import { ChatView } from '@/components/views/ChatView';
 import { CoachRail } from '@/components/coach/CoachRail';
 import { EmptyShellView } from '@/components/views/EmptyShellView';
+import { SandboxView } from '@/components/views/SandboxView';
 import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
 import { CsPathView } from '@/components/views/CsPathView';
@@ -313,7 +314,7 @@ export default function AppRoot() {
     toolbuilder: <BuilderStudioView />,
     toolsettings: <ToolSettingsView />,
     moderators: <ModeratorsView />,
-    sandbox: <EmptyShellView emoji="🧪" name="Sandbox" />,
+    sandbox: <SandboxView />,
   };
 
   // The Coach chat + the main nav pages (Slides / Repos / Moderators / Dashboard)
@@ -372,7 +373,7 @@ export default function AppRoot() {
         style={isShell ? { flex: 1, minHeight: 0, maxWidth: 'none', margin: 0, padding: 0, paddingLeft: 'var(--chat-rail, 0px)', border: 'none', overflow: 'hidden' } : undefined}>
         <ErrorBoundary onHome={() => nav(HOME)}>
           {isShell && !isChat
-            ? (<><CoachRail /><EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} /></>)
+            ? (<><CoachRail />{lv === 'sandbox' ? <SandboxView /> : <EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} />}</>)
             : views[lv]}
         </ErrorBoundary>
       </main>
