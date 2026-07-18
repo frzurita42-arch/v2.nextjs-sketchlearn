@@ -62,6 +62,8 @@ export interface AppState {
   // The id of the coach chat currently open, so the SAME conversation continues
   // across page visits until the user starts a new one.
   chatSessionId?: string | null;
+  // Whether the shared Coach side-rail is expanded (persists across page switches).
+  railOpen?: boolean;
   // Path-flow transient state (loading spinner + error, mirroring the legacy
   // imperative loadPath()).
   pathLoading?: string | null;

@@ -9,13 +9,14 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting } from '@/lib/app-state';
+import { CoachRail } from '@/components/coach/CoachRail';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { useApp } from '@/components/AppContext';
 import { estimateLessonTokens } from '@/lib/cost-estimate';
 import { loadLikes } from '@/lib/tool-likes';
 import {
   type ChatMsg, type ChatSession, type Sticky,
-  newSessionId, loadSessions, saveSession, deleteSession, relTime, hasContent,
+  newSessionId, loadSessions, saveSession, deleteSession, hasContent,
 } from '@/lib/chat-history';
 
 // Pages the coach can point the learner to via a [[page:xxx]] marker in its reply.
@@ -80,10 +81,7 @@ export function ChatView() {
   const [freeOnly, setFreeOnly] = useState(false);   // recommend only free (premade) tools
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
-  const [sidebar, setSidebar] = useState(true);
-  const [expanded, setExpanded] = useState(false);   // history "read more/less"
   const logRef = useRef<HTMLDivElement>(null);
-  const COLLAPSED_COUNT = 6;
 
   // Debounced push of the whole history to the DB (signed-in users only — guests
   // keep their chats in the browser, never the server).
@@ -163,14 +161,6 @@ export function ChatView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  // Publish the side-nav width as a CSS var so the (thin) app header can indent
-  // itself past the full-height rail — the Claude-style "sidebar over the header"
-  // effect. Reset to 0 when the chat page unmounts.
-  const RAIL_W = 250;
-  useEffect(() => {
-    document.documentElement.style.setProperty('--chat-rail', sidebar ? `${RAIL_W}px` : '0px');
-    return () => { document.documentElement.style.setProperty('--chat-rail', '0px'); };
-  }, [sidebar]);
 
   const [tokenRole, setTokenRole] = useState<string>('');
   const loadBalance = () => {
@@ -424,70 +414,12 @@ export function ChatView() {
     return topic || text.slice(0, 200);
   };
 
-  const visibleSessions = expanded ? sessions : sessions.slice(0, COLLAPSED_COUNT);
-
   return (
     <>
-      {/* Fills the fixed-viewport chat shell (see AppRoot): the history side-nav
-          sits flush against the LEFT edge of the screen, Claude-style, and only the
-          chat log scrolls — the page itself never scrolls. */}
-      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: '100%', width: '100%', paddingLeft: sidebar ? RAIL_W : 0 }}>
-        {sidebar ? (
-          // Full-height fixed rail: it runs from the very top of the viewport, up and
-          // over the thin app header (which indents itself past this rail), Claude-style.
-          <aside style={{ position: 'fixed', top: 0, left: 0, height: '100dvh', width: RAIL_W, zIndex: 60, background: 'var(--paper,#f7f3e9)', borderRight: '2px dashed var(--line,#d9cfc0)', padding: '10px 12px 10px 18px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {/* The logo lives at the TOP of the side nav (with the orange line). */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-              <button className="brand scribble-underline" onClick={() => app.nav('chat')} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, color: 'var(--ink)', padding: 0 }}>✏️ SketchLearn</button>
-              <button title="Collapse the history panel" onClick={() => setSidebar(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: 'var(--muted,#8a7f70)', padding: 0 }}>«</button>
-            </div>
-            <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>🆕 New chat</button>
-
-            {/* Quick links to the main pages (Claude-style side nav). */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-              {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'moderators', label: '🛡️ Moderators' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => (
-                <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}
-                  style={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left' }}>{n.label}</button>
-              ))}
-            </div>
-
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 6px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
-
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {sessions.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No past chats yet. Say something and it’ll show up here.</p>}
-              {visibleSessions.map((s) => {
-                const active = s.id === sessionId;
-                return (
-                  // The whole chat card is a real button; the active one gets a green
-                  // line along its bottom edge. The trash-can sits INSIDE the card
-                  // (its own click deletes and doesn't open the chat).
-                  <button
-                    key={s.id}
-                    onClick={() => openSession(s)}
-                    title={s.title || 'New chat'}
-                    style={{ position: 'relative', width: '100%', minWidth: 0, textAlign: 'left', cursor: 'pointer', padding: '6px 26px 6px 8px', borderRadius: 8, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#e5dccb)', borderBottom: active ? '3px solid var(--green,#7fb069)' : '1.5px solid var(--line,#e5dccb)', font: 'inherit', color: 'inherit' }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title || 'New chat'}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--muted,#8a7f70)' }}>{relTime(s.ts)}</div>
-                    <span role="button" tabIndex={0} aria-label="Delete chat" title="Delete chat"
-                      onClick={(e) => { e.stopPropagation(); removeSession(s.id); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); removeSession(s.id); } }}
-                      style={{ position: 'absolute', top: 6, right: 6, cursor: 'pointer', fontSize: 13, lineHeight: 1, color: 'var(--muted,#8a7f70)' }}>🗑</span>
-                  </button>
-                );
-              })}
-              {sessions.length > COLLAPSED_COUNT && (
-                <button className="btn small ghost" onClick={() => setExpanded((v) => !v)} style={{ alignSelf: 'flex-start', marginTop: 2, fontSize: 12 }}>
-                  {expanded ? '▲ Read less' : `▼ Read more (${sessions.length - COLLAPSED_COUNT})`}
-                </button>
-              )}
-            </div>
-          </aside>
-        ) : (
-          // Collapsed: a slim fixed button in the top-left corner (over the header)
-          // to reopen the history panel.
-          <button title="Show the history panel" onClick={() => setSidebar(true)}
-            style={{ position: 'fixed', top: 8, left: 8, zIndex: 60, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--ink)', borderRadius: 8, cursor: 'pointer', fontSize: 16, padding: '5px 9px', lineHeight: 1 }}>🗂 »</button>
-        )}
+      {/* Fills the fixed-viewport shell (see AppRoot). The shared CoachRail is the
+          full-height side-nav; only the chat log scrolls — the page never does. */}
+      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: '100%', width: '100%' }}>
+        <CoachRail active={sessionId} sessions={sessions} onNewChat={newChat} onOpenSession={openSession} onDeleteSession={removeSession} />
 
         <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', padding: '0 16px', maxWidth: 880 }}>
           <div className="chat-log" id="chat-log" ref={logRef}>
@@ -644,7 +576,7 @@ export function ChatView() {
               Toggle buttons (history, free-only) light a green line at the bottom
               when active; the others are plain tap actions. Credits float right. */}
           <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, gap: 4, flexWrap: 'wrap', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 10, padding: '6px 10px' }}>
-            <button style={emojiBtn(sidebar)} title="Show / hide chat history" aria-pressed={sidebar} onClick={() => setSidebar((v) => !v)}>🗂</button>
+            <button style={emojiBtn(appState.railOpen !== false)} title="Show / hide chat history" aria-pressed={appState.railOpen !== false} onClick={() => { appState.railOpen = appState.railOpen === false; app.rerender(); }}>🗂</button>
             <button style={emojiBtn()} title="Start a new chat" onClick={newChat}>🆕</button>
             <button style={emojiBtn()} title="Build a tool from this chat (spends your credits)" disabled={building} onClick={buildTool}>{building ? '⏳' : '🧰'}</button>
             <button style={emojiBtn()} title="Recommend an existing presentation or repo to play (free)" disabled={recommending} onClick={recommend}>{recommending ? '⏳' : '⭐'}</button>

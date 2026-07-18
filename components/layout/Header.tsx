@@ -22,7 +22,7 @@ export function Header({ chat }: { chat?: boolean } = {}) {
   return (
     // On the Coach chat page the header is thin and indented past the full-height
     // side nav (which carries the logo and overlaps this bar's left edge).
-    <nav id="topbar" className="topbar" style={chat ? { paddingTop: 5, paddingBottom: 5, paddingLeft: 'calc(var(--chat-rail, 0px) + 16px)' } : undefined}>
+    <nav id="topbar" className="topbar" style={chat ? { paddingTop: 3, paddingBottom: 3, paddingLeft: 'calc(var(--chat-rail, 0px) + 16px)', fontSize: 13 } : undefined}>
       {!chat && <button className="brand" onClick={() => nav('chat')}>✏️ SketchLearn</button>}
       <div className="topbar-links">
         {/* Coach chat is the home page. */}

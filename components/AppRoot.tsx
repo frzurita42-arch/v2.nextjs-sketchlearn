@@ -18,6 +18,8 @@ import { SettingsView } from '@/components/flows/SettingsView';
 import { GameView } from '@/components/game/GameView';
 import { LanguageGameView } from '@/components/game/LanguageGameView';
 import { ChatView } from '@/components/views/ChatView';
+import { CoachRail } from '@/components/coach/CoachRail';
+import { EmptyShellView } from '@/components/views/EmptyShellView';
 import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
 import { CsPathView } from '@/components/views/CsPathView';
@@ -313,14 +315,24 @@ export default function AppRoot() {
     moderators: <ModeratorsView />,
   };
 
-  // The Coach chat runs as a fixed-viewport app (like a chat client): the shell
-  // fills the screen exactly, the footer is hidden, and only the chat log scrolls.
-  const isChat = liveView(view) === 'chat';
+  // The Coach chat + the main nav pages (Slides / Repos / Moderators / Dashboard)
+  // share ONE fixed-viewport shell: full-height side-rail + thin header + thin
+  // footer, with the content area filling the rest. Chat renders the conversation;
+  // the others render an empty pane for now (real content lands there later).
+  const lv = liveView(view);
+  const isChat = lv === 'chat';
+  const SHELL: Record<string, { emoji: string; name: string }> = {
+    slides: { emoji: '🎞️', name: 'Slides' },
+    tools: { emoji: '📁', name: 'Repos' },
+    moderators: { emoji: '🛡️', name: 'Moderators' },
+    dashboard: { emoji: '🧑‍🏫', name: 'Dashboard' },
+  };
+  const isShell = isChat || lv in SHELL;
 
   return (
     <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner), requireLogin }}>
-      <div style={isChat ? { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' } : undefined}>
-      <Header chat={isChat} />
+      <div style={isShell ? { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' } : undefined}>
+      <Header chat={isShell} />
       {/* Sign-in / create-account overlay for guests. Dismissible so they can keep
           browsing; closes automatically once they're signed in. */}
       {authOpen && !user && (
@@ -355,10 +367,14 @@ export default function AppRoot() {
           while already on a tool page (e.g. "Make a lesson" from a repo's topic
           shelf) remounts the runner onto the new tool instead of staying put. */}
       <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}
-        style={isChat ? { flex: 1, minHeight: 0, maxWidth: 'none', margin: 0, padding: 0, overflow: 'hidden' } : undefined}>
-        <ErrorBoundary onHome={() => nav(HOME)}>{views[liveView(view)]}</ErrorBoundary>
+        style={isShell ? { flex: 1, minHeight: 0, maxWidth: 'none', margin: 0, padding: 0, paddingLeft: 'var(--chat-rail, 0px)', border: 'none', overflow: 'hidden' } : undefined}>
+        <ErrorBoundary onHome={() => nav(HOME)}>
+          {isShell && !isChat
+            ? (<><CoachRail /><EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} /></>)
+            : views[lv]}
+        </ErrorBoundary>
       </main>
-      {isChat ? <Footer compact /> : <Footer />}
+      {isShell ? <Footer compact /> : <Footer />}
       </div>
     </AppContext.Provider>
   );
