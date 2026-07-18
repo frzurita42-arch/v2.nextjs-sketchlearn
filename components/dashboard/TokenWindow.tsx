@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { MiniChart } from '@/components/ui/MiniChart';
 import { WhatsAppCouponNote } from '@/components/dashboard/WhatsAppCouponNote';
+import { TokenPackagesNote } from '@/components/dashboard/TokenPackagesNote';
 import { ModelPricesPanel } from '@/components/dashboard/ModelPricesPanel';
 import { UsageHistory } from '@/components/dashboard/UsageHistory';
 
@@ -164,9 +165,14 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
         {stat('Your role', tokens.role)}
       </div>
 
-      {/* How to get credits: request a coupon on WhatsApp. Shown to non-admins
-          (admins mint their own coupons and never spend their own tokens). */}
-      {!isAdmin && <WhatsAppCouponNote />}
+      {/* How to get credits: request a coupon on WhatsApp + the token packages,
+          side by side. Shown to non-admins (admins mint their own coupons). */}
+      {!isAdmin && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'start' }}>
+          <WhatsAppCouponNote />
+          <TokenPackagesNote />
+        </div>
+      )}
       {/* Redeem a coupon — anyone with a code can cash it in for credits. */}
       <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
         <h4 style={{ margin: '0 0 6px' }}>🎫 Redeem a coupon</h4>
@@ -225,6 +231,9 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
 
           {/* AI model catalog + their token/image prices (refreshable from the web). */}
           <ModelPricesPanel />
+
+          {/* Editable token packages (also shown to buyers next to the WhatsApp note). */}
+          <TokenPackagesNote />
 
           {/* Grant control */}
           <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>

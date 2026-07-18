@@ -68,13 +68,20 @@ export function MiniChart({ type, data, title, unit = '' }: { type: ChartType; d
     const x = (i: number) => padL + (rows.length === 1 ? 0 : (i / (rows.length - 1)) * (W - padL - padR));
     const y = (v: number) => padT + (1 - (v - min) / span) * (H - padT - padB);
     const pts = rows.map((d, i) => `${x(i)},${y(d.value)}`).join(' ');
+    // Too many points (24 hours, 60 minutes…) makes every-point labels collide, so
+    // show at most ~8 evenly-spaced labels (always the first and last) with a tick
+    // mark under each, and keep a dot on every point.
+    const maxLabels = 8;
+    const step = Math.max(1, Math.ceil(rows.length / maxLabels));
+    const showLabel = (i: number) => i === 0 || i === rows.length - 1 || i % step === 0;
     body = (
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: 460 }} role="img">
         <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={ink} strokeWidth={1} opacity={0.5} />
         <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke={ink} strokeWidth={1} opacity={0.5} />
         <polyline points={pts} fill="none" stroke={PALETTE[0]} strokeWidth={2.5} />
-        {rows.map((d, i) => <circle key={i} cx={x(i)} cy={y(d.value)} r={3} fill={PALETTE[0]} />)}
-        {rows.map((d, i) => <text key={i} x={x(i)} y={H - padB + 12} textAnchor="middle" fontSize={9} fill={ink} opacity={0.75}>{clip(d.label, 6)}</text>)}
+        {rows.map((d, i) => <circle key={`c${i}`} cx={x(i)} cy={y(d.value)} r={2.5} fill={PALETTE[0]} />)}
+        {rows.map((d, i) => showLabel(i) ? <line key={`k${i}`} x1={x(i)} y1={H - padB} x2={x(i)} y2={H - padB + 4} stroke={ink} strokeWidth={1} opacity={0.6} /> : null)}
+        {rows.map((d, i) => showLabel(i) ? <text key={`t${i}`} x={x(i)} y={H - padB + 14} textAnchor="middle" fontSize={9} fill={ink} opacity={0.8}>{clip(d.label, 7)}</text> : null)}
         <text x={padL - 4} y={y(max)} textAnchor="end" fontSize={9} fill={ink} opacity={0.7}>{fmt(max)}</text>
       </svg>
     );

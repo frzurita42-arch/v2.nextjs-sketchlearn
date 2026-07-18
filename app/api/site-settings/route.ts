@@ -17,6 +17,8 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   'slideCommandCenterHidden',
   // The three admin coupon tiers, stored as a small JSON string ([{tokens,usd}]).
   'couponTiers',
+  // Editable token packages shown on the dashboard ([{tokens,usd,note}] JSON).
+  'tokenPackages',
   // Section how-to banners (longer text).
   'galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner',
   // Home-page section visibility ('1' = collapsed/hidden for regular users). The
@@ -53,7 +55,8 @@ export async function PUT(req: Request) {
   const b = (await req.json().catch(() => ({}))) || {};
   const key = String(b.key || '');
   if (!KEYS.includes(key)) return NextResponse.json({ error: 'Unknown setting.' }, { status: 400 });
-  const value = String(b.value ?? '').slice(0, BANNER_KEYS.has(key) ? 600 : 240);
+  const longKey = BANNER_KEYS.has(key) || key === 'tokenPackages';
+  const value = String(b.value ?? '').slice(0, longKey ? 800 : 240);
   const ok = await setSiteSetting(key, value);
   if (!ok) return NextResponse.json({ ok: false, error: 'The database write did not land — the value was not saved. Check /api/health.' }, { status: 200 });
   return NextResponse.json({ ok: true, key, value });
