@@ -418,10 +418,13 @@ export function ChatView() {
     <>
       {/* Fills the fixed-viewport shell (see AppRoot). The shared CoachRail is the
           full-height side-nav; only the chat log scrolls — the page never does. */}
-      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: '100%', width: '100%' }}>
+      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', justifyContent: 'center', height: '100%', width: '100%' }}>
         <CoachRail active={sessionId} sessions={sessions} onNewChat={newChat} onOpenSession={openSession} onDeleteSession={removeSession} />
 
-        <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', padding: '0 16px', maxWidth: 880 }}>
+        {/* The working column is centred in the area to the right of the rail (and
+            re-centres when the rail collapses), bounded by two dashed vertical rules
+            that separate the workstation from the background. */}
+        <div className="chat-shell" style={{ width: '100%', maxWidth: 880, minWidth: 0, height: '100%', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
           <div className="chat-log" id="chat-log" ref={logRef}>
             {messages.map((m, i) => {
               if (m.building) return (

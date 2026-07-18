@@ -62,9 +62,10 @@ export function SandboxView() {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
-      {/* Same working column as the chat interface (max-width 880), bounded by two
-          dashed vertical rules so the editable area is obvious. */}
-      <div style={{ maxWidth: 880, minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+      {/* Same working column as the chat interface (max-width 880), CENTRED in the
+          area to the right of the rail (re-centres when the rail collapses), bounded
+          by two dashed vertical rules that separate the workstation from the space. */}
+      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
       {/* ── Gallery title ── */}
       <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>🎞️ Slides gallery</h2>
       <p style={{ margin: '0 0 14px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>
