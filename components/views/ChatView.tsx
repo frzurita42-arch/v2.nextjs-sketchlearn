@@ -575,7 +575,7 @@ export function ChatView() {
           {/* Bare emoji toolbar inside a dashed box (like the repo settings panel).
               Toggle buttons (history, free-only) light a green line at the bottom
               when active; the others are plain tap actions. Credits float right. */}
-          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, gap: 4, flexWrap: 'wrap', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 10, padding: '6px 10px' }}>
+          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, marginBottom: 22, gap: 4, flexWrap: 'wrap', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 10, padding: '6px 10px' }}>
             <button style={emojiBtn(appState.railOpen !== false)} title="Show / hide chat history" aria-pressed={appState.railOpen !== false} onClick={() => { appState.railOpen = appState.railOpen === false; app.rerender(); }}>🗂</button>
             <button style={emojiBtn()} title="Start a new chat" onClick={newChat}>🆕</button>
             <button style={emojiBtn()} title="Build a tool from this chat (spends your credits)" disabled={building} onClick={buildTool}>{building ? '⏳' : '🧰'}</button>
@@ -586,8 +586,8 @@ export function ChatView() {
             {youtubeOn && <button style={emojiBtn()} title="Recommend YouTube videos for this topic (free)" disabled={recVideos} onClick={recommendVideos}>{recVideos ? '⏳' : '📺'}</button>}
             <span style={{ flex: 1 }} />
             {app.user && (tokenRole === 'admin'
-              ? <span title="Admin — unlimited credits" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
-              : <span title="Your remaining credits" style={{ fontSize: 13, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()}</span>)}
+              ? <span title="Admin — unlimited credits" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
+              : <span title="Your remaining credits" style={{ fontSize: 18, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()}</span>)}
           </div>
         </div>
       </div>
