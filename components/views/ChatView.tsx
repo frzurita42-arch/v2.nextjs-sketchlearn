@@ -136,7 +136,7 @@ export function ChatView() {
     setMessages(next); setDrawing(true);
     try {
       const r: any = await API.post('/api/ai/coach-image', { prompt: idea });
-      if (r?.url) setMessages([...next, { role: 'assistant', content: 'Here you go 🎨', images: [r.url], imageCredit: r.providerLabel || r.provider || 'AI' }]);
+      if (r?.url) setMessages([...next, { role: 'assistant', content: '', images: [r.url], imageCredit: r.providerLabel || r.provider || 'AI' }]);
       else setMessages([...next, { role: 'assistant', content: r?.error || 'Could not draw that — try again.' }]);
     } catch (e: any) { setMessages([...next, { role: 'assistant', content: `(Could not draw that: ${e.message})` }]); }
     setDrawing(false); loadBalance();
@@ -188,17 +188,16 @@ export function ChatView() {
     const topic = messages.filter((m) => m.role === 'user' && m.content).slice(-4).map((m) => m.content).join(' ').slice(0, 400);
     setRecommending(true);
     try {
-      const r: any = await API.post('/api/tools/recommend', { query: topic, favs: loadLikes ? Object.keys(loadLikes() || {}).join(',') : '', limit: 2 });
-      const picks: any[] = Array.isArray(r?.picks) ? r.picks : [];
-      if (!picks.length) {
+      const r: any = await API.post('/api/tools/recommend', { query: topic, favs: loadLikes ? Object.keys(loadLikes() || {}).join(',') : '', limit: 1 });
+      const p = (Array.isArray(r?.picks) ? r.picks : [])[0];
+      if (!p) {
         setMessages((m) => [...m, { role: 'assistant', content: 'No matching presentation or repo yet. Press “🧰 Build a tool from this chat” to make one.' }]);
       } else {
-        setMessages((m) => [...m, { role: 'assistant', content: picks.length > 1 ? 'Here are a couple you can play now:' : 'Here’s one you can play now:' },
-          ...picks.map((p) => ({ role: 'assistant' as const, content: '', sticky: {
-            slug: p.slug, title: p.title || 'Tool', kind: p.archetype === 'repo' ? 'repo' : 'lesson',
-            runCost: p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0,
-            reason: p.reason || '', recommended: true,
-          } }))]);
+        setMessages((m) => [...m, { role: 'assistant', content: '', sticky: {
+          slug: p.slug, title: p.title || 'Tool', kind: p.archetype === 'repo' ? 'repo' : 'lesson',
+          runCost: p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0,
+          reason: p.reason || '', recommended: true,
+        } }]);
       }
     } catch (e: any) { setMessages((m) => [...m, { role: 'assistant', content: `(Could not fetch a recommendation: ${e.message})` }]); }
     setRecommending(false);
@@ -268,14 +267,27 @@ export function ChatView() {
                   </div>
                 </div>
               );
-              if (m.sticky) return (
-                <div key={i} className="msg ai">
-                  <div className={`slide-comp comp-sticky ${m.sticky.recommended ? 'sticky-green' : 'sticky-yellow'}`} style={{ transform: 'rotate(-1deg)', maxWidth: 320 }}>
-                    <b className="sticky-title" style={{ display: 'block' }}>{m.sticky.recommended ? '⭐ ' : ''}{m.sticky.kind === 'repo' ? '📁' : '🎬'} {m.sticky.title}</b>
-                    {m.sticky.reason && <p style={{ margin: '3px 0 0', fontSize: 12, fontStyle: 'italic', opacity: 0.8 }}>{m.sticky.reason}</p>}
-                    <p style={{ margin: '4px 0 8px', fontSize: 13 }}>{m.sticky.recommended ? 'Recommended' : 'Ready'} — {m.sticky.kind === 'repo' ? 'open the pathway' : 'play it'}.{m.sticky.runCost ? ` ≈ ${m.sticky.runCost.toLocaleString()} credits to run.` : ''}</p>
-                    <button className="btn small green" onClick={() => openTool(m.sticky!.slug)}>{m.sticky.kind === 'repo' ? 'Open →' : '▶ Open & play'}</button>
+              if (m.sticky) {
+                // Just the taped sticky note — no chat-bubble background. Recommended =
+                // green, a built slide tool = blue, a built repo = orange.
+                const color = m.sticky.recommended ? 'sticky-green' : m.sticky.kind === 'repo' ? 'sticky-orange' : 'sticky-blue';
+                return (
+                  <div key={i} style={{ marginRight: 'auto', marginBottom: 14, maxWidth: 320 }}>
+                    <div className={`slide-comp comp-sticky ${color}`} style={{ transform: 'rotate(-1deg)', marginBottom: 0 }}>
+                      <b className="sticky-title" style={{ display: 'block' }}>{m.sticky.recommended ? '⭐ ' : '🧰 '}{m.sticky.kind === 'repo' ? '📁' : '🎬'} {m.sticky.title}</b>
+                      {m.sticky.reason && <p style={{ margin: '3px 0 0', fontSize: 12, fontStyle: 'italic', opacity: 0.8 }}>{m.sticky.reason}</p>}
+                      <p style={{ margin: '4px 0 8px', fontSize: 13 }}>{m.sticky.recommended ? 'Recommended' : 'Built'} — {m.sticky.kind === 'repo' ? 'open the pathway' : 'play it'}.{m.sticky.runCost ? ` ≈ ${m.sticky.runCost.toLocaleString()} credits to run.` : ''}</p>
+                      <button className="btn small green" onClick={() => openTool(m.sticky!.slug)}>{m.sticky.kind === 'repo' ? 'Open →' : '▶ Open & play'}</button>
+                    </div>
                   </div>
+                );
+              }
+              // A generated image: show the picture + attribution alone, no bubble.
+              if (m.imageCredit && m.images?.length) return (
+                <div key={i} style={{ marginRight: 'auto', marginBottom: 12, maxWidth: 240 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.images[0]} alt="generated" style={{ width: '100%', borderRadius: 8, border: '2px solid var(--ink)' }} />
+                  <div style={{ marginTop: 4, fontSize: 11, color: 'var(--muted,#8a7f70)' }}>🎨 Generated by {m.imageCredit}</div>
                 </div>
               );
               return (
@@ -287,7 +299,6 @@ export function ChatView() {
                     </div>
                   ) : null}
                   {m.content && <span>{m.content}</span>}
-                  {m.imageCredit && <div style={{ marginTop: 4, fontSize: 11, color: 'var(--muted,#8a7f70)' }}>🎨 Generated by {m.imageCredit}</div>}
                   {m.role === 'assistant' && m.content && (
                     <div style={{ marginTop: 6 }}><AudioButton text={m.content} label="🔊" small showTextOnFail={false} /></div>
                   )}
