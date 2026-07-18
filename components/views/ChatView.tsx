@@ -107,13 +107,13 @@ export function ChatView() {
     API.post('/api/tools/recommend', { favs, limit: 1, playable: true, noai: true }).then((r: any) => {
       const p = (Array.isArray(r?.picks) ? r.picks : [])[0];
       if (!p) return;
-      const intro: ChatMsg = { role: 'assistant', content: 'Based on your history and what’s popular, here’s a presentation you could start with:' };
+      // Just the sticky — the greeting message already introduces it.
       const sticky: ChatMsg = { role: 'assistant', content: '', sticky: {
         slug: p.slug, title: p.title || 'Tool', kind: p.archetype === 'repo' ? 'repo' : 'lesson',
         runCost: p.free ? 0 : (p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0),
         reason: p.reason || 'Recommended for you', recommended: true, free: !!p.free,
       } };
-      setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, intro, sticky] : cur));
+      setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, sticky] : cur));
     }).catch(() => { /* skip the welcome pick */ });
   };
 
@@ -384,7 +384,7 @@ export function ChatView() {
             style={{ flex: '0 0 auto', alignSelf: 'flex-start', margin: '4px 8px 0 8px', background: 'var(--card,#fff8ee)', border: '1.5px solid var(--ink)', borderRadius: 8, cursor: 'pointer', fontSize: 16, padding: '5px 9px', lineHeight: 1 }}>🗂 »</button>
         )}
 
-        <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', padding: '0 16px' }}>
+        <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', padding: '0 16px', maxWidth: 880 }}>
           <div className="chat-log" id="chat-log" ref={logRef}>
             {messages.map((m, i) => {
               if (m.building) return (
