@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
+import { LayoutEditor } from '@/components/tools/LayoutEditor';
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
@@ -988,23 +989,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => { try { setSettingsOpen(localStorage.getItem('sl_lesson_settings_open') === '1'); } catch { /* ignore */ } }, []);
   const toggleSettings = () => setSettingsOpen((o) => { const n = !o; try { localStorage.setItem('sl_lesson_settings_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
-  // Open the Studio pre-loaded with THIS tool to edit its slide layout / proposed
-  // activities. Publishing there updates this same tool (no new copy), so changes
-  // apply to future generations. Shared by the prominent button + command center.
-  const openLayoutEditor = () => {
-    const sc: any = (def as any).studioConfig;
-    appState.builderSeed = sc && sc.artifact
-      ? { ...sc, editSlug: slug }
-      : {
-          artifact: 'presentation',
-          title: String(def.title || '').replace(/^(Presentation|Collection) — /, ''),
-          subject: (lesson as any).subject || '',
-          context: (def as any).description || '',
-          editSlug: slug,
-        };
-    appState.activeTool = appState.activeTool || { slug, definition: def };
-    app.nav('toolbuilder');
-  };
+  // Edit this tool's PER-SLIDE layout (proposed slide types) + the whole generation
+  // prompt, in place, loading the tool's saved layout and saving it back to the DB.
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  const openLayoutEditor = () => setLayoutOpen(true);
   // The study source / AI guidance (lesson.style) is still fed into every slide's
   // generation prompt; it is now edited via the Studio ("✏️ Edit layout &
   // activities"), not an on-page command center.
@@ -1771,10 +1759,18 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           </div>
         )}
 
-        {/* The owner-only command center was removed — editing the slide layout /
-            proposed activities is done via the "✏️ Edit layout & activities" button
-            beside "New topics". The study source (lesson.style) is still fed into
-            every slide's generation prompt; it's just no longer editable here. */}
+        {/* Editing the slide layout / proposed activities is done via the "✏️ Edit
+            layout & activities" button beside "New topics", which opens this in-place
+            editor (loads the tool's saved layout, saves it back to the DB). */}
+        {layoutOpen && canEdit && (
+          <LayoutEditor slug={slug} def={def}
+            onClose={() => setLayoutOpen(false)}
+            onSaved={(nextDef) => {
+              appState.activeTool = { ...(appState.activeTool || { slug }), definition: nextDef };
+              if (def) def.lesson = nextDef.lesson;
+              app.rerender();
+            }} />
+        )}
 
         {showGenerate && (
         <div className="card alt" style={{ padding: '14px 16px' }}>

@@ -342,7 +342,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       support: pg?.support && typeof pg.support === 'object' ? cleanSup(pg.support) : undefined,
       paragraphsPerSlide: Math.max(1, Math.min(4, parseInt(pg?.paragraphsPerSlide, 10) || 1)),
       paragraphLength: ['brief', 'medium', 'detailed'].includes(pg?.paragraphLength) ? pg.paragraphLength : 'medium',
-      style: String(pg?.style || '').slice(0, 400) || undefined,
+      style: String(pg?.style || '').slice(0, 2000) || undefined,
       padSize: ['large', 'medium', 'adaptive'].includes(pg?.padSize) ? pg.padSize : undefined,
       reading: pg?.reading ? true : undefined,
       decorations: (Array.isArray(pg?.decorations) ? pg.decorations : []).slice(0, 6).map((d: any) => {
@@ -360,7 +360,9 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       totalSlides: Math.max(1, Math.min(75, parseInt(l.totalSlides, 10) || pages.length || 5)),
       language: String(l.language || '').slice(0, 40) || undefined,
       translateTo: String(l.translateTo || 'English').slice(0, 40),
-      style: String(l.style || '').slice(0, 500) || undefined,
+      // The whole generation prompt / guidance (fed into every slide). Kept generous
+      // so the full context is saved, not truncated.
+      style: String(l.style || '').slice(0, 6000) || undefined,
       subjectKind: sk,
       paragraphsPerSlide: Math.max(1, Math.min(4, parseInt(l.paragraphsPerSlide, 10) || 1)),
       paragraphLength: ['brief', 'medium', 'detailed'].includes(l.paragraphLength) ? l.paragraphLength : 'medium',
