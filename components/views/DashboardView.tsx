@@ -246,7 +246,10 @@ export function DashboardView() {
   // window; a MODERATOR also sees their own work (tools they built + runs of those
   // tools). None of the site-internal / other-users' tables are shown. (All hooks
   // above have run, so this early return is safe.)
-  const myRole = app.user?.role || 'user';
+  // Render the dashboard for the EFFECTIVE role, so an admin using the "View as"
+  // bar (user / moderator / admin) actually sees that role's dashboard instead of
+  // always the admin one. For everyone else this is just their real role.
+  const myRole = app.eff().role;
   if (myRole !== 'admin') {
     const isMod = myRole === 'moderator';
     const rule = <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '18px auto', maxWidth: 820 }} />;
