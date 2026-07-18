@@ -609,6 +609,7 @@ table.sketch tr:nth-child(even) td { background: #fffbe8; }
   padding: 3px 0;
   font-size: .64rem;
   border-top-width: 1.5px;
+  border-top-color: var(--line, #d9cfc0);
   opacity: .6;
 }
 
