@@ -55,7 +55,7 @@ export function AppSettingsView() {
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         {/* Title (dotted box) + header-size control, half and half. */}
-        <PageHeaderBar pageKey="appsettings" title="⚙️ Settings" subtitle="Tweak how SketchLearn looks." />
+        <PageHeaderBar pageKey="appsettings" title="⚙️ Settings" subtitle="Tweak how SketchLearn looks." global />
 
         {/* ── CARDS ─────────────────────────────────────────────────────
             A thin filter-toolbar of controls sitting above the live preview. */}
