@@ -21,6 +21,7 @@ import { useApp } from '@/components/AppContext';
 import { Loading } from '@/components/ui/Loading';
 import { MiniChart, type ChartType, type Datum } from '@/components/ui/MiniChart';
 import { TokenWindow } from '@/components/dashboard/TokenWindow';
+import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 
 // Output styles for the AI visual generator (matches the API's KINDS).
 const VISUAL_KINDS: { key: string; label: string }[] = [
@@ -36,68 +37,6 @@ const VISUAL_KINDS: { key: string; label: string }[] = [
 const fmtDate = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }); };
 const fmtDay = (v: any) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(); };
 const money = (n: number) => `$${(Number(n) || 0).toFixed(4)}`;
-
-const ROWS_PER_PAGE = 4;
-const CELL_LIMIT = 100;
-type Cell = string | number | null | undefined | { node: React.ReactNode };
-
-// A table that shows ROWS_PER_PAGE rows at a time (Prev/Next) and clips any text
-// cell over CELL_LIMIT chars, revealing the full value in a popup via 👁. The
-// full text stays in the row data, so search/CSV always see it — only the
-// on-screen cell is clipped.
-function PagedTable({ headers, rows, empty, rowIds, onDelete, compact }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; compact?: boolean }) {
-  const [page, setPage] = useState(0);
-  const [view, setView] = useState<{ title: string; text: string } | null>(null);
-  const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
-  const p = Math.min(page, pages - 1);
-  const slice = rows.slice(p * ROWS_PER_PAGE, p * ROWS_PER_PAGE + ROWS_PER_PAGE);
-  const canDelete = !!(onDelete && rowIds);
-  const totalCols = headers.length + (canDelete ? 1 : 0);
-  return (
-    <>
-      <div className="table-wrap"><table className={compact ? 'sketch compact' : 'sketch'}><tbody>
-        <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
-        {slice.length ? slice.map((r, ri) => {
-          const abs = p * ROWS_PER_PAGE + ri;
-          const id = rowIds ? rowIds[abs] : '';
-          return (
-          <tr key={ri}>
-            {r.map((c, ci) => {
-              if (c && typeof c === 'object' && 'node' in c) return <td key={ci}>{c.node}</td>;
-              const s = String(c ?? '');
-              if (s.length > CELL_LIMIT) return (
-                <td key={ci}>{s.slice(0, CELL_LIMIT)}…{' '}
-                  <button type="button" title="Show the full text" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
-                </td>
-              );
-              return <td key={ci}>{s || '—'}</td>;
-            })}
-            {canDelete && <td><button type="button" title="Delete this row (hides it from the dashboard)" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => { if (id && confirm('Delete this row from the dashboard?')) onDelete!(id); }}>🗑</button></td>}
-          </tr>
-          );
-        }) : <tr><td colSpan={totalCols}>{empty}</td></tr>}
-      </tbody></table></div>
-      {pages > 1 && (
-        <>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
-            <button className="btn small ghost" disabled={p <= 0} onClick={() => setPage(p - 1)}>‹ Prev</button>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>Rows {p * ROWS_PER_PAGE + 1}–{Math.min(rows.length, (p + 1) * ROWS_PER_PAGE)} of {rows.length}</span>
-            <button className="btn small ghost" disabled={p >= pages - 1} onClick={() => setPage(p + 1)}>Next ›</button>
-          </div>
-          <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, marginTop: 10 }} />
-        </>
-      )}
-      {view && (
-        <div onClick={() => setView(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div className="card" onClick={e => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: '16px 18px', maxHeight: '80vh', overflow: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><b>{view.title || 'Full text'}</b><button className="btn small ghost" onClick={() => setView(null)}>✕</button></div>
-            <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit' }}>{view.text}</p>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
 
 export function DashboardView() {
   const app = useApp();

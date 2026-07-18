@@ -1,12 +1,15 @@
 'use client';
-/* Sandbox — a workbench for building reusable display components before they go
- * live. First up: the SLIDES view. It shows a titled, paginated gallery of every
- * slide tool (presentation) on the site, a divider, then a data table of the same
- * slides. Both read from the same /api/tools list. */
+/* Sandbox — a workbench for rebuilding the site's displays with the new shell
+ * layout, RECYCLING the existing components. First up: the SLIDES view. It shows a
+ * titled, paginated gallery built from the shared <ToolCard> (identical to the
+ * Slides/Repos pages), a divider, then the shared <PagedTable> (identical to the
+ * Dashboard's tables) listing the same slides. Both read /api/tools. */
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
+import { ToolCard } from '@/components/tools/ToolCard';
+import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 
 const GALLERY_PER_PAGE = 6;
 
@@ -17,14 +20,6 @@ function fmtDate(v: any): string {
 }
 function slideCount(t: any): number {
   return Number(t?.definition?.lesson?.totalSlides || t?.definition?.lesson?.pages?.length || 0) || 0;
-}
-function Thumb({ t, size = 44 }: { t: any; size?: number }) {
-  const src = t?.thumbnail;
-  if (typeof src === 'string' && src) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt="" style={{ width: size, height: size, objectFit: 'cover', borderRadius: 8, border: '1.5px solid var(--ink)', flex: '0 0 auto' }} />;
-  }
-  return <span style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5, borderRadius: 8, border: '1.5px solid var(--ink)', background: 'var(--card,#fff8ee)', flex: '0 0 auto' }}>🎞️</span>;
 }
 
 export function SandboxView() {
@@ -38,7 +33,6 @@ export function SandboxView() {
     API.get('/api/tools').then((r: any) => {
       if (!alive) return;
       const all = Array.isArray(r?.tools) ? r.tools : [];
-      // Slides = presentation decks (archetype 'lesson').
       setTools(all.filter((t: any) => (t?.archetype || t?.definition?.archetype) === 'lesson'));
     }).catch(() => { /* keep empty */ }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -54,8 +48,23 @@ export function SandboxView() {
     app.nav('tool');
   };
 
+  // Table rows (same shared PagedTable the Dashboard uses).
+  const rows: Cell[][] = tools.map((t) => [
+    t.title || 'Untitled',
+    t.owner || '—',
+    slideCount(t) || '—',
+    t.visibility || '—',
+    t.aiGenerated ? '✦' : '',
+    Number(t.likeCount || 0),
+    fmtDate(t.createdAt),
+    t.slug,
+  ]);
+
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '18px 22px 40px' }}>
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+      {/* Same working column as the chat interface (max-width 880), bounded by two
+          dashed vertical rules so the editable area is obvious. */}
+      <div style={{ maxWidth: 880, minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
       {/* ── Gallery title ── */}
       <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>🎞️ Slides gallery</h2>
       <p style={{ margin: '0 0 14px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>
@@ -68,71 +77,35 @@ export function SandboxView() {
         <p style={{ color: 'var(--muted,#8a7f70)' }}>No slide tools yet.</p>
       ) : (
         <>
-          {/* ── Gallery cards ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+          {/* ── Gallery cards (shared ToolCard) ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16, alignItems: 'start' }}>
             {shown.map((t) => (
-              <div key={t.slug} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
-                  <Thumb t={t} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title || 'Untitled'}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted,#8a7f70)' }}>by {t.owner || '—'} · {slideCount(t) || '?'} slides</div>
-                  </div>
-                </div>
-                {t.description && <div style={{ fontSize: 12.5, color: 'var(--ink)', opacity: 0.85, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.description}</div>}
-                <button className="btn small green" style={{ alignSelf: 'flex-start' }} onClick={() => openTool(t)}>▶ Open</button>
-              </div>
+              <ToolCard key={t.slug} tool={t} view="grid" onOpen={openTool} />
             ))}
           </div>
 
-          {/* ── Pagination ── */}
+          {/* ── Gallery pagination ── */}
           {pageCount > 1 && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 14 }}>
-              <button className="btn small ghost" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>← Prev</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
+              <button className="btn small ghost" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
               <span style={{ fontSize: 13 }}>Page {page} of {pageCount}</span>
-              <button className="btn small ghost" disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>Next →</button>
+              <button className="btn small ghost" disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>Next ›</button>
             </div>
           )}
 
           {/* ── Division line ── */}
           <hr style={{ border: 'none', borderTop: '2px dashed var(--line,#d9cfc0)', margin: '26px 0 18px' }} />
 
-          {/* ── Data table: all slides ── */}
+          {/* ── Data table: all slides (shared PagedTable) ── */}
           <h3 style={{ margin: '0 0 10px' }}>All slides — table</h3>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="sketch" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left' }}>#</th>
-                  <th style={{ textAlign: 'left' }}>Title</th>
-                  <th style={{ textAlign: 'left' }}>Owner</th>
-                  <th style={{ textAlign: 'right' }}>Slides</th>
-                  <th style={{ textAlign: 'left' }}>Visibility</th>
-                  <th style={{ textAlign: 'center' }}>AI</th>
-                  <th style={{ textAlign: 'right' }}>Likes</th>
-                  <th style={{ textAlign: 'left' }}>Created</th>
-                  <th style={{ textAlign: 'left' }}>Slug</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tools.map((t, i) => (
-                  <tr key={t.slug}>
-                    <td>{i + 1}</td>
-                    <td>{t.title || 'Untitled'}</td>
-                    <td>{t.owner || '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{slideCount(t) || '—'}</td>
-                    <td>{t.visibility || '—'}</td>
-                    <td style={{ textAlign: 'center' }}>{t.aiGenerated ? '✦' : ''}</td>
-                    <td style={{ textAlign: 'right' }}>{Number(t.likeCount || 0)}</td>
-                    <td>{fmtDate(t.createdAt)}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{t.slug}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PagedTable
+            headers={['Title', 'Owner', 'Slides', 'Visibility', 'AI', 'Likes', 'Created', 'Slug']}
+            rows={rows}
+            empty="No slide tools yet."
+          />
         </>
       )}
+      </div>
     </div>
   );
 }
