@@ -352,6 +352,10 @@ export async function POST(req: Request) {
   // All the user's turns joined (first = the idea) so the heuristic proposal
   // captures the whole request, not just the last "generate as is" answer.
   const ideaText = messages.filter((m) => m.role === 'user').map((m) => String(m.content || '').trim()).filter(Boolean).join('. ') || String(lastUser || 'a simple tool');
+  // A title the owner/user explicitly set wins: use it verbatim and never let the
+  // AI propose over it. Only when it's blank does the builder invent one.
+  const userTitle = String(b.title || '').trim().slice(0, 70);
+  const withTitle = (def: any) => { if (def && userTitle) def.title = userTitle; return def; };
 
   // Gate: turn 1 = the idea; force 2 follow-up questions (turns 1,2) + a
   // recommendation (turn 3) BEFORE any proposal is allowed. Only from turn 4 on
@@ -363,7 +367,7 @@ export async function POST(req: Request) {
     if (inGate) return NextResponse.json({ kind: 'question', ...gateQuestion(userTurns, ideaText) });
     const raw = heuristicProposal(ideaText);
     const { def } = validateToolDefinition(raw);
-    return NextResponse.json({ kind: 'proposal', definition: def, summary: 'Assembled a starter tool from your answers (no AI connected — edit or publish as-is).' });
+    return NextResponse.json({ kind: 'proposal', definition: withTitle(def), summary: 'Assembled a starter tool from your answers (no AI connected — edit or publish as-is).' });
   }
 
   const system = [
@@ -375,6 +379,7 @@ export async function POST(req: Request) {
     'OR { "kind": "proposal", "summary": "one sentence", "definition": { ...a full Tool Definition... } }',
     'Questions must be short and give 2-4 concrete options (the user can also type a custom answer). They must uncover what you need to DESIGN the tool: its DOMAIN (educational lesson? language learning? a gallery/collection? a journal?), its SUBJECT/topic area, and the CONTENT/COMPONENTS to use (what each activity asks or each item contains, how it is shown).',
     'NEVER ask about difficulty or level — every lesson already gets a preloaded, customizable difficulty setting. Never re-ask something already answered; each question must reveal something NEW.',
+    'TITLE: if the user already gave the tool a specific name or title in the conversation, use THAT exact title verbatim as definition.title — do not invent a new one or reformat it. Only compose a title when the user did not provide one.',
   ].join('\n');
   const convo = messages.map((m) => `${m.role === 'assistant' ? 'Builder' : 'User'}: ${String(m.content).slice(0, 800)}`).join('\n');
 
@@ -407,9 +412,9 @@ export async function POST(req: Request) {
     );
     if (r?.kind === 'proposal' || r?.definition) {
       const { ok, def } = validateToolDefinition(r.definition);
-      if (ok) return NextResponse.json({ kind: 'proposal', definition: def, summary: String(r.summary || 'Here is a tool based on your answers.') });
+      if (ok) return NextResponse.json({ kind: 'proposal', definition: withTitle(def), summary: String(r.summary || 'Here is a tool based on your answers.') });
       const { def: hdef } = validateToolDefinition(heuristicProposal(ideaText));
-      return NextResponse.json({ kind: 'proposal', definition: hdef, summary: 'Here is a starter version — tweak it or publish.' });
+      return NextResponse.json({ kind: 'proposal', definition: withTitle(hdef), summary: 'Here is a starter version — tweak it or publish.' });
     }
     // Model still asked something -> pass it through.
     return NextResponse.json({
@@ -420,6 +425,6 @@ export async function POST(req: Request) {
     });
   } catch {
     const { def } = validateToolDefinition(heuristicProposal(ideaText));
-    return NextResponse.json({ kind: 'proposal', definition: def, summary: 'Assembled a starter tool from your description.' });
+    return NextResponse.json({ kind: 'proposal', definition: withTitle(def), summary: 'Assembled a starter tool from your description.' });
   }
 }
