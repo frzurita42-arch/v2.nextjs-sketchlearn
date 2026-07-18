@@ -1224,15 +1224,15 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // "Any (AI picks)" tone means: don't constrain the AI — drop it so the generator
     // chooses the voice itself.
     if ((cc as any).tone === 'Any (AI picks)') delete (cc as any).tone;
-    // Affordability gate: estimate the credits this generation will cost and block
-    // it if the (non-admin) user can't cover it — send them to buy credits.
-    if (!eff.isAdmin) {
-      const est = estimateLessonTokens({ ...cc, totalSlides: lesson.totalSlides, support: lesson.support });
-      if (typeof balance === 'number' && balance < est) {
-        setGateMsg(`This presentation is estimated to cost ~${est.toLocaleString()} credits, but you have ${balance.toLocaleString()}. Get more credits to generate it.`);
-        app.nav('dashboard');
-        return;
-      }
+    // Credit gate: you may start (and finish) a generation while you still have a
+    // positive balance — even if the estimate exceeds it, so a run isn't cut off
+    // mid-way — but once your balance is at zero or negative you're redirected to
+    // the dashboard to buy more. Admins are unlimited. The estimate is shown by
+    // the button as a heads-up.
+    if (!eff.isAdmin && typeof balance === 'number' && balance <= 0) {
+      setGateMsg(`You're out of credits (balance ${balance.toLocaleString()}). Get more to generate.`);
+      app.nav('dashboard');
+      return;
     }
     setGateMsg('');
     playedEntryId.current = null; savedRunEntry.current = false;
