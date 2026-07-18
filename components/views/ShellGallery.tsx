@@ -59,7 +59,7 @@ function unitCount(t: any, kind: Kind): number {
   return Number(t?.definition?.cards?.length || t?.definition?.entries?.length || 0) || 0;
 }
 
-export function ShellGallery({ kind, title, subtitle }: { kind: Kind; title: string; subtitle: string }) {
+export function ShellGallery({ kind, title, subtitle, topSlot }: { kind: Kind; title: string; subtitle: string; topSlot?: React.ReactNode }) {
   const app = useApp();
   const isGuest = !app.user;
   const [tools, setTools] = useState<any[]>([]);
@@ -171,6 +171,8 @@ export function ShellGallery({ kind, title, subtitle }: { kind: Kind; title: str
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>{title}</h2>
         <p style={{ margin: '0 0 12px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>{subtitle}{tools.length ? ` — ${tools.length} total` : ''}.</p>
+
+        {topSlot}
 
         {/* Search + favorites/mine filters. */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
