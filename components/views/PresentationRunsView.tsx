@@ -75,7 +75,7 @@ function SlideSettings() {
 
 export function PresentationRunsView() {
   return (
-    <ShellGallery kind="presentation" title="🎬 Presentation runs" subtitle="Set up a new presentation, or open one of the slide tools"
+    <ShellGallery pageKey="presrun" kind="presentation" title="🎬 Presentation runs" subtitle="Set up a new presentation, or open one of the slide tools"
       topSlot={<SlideSettings />} />
   );
 }

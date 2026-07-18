@@ -12,7 +12,7 @@ import { useCardSize, galleryLayout } from '@/lib/card-size';
 export function SandboxView() {
   const app = useApp();
   const [repo, setRepo] = useState<any>(null);
-  const [cardSize] = useCardSize();
+  const cardSize = useCardSize('sandbox');
   const layout = galleryLayout(cardSize);
 
   useEffect(() => {
@@ -39,9 +39,9 @@ export function SandboxView() {
         <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>🧪 Sandbox</h2>
         <p style={{ margin: '0 0 16px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>Empty-gallery state preview.</p>
 
-        <div style={{ ...layout.container, alignItems: 'start' }}>
-          {/* The looping pencil "make one" CTA card. */}
-          <div className="card" style={{ minHeight: 260, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
+        <div style={{ ...layout.container, alignItems: 'stretch' }}>
+          {/* The looping pencil "make one" CTA card — stretches to the card height. */}
+          <div className="card" style={{ height: '100%', minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
             <span className="sl-pencil" style={{ fontSize: 42, color: 'var(--ink)' }} aria-hidden>
               <span className="sl-pencil__line" />
               <span className="sl-pencil__tip">✏️</span>

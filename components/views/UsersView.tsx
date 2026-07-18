@@ -21,7 +21,7 @@ const roleBadge = (r: string) => r === 'admin' ? '🛡️ Admin' : r === 'modera
 function UserCard({ u, row }: { u: Row; row: boolean }) {
   const av = avatarFor(u.username);
   return (
-    <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'center', padding: row ? '10px 14px' : '14px 16px' }}>
+    <div className="card" style={{ height: '100%', boxSizing: 'border-box', display: 'flex', gap: 12, alignItems: 'center', padding: row ? '10px 14px' : '14px 16px' }}>
       <span style={{ flex: '0 0 auto', width: 42, height: 42, borderRadius: '50%', background: av.color, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, border: '2px solid var(--ink)' }}>{av.emoji}</span>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.username}</div>
@@ -36,7 +36,7 @@ export function UsersView() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
-  const [cardSize] = useCardSize();
+  const cardSize = useCardSize('users');
   const layout = galleryLayout(cardSize);
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export function UsersView() {
         {!err && rows !== null && filtered.length === 0 && <p style={{ color: 'var(--muted,#8a7f70)' }}>No users match your search.</p>}
 
         {!err && filtered.length > 0 && (
-          <div style={{ ...layout.container, alignItems: 'start' }}>
+          <div style={{ ...layout.container, alignItems: 'stretch' }}>
             {filtered.map((u) => <UserCard key={u.username} u={u} row={layout.view === 'row'} />)}
           </div>
         )}

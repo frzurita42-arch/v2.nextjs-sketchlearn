@@ -391,13 +391,15 @@ export default function AppRoot() {
                 : lv === 'empty' ? <EmptyView />
                 : lv === 'appsettings' ? <AppSettingsView />
                 : lv === 'presrun' ? <PresentationRunsView />
-                : lv === 'slides' ? <ShellGallery kind="presentation" title="🎞️ Slides gallery" subtitle="Every slide tool on the site" />
-                : lv === 'tools' ? <ShellGallery kind="repository" title="📁 Repos gallery" subtitle="Every repository on the site" />
+                : lv === 'slides' ? <ShellGallery pageKey="slides" kind="presentation" title="🎞️ Slides gallery" subtitle="Every slide tool on the site" />
+                : lv === 'tools' ? <ShellGallery pageKey="tools" kind="repository" title="📁 Repos gallery" subtitle="Every repository on the site" />
                 // Moderators & Users self-manage their shell column; Dashboard scrolls in a wrapper.
                 : lv === 'moderators' ? views.moderators
                 : lv === 'users' ? views.users
                 : lv === 'dashboard'
-                  ? <div style={{ height: '100%', overflowY: 'auto', padding: '8px 16px 40px' }}>{views.dashboard}</div>
+                  ? <div style={{ height: '100%', overflowY: 'auto' }}>
+                      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>{views.dashboard}</div>
+                    </div>
                 : <EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} />
               }</>)
             : views[lv]}

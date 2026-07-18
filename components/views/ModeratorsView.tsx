@@ -64,7 +64,7 @@ export function ModeratorsView() {
     });
   }, [mods, q, minAge, maxAge]);
 
-  const [cardSize] = useCardSize();
+  const cardSize = useCardSize('moderators');
   const layout = galleryLayout(cardSize);
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
@@ -92,7 +92,7 @@ export function ModeratorsView() {
           <p style={{ color: 'var(--muted,#8a7f70)' }}>{mods.length === 0 ? 'No moderators yet.' : 'No moderators match your search.'}</p>
         )}
 
-        <div style={{ ...layout.container, alignItems: 'start' }}>
+        <div style={{ ...layout.container, alignItems: 'stretch' }}>
           {filtered.map((m) => (
             <ModeratorCard key={m.username} mod={m}
               canEdit={perms.isAdmin || perms.username === m.username}
@@ -123,7 +123,7 @@ function ModeratorCard({ mod, canEdit, editing, onEdit, onCancel, onSaved }: {
   if (editing) return <ModeratorEditor mod={mod} onCancel={onCancel} onSaved={onSaved} />;
 
   return (
-    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="card" style={{ height: '100%', boxSizing: 'border-box', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         {p.image
           // eslint-disable-next-line @next/next/no-img-element

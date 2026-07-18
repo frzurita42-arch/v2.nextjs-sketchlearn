@@ -60,7 +60,7 @@ function unitCount(t: any, kind: Kind): number {
   return Number(t?.definition?.cards?.length || t?.definition?.entries?.length || 0) || 0;
 }
 
-export function ShellGallery({ kind, title, subtitle, topSlot }: { kind: Kind; title: string; subtitle: string; topSlot?: React.ReactNode }) {
+export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind: Kind; title: string; subtitle: string; topSlot?: React.ReactNode; pageKey?: string }) {
   const app = useApp();
   const isGuest = !app.user;
   const [tools, setTools] = useState<any[]>([]);
@@ -73,7 +73,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot }: { kind: Kind; t
   const [thumbing, setThumbing] = useState<Record<string, boolean>>({});
   const [imgPromptTool, setImgPromptTool] = useState<any>(null);
   const [imgPromptText, setImgPromptText] = useState('');
-  const [cardSize] = useCardSize();
+  const cardSize = useCardSize(pageKey);
   const layout = galleryLayout(cardSize);
 
   const patchTool = (slug: string, patch: any) => setTools((ts) => ts.map((t) => t.slug === slug ? { ...t, ...patch } : t));
@@ -195,7 +195,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot }: { kind: Kind; t
           <p style={{ color: 'var(--muted,#8a7f70)' }}>Nothing matches — try a different search or filter.</p>
         ) : (
           <>
-            <div style={{ ...layout.container, alignItems: 'start' }}>
+            <div style={{ ...layout.container, alignItems: 'stretch' }}>
               {shown.map((t) => {
                 const editable = canEdit(t);
                 return (
