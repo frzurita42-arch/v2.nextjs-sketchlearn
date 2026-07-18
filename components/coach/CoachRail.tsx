@@ -63,7 +63,7 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
   }
 
   return (
-    <aside className="grid-bg" style={{ position: 'fixed', top: 0, left: 0, height: '100dvh', width: RAIL_W, zIndex: 60, backgroundColor: 'var(--paper,#f7f3e9)', borderRight: '2px dashed var(--line,#d9cfc0)', padding: '10px 12px 10px 18px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <aside className="grid-bg" style={{ position: 'fixed', top: 0, left: 0, height: '100dvh', width: RAIL_W, zIndex: 60, backgroundColor: 'var(--paper,#f7f3e9)', backgroundImage: 'linear-gradient(rgba(92,128,188,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(92,128,188,.09) 1px, transparent 1px)', backgroundSize: '26px 26px', borderRight: '2px dashed var(--line,#d9cfc0)', padding: '10px 12px 10px 18px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Logo at the TOP of the side nav (with the orange line) + collapse. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
         <button className="brand scribble-underline" onClick={() => app.nav('chat')} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, color: 'var(--ink)', padding: 0 }}>✏️ SketchLearn</button>
