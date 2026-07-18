@@ -63,16 +63,19 @@ export const PAGE_HEADERS: Record<string, PageHeaderDef> = {
     defaultEmoji: '🎞️', defaultTitle: 'Slides',
     defaultSubtitle: 'Browse every slide presentation — open one to play it.',
   },
+  // Coach & Dashboard bake the emoji into the title text (same mechanism as
+  // repos/slides), so it always shows and can't be suppressed by a stale
+  // per-page emoji-off flag.
   coach: {
     titleKey: 'coachTitle', subtitleKey: 'coachSubtitle',
     emojiKey: 'coachEmoji', emojiOffKey: 'coachEmojiOff',
-    defaultEmoji: '💬', defaultTitle: 'Coach chat',
+    defaultEmoji: '💬', defaultTitle: '💬 Coach chat',
     defaultSubtitle: 'The coach reads your progress spreadsheet and guides your next steps.',
   },
   dashboard: {
     titleKey: 'dashTitle', subtitleKey: 'dashSubtitle',
     emojiKey: 'dashEmoji', emojiOffKey: 'dashEmojiOff',
-    defaultEmoji: '🧑‍🏫', defaultTitle: 'Teacher’s dashboard',
+    defaultEmoji: '🧑‍🏫', defaultTitle: '🧑‍🏫 Teacher’s dashboard',
     defaultSubtitle: 'One page at a time — pick a section below.',
   },
 };

@@ -18,7 +18,10 @@ const CACHE = 'sl_site_settings';
 
 export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEADERS | string; left?: React.ReactNode; right?: React.ReactNode }) {
   const def = PAGE_HEADERS[page as string];
-  const hidePageEmoji = page === 'repos' || page === 'slides';
+  // The emoji rides inside the title text on every page (repos/slides/coach/
+  // dashboard), so hide the separate toggleable emoji slot everywhere — that
+  // keeps the emoji consistent and immune to a stale per-page emoji-off flag.
+  const hidePageEmoji = page === 'repos' || page === 'slides' || page === 'coach' || page === 'dashboard';
   // Seed synchronously from the shared site-settings cache so the DB copy paints
   // on the first frame (no flash of the default), then refresh from the server.
   const [site, setSite] = useState<Record<string, string | undefined>>(() => {
