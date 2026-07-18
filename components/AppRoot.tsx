@@ -23,6 +23,7 @@ import { EmptyShellView } from '@/components/views/EmptyShellView';
 import { SandboxView } from '@/components/views/SandboxView';
 import { EmptyView } from '@/components/views/EmptyView';
 import { PresentationRunsView } from '@/components/views/PresentationRunsView';
+import { AppSettingsView } from '@/components/views/AppSettingsView';
 import { ShellGallery } from '@/components/views/ShellGallery';
 import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
@@ -38,12 +39,12 @@ import { ModeratorsView } from '@/components/views/ModeratorsView';
 // or, for 'tool', reload from the ?tool=<slug>). Transient flow views (path,
 // settings, activity, language, toolsettings) depend on in-memory state, so a
 // refresh on those returns home instead of showing a broken screen.
-const RESTORABLE: ViewName[] = ['chat', 'dashboard', 'tools', 'slides', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun'];
+const RESTORABLE: ViewName[] = ['chat', 'dashboard', 'tools', 'slides', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun', 'appsettings'];
 // The only pages reachable now. The legacy built-in activities (Learning Path
 // home, Cybersecurity Academy, Structured Explanations, Suggested Topic, Time
 // Travel, the Feed, My stats…) are retired: any attempt to open them — a nav
 // call, a stale ?view= URL, an old in-app link — is redirected to Slides.
-const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun'];
+const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun', 'appsettings'];
 // The HOME page — where the app lands by default and where retired/unknown views
 // redirect. Coach chat is the front page.
 const HOME: ViewName = 'chat';
@@ -320,6 +321,7 @@ export default function AppRoot() {
     sandbox: <SandboxView />,
     empty: <EmptyView />,
     presrun: <PresentationRunsView />,
+    appsettings: <AppSettingsView />,
   };
 
   // The Coach chat + the main nav pages (Slides / Repos / Moderators / Dashboard)
@@ -336,6 +338,7 @@ export default function AppRoot() {
     sandbox: { emoji: '🧪', name: 'Sandbox' },
     empty: { emoji: '📭', name: 'Empty' },
     presrun: { emoji: '🎬', name: 'Presentation runs' },
+    appsettings: { emoji: '⚙️', name: 'Settings' },
   };
   const isShell = isChat || lv in SHELL;
 
@@ -383,6 +386,7 @@ export default function AppRoot() {
             ? (<><CoachRail />{
                 lv === 'sandbox' ? <SandboxView />
                 : lv === 'empty' ? <EmptyView />
+                : lv === 'appsettings' ? <AppSettingsView />
                 : lv === 'presrun' ? <PresentationRunsView />
                 : lv === 'slides' ? <ShellGallery kind="presentation" title="🎞️ Slides gallery" subtitle="Every slide tool on the site" />
                 : lv === 'tools' ? <ShellGallery kind="repository" title="📁 Repos gallery" subtitle="Every repository on the site" />

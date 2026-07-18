@@ -10,6 +10,7 @@ import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
+import { useCardSize, galleryLayout } from '@/lib/card-size';
 
 const GALLERY_PER_PAGE = 6;
 
@@ -72,6 +73,8 @@ export function ShellGallery({ kind, title, subtitle, topSlot }: { kind: Kind; t
   const [thumbing, setThumbing] = useState<Record<string, boolean>>({});
   const [imgPromptTool, setImgPromptTool] = useState<any>(null);
   const [imgPromptText, setImgPromptText] = useState('');
+  const [cardSize] = useCardSize();
+  const layout = galleryLayout(cardSize);
 
   const patchTool = (slug: string, patch: any) => setTools((ts) => ts.map((t) => t.slug === slug ? { ...t, ...patch } : t));
   const isExample = (t: any) => (t.tags || []).includes('example');
@@ -192,11 +195,11 @@ export function ShellGallery({ kind, title, subtitle, topSlot }: { kind: Kind; t
           <p style={{ color: 'var(--muted,#8a7f70)' }}>Nothing matches — try a different search or filter.</p>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16, alignItems: 'start' }}>
+            <div style={{ ...layout.container, alignItems: 'start' }}>
               {shown.map((t) => {
                 const editable = canEdit(t);
                 return (
-                  <ToolCard key={t.slug} tool={t} view="grid" hideOpen onOpen={openTool}
+                  <ToolCard key={t.slug} tool={t} view={layout.view} hideOpen onOpen={openTool}
                     favs={isGuest ? {} : favs} onToggleFav={isGuest ? undefined : toggleFav}
                     canEdit={editable} onEdit={editable ? setEditTool : undefined}
                     onGenThumb={editable ? genThumb : undefined} onThumbPrompt={editable ? openImgPrompt : undefined}
