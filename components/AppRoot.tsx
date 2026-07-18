@@ -358,7 +358,7 @@ export default function AppRoot() {
         style={isChat ? { flex: 1, minHeight: 0, maxWidth: 'none', margin: 0, padding: 0, overflow: 'hidden' } : undefined}>
         <ErrorBoundary onHome={() => nav(HOME)}>{views[liveView(view)]}</ErrorBoundary>
       </main>
-      {!isChat && <Footer />}
+      {isChat ? <Footer compact /> : <Footer />}
       </div>
     </AppContext.Provider>
   );

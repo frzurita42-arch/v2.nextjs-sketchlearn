@@ -560,6 +560,16 @@ table.sketch tr:nth-child(even) td { background: #fffbe8; }
 /* the shared site-wide footer sits below #app; give it a little breathing room */
 .site-footer { margin: 34px auto 18px; padding-bottom: 6px; }
 .site-footer.hidden { display: none; }
+/* Thin footer for the fixed-viewport chat page: an auto-height row pinned at
+   the bottom of the flex column, no vertical margin so nothing scrolls. */
+.site-footer--compact {
+  max-width: none;
+  margin: 0;
+  padding: 5px 0;
+  font-size: .74rem;
+  border-top-width: 1.5px;
+  opacity: .6;
+}
 
 /* ---------- responsive ---------- */
 @media (max-width: 640px) {
