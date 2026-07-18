@@ -227,24 +227,40 @@ export default function AppRoot() {
   // On load (once signed in) restore the view from the URL, so a refresh stays on
   // the same page. /?tool=<slug> (or ?view=tool) reloads that shared tool.
   useEffect(() => {
-    if (!user || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const slug = params.get('tool');
     const v = params.get('view') as ViewName | null;
     if (slug) {
+      // A deep/shared tool link (also a stale ?tool=… URL kept across a redeploy).
+      // Works for guests too now that they can browse tools.
       let cancelled = false;
       API.get(`/api/tools?slug=${encodeURIComponent(slug)}`).then((r: any) => {
-        if (!cancelled && r?.tool) {
-          appState.activeTool = r.tool; setView('tool');
-          try { window.history.replaceState({ view: 'tool', tool: slug }, '', window.location.href); } catch { /* ignore */ }
+        if (cancelled) return;
+        if (!r?.tool) {
+          // Tool gone/unreachable — fall back to the home page and clean the URL so
+          // the visitor isn't stranded on a broken tool entry.
+          setView('slides');
+          try { window.history.replaceState({ view: 'slides', tool: null }, '', urlFor('slides')); } catch { /* ignore */ }
+          return;
         }
-      }).catch(() => { /* ignore */ });
+        appState.activeTool = r.tool; setView('tool'); rerender();
+        // Put a home (Slides) entry BEHIND the tool so the browser Back button
+        // leaves the tool page instead of bouncing straight back to it (a deep
+        // link opens with no prior in-app entry, which made Back feel "stuck").
+        try {
+          window.history.replaceState({ view: 'slides', tool: null, key: 'home' }, '', urlFor('slides'));
+          const key = newScrollKey(); curScrollKey.current = key;
+          window.history.pushState({ view: 'tool', tool: slug, key }, '', urlFor('tool'));
+        } catch { /* ignore */ }
+      }).catch(() => { if (!cancelled) setView('slides'); });
       return () => { cancelled = true; };
     }
     if (v && v !== 'tool' && RESTORABLE.includes(v)) setView(v);
     // Seed the current history entry with a state object so the first Back works.
     try { window.history.replaceState({ view: (v && RESTORABLE.includes(v) ? v : 'slides'), tool: null }, '', window.location.href); } catch { /* ignore */ }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Demo-mode banner: show when the server has no AI provider connected.
   useEffect(() => {

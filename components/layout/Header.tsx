@@ -2,13 +2,19 @@
 /* Top nav bar. Markup ported from public/index.html #topbar + core/layout.js.
  * Shown once a session is active. */
 import { useApp } from '@/components/AppContext';
+import { appState } from '@/lib/app-state';
 
 export function Header() {
   const { nav, user, logout, view, requireLogin } = useApp();
   // The current page gets an orange underline (the same orange as the ✏️ pencil)
-  // so you always know where you are. A tool opened from a gallery keeps that
-  // gallery highlighted.
-  const isActive = (v: string) => view === v || (v === 'tools' && view === 'tool');
+  // so you always know where you are. A tool opened from a gallery keeps THAT
+  // gallery highlighted: a slide presentation keeps Slides, a repository keeps
+  // Repos (by the open tool's archetype).
+  const toolIsSlide = view === 'tool' && appState.activeTool?.archetype === 'lesson';
+  const isActive = (v: string) =>
+    view === v
+    || (v === 'slides' && toolIsSlide)
+    || (v === 'tools' && view === 'tool' && !toolIsSlide);
   const active = { borderBottom: '3px solid var(--orange)', borderRadius: 0, paddingBottom: 3, color: 'var(--ink)' } as const;
   const link = (v: string, label: string, id?: string) => (
     <button id={id} onClick={() => nav(v as never)} style={isActive(v) ? active : undefined} aria-current={isActive(v) ? 'page' : undefined}>{label}</button>
