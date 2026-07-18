@@ -49,10 +49,10 @@ function replyToMessages(reply: string): ChatMsg[] {
 export function ChatView() {
   const app = useApp();
   const username = app.user?.username || null;
-  // Continue the SAME conversation across visits: seed from the in-memory session
-  // (appState) rather than starting fresh each time.
-  const [sessionId, setSessionId] = useState<string>(() => appState.chatSessionId || newSessionId());
-  const [messages, setMessages] = useState<ChatMsg[]>(() => (Array.isArray(appState.chat) && appState.chat.length ? (appState.chat as ChatMsg[]) : [initialCoachGreeting as ChatMsg]));
+  // A brand-new chat starts every time the Coach page loads (the previous one is
+  // saved to history as it was typed).
+  const [sessionId, setSessionId] = useState<string>(() => newSessionId());
+  const [messages, setMessages] = useState<ChatMsg[]>([initialCoachGreeting as ChatMsg]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -98,29 +98,22 @@ export function ChatView() {
   // live into history as it was typed. Signed-in users load their history from the
   // DB (so it follows them across devices); guests use the browser cache only.
   useEffect(() => {
-    // Load the history list. Continue the SAME conversation across visits — only
-    // "🆕 New chat" starts a fresh one. If nothing is open yet (first load),
-    // reopen the most recent saved chat, else start from the greeting.
-    const continuing = appState.chatSessionId && Array.isArray(appState.chat) && appState.chat.length;
-    const applyList = (list: ChatSession[]) => {
-      setSessions(list);
-      if (continuing) return;   // keep the in-memory conversation
-      const recent = list[0];
-      if (recent) { setMessages(recent.messages); setSessionId(recent.id); appState.chat = recent.messages; appState.chatSessionId = recent.id; }
-    };
+    // Every visit opens a fresh chat; the previous chat was saved live, so it's in
+    // the history list. Signed-in users load their history from the DB.
+    const fresh = [initialCoachGreeting as ChatMsg];
+    setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
     if (username) {
       API.get('/api/coach-chats').then((r: any) => {
         const db = Array.isArray(r?.sessions) ? (r.sessions as ChatSession[]) : [];
-        applyList(db.length ? db : loadSessions(username));
-      }).catch(() => applyList(loadSessions(username)));
+        setSessions(db.length ? db : loadSessions(username));
+      }).catch(() => setSessions(loadSessions(username)));
     } else {
-      applyList(loadSessions(username));
+      setSessions(loadSessions(username));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
   useEffect(() => { appState.chat = messages; }, [messages]);
-  useEffect(() => { appState.chatSessionId = sessionId; }, [sessionId]);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, thinking, building, drawing]);
 
   // Persist the active chat into history whenever it gains content, so the sidebar
@@ -322,18 +315,19 @@ export function ChatView() {
 
   return (
     <>
-      {/* No top strip — every control lives in the emoji row under the input, and
-          the Coach identity sits at the bottom of the sidebar. The chat fills the
-          space down to the footer (no dead gap). */}
-      <div style={{ display: 'flex', gap: 14, alignItems: 'stretch', height: 'calc(100vh - 104px)', minHeight: 380 }}>
-        {sidebar && (
-          <aside style={{ flex: '0 0 210px', maxWidth: 210, borderRight: '2px dashed var(--line,#d9cfc0)', paddingRight: 10, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>＋ New chat</button>
+      {/* Full-bleed row: the history side-nav sits flush against the LEFT edge of
+          the screen (breaking out of the centered #app container), Claude-style. */}
+      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: 'calc(100vh - 104px)', minHeight: 380, marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)', width: '100vw' }}>
+        {sidebar ? (
+          <aside style={{ flex: '0 0 250px', maxWidth: 250, borderRight: '2px dashed var(--line,#d9cfc0)', padding: '4px 12px 10px 22px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {/* Coach logo top-left (orange scribble underline, larger) + collapse. */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+              <span className="scribble-underline" style={{ fontSize: 21, fontWeight: 800, whiteSpace: 'nowrap' }}>{coach.emoji} {coach.title}</span>
+              <button title="Collapse the history panel" onClick={() => setSidebar(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: 'var(--muted,#8a7f70)', padding: 0 }}>«</button>
+            </div>
+            <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>🆕 New chat</button>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 6px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
 
-            {/* The history list scrolls in its own window and, when it fills up,
-                offers read-more/less — so it never overlaps the Coach identity
-                pinned at the bottom of the sidebar. */}
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {sessions.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No past chats yet. Say something and it’ll show up here.</p>}
               {visibleSessions.map((s) => (
@@ -353,17 +347,14 @@ export function ChatView() {
                 </button>
               )}
             </div>
-
-            {/* Coach identity — pinned at the bottom of the side navigation. */}
-            <div style={{ borderTop: '2px dashed var(--line,#d9cfc0)', marginTop: 8, paddingTop: 10, textAlign: 'center', flex: '0 0 auto' }}>
-              <div style={{ fontSize: 26, lineHeight: 1 }}>{coach.emoji}</div>
-              <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2 }}>{coach.title}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--muted,#8a7f70)', marginTop: 2 }}>{coach.subtitle}</div>
-            </div>
           </aside>
+        ) : (
+          // Collapsed: a slim button flush-left to reopen the history panel.
+          <button title="Show the history panel" onClick={() => setSidebar(true)}
+            style={{ flex: '0 0 auto', alignSelf: 'flex-start', margin: '4px 8px 0 8px', background: 'var(--card,#fff8ee)', border: '1.5px solid var(--ink)', borderRadius: 8, cursor: 'pointer', fontSize: 16, padding: '5px 9px', lineHeight: 1 }}>🗂 »</button>
         )}
 
-        <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', maxWidth: 'none' }}>
+        <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', padding: '0 16px' }}>
           <div className="chat-log" id="chat-log" ref={logRef}>
             {messages.map((m, i) => {
               if (m.building) return (
