@@ -262,7 +262,9 @@ export async function POST(req: Request) {
     `CRITICAL: The teaching and the question MUST genuinely be about "${topic || subject}" and pitched at "${level}" level. If the subject is ${subject}, do NOT drift to unrelated easier material (e.g. for Trigonometry ask about sine/cosine/tangent, angles, identities or triangles — NOT plain arithmetic like "2+2"). Match the true difficulty of ${level}.`,
     ACTIVITY_MENU,
     langLine, subjectLine,
-    pageSpec?.reading ? 'Include a substantial READING PASSAGE as the "content" (follow the paragraph length/count above).' : '',
+    // TEXT IS MANDATORY ON EVERY SLIDE. A slide may skip the image or the question,
+    // but it must ALWAYS teach in prose.
+    `ALWAYS include real teaching text: "content" MUST be a genuine reading passage of at least ${paras} paragraph(s) (never fewer than ~2 full sentences, even on a question-heavy or visual slide). NEVER return empty, trivial, or one-word "content" — every slide teaches something in prose. The support visual and the question are optional; the teaching text is not.`,
     qKinds.length
       ? 'For THIS slide, teach one idea, then produce these specific questions IN THIS ORDER (still applying the freedom above to vary content):'
       : 'This slide has NO questions — just teach with clear "content". Return "questions": [].',
@@ -279,10 +281,10 @@ export async function POST(req: Request) {
     const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 2600 });
     const content = cleanContent(r?.content);
     const questions = (Array.isArray(r?.questions) ? r.questions : []).map(cleanQuestion).filter(Boolean);
-    // Fall back only when content is unusable, or when questions WERE requested
-    // but none came back. A designed reading-only page (qKinds empty) legitimately
-    // has no questions, so an empty array is fine there.
-    if (!content || (qKinds.length > 0 && !questions.length)) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
+    // Fall back when the teaching TEXT is missing or too trivial (text is required on
+    // every slide), or when questions WERE requested but none came back. A designed
+    // reading-only page (qKinds empty) legitimately has no questions.
+    if (!content || content.trim().length < 25 || (qKinds.length > 0 && !questions.length)) return NextResponse.json(fbSlide(subject, n, qKinds, mathish));
     await recordTextUsage({ username: a.user.username, kind: 'slide', input: system + user, output: JSON.stringify(r || {}), subject: [subject, topic].filter(Boolean).join(' — '), meta: { level, slideNumber: n } });
     return NextResponse.json({
       title: String(r.title || `${subject} — slide ${n}`).slice(0, 100),

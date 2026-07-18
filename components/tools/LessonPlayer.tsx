@@ -2082,12 +2082,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // complete rather than half-loaded. Slides with no visuals are ready at once.
   const curNeedsWarm = !!(curSlide && Array.isArray(curSlide.supportPlan) && curSlide.supportPlan.length);
   const curReady = !!curSlide && (!curNeedsWarm || !!slideReady[cur]);
-  // MCQ-gated slide: show the visuals + the multiple-choice question first and
-  // reveal the teaching text only AFTER the question is answered ("predict, then
-  // learn"). Any slide carrying an mcq question uses this order.
-  const mcqIdxs = qList.map((q: Q, i: number) => (q.kind === 'mcq' ? i : -1)).filter((i: number) => i >= 0);
-  const mcqGate = mcqIdxs.length > 0;
-  const mcqAnswered = mcqGate && mcqIdxs.every((i: number) => res?.answers?.[i] !== undefined);
 
   return (
     <div>
@@ -2256,23 +2250,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 </div>
               );
             });
-            if (mcqGate) {
-              return (
-                <>
-                  {supportsEl}
-                  {questionsEl}
-                  {mcqAnswered && contentEl && (
-                    <div style={{ marginTop: 14, borderTop: '1.5px dashed var(--ink)', paddingTop: 12 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>💡 Here&apos;s the explanation</div>
-                      {contentEl}
-                    </div>
-                  )}
-                </>
-              );
-            }
+            // Teaching TEXT is always shown first on EVERY slide (no hiding it
+            // behind the question), then the support visuals, then the question(s).
             return (
               <>
-                {/* Reading passage (its own "paper"). */}
+                {/* Reading passage (its own "paper") — always visible. */}
                 {contentEl}
                 {/* Support materials — each streams into its own card, dotted-separated. */}
                 {(curSlide.supportPlan?.length || curSlide.support) && curSlide.content ? <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12 }} /> : null}

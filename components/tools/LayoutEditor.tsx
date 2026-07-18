@@ -77,11 +77,14 @@ export function LayoutEditor({ slug, def, onClose, onSaved }: {
   const save = async () => {
     setBusy(true); setMsg('Saving…');
     // Persist every slide's layout + the whole prompt into the tool definition.
+    // Every slide ALWAYS carries teaching text (reading:true); the activity/
+    // evaluation and the support/visual are optional per slide.
     const cleanPages = pages.map((p) => ({
-      activityTypes: p.activityTypes.length ? p.activityTypes : ['mcq'],
+      activityTypes: p.activityTypes,          // may be empty = no evaluation on this slide
       support: p.support,
       paragraphsPerSlide: p.paragraphsPerSlide,
       paragraphLength: p.paragraphLength,
+      reading: true,                            // text/reading is mandatory on every slide
       style: p.style.trim() || undefined,
     }));
     const nextDef = { ...def, lesson: { ...lesson, style: style.trim(), pages: cleanPages, totalSlides: cleanPages.length } };
@@ -107,7 +110,7 @@ export function LayoutEditor({ slug, def, onClose, onSaved }: {
           <button className="btn small ghost" onClick={onClose}>✕</button>
         </div>
         <p style={{ fontSize: 12, opacity: 0.7, margin: '0 0 10px' }}>
-          Each row is one slide of the presentation. Pick the activity types and support components the AI must put on that slide. The generator follows this layout for every run, at random across the slides, and double-checks each slide against it.
+          Each row is one slide. Every slide ALWAYS has <b>teaching text</b>. On top of that you choose, per slide: an <b>evaluation</b> (a question — optional), and <b>support / visuals</b> (image, table… — optional). The generator follows this layout on every run and double-checks each slide against it.
         </p>
 
         {/* Overall generation prompt — the WHOLE guidance, saved to the DB. */}
@@ -130,11 +133,15 @@ export function LayoutEditor({ slug, def, onClose, onSaved }: {
                   <button className="btn small ghost" title="Remove slide" disabled={pages.length <= 1} onClick={() => removeSlide(i)} style={{ padding: '0 8px' }}>🗑</button>
                 </span>
               </div>
-              <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Activities</div>
+              {/* Text is a fixed, always-present element of every slide. */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, background: 'var(--paper-2,#f3ead6)', border: '1.5px dashed var(--ink)', borderRadius: 8, padding: '3px 9px', margin: '2px 0 8px' }}>
+                📖 Reading text <span style={{ fontWeight: 400, opacity: 0.7 }}>· always on every slide</span>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Evaluation (question) — optional, leave all off for no question</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
                 {ACTIVITIES.map((a) => <span key={a.id} onClick={() => toggleAct(i, a.id)} style={chip(p.activityTypes.includes(a.id))}>{a.label}</span>)}
               </div>
-              <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Support / visuals</div>
+              <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Support / visuals — optional</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
                 {SUPPORTS.map((s) => <span key={s.id} onClick={() => toggleSup(i, s.id)} style={chip(!!p.support[s.id])}>{s.label}</span>)}
               </div>
@@ -150,8 +157,9 @@ export function LayoutEditor({ slug, def, onClose, onSaved }: {
                   </select>
                 </label>
               </div>
-              <input value={p.style} onChange={(e) => setPage(i, { style: e.target.value })} placeholder="Optional: what THIS slide should teach/show (extra instruction for the AI)"
-                style={{ width: '100%', fontSize: 12, marginTop: 6, padding: '5px 8px', borderRadius: 8, border: '1.5px solid var(--ink)' }} maxLength={2000} />
+              <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '8px 0 2px' }}>Slide context (what this slide teaches / must show — guides the AI)</div>
+              <textarea value={p.style} onChange={(e) => setPage(i, { style: e.target.value })} placeholder="e.g. Welcome slide: greet ESL learners and introduce fashion design. Include an AI image of a design studio. One easy multiple-choice question."
+                style={{ width: '100%', fontSize: 12, minHeight: 46, padding: '6px 8px', borderRadius: 8, border: '1.5px solid var(--ink)' }} maxLength={2000} />
             </div>
           ))}
         </div>
