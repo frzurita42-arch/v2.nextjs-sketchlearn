@@ -6,9 +6,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
-import { useCardSize, galleryLayout } from '@/lib/card-size';
+import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
-import { PageHeading } from '@/components/ui/PageHeading';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
+import { ProfileCard } from '@/components/ui/ProfileCard';
 
 type Row = { username: string; role: string; createdAt?: string | null; gamesPlayed?: number };
 
@@ -20,25 +21,13 @@ function avatarFor(name: string) {
 function fmtDate(v: any): string { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(); }
 const roleBadge = (r: string) => r === 'admin' ? '🛡️ Admin' : r === 'moderator' ? '🎓 Moderator' : '☺ User';
 
-function UserCard({ u, row }: { u: Row; row: boolean }) {
-  const av = avatarFor(u.username);
-  return (
-    <div className="card" style={{ height: '100%', boxSizing: 'border-box', display: 'flex', gap: 12, alignItems: 'center', padding: row ? '10px 14px' : '14px 16px' }}>
-      <span style={{ flex: '0 0 auto', width: 42, height: 42, borderRadius: '50%', background: av.color, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, border: '2px solid var(--ink)' }}>{av.emoji}</span>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.username}</div>
-        <div style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>{roleBadge(u.role)} · joined {fmtDate(u.createdAt)} · 🎮 {u.gamesPlayed ?? 0}</div>
-      </div>
-    </div>
-  );
-}
-
 export function UsersView() {
   const app = useApp();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
   const cardSize = useCardSize('users');
+  const imgMode = useImgSize('users');
   const layout = galleryLayout(cardSize);
 
   useEffect(() => {
@@ -55,12 +44,12 @@ export function UsersView() {
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
-        <PageHeading pageKey="users" title="👥 Users" subtitle={`Everyone on the system${rows ? ` — ${rows.length} total` : ''}.`} />
+        <PageHeaderBar pageKey="users" title="👥 Users" subtitle={`Everyone on the system${rows ? ` — ${rows.length} total` : ''}.`} />
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name or role…"
-            style={{ flex: '1 1 220px', minWidth: 0, padding: '7px 10px', border: '1.5px solid var(--ink)', borderRadius: 8, font: 'inherit', fontSize: 13, background: 'var(--card,#fff8ee)' }} />
-          <CardViewMenu pageKey="users" showImage={false} />
+          <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name or role…"
+            style={{ flex: '1 1 220px', minWidth: 0 }} />
+          <CardViewMenu pageKey="users" />
         </div>
 
         {err && <p style={{ color: 'var(--muted,#8a7f70)' }}>{/403|admin|Unauthorized|Forbidden/i.test(err) ? 'The full user directory is available to admins only.' : err}</p>}
@@ -69,7 +58,16 @@ export function UsersView() {
 
         {!err && filtered.length > 0 && (
           <div style={{ ...layout.container, alignItems: 'stretch' }}>
-            {filtered.map((u) => <UserCard key={u.username} u={u} row={layout.view === 'row'} />)}
+            {filtered.map((u) => {
+              const av = avatarFor(u.username);
+              return (
+                <ProfileCard key={u.username} view={layout.view}
+                  name={u.username} title={u.username} emoji={av.emoji} color={av.color}
+                  badge={roleBadge(u.role)} imageMode={imgMode}
+                  subtitle={`${roleBadge(u.role)} · joined ${fmtDate(u.createdAt)}`}
+                  meta={<span style={{ fontSize: 11, opacity: 0.6 }}>joined {fmtDate(u.createdAt)} · 🎮 {u.gamesPlayed ?? 0}</span>} />
+              );
+            })}
           </div>
         )}
       </div>

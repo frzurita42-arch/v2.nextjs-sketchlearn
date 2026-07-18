@@ -12,7 +12,7 @@ import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
-import { PageHeading } from '@/components/ui/PageHeading';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 
 const GALLERY_PER_PAGE = 6;
 
@@ -175,7 +175,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
-        <PageHeading pageKey={pageKey} title={title} subtitle={`${subtitle}${tools.length ? ` — ${tools.length} total` : ''}.`} />
+        <PageHeaderBar pageKey={pageKey} title={title} subtitle={`${subtitle}${tools.length ? ` — ${tools.length} total` : ''}.`} />
 
         {topSlot}
 

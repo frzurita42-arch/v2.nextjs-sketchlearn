@@ -10,9 +10,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
-import { useCardSize, galleryLayout } from '@/lib/card-size';
+import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
-import { PageHeading } from '@/components/ui/PageHeading';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
+import { ProfileCard } from '@/components/ui/ProfileCard';
 
 type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number; image?: string };
 type Moderator = { username: string; role: 'admin' | 'moderator' | 'user'; createdAt?: string | null; gamesPlayed?: number; profile: Profile };
@@ -44,6 +45,18 @@ export function ModeratorsView() {
   const [minAge, setMinAge] = useState('');
   const [maxAge, setMaxAge] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  const [portraitBusy, setPortraitBusy] = useState<string | null>(null);
+
+  // Generate an AI portrait for a moderator straight from their card. The endpoint
+  // persists it server-side, so it survives a reload even without opening the editor.
+  const makePortrait = async (username: string) => {
+    setPortraitBusy(username);
+    try {
+      const r: any = await API.post('/api/moderators/portrait', { username });
+      if (r?.url) setMods((cur) => (cur || []).map((x) => x.username === username ? { ...x, profile: { ...(x.profile || {}), image: r.url } } : x));
+    } catch { /* leave the avatar fallback */ }
+    setPortraitBusy(null);
+  };
 
   const load = () => {
     API.get('/api/moderators')
@@ -67,17 +80,18 @@ export function ModeratorsView() {
   }, [mods, q, minAge, maxAge]);
 
   const cardSize = useCardSize('moderators');
+  const imgMode = useImgSize('moderators');
   const layout = galleryLayout(cardSize);
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
-        <PageHeading pageKey="moderators" title="🛡️ Moderators" subtitle="The site's active moderators & admins." />
+        <PageHeaderBar pageKey="moderators" title="🛡️ Moderators" subtitle="The site's active moderators & admins." />
 
         {/* Search + age filter (styled like the other galleries) */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 16px' }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)}
+          <input type="text" value={q} onChange={(e) => setQ(e.target.value)}
             placeholder="🔍 Search by name, interest or keyword…"
-            style={{ flex: '1 1 220px', minWidth: 0, padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--ink)', fontSize: 13, background: 'var(--card,#fff8ee)', font: 'inherit' }} />
+            style={{ flex: '1 1 220px', minWidth: 0 }} />
           <span style={{ fontSize: 13, color: 'var(--muted,#8a7f70)' }}>Age</span>
           <input value={minAge} onChange={(e) => setMinAge(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric"
             placeholder="min" style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '2px solid var(--ink)', fontSize: 14 }} />
@@ -85,7 +99,7 @@ export function ModeratorsView() {
           <input value={maxAge} onChange={(e) => setMaxAge(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric"
             placeholder="max" style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '2px solid var(--ink)', fontSize: 14 }} />
           {(q || minAge || maxAge) && <button className="btn small ghost" onClick={() => { setQ(''); setMinAge(''); setMaxAge(''); }}>Clear</button>}
-          <CardViewMenu pageKey="moderators" showImage={false} />
+          <CardViewMenu pageKey="moderators" />
         </div>
 
         {err && <p style={{ color: 'var(--danger,#e4572e)' }}>{err}</p>}
@@ -95,60 +109,37 @@ export function ModeratorsView() {
         )}
 
         <div style={{ ...layout.container, alignItems: 'stretch' }}>
-          {filtered.map((m) => (
-            <ModeratorCard key={m.username} mod={m}
-              canEdit={perms.isAdmin || perms.username === m.username}
-              editing={editing === m.username}
-              onEdit={() => setEditing(m.username)}
-              onCancel={() => setEditing(null)}
-              onSaved={(p) => { setEditing(null); setMods((cur) => (cur || []).map((x) => x.username === m.username ? { ...x, profile: p } : x)); }} />
-          ))}
+          {filtered.map((m) => {
+            const canEdit = perms.isAdmin || perms.username === m.username;
+            if (editing === m.username) {
+              return <ModeratorEditor key={m.username} mod={m}
+                onCancel={() => setEditing(null)}
+                onSaved={(p) => { setEditing(null); setMods((cur) => (cur || []).map((x) => x.username === m.username ? { ...x, profile: p } : x)); }} />;
+            }
+            const p = m.profile || {};
+            const av = avatarFor(m.username);
+            const wa = waLink(p.whatsapp);
+            const role = m.role === 'admin' ? '🛡️ Admin' : '🛡️ Moderator';
+            return (
+              <ProfileCard key={m.username} view={layout.view}
+                name={m.username} title={p.title || m.username} subtitle={p.subtitle}
+                image={p.image} emoji={av.emoji} color={av.color} badge={role}
+                imageMode={imgMode}
+                tags={p.interests ? p.interests.split(/[,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 10) : undefined}
+                meta={<span style={{ fontSize: 11, opacity: 0.6 }}>{role}{p.age ? ` · ${p.age}` : ''} · ☺ {m.username}</span>}
+                onEdit={canEdit ? () => setEditing(m.username) : undefined}
+                onPortrait={canEdit ? () => makePortrait(m.username) : undefined}
+                portraitBusy={portraitBusy === m.username}
+                actions={wa
+                  ? <a className="btn small green" href={wa} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>💬 WhatsApp</a>
+                  : <span style={{ fontSize: 11, color: 'var(--muted,#8a7f70)' }}>No WhatsApp</span>} />
+            );
+          })}
         </div>
 
         <DiscussionSection titleKey="moderatorsDiscussionTitle" titleFallback="💬 Discussion"
           collapseKey="moderatorsDiscussionCollapsed"
           targetType="tool" targetId="__moderators__" maxWidth={980} />
-      </div>
-    </div>
-  );
-}
-
-function ModeratorCard({ mod, canEdit, editing, onEdit, onCancel, onSaved }: {
-  mod: Moderator; canEdit: boolean; editing: boolean;
-  onEdit: () => void; onCancel: () => void; onSaved: (p: Profile) => void;
-}) {
-  const av = avatarFor(mod.username);
-  const p = mod.profile || {};
-  const wa = waLink(p.whatsapp);
-  const roleBadge = mod.role === 'admin' ? '🛡️ Admin' : '🛡️ Moderator';
-
-  if (editing) return <ModeratorEditor mod={mod} onCancel={onCancel} onSaved={onSaved} />;
-
-  return (
-    <div className="card" style={{ height: '100%', boxSizing: 'border-box', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        {p.image
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={p.image} alt={mod.username} style={{ flex: '0 0 auto', width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--ink)' }} />
-          : <span style={{ flex: '0 0 auto', width: 42, height: 42, borderRadius: '50%', background: av.color, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, border: '2px solid var(--ink)' }}>{av.emoji}</span>}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title || mod.username}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>{roleBadge}{p.age ? ` · ${p.age}` : ''} · ☺ {mod.username}</div>
-        </div>
-      </div>
-      {p.subtitle && <div style={{ fontSize: 13.5 }}>{p.subtitle}</div>}
-      {p.interests && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {p.interests.split(/[,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 10).map((tag, i) => (
-            <span key={i} style={{ fontSize: 11.5, background: 'var(--chip,#f0e9dc)', border: '1.5px solid var(--ink)', borderRadius: 999, padding: '2px 9px' }}>{tag}</span>
-          ))}
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 6, flexWrap: 'wrap' }}>
-        {wa
-          ? <a className="btn small green" href={wa} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>💬 WhatsApp</a>
-          : <span style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No WhatsApp linked</span>}
-        {canEdit && <button className="btn small ghost" onClick={onEdit}>✎ Edit</button>}
       </div>
     </div>
   );
