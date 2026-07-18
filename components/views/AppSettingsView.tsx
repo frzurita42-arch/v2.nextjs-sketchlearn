@@ -4,10 +4,29 @@
  * them universal; the popup targets specific pages. */
 import { useState } from 'react';
 import {
-  CARD_SIZE_LABELS, CARD_IMG_LABELS, CARD_PAGES,
+  CARD_SIZE_LABELS, CARD_IMG_LABELS, CARD_PAGES, galleryLayout,
   loadGlobalCardSize, loadGlobalImgSize, hasPageOverride,
   applyCardSizeAll, applyImgSizeAll, setPageCardSize, setPageImgSize, clearPageCardSize, clearPageImgSize,
 } from '@/lib/card-size';
+import { ToolCard } from '@/components/tools/ToolCard';
+
+// A fake tool for the live preview — an emoji thumbnail (no photo) + real card chrome.
+const SAMPLE = {
+  slug: '__preview__', title: 'Sample presentation', archetype: 'lesson', owner: 'you', visibility: 'public',
+  description: 'A preview card — this is how your galleries will look with the current layout and image settings.',
+  tags: ['example', 'preview'], aiGenerated: true, thumbnail: null, createdAt: new Date().toISOString(),
+};
+const noop = () => { /* preview only */ };
+
+function CardPreview({ layout, img }: { layout: number; img: number }) {
+  const l = galleryLayout(layout);
+  return (
+    <div style={{ ...l.container, alignItems: 'stretch' }}>
+      <ToolCard tool={SAMPLE} view={l.view} hideOpen imageMode={img} onOpen={noop}
+        canEdit onEdit={noop} onGenThumb={noop} onThumbPrompt={noop} onUploadThumb={noop} onDice={noop} thumbing={false} />
+    </div>
+  );
+}
 
 const sel: React.CSSProperties = { width: '100%', padding: '7px 9px', fontSize: 13, borderRadius: 8, border: '1.5px solid var(--ink)', background: 'var(--card,#fff8ee)', font: 'inherit', cursor: 'pointer' };
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px', display: 'block' };
@@ -79,6 +98,14 @@ export function AppSettingsView() {
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14, flexWrap: 'wrap' }}>
             <button className="btn small ghost" onClick={() => setPopup(true)}>Customise per page…</button>
             <button className="btn small green" onClick={applyAll}>{saved ? '✓ Applied' : 'Apply to all pages'}</button>
+          </div>
+        </div>
+
+        {/* Live preview — a real card in the currently-chosen layout + image mode. */}
+        <div style={{ marginTop: 20 }}>
+          <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
+          <div style={{ border: '2px dashed var(--line,#d9cfc0)', borderRadius: 12, padding: 16, background: 'rgba(0,0,0,0.015)' }}>
+            <CardPreview layout={layout} img={img} />
           </div>
         </div>
       </div>
