@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
+import { geminiEnabled, openrouterEnabled, deepseekEnabled, freeChatEnabled, OPENROUTER_FREE_MODEL } from '@/src/config';
 import { readJSON } from '@/src/db/persistence';
 import { generateText } from '@/src/ai/providers';
 import { buildCoachChatSystem } from '@/src/ai/prompts/coach';
@@ -18,7 +18,13 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
-  const { messages = [], recentChats = [] } = (await req.json().catch(() => ({}))) || {};
+  const { messages = [], recentChats = [], free = false } = (await req.json().catch(() => ({}))) || {};
+  // Free chat (no-credit users): only ever use a free OpenRouter model, never a paid
+  // one, so it costs nothing. If no free model is configured, tell the client to fall
+  // back to its no-AI recommendation mode.
+  if (free && !freeChatEnabled) {
+    return NextResponse.json({ noFree: true });
+  }
   const games = readJSON('games.json', []).filter((g: any) => g.username === a.user.username);
   const progress = games.slice(-20).map((g: any) => ({
     date: g.finishedAt, topic: g.topic, concept: g.concept, level: g.level,
@@ -34,16 +40,23 @@ export async function POST(req: Request) {
       .map((t: any) => ({ title: t.title, archetype: t.archetype }));
   } catch { /* context is best-effort */ }
   const chats = Array.isArray(recentChats) ? recentChats.filter((s: any) => typeof s === 'string').slice(0, 12) : [];
-  if (!openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
+  if (!free && !openrouterEnabled && !geminiEnabled && !deepseekEnabled) {
     return NextResponse.json({ reply: makeFallbackCoachReply(progress) });
   }
+  // Free mode forces the free OpenRouter model; paid mode uses the normal failover.
+  const opts = free
+    ? { json: false, temperature: 0.8, maxTokens: 500, provider: 'openrouter', model: OPENROUTER_FREE_MODEL }
+    : { json: false, temperature: 0.8, maxTokens: 800 };
   try {
     const reply = await generateText([
       { role: 'system', content: buildCoachChatSystem({ progress, username: a.user.username, tools, recentChats: chats }) },
       ...messages.slice(-16).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
-    ], { json: false, temperature: 0.8, maxTokens: 800 });
-    return NextResponse.json({ reply });
+    ], opts as any);
+    return NextResponse.json({ reply, free });
   } catch (e: any) {
+    // In free mode a failure (e.g. the free model is rate-limited) shouldn't error —
+    // signal the client to fall back to its no-AI recommendation mode.
+    if (free) return NextResponse.json({ noFree: true });
     return NextResponse.json({ error: e.message }, { status: 502 });
   }
 }

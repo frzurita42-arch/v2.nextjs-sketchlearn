@@ -20,17 +20,20 @@ async function freshUsers() {
   return userState.users;
 }
 
-type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number };
+type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number; image?: string };
 
 function cleanProfile(raw: any): Profile {
   const s = (v: any, n: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
   const age = Number(raw?.age);
+  const rawImage = String(raw?.image || '').slice(0, 2_000_000);
+  const image = (/^https?:\/\//i.test(rawImage) || /^data:image\//i.test(rawImage)) ? rawImage : '';
   return {
     title: s(raw?.title, 80),
     subtitle: s(raw?.subtitle, 120),
     interests: s(raw?.interests, 300),
     whatsapp: s(raw?.whatsapp, 120),
     age: Number.isFinite(age) && age > 0 && age < 130 ? Math.round(age) : undefined,
+    image,
   };
 }
 

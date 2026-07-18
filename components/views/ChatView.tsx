@@ -145,8 +145,25 @@ export function ChatView() {
     const userMsg: ChatMsg = { role: 'user', content: text || '(shared an image)', ...(imgs.length ? { images: imgs } : {}) };
     const next = [...messages, userMsg];
     setMessages(next);
-    // No AI call for free-mode users — recommend a tool instead (zero token spend).
-    if (freeMode) { await freeReply(next, text); return; }
+    // Free-mode users (guests, 🆓 toggle, or out of credits) never spend credits: a
+    // signed-in user gets a reply from a FREE OpenRouter model when one is configured,
+    // otherwise (and for guests) we fall back to a no-AI tool recommendation.
+    if (freeMode) {
+      if (app.user) {
+        setThinking(true);
+        try {
+          const r: any = await API.post('/api/ai/chat', {
+            messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content })),
+            recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
+            free: true,
+          });
+          if (r?.reply) { setMessages([...next, { role: 'assistant', content: r.reply }]); setThinking(false); return; }
+        } catch { /* fall through to recommendation */ }
+        setThinking(false);
+      }
+      await freeReply(next, text);
+      return;
+    }
     setThinking(true);
     try {
       const r = await API.post('/api/ai/chat', {
@@ -180,6 +197,11 @@ export function ChatView() {
   // proposal from the chat.
   const buildTool = async () => {
     if (!app.user) { app.requireLogin(); return; }
+    // No generating presentations/repos without credits — building spends them.
+    if (noCredits) {
+      setMessages((m) => [...m, { role: 'assistant', content: 'Building a tool needs credits. Add credits on the dashboard, or press ⭐ Recommend a run to play (free).' }]);
+      return;
+    }
     if (building) return;
     setBuilding(true);
     setMessages((m) => [...m, { role: 'assistant', content: '', building: true }]);
@@ -365,9 +387,9 @@ export function ChatView() {
           </div>
           {freeMode && (
             <div style={{ fontSize: 11, color: 'var(--muted,#8a7f70)', marginTop: 4 }}>
-              {!app.user ? 'Free mode (guest): messages recommend a tool to play — no AI, no cost. Sign in to chat with the coach and build.'
-                : noCredits && !freeOnly ? 'You’re out of credits, so messages recommend tools instead of using the AI. Add credits, or turn on 🆓 Free only.'
-                : 'Free mode: messages recommend a random tool — no AI is used, so nothing is charged.'}
+              {!app.user ? 'Free mode (guest): messages recommend a tool to play — no cost. Sign in to build and generate.'
+                : noCredits && !freeOnly ? 'You’re out of credits: chat runs on a free model (or recommends a tool), and building/generating is paused until you add credits.'
+                : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
             </div>
           )}
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>

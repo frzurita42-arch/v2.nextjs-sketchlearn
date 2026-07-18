@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
 
-type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number };
+type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number; image?: string };
 type Moderator = { username: string; role: 'admin' | 'moderator' | 'user'; createdAt?: string | null; gamesPlayed?: number; profile: Profile };
 
 // Deterministic emoji+colour avatar from a username (matches the comment style).
@@ -125,7 +125,10 @@ function ModeratorCard({ mod, canEdit, editing, onEdit, onCancel, onSaved }: {
   return (
     <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <span style={{ flex: '0 0 auto', width: 42, height: 42, borderRadius: '50%', background: av.color, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, border: '2px solid var(--ink)' }}>{av.emoji}</span>
+        {p.image
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={p.image} alt={mod.username} style={{ flex: '0 0 auto', width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--ink)' }} />
+          : <span style={{ flex: '0 0 auto', width: 42, height: 42, borderRadius: '50%', background: av.color, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, border: '2px solid var(--ink)' }}>{av.emoji}</span>}
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title || mod.username}</div>
           <div style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>{roleBadge}{p.age ? ` · ${p.age}` : ''} · ☺ {mod.username}</div>
@@ -156,16 +159,31 @@ function ModeratorEditor({ mod, onCancel, onSaved }: { mod: Moderator; onCancel:
   const [interests, setInterests] = useState(p.interests || '');
   const [whatsapp, setWhatsapp] = useState(p.whatsapp || '');
   const [age, setAge] = useState(p.age ? String(p.age) : '');
+  const [image, setImage] = useState(p.image || '');
   const [busy, setBusy] = useState(false);
+  const [portraitBusy, setPortraitBusy] = useState(false);
   const [err, setErr] = useState('');
 
   const save = async () => {
     setBusy(true); setErr('');
-    const profile: Profile = { title: title.trim(), subtitle: subtitle.trim(), interests: interests.trim(), whatsapp: whatsapp.trim(), age: age ? parseInt(age, 10) : undefined };
+    const profile: Profile = { title: title.trim(), subtitle: subtitle.trim(), interests: interests.trim(), whatsapp: whatsapp.trim(), age: age ? parseInt(age, 10) : undefined, image };
     try {
       const r: any = await API.put('/api/moderators', { username: mod.username, profile });
       onSaved(r?.profile || profile);
     } catch (e: any) { setErr(e?.message || 'Could not save.'); setBusy(false); }
+  };
+
+  // Generate an AI portrait from what we know about this person. The endpoint
+  // saves it too, so it persists even without pressing Save. Each press varies the
+  // ethnicity, so pressing again gives a different face.
+  const makePortrait = async () => {
+    setPortraitBusy(true); setErr('');
+    try {
+      const r: any = await API.post('/api/moderators/portrait', { username: mod.username });
+      if (r?.url) setImage(r.url);
+      else setErr(r?.error || 'Could not generate a portrait.');
+    } catch (e: any) { setErr(e?.message || 'Could not generate a portrait.'); }
+    setPortraitBusy(false);
   };
 
   const field = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '2px solid var(--ink)', fontSize: 13.5, marginTop: 3 } as const;
@@ -181,6 +199,20 @@ function ModeratorEditor({ mod, onCancel, onSaved }: { mod: Moderator; onCancel:
         <label style={{ ...lbl, flex: 1 }}>WhatsApp (number or link)<input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} maxLength={120} placeholder="+1 555 123 4567" style={field} /></label>
         <label style={{ ...lbl, width: 90 }}>Age<input value={age} onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" maxLength={3} style={field} /></label>
       </div>
+
+      {/* Profile picture: an AI portrait imagined from this person's name, card copy,
+          interests, lesson history and tokens. Press again for a different face. */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 2 }}>
+        {image
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={image} alt="portrait" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--ink)' }} />
+          : <span style={{ width: 56, height: 56, borderRadius: '50%', border: '2px dashed var(--ink)', display: 'grid', placeItems: 'center', fontSize: 20, opacity: 0.6 }}>👤</span>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <button className="btn small" disabled={portraitBusy} onClick={makePortrait} title="Generate an AI portrait from this profile">{portraitBusy ? '🎨 Imagining…' : (image ? '🎨 Regenerate portrait' : '🎨 AI portrait')}</button>
+          {image && <button className="btn small ghost" disabled={portraitBusy} onClick={() => setImage('')} style={{ fontSize: 11 }}>Remove photo</button>}
+        </div>
+      </div>
+
       {err && <div style={{ color: 'var(--danger,#e4572e)', fontSize: 12 }}>{err}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button className="btn small green" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>

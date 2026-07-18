@@ -133,7 +133,13 @@ const OPENROUTER_URL = process.env.OPENROUTER_API_URL || 'https://openrouter.ai/
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';          // general + vision, cheap default
 const OPENROUTER_MODEL_REASON = process.env.OPENROUTER_MODEL_REASON || OPENROUTER_MODEL; // math / science / reasoning
 const OPENROUTER_MODEL_VISION = process.env.OPENROUTER_MODEL_VISION || OPENROUTER_MODEL; // reads images / handwriting
+// A FREE OpenRouter model (a ":free" slug) used for the coach chat of users who
+// have no credits, so they can still talk to the AI at no cost. Overridable via
+// env because which models are free changes over time.
+const OPENROUTER_FREE_MODEL = process.env.OPENROUTER_FREE_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
 const openrouterEnabled = !forceFallback && hasConfiguredKey(OPENROUTER_API_KEY);
+// Free coach chat is available when OpenRouter is configured and a free model is set.
+const freeChatEnabled = openrouterEnabled && !!OPENROUTER_FREE_MODEL;
 
 // Optional: Moonshot AI (Kimi) — an OpenAI-compatible chat endpoint. Set
 // MOONSHOT_API_KEY to make "Kimi" a directly selectable text model. Endpoint and
@@ -257,7 +263,9 @@ module.exports = {
   OPENROUTER_MODEL,
   OPENROUTER_MODEL_REASON,
   OPENROUTER_MODEL_VISION,
+  OPENROUTER_FREE_MODEL,
   openrouterEnabled,
+  freeChatEnabled,
   MOONSHOT_API_KEY,
   MOONSHOT_URL,
   MOONSHOT_MODEL,
