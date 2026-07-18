@@ -10,7 +10,6 @@ import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting } from '@/lib/app-state';
 import { AudioButton } from '@/components/ui/AudioButton';
-import { MicButton } from '@/components/ui/MicButton';
 import { useApp } from '@/components/AppContext';
 import { estimateLessonTokens } from '@/lib/cost-estimate';
 import { loadLikes } from '@/lib/tool-likes';
@@ -429,17 +428,23 @@ export function ChatView() {
 
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {sessions.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No past chats yet. Say something and it’ll show up here.</p>}
-              {visibleSessions.map((s) => (
-                <div key={s.id} className={s.id === sessionId ? 'card' : ''}
-                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 8, cursor: 'pointer', background: s.id === sessionId ? 'var(--card,#fff8ee)' : 'transparent', border: s.id === sessionId ? '1.5px solid var(--ink)' : '1.5px solid transparent' }}
-                  onClick={() => openSession(s)}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+              {visibleSessions.map((s) => {
+                const active = s.id === sessionId;
+                return (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
+                  {/* The chat card is a real button; the active one gets a green line
+                      along its bottom edge. */}
+                  <button
+                    onClick={() => openSession(s)}
+                    title={s.title || 'New chat'}
+                    style={{ flex: 1, minWidth: 0, textAlign: 'left', cursor: 'pointer', padding: '6px 8px', borderRadius: 8, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#e5dccb)', borderBottom: active ? '3px solid var(--green,#7fb069)' : '1.5px solid var(--line,#e5dccb)', font: 'inherit', color: 'inherit' }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title || 'New chat'}</div>
                     <div style={{ fontSize: 10.5, color: 'var(--muted,#8a7f70)' }}>{relTime(s.ts)}</div>
-                  </div>
+                  </button>
                   <button title="Delete chat" onClick={(e) => { e.stopPropagation(); removeSession(s.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--muted,#8a7f70)', padding: 2 }}>✕</button>
                 </div>
-              ))}
+                );
+              })}
               {sessions.length > COLLAPSED_COUNT && (
                 <button className="btn small ghost" onClick={() => setExpanded((v) => !v)} style={{ alignSelf: 'flex-start', marginTop: 2, fontSize: 12 }}>
                   {expanded ? '▲ Read less' : `▼ Read more (${sessions.length - COLLAPSED_COUNT})`}
@@ -585,10 +590,9 @@ export function ChatView() {
 
           <div className="chat-input-row">
             <button className="btn small ghost" title="Attach images" onClick={pickFiles} style={{ padding: '0 10px' }}>📎</button>
-            <textarea id="chat-input" placeholder="Tell me what you want to learn… I'll help you build a lesson or repo (or tap 🎤 / 📎 / 🎨)"
+            <textarea id="chat-input" placeholder="Tell me what you want to learn… I'll help you build a lesson or repo (or tap 📎 / 🎨)"
               value={input} onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
-            <MicButton lang="en-US" title="Speak your message" onText={(t: string) => setInput((v) => (v ? v + ' ' : '') + t)} />
             <button className="btn primary" id="chat-send" onClick={send}>Send</button>
           </div>
           {freeMode && (
