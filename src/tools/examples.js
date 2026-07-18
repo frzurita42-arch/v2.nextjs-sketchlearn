@@ -56,10 +56,6 @@ const EXAMPLE_TOOLS = [
   exLesson({ slug: 'example-creative-writing', title: 'Creative Writing — Example Lesson', subject: 'Creative Writing', kind: 'general', tags: ['writing', 'arts'], acts: ['input', 'mcq'], desc: 'Spark ideas, build characters and shape a scene — a gentle creative-writing warm-up.' }),
   exLesson({ slug: 'example-geography', title: 'World Geography — Example Lesson', subject: 'Geography', kind: 'general', tags: ['history', 'geography'], support: { images: true, tables: true }, desc: 'Continents, capitals and landscapes — explore the world one slide at a time.' }),
   exLesson({ slug: 'example-study-skills', title: 'Study Skills — Example Lesson', subject: 'Study Skills', kind: 'general', tags: ['productivity'], desc: 'Focus, note-taking and memory techniques to learn anything more effectively.' }),
-  // ── Themed presentation tools (climate / cybersecurity / nutrition) ──
-  exLesson({ slug: 'example-climate-awareness', title: 'Climate Awareness — Presentation Tool', subject: 'Climate Change', kind: 'general', tags: ['science', 'climate', 'environment'], support: { images: true, tables: true }, style: 'Teach climate awareness clearly: the greenhouse effect, the evidence (temperature, ice, sea level), impacts on ecosystems and people, and practical solutions. One idea per slide with a labelled diagram or a simple data chart.', desc: 'Understand climate change — causes, evidence and what we can do — one clear slide at a time, with diagrams and data. A ready-to-play presentation tool.' }),
-  exLesson({ slug: 'example-cybersecurity', title: 'Cybersecurity Foundations — Presentation Tool', subject: 'Cybersecurity', kind: 'programming', tags: ['technology', 'cybersecurity', 'security'], support: { images: true, code: true }, acts: ['mcq', 'code', 'input'], style: 'Teach cybersecurity foundations: the CIA triad, common threats (phishing, malware, social engineering), passwords & MFA, networks & encryption, and safe practices. Use a clear diagram or a short command/code snippet where it helps.', desc: 'Learn the foundations of cybersecurity — threats, passwords, encryption and safe practices — with diagrams and worked snippets. A ready-to-play presentation tool.' }),
-  exLesson({ slug: 'example-nutrition', title: 'Nutrition & Wellness — Presentation Tool', subject: 'Nutrition', kind: 'general', tags: ['science', 'biology', 'health', 'nutrition'], support: { images: true, tables: true }, style: 'Teach nutrition clearly and practically: macronutrients (carbs, protein, fat), micronutrients, energy balance, hydration, and how to read a food label. Use a simple labelled diagram or a comparison table per slide, and adapt the angle (sports, everyday wellness…) to the topic given.', desc: 'Food science made practical — macronutrients, energy balance, hydration and reading labels — with diagrams and tables. A ready-to-play presentation tool.' }),
 ];
 
 // ---------------------------------------------------------------------------
@@ -181,47 +177,6 @@ const REPO_EXAMPLES = [
       { id: 'c4', kind: 'card', title: 'Weekly study checklist', text: 'Review notes, do 10 practice questions, then summarise one page from memory.', mode: 'approved' },
     ],
   }),
-  // ── Climate awareness pathway (feeds the Climate Awareness presentation tool) ──
-  exRepo({
-    slug: 'example-climate-path', title: 'Climate Awareness — Study Path', tags: ['science', 'climate', 'environment', 'education'],
-    studyMode: true, studyToolSlug: 'example-climate-awareness',
-    desc: 'A guided path through climate awareness. Each 🔵 topic card opens the Climate Awareness presentation tool preset to that theme — press 🎬 to generate that lesson.',
-    cards: [
-      { id: 'c1', kind: 'card', title: 'Antarctic & Arctic ice', text: '🔵 Teach how polar ice sheets and sea ice are changing — why they melt, how we measure it, and what rising melt means for sea level and ecosystems. Include a simple chart of ice extent over time.' },
-      { id: 'c2', kind: 'card', title: 'Endangered & threatened wildlife', text: '🔵 Teach how climate change and habitat loss threaten species — examples like polar bears, coral and amphibians, why biodiversity matters, and conservation actions. Include a labelled food-web diagram.' },
-      { id: 'c3', kind: 'card', title: 'Warming oceans & coral reefs', text: '🔵 Teach ocean warming and acidification — coral bleaching, marine life, and the knock-on effects for people who depend on the sea.' },
-      { id: 'c4', kind: 'card', title: 'Renewable energy & solutions', text: '🔵 Teach the main climate solutions — solar, wind, efficiency and everyday choices — with a simple comparison of energy sources.' },
-      { id: 'c5', kind: 'card', title: 'How to use this study path', text: 'Tap a 🔵 topic card’s 🎬 button to open the Climate Awareness tool preset to that theme, then play through the generated presentation.', mode: 'approved' },
-    ],
-  }),
-  // ── Cybersecurity career pathway (feeds the Cybersecurity Foundations tool) ──
-  exRepo({
-    slug: 'example-cyber-path', title: 'Cybersecurity Career Pathway', tags: ['technology', 'cybersecurity', 'security', 'education'],
-    studyMode: true, studyToolSlug: 'example-cybersecurity',
-    desc: 'A guided pathway toward a security role. Each 🔵 module opens the Cybersecurity Foundations presentation tool preset to that module — press 🎬 to generate the lesson and learn it your way.',
-    cards: [
-      { id: 'm1', kind: 'card', title: 'Module 1 — Security fundamentals', text: '🔵 Teach the CIA triad (confidentiality, integrity, availability), risk, and the vocabulary of security, with a clear diagram.' },
-      { id: 'm2', kind: 'card', title: 'Module 2 — Passwords, MFA & identity', text: '🔵 Teach strong authentication — password hygiene, multi-factor auth, and how credential attacks work.' },
-      { id: 'm3', kind: 'card', title: 'Module 3 — Networks & encryption', text: '🔵 Teach how data moves and is protected — ports, TLS/HTTPS, and symmetric vs public-key encryption, with a diagram.' },
-      { id: 'm4', kind: 'card', title: 'Module 4 — Threats & malware', text: '🔵 Teach common threats — phishing, malware types and social engineering — and how to spot and stop them.' },
-      { id: 'm5', kind: 'card', title: 'Module 5 — Secure coding & incident response', text: '🔵 Teach secure-coding basics (input validation, least privilege) and the incident-response lifecycle, with a short code snippet.' },
-      { id: 'm6', kind: 'card', title: 'How to use this pathway', text: 'Work the 🔵 modules in order — tap each card’s 🎬 button to open the Cybersecurity Foundations tool preset to that module and play the generated lesson.', mode: 'approved' },
-    ],
-  }),
-  // ── Nutrition: one repository, five ready presentations (feeds the Nutrition tool) ──
-  exRepo({
-    slug: 'example-nutrition-path', title: 'Nutrition — How to Teach It', tags: ['science', 'health', 'nutrition', 'education'],
-    studyMode: true, studyToolSlug: 'example-nutrition',
-    desc: 'One repository, five ready presentations. Each 🔵 card is a nutrition topic taught a specific way — press 🎬 to open the Nutrition presentation tool preset to that topic and generate the lesson.',
-    cards: [
-      { id: 'n1', kind: 'card', title: 'Sports nutrition', text: '🔵 Teach sports nutrition — fuelling before, during and after training, carb & protein timing, and hydration — for an active learner. Include a simple timing table.' },
-      { id: 'n2', kind: 'card', title: 'Health & wellness', text: '🔵 Teach everyday healthy eating — balanced plates, whole vs processed foods, and small sustainable habits — in a friendly, practical tone.' },
-      { id: 'n3', kind: 'card', title: 'Macronutrients explained', text: '🔵 Teach the three macronutrients (carbohydrate, protein, fat) — what they do, food sources, and energy per gram — with a comparison table.' },
-      { id: 'n4', kind: 'card', title: 'Meal planning on a budget', text: '🔵 Teach simple meal planning — batch cooking, cheap nutrient-dense foods, and a sample day of meals.' },
-      { id: 'n5', kind: 'card', title: 'Hydration & recovery', text: '🔵 Teach hydration and recovery — water needs, electrolytes, signs of dehydration, and sleep’s role in recovery.' },
-      { id: 'n6', kind: 'card', title: 'How to use this repository', text: 'Each 🔵 card teaches nutrition a specific way. Tap a card’s 🎬 button to open the Nutrition tool preset to that topic, then generate and play the presentation.', mode: 'approved' },
-    ],
-  }),
   exRepo({
     slug: 'example-reading-list', title: 'Beginner Reading List — Example Repository', tags: ['reading'],
     desc: 'A short, curated reading list — a repository of recommended books with links and notes.',
@@ -248,10 +203,7 @@ const ADMIN_TOOLS = [
 // Featured in the galleries so BOTH pages have ready content: the Repos page
 // shows the repository examples; the Slides page shows the saved presentation and
 // a couple of playable lesson examples. (ToolsView filters featured by archetype.)
-// Feature the themed presentation tools (climate / cyber / nutrition) plus a
-// couple of easy ones on the Slides page, and every repo/deck example.
-const FEATURED_SLIDE_SLUGS = ['example-climate-awareness', 'example-cybersecurity', 'example-nutrition', 'example-easy-french', 'example-easy-math'];
-const GALLERY_EXAMPLES = [...REPO_EXAMPLES, ...DECK_EXAMPLES, ...EXAMPLE_TOOLS.filter((t) => FEATURED_SLIDE_SLUGS.includes(t.slug))];
+const GALLERY_EXAMPLES = [...REPO_EXAMPLES, ...DECK_EXAMPLES, ...EXAMPLE_TOOLS.slice(0, 2)];
 // Everything resolvable by slug (opened / edited): subjects, decks, repos + admin.
 const ALL_EXAMPLES = [...EXAMPLE_TOOLS, ...DECK_EXAMPLES, ...REPO_EXAMPLES, ...ADMIN_TOOLS];
 
