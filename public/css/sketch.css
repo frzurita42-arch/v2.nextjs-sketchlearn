@@ -24,12 +24,15 @@ body {
   line-height: 1.45;
   color: var(--ink);
   background-color: var(--paper);
-  /* graph-paper background */
+  min-height: 100vh;
+}
+/* The graph-paper grid lives in the MAIN working area (see #app / .grid-bg),
+   so the page margins outside it stay plain paper. */
+.grid-bg, #app {
   background-image:
     linear-gradient(rgba(92, 128, 188, .09) 1px, transparent 1px),
     linear-gradient(90deg, rgba(92, 128, 188, .09) 1px, transparent 1px);
   background-size: 26px 26px;
-  min-height: 100vh;
 }
 
 .hidden { display: none !important; }

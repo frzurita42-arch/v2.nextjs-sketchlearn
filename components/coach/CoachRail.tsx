@@ -69,11 +69,15 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
         <button className="brand scribble-underline" onClick={() => app.nav('chat')} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, color: 'var(--ink)', padding: 0 }}>✏️ SketchLearn</button>
         <button title="Collapse the panel" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: 'var(--muted,#8a7f70)', padding: 0 }}>«</button>
       </div>
-      <button className="btn small green" onClick={doNew} style={{ width: '100%', marginBottom: 8 }}>🆕 New chat</button>
+      {/* New chat is a plain action; the GREEN underline is reserved for the page
+          indicator (it lights under whichever option is the current page). */}
+      <button className="btn small ghost" onClick={doNew}
+        style={{ width: '100%', marginBottom: 8, ...(app.view === 'chat' ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>🆕 New chat</button>
 
-      {/* Quick links to the main pages (Claude-style side nav). */}
+      {/* Quick links to the main pages (Claude-style side nav). The current page's
+          option shows a green line underneath; the rest stay off. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'moderators', label: '🛡️ Moderators' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => (
+        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'moderators', label: '🛡️ Moderators' }, { v: 'sandbox', label: '🧪 Sandbox' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => (
           <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}
             style={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left', ...(app.view === n.v ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>{n.label}</button>
         ))}
