@@ -16,7 +16,7 @@ import { estimateLessonTokens } from '@/lib/cost-estimate';
 import { PAGE_HEADERS } from '@/lib/page-settings';
 import { loadLikes } from '@/lib/tool-likes';
 import {
-  type ChatMsg, type ChatSession,
+  type ChatMsg, type ChatSession, type Sticky,
   newSessionId, loadSessions, saveSession, deleteSession, relTime, hasContent,
 } from '@/lib/chat-history';
 
@@ -25,9 +25,19 @@ const PAGE_STICKIES: Record<string, { view: string; emoji: string; title: string
   slides: { view: 'slides', emoji: '🎞️', title: 'Slides', desc: 'Browse & play presentations' },
   repos: { view: 'tools', emoji: '📁', title: 'Repos', desc: 'Explore repositories & pathways' },
   tools: { view: 'tools', emoji: '📁', title: 'Repos', desc: 'Explore repositories & pathways' },
+  feed: { view: 'feed', emoji: '📖', title: 'Lesson feed', desc: 'Read & review published lesson runs' },
   moderators: { view: 'moderators', emoji: '🛡️', title: 'Moderators', desc: 'Meet the moderators' },
   dashboard: { view: 'dashboard', emoji: '🧑‍🏫', title: 'Dashboard', desc: 'Your tokens & work' },
 };
+// The four places the welcome message points a fresh visitor to — each is a
+// self-describing page sticky (its own view/emoji/title + a free/paid tag), so
+// it does not depend on a unique PAGE_STICKIES key.
+const WELCOME_PAGES: { page: string; view: string; emoji: string; title: string; desc: string; access: 'free' | 'paid' }[] = [
+  { page: 'repos', view: 'tools', emoji: '📁', title: 'Repos', desc: 'Explore learning repositories & pathways', access: 'free' },
+  { page: 'slides', view: 'slides', emoji: '🎞️', title: 'Slide Tool', desc: 'Browse & build slide presentations', access: 'free' },
+  { page: 'runs', view: 'slides', emoji: '▶️', title: 'Presentation runs', desc: 'Play a full presentation run', access: 'paid' },
+  { page: 'feed', view: 'feed', emoji: '📖', title: 'Lesson feed review', desc: 'Read & review published lesson runs', access: 'free' },
+];
 // Pull [[page:xxx]] markers out of an assistant reply.
 function splitPageMarkers(reply: string): { text: string; pages: string[] } {
   const pages: string[] = [];
@@ -99,22 +109,19 @@ export function ChatView() {
   // On every visit: start a brand-new chat. The previously active chat was saved
   // live into history as it was typed. Signed-in users load their history from the
   // DB (so it follows them across devices); guests use the browser cache only.
-  // After the greeting, drop a SECOND welcome message: a recommended presentation
-  // run to play, picked from the learner's history/interests + platform usage
-  // (deterministic, no AI cost). Only appended while the chat is still untouched.
-  const welcomeRecommend = () => {
-    const favs = loadLikes ? Object.keys(loadLikes() || {}).join(',') : '';
-    API.post('/api/tools/recommend', { favs, limit: 1, playable: true, noai: true }).then((r: any) => {
-      const p = (Array.isArray(r?.picks) ? r.picks : [])[0];
-      if (!p) return;
-      // Just the sticky — the greeting message already introduces it.
-      const sticky: ChatMsg = { role: 'assistant', content: '', sticky: {
-        slug: p.slug, title: p.title || 'Tool', kind: p.archetype === 'repo' ? 'repo' : 'lesson',
-        runCost: p.free ? 0 : (p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0),
-        reason: p.reason || 'Recommended for you', recommended: true, free: !!p.free,
-      } };
-      setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, sticky] : cur));
-    }).catch(() => { /* skip the welcome pick */ });
+  // After the greeting, drop four page sticky notes pointing the visitor to the
+  // main places to explore: Repos (free to view), the Slide Tool (free to view),
+  // Presentation runs (paid to play), and the Lesson feed review (free to view).
+  // These are static navigation cards — no AI cost — appended only while the chat
+  // is still untouched.
+  const welcomePages = () => {
+    const stickies: ChatMsg[] = WELCOME_PAGES.map((w) => ({
+      role: 'assistant', content: '', sticky: {
+        slug: '', kind: 'page', runCost: 0, page: w.page, view: w.view,
+        emoji: w.emoji, title: w.title, reason: w.desc, access: w.access, recommended: true,
+      },
+    }));
+    setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, ...stickies] : cur));
   };
 
   useEffect(() => {
@@ -122,7 +129,7 @@ export function ChatView() {
     // the history list. Signed-in users load their history from the DB.
     const fresh = [initialCoachGreeting as ChatMsg];
     setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
-    welcomeRecommend();
+    welcomePages();
     if (username) {
       API.get('/api/coach-chats').then((r: any) => {
         const db = Array.isArray(r?.sessions) ? (r.sessions as ChatSession[]) : [];
@@ -307,7 +314,9 @@ export function ChatView() {
   };
   // Navigate to a whole PAGE the coach recommended (Slides / Repos / Moderators /
   // Dashboard). The chat stays open, so the learner can come back and continue.
-  const openPage = (pageKey: string) => { const p = PAGE_STICKIES[pageKey]; if (p) app.nav(p.view as never); };
+  // A page sticky may carry its own target view (the welcome cards do); fall back
+  // to the PAGE_STICKIES lookup for coach-generated [[page:xxx]] markers.
+  const openPage = (s: Sticky) => { const view = s.view || PAGE_STICKIES[s.page || '']?.view; if (view) app.nav(view as never); };
 
   // Recommend an EXISTING repo/slide tool to play, based on the conversation topic,
   // and drop it into the chat as a sticky note (with an Open/Play button). This is
@@ -397,14 +406,25 @@ export function ChatView() {
                 </div>
               );
               // A page sticky — points to a whole section of the site (chat stays open).
+              // The welcome cards carry their own emoji/title/view + a free/paid tag;
+              // coach [[page:xxx]] markers fall back to the PAGE_STICKIES lookup.
               if (m.sticky && m.sticky.kind === 'page') {
-                const pg = PAGE_STICKIES[m.sticky.page || ''] || { view: 'slides', emoji: '📄', title: m.sticky.title, desc: '' };
+                const base = PAGE_STICKIES[m.sticky.page || ''] || { view: 'slides', emoji: '📄', title: m.sticky.title, desc: '' };
+                const emoji = m.sticky.emoji || base.emoji;
+                const title = m.sticky.title || base.title;
+                const desc = m.sticky.reason || base.desc;
+                const access = m.sticky.access;
                 return (
                   <div key={i} style={{ marginRight: 'auto', marginBottom: 14, maxWidth: 320 }}>
                     <div className="slide-comp comp-sticky sticky-blue" style={{ transform: 'rotate(-1deg)', marginBottom: 0 }}>
-                      <b className="sticky-title" style={{ display: 'block' }}>{pg.emoji} {pg.title} page</b>
-                      {(m.sticky.reason || pg.desc) && <p style={{ margin: '3px 0 8px', fontSize: 12.5 }}>{m.sticky.reason || pg.desc}. Come back to the chat anytime.</p>}
-                      <button className="btn small green" onClick={() => openPage(m.sticky!.page || '')}>Open the {pg.title} page →</button>
+                      <b className="sticky-title" style={{ display: 'block' }}>{emoji} {title}</b>
+                      {access && (
+                        <span style={{ display: 'inline-block', margin: '2px 0 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)', background: access === 'paid' ? 'rgba(255,138,76,0.18)' : 'rgba(102,187,106,0.2)' }}>
+                          {access === 'paid' ? '💳 Paid to run' : '🆓 Free to view'}
+                        </span>
+                      )}
+                      {desc && <p style={{ margin: '3px 0 8px', fontSize: 12.5 }}>{desc}. Come back to the chat anytime.</p>}
+                      <button className="btn small green" onClick={() => openPage(m.sticky!)}>Open the {title} page →</button>
                     </div>
                   </div>
                 );
