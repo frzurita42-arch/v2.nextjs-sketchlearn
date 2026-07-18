@@ -897,6 +897,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const total = () => Math.max(1, Math.min(75, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const [slides, setSlides] = useState<(Slide | null)[]>([]);   // cached by 0-based index
   const [cur, setCur] = useState(0);
+  // Which slides are FULLY ready to reveal (text + all visuals warmed). Until a
+  // slide is ready the player shows the pencil skeleton instead of a half-loaded
+  // slide, so the first slide appears complete and later slides (warmed in the
+  // background) show instantly on arrival.
+  const [slideReady, setSlideReady] = useState<Record<number, boolean>>({});
+  const markReady = (idx: number, ready: boolean) => setSlideReady((m) => ({ ...m, [idx]: ready }));
   const [results, setResults] = useState<Record<number, SlideRes>>({});
   const [genBusy, setGenBusy] = useState(false);                // fetching a slide
   const [err, setErr] = useState('');
@@ -1011,22 +1017,27 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     if (phase === 'play') window.scrollTo(0, 0);
   }, [cur]);
 
-  // Kick off the ONE image on a (pre)fetched slide ahead of time, caching the
-  // in-flight request on the slide the same way SupportsLoader does — so when the
-  // learner reaches the slide the picture is already loading/ready. Warms at most
-  // one image per slide; other support (tables/formulas) stays lazy/on-view.
-  const warmSlideImage = (sl: any) => {
+  // Warm ALL of a (pre)fetched slide's support materials (image, table, formula,
+  // wolfram, …) ahead of time, caching the in-flight requests on the slide the
+  // same way SupportsLoader does. Resolves once every piece is loaded, so callers
+  // can hold the pencil until the WHOLE slide (text + visuals) is ready to reveal,
+  // and the next slide can be fully warmed in the background. Images use the
+  // watchdog helper so a slow provider is switched out. Best-effort: never rejects.
+  const warmSupports = (sl: any): Promise<void> => {
     try {
       const plan: string[] = Array.isArray(sl?.supportPlan) ? sl.supportPlan : [];
-      const i = plan.indexOf('image');
-      if (i < 0) return;
+      if (!plan.length) return Promise.resolve();
       if (!sl._supports || sl._supports.length !== plan.length) sl._supports = plan.map(() => undefined);
       if (!sl._supportP || sl._supportP.length !== plan.length) sl._supportP = plan.map(() => undefined);
-      if (sl._supports[i] !== undefined || sl._supportP[i]) return;   // already warmed / loaded
-      sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson, values: cfgRef.current, type: 'image', content: sl.content, title: sl.title, imageStyle: cfgRef.current.imageStyle || '', imageProvider: cfgRef.current.imageProvider || '' })
-        .then((r: any) => { sl._supports[i] = r?.support || null; })
-        .catch(() => { sl._supports[i] = null; });
-    } catch { /* best-effort */ }
+      const ctx = { lesson, values: cfgRef.current, imageStyle: cfgRef.current.imageStyle || '', imageProvider: cfgRef.current.imageProvider || '' };
+      plan.forEach((type, i) => {
+        if (sl._supports[i] !== undefined || sl._supportP[i]) return;   // already warmed / loading
+        sl._supportP[i] = loadSupport(type, ctx, sl)
+          .then((support: any) => { sl._supports[i] = support ?? null; })
+          .catch(() => { sl._supports[i] = null; });
+      });
+      return Promise.all((sl._supportP as any[]).filter(Boolean)).then(() => undefined).catch(() => undefined);
+    } catch { return Promise.resolve(); }
   };
 
   // Build the "what the learner has already seen" digest for the slide being
@@ -1079,11 +1090,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         // that is awaiting this prefetch — that made Next need two clicks.
         if (!slidesRef.current[idx]) { const nr = [...slidesRef.current]; nr[idx] = r; slidesRef.current = nr; }
         setSlides((sc) => { if (sc[idx]) return sc; const n = [...sc]; n[idx] = r; return n; });
-        // Warm ONLY the next slide's single image in the background while the learner
-        // is still reading the current slide — image generation is the slow part, so
-        // this makes the picture appear (near-)instantly on arrival. Never warm more
-        // than one image (tables/formulas/etc. are quick and load on view).
-        warmSlideImage(r);
+        // Fully warm the next slide's visuals in the BACKGROUND while the learner is
+        // still on the current slide — image generation is the slow part, so this
+        // makes the whole slide (picture + tables + …) appear instantly on arrival.
+        // Mark it ready only once everything is warmed.
+        warmSupports(r).then(() => markReady(idx, true));
       } catch { /* goNext will fetch on demand if this failed */ }
       finally { delete prefetching.current[idx]; }
     })();
@@ -1128,6 +1139,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       const r = await API.post('/api/tools/lesson/slide', { lesson: runLesson(), values: useCfg, slideNumber: idx + 1, priorSummary: priorDigest(idx) });
       setSlides(sc => { const n = [...sc]; n[idx] = r; slidesRef.current = n; return n; });
       setGenBusy(false);
+      // Keep the pencil until the WHOLE slide is ready — warm its visuals, then
+      // reveal. Slides with no visuals are ready immediately.
+      markReady(idx, false);
+      warmSupports(r).then(() => markReady(idx, true));
       prefetch(idx + 1);               // start loading the NEXT slide in the background
       return true;
     } catch (e: any) { setErr(e?.message || 'Could not load the slide.'); setGenBusy(false); return false; }
@@ -1138,7 +1153,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     shufflePages();   // roll a fresh slide order for this run (intro stays first)
     savedRun.current = false;   // this fresh run hasn't been auto-saved yet
     setFavSlides({}); favSlidesRef.current = {};
-    setCfg(c); setSlides([]); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
+    setCfg(c); setSlides([]); setSlideReady({}); setResults({}); setCur(0); setShowReview(false); setErr(''); setPhase('play');
     fetchInto(0, c);
   };
 
@@ -1282,6 +1297,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     setCfg((c) => ({ ...c, level: lvl, difficulty: lvl }));
     const kept = slidesRef.current.map((sl, i) => (i > cur ? null : sl));
     slidesRef.current = kept; setSlides(kept);
+    setSlideReady((m) => { const n = { ...m }; Object.keys(n).forEach((k) => { if (Number(k) > cur) delete n[Number(k)]; }); return n; });
     Object.keys(prefetching.current).forEach((k) => { if (Number(k) > cur) delete prefetching.current[Number(k)]; });
     setSlideLevel((m) => { const n: Record<number, string> = {}; for (const k of Object.keys(m)) { if (Number(k) <= cur) n[Number(k)] = m[Number(k)]; } n[cur] = lvl; return n; });
 
@@ -1337,6 +1353,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         setSlides((sc) => { const n = [...sc]; n[cur] = r; slidesRef.current = n; return n; });
         setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
         setModText(''); setModOpen(false);
+        // The rebuilt slide has fresh visuals — hold the pencil until they warm.
+        markReady(cur, false);
+        warmSupports(r).then(() => markReady(cur, true));
       }
     } catch { /* keep the current slide */ }
     setModBusy(false);
@@ -1393,6 +1412,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // Drop the current slide and everything after it so they regenerate on-theme.
     const kept = slidesRef.current.map((sl, i) => (i < cur ? sl : null));
     slidesRef.current = kept; setSlides(kept);
+    setSlideReady((m) => { const n = { ...m }; Object.keys(n).forEach((k) => { if (Number(k) >= cur) delete n[Number(k)]; }); return n; });
     Object.keys(prefetching.current).forEach((k) => { if (Number(k) >= cur) delete prefetching.current[Number(k)]; });
     setResults((rr) => { const n = { ...rr }; delete n[cur]; return n; });
     setThemeBusy(true); setGenBusy(true); setErr('');
@@ -2046,6 +2066,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const padSize = curPage?.padSize || 'large';
   const hasAnnotation = qList.some((q: Q) => q.kind === 'annotation');
   const scoreSoFar = Object.values(results).reduce((a, r) => a + Object.values(r.answers).filter((x: any) => x.correct).length, 0);
+  // A slide is ready to REVEAL once its text is loaded AND all its visuals are
+  // warmed. Until then the pencil skeleton stands in, so the whole slide appears
+  // complete rather than half-loaded. Slides with no visuals are ready at once.
+  const curNeedsWarm = !!(curSlide && Array.isArray(curSlide.supportPlan) && curSlide.supportPlan.length);
+  const curReady = !!curSlide && (!curNeedsWarm || !!slideReady[cur]);
+  // MCQ-gated slide: show the visuals + the multiple-choice question first and
+  // reveal the teaching text only AFTER the question is answered ("predict, then
+  // learn"). Any slide carrying an mcq question uses this order.
+  const mcqIdxs = qList.map((q: Q, i: number) => (q.kind === 'mcq' ? i : -1)).filter((i: number) => i >= 0);
+  const mcqGate = mcqIdxs.length > 0;
+  const mcqAnswered = mcqGate && mcqIdxs.every((i: number) => res?.answers?.[i] !== undefined);
 
   return (
     <div>
@@ -2076,9 +2107,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         ))}
       </div>
 
-      {/* A slide-sized skeleton fills the space WHILE loading, so the view keeps
-          the same height (the layout doesn't collapse to reveal the comments). */}
-      {genBusy && !curSlide && (
+      {/* A slide-sized skeleton fills the space WHILE the whole slide loads (text
+          AND its visuals), so the first slide appears complete rather than
+          half-drawn, and the view keeps the same height (the layout doesn't
+          collapse to reveal the comments). */}
+      {!curReady && !err && (
         <div className="card" style={{ padding: '16px 18px', maxWidth: 640, margin: '0 auto', minHeight: 'min(72vh, 560px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <GenProgress target={cur + 1} total={tot} />
           <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
@@ -2092,7 +2125,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       )}
       {err && !curSlide && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchInto(cur, cfg)}>Retry</button></p>}
 
-      {curSlide && (
+      {curReady && curSlide && (
         <div className="card" style={{ padding: '16px 18px', maxWidth: hasAnnotation ? 900 : 640, margin: '0 auto' }}>
           {curSlide.fallback && <p style={{ fontSize: 12, fontStyle: 'italic', opacity: 0.7, textAlign: 'center' }}>Demo slide (no AI connected).</p>}
           {/* Title row with a ⚙ gear to change the TEXT LEVEL of this slide. */}
@@ -2180,33 +2213,64 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           {/* On-slide helper tooltips (hints/links/ask-AI). Hidden when the player
               turned Tooltips OFF for this run (some students lack tooltip access). */}
           {cfg.tooltips !== false && curPage?.decorations?.length ? <Decorations items={curPage.decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
-          {/* Reading passage (its own "paper"). */}
-          {curSlide.content && <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} speakable={!!lesson.language} voiceId={cfg.voice} /></p>}
-          {/* Support materials — each streams into its own card, dotted-separated. */}
-          {(curSlide.supportPlan?.length || curSlide.support) && curSlide.content ? <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12 }} /> : null}
-          <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg, imageStyle: slideImgStyle[cur] || cfg.imageStyle || '', imageProvider: cfg.imageProvider || '', nonce: supportNonce }} />
-
-          {/* Every question, stacked as its own "paper"; scroll down to reach them. */}
-          {qList.map((q: Q, i: number) => {
-            const ans = res?.answers?.[i];
-            return (
-              <div key={`${cur}-${i}`} style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
-                {qList.length > 1 && <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5, marginBottom: 6 }}>Question {i + 1} / {qList.length}</div>}
-                {/* MCQ keeps its full option list (chosen red, correct green,
-                    explanation below) even after it's answered; other kinds use
-                    the compact ReviewRow once answered. */}
-                {ans && q.kind !== 'mcq'
-                  ? <ReviewRow d={ans} />
-                  : q.kind === 'annotation'
-                    ? <AnnotationQuestion q={q} subject={lesson.subject || ''} size={padSize} onDone={(c, d) => recordQ(i, c, d)} />
-                    : q.kind === 'code'
-                      ? <CodeQuestion q={q} subject={lesson.subject || ''} onDone={(c, d) => recordQ(i, c, d)} />
-                      : q.kind === 'writing'
-                        ? <WritingQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />
-                        : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} subject={lesson.subject || ''} recorded={ans} voiceId={cfg.voice} speakable={!!lesson.language} onDone={(c, d) => recordQ(i, c, d)} />}
-              </div>
+          {/* Body order depends on the slide:
+              • Normal slide → teaching text, then its visuals, then the question(s).
+              • Multiple-choice slide → visuals + the question FIRST (predict from the
+                picture/table/etc.), and the teaching text is revealed only AFTER the
+                MCQ is answered, so the lesson "continues teaching" once you commit. */}
+          {(() => {
+            const contentEl = curSlide.content ? (
+              <p style={{ fontSize: 16, lineHeight: 1.6 }}><RichText text={curSlide.content} translateTo={lesson.translateTo || 'English'} speakable={!!lesson.language} voiceId={cfg.voice} /></p>
+            ) : null;
+            const supportsEl = (
+              <SupportsLoader slide={curSlide} ctx={{ lesson, values: cfg, imageStyle: slideImgStyle[cur] || cfg.imageStyle || '', imageProvider: cfg.imageProvider || '', nonce: supportNonce }} />
             );
-          })}
+            const questionsEl = qList.map((q: Q, i: number) => {
+              const ans = res?.answers?.[i];
+              return (
+                <div key={`${cur}-${i}`} style={{ marginTop: 14, borderTop: '2px dashed var(--ink)', paddingTop: 14 }}>
+                  {qList.length > 1 && <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.5, marginBottom: 6 }}>Question {i + 1} / {qList.length}</div>}
+                  {/* MCQ keeps its full option list (chosen red, correct green,
+                      explanation below) even after it's answered; other kinds use
+                      the compact ReviewRow once answered. */}
+                  {ans && q.kind !== 'mcq'
+                    ? <ReviewRow d={ans} />
+                    : q.kind === 'annotation'
+                      ? <AnnotationQuestion q={q} subject={lesson.subject || ''} size={padSize} onDone={(c, d) => recordQ(i, c, d)} />
+                      : q.kind === 'code'
+                        ? <CodeQuestion q={q} subject={lesson.subject || ''} onDone={(c, d) => recordQ(i, c, d)} />
+                        : q.kind === 'writing'
+                          ? <WritingQuestion q={q} translateTo={lesson.translateTo || 'English'} onDone={(c, d) => recordQ(i, c, d)} />
+                          : <ChoiceQuestion q={q} translateTo={lesson.translateTo || 'English'} subject={lesson.subject || ''} recorded={ans} voiceId={cfg.voice} speakable={!!lesson.language} onDone={(c, d) => recordQ(i, c, d)} />}
+                </div>
+              );
+            });
+            if (mcqGate) {
+              return (
+                <>
+                  {supportsEl}
+                  {questionsEl}
+                  {mcqAnswered && contentEl && (
+                    <div style={{ marginTop: 14, borderTop: '1.5px dashed var(--ink)', paddingTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>💡 Here&apos;s the explanation</div>
+                      {contentEl}
+                    </div>
+                  )}
+                </>
+              );
+            }
+            return (
+              <>
+                {/* Reading passage (its own "paper"). */}
+                {contentEl}
+                {/* Support materials — each streams into its own card, dotted-separated. */}
+                {(curSlide.supportPlan?.length || curSlide.support) && curSlide.content ? <div style={{ borderTop: '1.5px dashed var(--ink)', marginTop: 12 }} /> : null}
+                {supportsEl}
+                {/* Every question, stacked as its own "paper"; scroll down to reach them. */}
+                {questionsEl}
+              </>
+            );
+          })()}
 
           {/* The single, clear navigation bar — one place, always the same order. */}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, borderTop: '1.5px solid rgba(0,0,0,0.12)', paddingTop: 14 }}>
