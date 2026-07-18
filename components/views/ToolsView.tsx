@@ -15,6 +15,7 @@ import { ToolCard } from '@/components/tools/ToolCard';
 import { AdminToolsCarousel } from '@/components/tools/AdminToolsCarousel';
 import { Carousel } from '@/components/ui/Carousel';
 import { InstructionPlank } from '@/components/activities/InstructionPlank';
+import { loadLikes, saveLikes } from '@/lib/tool-likes';
 
 // Edit a card's title + description (type manually or ✦ write each with AI).
 function CardEditor({ tool, onClose, onSaved }: { tool: any; onClose: () => void; onSaved: (title: string, description: string) => void }) {
@@ -78,7 +79,9 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
   const [tools, setTools] = useState<any[]>(() => toolsCache || []);
   const [loading, setLoading] = useState(() => toolsCache === null);
   const [favs, setFavs] = useState<Record<string, boolean>>({});
-  useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_tool_likes') || '{}')); } catch { /* ignore */ } }, []);
+  // Load THIS user's favorites (per-user store); reload on sign in/out so a new
+  // account doesn't inherit the previous user's stars on this browser.
+  useEffect(() => { setFavs(loadLikes()); }, [app.user?.username]);
   // Favorite / unfavorite a tool straight from its gallery card. Kept in the same
   // `sl_tool_likes` store the tool page uses, so the ★ Favorites filter and the
   // per-card star stay in sync everywhere, and the like is recorded server-side.
@@ -88,7 +91,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
       const next = { ...prev };
       const nowFav = !next[slug];
       if (nowFav) next[slug] = true; else delete next[slug];
-      try { localStorage.setItem('sl_tool_likes', JSON.stringify(next)); } catch { /* ignore */ }
+      saveLikes(next);
       API.post('/api/tools/like', { slug, liked: nowFav }).catch(() => { /* ignore */ });
       // When an admin favorites, reflect it in the 🛡️ Admin filter immediately
       // (the server likedByAdmin flag only refreshes on the next list fetch).

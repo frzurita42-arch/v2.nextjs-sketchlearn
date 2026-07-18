@@ -19,6 +19,7 @@ import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
 import { isRenderableImage } from '@/lib/img';
+import { loadLikes, saveLikes } from '@/lib/tool-likes';
 
 // Coerce anything the API/DB hands us into an array, so a stray non-array shape
 // (e.g. tags/entries returned oddly) can never throw `.map is not a function`.
@@ -204,7 +205,7 @@ export function ToolRunnerView() {
   const [likes, setLikes] = useState<number>(tool?.likeCount || 0);
   const [liked, setLiked] = useState<boolean>(false);
   useEffect(() => {
-    try { const set = JSON.parse(localStorage.getItem('sl_tool_likes') || '{}'); setLiked(!!set[tool?.slug]); } catch { /* ignore */ }
+    setLiked(!!loadLikes()[tool?.slug]);
   }, [tool?.slug]);
 
   const isApp = def?.archetype === 'app';
@@ -241,11 +242,9 @@ export function ToolRunnerView() {
   const toggleLike = async () => {
     const next = !liked;
     setLiked(next); setLikes(n => Math.max(0, n + (next ? 1 : -1)));
-    try {
-      const set = JSON.parse(localStorage.getItem('sl_tool_likes') || '{}');
-      if (next) set[tool.slug] = 1; else delete set[tool.slug];
-      localStorage.setItem('sl_tool_likes', JSON.stringify(set));
-    } catch { /* ignore */ }
+    const set = loadLikes();
+    if (next) set[tool.slug] = true; else delete set[tool.slug];
+    saveLikes(set);
     try { await API.post('/api/tools/like', { slug: tool.slug, liked: next }); } catch { /* ignore */ }
   };
 

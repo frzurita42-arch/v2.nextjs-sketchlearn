@@ -5,6 +5,7 @@
  * the Tools page carousels use it today; other places can reuse it later. */
 import { useState } from 'react';
 import { API } from '@/lib/api';
+import { loadLikes } from '@/lib/tool-likes';
 
 export function RecommendButton({ likeSlug, limit = 10, label = '✨ Recommend', onResults, onError }: {
   likeSlug?: string;
@@ -15,7 +16,7 @@ export function RecommendButton({ likeSlug, limit = 10, label = '✨ Recommend',
 }) {
   const [busy, setBusy] = useState(false);
   const favSlugs = (): string => {
-    try { const m = JSON.parse(localStorage.getItem('sl_tool_likes') || '{}'); return Object.keys(m).filter(k => m[k]).join(','); } catch { return ''; }
+    const m = loadLikes(); return Object.keys(m).filter(k => m[k]).join(',');
   };
   const run = async () => {
     setBusy(true);
