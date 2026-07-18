@@ -8,6 +8,7 @@ import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
 import { useCardSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
+import { PageHeading } from '@/components/ui/PageHeading';
 
 type Row = { username: string; role: string; createdAt?: string | null; gamesPlayed?: number };
 
@@ -54,8 +55,7 @@ export function UsersView() {
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
-        <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>👥 Users</h2>
-        <p style={{ margin: '0 0 12px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>Everyone on the system{rows ? ` — ${rows.length} total` : ''}.</p>
+        <PageHeading pageKey="users" title="👥 Users" subtitle={`Everyone on the system${rows ? ` — ${rows.length} total` : ''}.`} />
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name or role…"

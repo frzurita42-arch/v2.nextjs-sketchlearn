@@ -12,6 +12,7 @@ import { useApp } from '@/components/AppContext';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { useCardSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
+import { PageHeading } from '@/components/ui/PageHeading';
 
 type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number; image?: string };
 type Moderator = { username: string; role: 'admin' | 'moderator' | 'user'; createdAt?: string | null; gamesPlayed?: number; profile: Profile };
@@ -70,8 +71,7 @@ export function ModeratorsView() {
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
-        <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>🛡️ Moderators</h2>
-        <p style={{ margin: '0 0 12px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>The site&apos;s active moderators &amp; admins.</p>
+        <PageHeading pageKey="moderators" title="🛡️ Moderators" subtitle="The site's active moderators & admins." />
 
         {/* Search + age filter (styled like the other galleries) */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 16px' }}>
