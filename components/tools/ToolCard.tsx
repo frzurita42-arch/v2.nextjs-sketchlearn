@@ -33,6 +33,7 @@ export interface ToolCardProps {
   isExample?: boolean;
   onRemove?: (t: any) => void;
   hideOpen?: boolean;   // omit the "Open →" button (image + title still open the tool)
+  imageMode?: number;   // grid picture: 0 none · 1 small · 2 medium · 3 large · 4 cover 16:9 · 5 cover 9:16
   onReplay?: (t: any) => void;    // ♻️ new generation
   onHistory?: (t: any) => void;   // 📖 OP history track (saved results)
 }
@@ -103,6 +104,15 @@ export function ToolCard(p: ToolCardProps) {
   // emoji keeps shuffling until a picture is attached.
   const [randEmoji] = useState(() => randomEmoji());
   const emoji = isRenderableImage(t.thumbnail) ? '' : randEmoji;
+  // Map the picture mode (from the Image size control) to CardShell props.
+  const im = p.imageMode;
+  const imgProps: any =
+    im === 0 ? { hideImage: true, gridHeight: 300 }
+    : im === 1 ? { thumbHeight: 84, gridHeight: 320 }
+    : im === 3 ? { thumbHeight: 160, gridHeight: 392 }
+    : im === 4 ? { imageAspect: '16 / 9' }
+    : im === 5 ? { imageAspect: '9 / 16' }
+    : { thumbHeight: 110, gridHeight: 340 };   // 2 = medium (default)
   return (
     <CardShell
       view={view}
@@ -112,7 +122,7 @@ export function ToolCard(p: ToolCardProps) {
       fav={fav}
       thumbnail={emoji ? null : t.thumbnail}
       iconNode={emoji ? <span aria-hidden>{emoji}</span> : undefined}
-      gridHeight={view === 'grid' ? 340 : undefined}   // uniform fixed-height tiles
+      {...(view === 'grid' ? imgProps : {})}   // picture mode (size/aspect/hidden) for uniform tiles
       onOpen={() => onOpen(t)}
       overlay={overlay}
       placeholder={placeholder}

@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
 import { useCardSize, galleryLayout } from '@/lib/card-size';
-import { CardSizeMini } from '@/components/ui/CardSizeMini';
+import { CardViewMenu } from '@/components/ui/CardViewMenu';
 
 type Row = { username: string; role: string; createdAt?: string | null; gamesPlayed?: number };
 
@@ -60,7 +60,7 @@ export function UsersView() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name or role…"
             style={{ flex: '1 1 220px', minWidth: 0, padding: '7px 10px', border: '1.5px solid var(--ink)', borderRadius: 8, font: 'inherit', fontSize: 13, background: 'var(--card,#fff8ee)' }} />
-          <CardSizeMini pageKey="users" />
+          <CardViewMenu pageKey="users" showImage={false} />
         </div>
 
         {err && <p style={{ color: 'var(--muted,#8a7f70)' }}>{/403|admin|Unauthorized|Forbidden/i.test(err) ? 'The full user directory is available to admins only.' : err}</p>}

@@ -18,7 +18,11 @@ export interface CardShellProps {
   badge?: string;             // small kind label, upper-right (LESSON, REPO, replica…)
   fav?: boolean;
   thumbnail?: string | null;
-  thumbHeight?: number;       // grid image height (default 130)
+  thumbHeight?: number;       // grid image height (default 110)
+  hideImage?: boolean;        // GRID: omit the picture area entirely (text-only card)
+  imageAspect?: string;       // GRID: show the picture at a fixed aspect (e.g. '16 / 9',
+                              // '9 / 16') full-bleed instead of a fixed pixel height; the
+                              // card then auto-sizes (gridHeight is ignored).
   gridHeight?: number;        // when set, GRID cards are this fixed total height
                               // (uniform tiles); the description is clamped and the
                               // footer pins to the bottom so nothing overflows.
@@ -46,21 +50,25 @@ const clickable = { cursor: 'pointer' } as const;
 
 export function CardShell(p: CardShellProps) {
   const { view, title, subtitle, badge, fav, thumbnail, onOpen } = p;
-  const h = p.thumbHeight ?? 110;   // grid picture height — 15% smaller than the old 130
+  const aspect = p.imageAspect;
+  const h = p.thumbHeight ?? 110;   // grid picture height (ignored when an aspect is set)
   const hasImg = isRenderableImage(thumbnail || undefined);
+  // For a fixed-aspect "cover" image, size by aspect-ratio at full width (no fixed
+  // pixel height); otherwise use the pixel height h.
+  const boxSize: React.CSSProperties = aspect ? { aspectRatio: aspect, height: 'auto' } : { height: h };
 
-  const imageBox = (
+  const imageBox = p.hideImage ? null : (
     p.iconNode
-      ? <div style={{ position: 'relative', height: h, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 52, lineHeight: 1, background: 'rgba(0,0,0,0.03)', borderBottom: '2px solid var(--ink)', cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
+      ? <div style={{ position: 'relative', ...boxSize, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: aspect ? 72 : 52, lineHeight: 1, background: 'rgba(0,0,0,0.03)', borderBottom: '2px solid var(--ink)', cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
           {p.iconNode}
           {p.overlay}
         </div>
       : hasImg
       ? <div style={{ position: 'relative', cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
-          <img src={thumbnail as string} alt="" loading="eager" decoding="async" style={{ width: '100%', height: h, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
+          <img src={thumbnail as string} alt="" loading="eager" decoding="async" style={{ width: '100%', ...boxSize, objectFit: 'cover', display: 'block', borderBottom: '2px solid var(--ink)' }} />
           {p.overlay}
         </div>
-      : <div style={{ height: h, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', textAlign: 'center', padding: 6, cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
+      : <div style={{ ...boxSize, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderBottom: '2px dashed var(--ink)', textAlign: 'center', padding: 6, cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen}>
           <span style={{ fontSize: 12, opacity: 0.6 }}>🖼️ No photo available</span>
           {p.placeholder}
         </div>
@@ -106,7 +114,7 @@ export function CardShell(p: CardShellProps) {
 
   // Fixed-height tiles: clamp the description to a couple of lines and let the
   // footer pin to the bottom, so every card is exactly the same height.
-  const fixed = typeof p.gridHeight === 'number';
+  const fixed = typeof p.gridHeight === 'number' && !aspect;
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: fixed ? p.gridHeight : '100%' }}>
       {imageBox}

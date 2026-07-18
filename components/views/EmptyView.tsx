@@ -6,12 +6,13 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
-import { useCardSize, galleryLayout } from '@/lib/card-size';
+import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 
 export function EmptyView() {
   const app = useApp();
   const [repo, setRepo] = useState<any>(null);
   const cardSize = useCardSize('empty');
+  const imgMode = useImgSize('empty');
   const layout = galleryLayout(cardSize);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function EmptyView() {
             <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4 }}>Make a repository or create a Slide Tool to get started.</p>
             <button className="btn green" onClick={() => app.nav('chat')}>＋ Build one</button>
           </div>
-          {repo && <ToolCard tool={repo} view={layout.view} hideOpen onOpen={openTool} />}
+          {repo && <ToolCard tool={repo} view={layout.view} hideOpen onOpen={openTool} imageMode={imgMode} />}
         </div>
       </div>
     </div>

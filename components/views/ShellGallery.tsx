@@ -10,8 +10,8 @@ import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
-import { useCardSize, galleryLayout } from '@/lib/card-size';
-import { CardSizeMini } from '@/components/ui/CardSizeMini';
+import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
+import { CardViewMenu } from '@/components/ui/CardViewMenu';
 
 const GALLERY_PER_PAGE = 6;
 
@@ -75,6 +75,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind
   const [imgPromptTool, setImgPromptTool] = useState<any>(null);
   const [imgPromptText, setImgPromptText] = useState('');
   const cardSize = useCardSize(pageKey);
+  const imgMode = useImgSize(pageKey);
   const layout = galleryLayout(cardSize);
 
   const patchTool = (slug: string, patch: any) => setTools((ts) => ts.map((t) => t.slug === slug ? { ...t, ...patch } : t));
@@ -185,7 +186,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind
           {filters.map((f) => (
             <button key={f.key} className={`btn small ${filter === f.key ? 'green' : 'ghost'}`} onClick={() => setFilter(f.key)}>{f.label}</button>
           ))}
-          {pageKey && <CardSizeMini pageKey={pageKey} />}
+          {pageKey && <CardViewMenu pageKey={pageKey} />}
         </div>
 
         {loading ? (
@@ -201,7 +202,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind
               {shown.map((t) => {
                 const editable = canEdit(t);
                 return (
-                  <ToolCard key={t.slug} tool={t} view={layout.view} hideOpen onOpen={openTool}
+                  <ToolCard key={t.slug} tool={t} view={layout.view} hideOpen onOpen={openTool} imageMode={imgMode}
                     favs={isGuest ? {} : favs} onToggleFav={isGuest ? undefined : toggleFav}
                     canEdit={editable} onEdit={editable ? setEditTool : undefined}
                     onGenThumb={editable ? genThumb : undefined} onThumbPrompt={editable ? openImgPrompt : undefined}

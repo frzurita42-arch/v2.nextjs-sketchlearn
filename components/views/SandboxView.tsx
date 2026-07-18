@@ -7,12 +7,13 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
-import { useCardSize, galleryLayout } from '@/lib/card-size';
+import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 
 export function SandboxView() {
   const app = useApp();
   const [repo, setRepo] = useState<any>(null);
   const cardSize = useCardSize('sandbox');
+  const imgMode = useImgSize('sandbox');
   const layout = galleryLayout(cardSize);
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export function SandboxView() {
           </div>
 
           {/* A recommended repo, shown with the shared card (Open button hidden). */}
-          {repo && <ToolCard tool={repo} view={layout.view} hideOpen onOpen={openTool} />}
+          {repo && <ToolCard tool={repo} view={layout.view} hideOpen onOpen={openTool} imageMode={imgMode} />}
         </div>
       </div>
     </div>
