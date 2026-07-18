@@ -55,6 +55,12 @@ export default function AppRoot() {
   const viewRef = useRef<ViewName>('tools');
   const navStack = useRef<NavEntry[]>([]);
   const setView = useCallback((v: ViewName) => { viewRef.current = v; setViewState(v); }, []);
+  // For guests, nudge them to sign in on arrival and again after every 4 page
+  // jumps. A ref mirrors `user` so the stable `nav` callback reads it without
+  // going stale, and a counter tracks the jumps between nudges.
+  const userRef = useRef<SessionUser | null>(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+  const guestJumps = useRef(0);
 
   const rerender = useCallback(() => setTick(t => t + 1), []);
 
@@ -109,6 +115,10 @@ export default function AppRoot() {
           setUser(fresh);
         }
       }).catch(() => { /* offline / expired token — keep the cached user */ });
+    } else {
+      // No token → a signed-out visitor. Nudge them to sign in on arrival (they
+      // can dismiss and keep browsing; it returns after every 4 page jumps).
+      setAuthOpen(true);
     }
   }, []);
 
@@ -139,6 +149,12 @@ export default function AppRoot() {
     }
     if (next !== 'activity') appState.game = null;
     if (next !== cur) setViewAs('self');   // never carry a preview across pages
+    // Guest nudge: after every 4 jumps to a different page, reopen the sign-in
+    // overlay (dismissible). Signed-in users are never counted or nudged.
+    if (next !== cur && !userRef.current) {
+      guestJumps.current += 1;
+      if (guestJumps.current >= 4) { guestJumps.current = 0; setAuthOpen(true); }
+    }
     // Save where we are on the page we're LEAVING, so Back can return to this spot.
     try { scrollByKey.current[curScrollKey.current] = window.scrollY; } catch { /* ignore */ }
     setView(next);
