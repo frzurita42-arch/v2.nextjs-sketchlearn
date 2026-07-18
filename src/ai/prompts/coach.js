@@ -26,7 +26,25 @@ function buildAnswerNotePrompt({ topic, concept, level, question, chosen, correc
 
 // System message for the coach chat. `progress` is a compact array of recent
 // games; `username` is the learner's name.
-function buildCoachChatSystem({ progress, username, tools = [], recentChats = [] }) {
+// Turn the user's saved prompt-behavior settings into an override block appended
+// to the system prompt. All fields optional; sensible defaults if omitted.
+function promptPrefsBlock(s) {
+  if (!s || typeof s !== 'object') return '';
+  const TONE = { stale: 'flat and matter-of-fact — zero emotion, no filler', neutral: 'plain and neutral', friendly: 'warm and friendly', encouraging: 'encouraging and supportive', humorous: 'light and lightly humorous', socratic: 'Socratic — guide mostly with questions' };
+  const BREV = ['extremely terse (a few words to one sentence)', 'brief (1–2 sentences)', 'medium (2–4 sentences)', 'fuller (a short paragraph)', 'detailed (as needed)'];
+  const FREQ = ['never add page sticky-note markers', 'rarely add a page marker (only when clearly useful)', 'sometimes add a page marker', 'often add a relevant page marker', 'add a relevant page marker in most replies'];
+  const parts = [];
+  const maxWords = Number(s.maxWords) || 80;
+  parts.push(`- Length: keep replies under ${maxWords} words; ${BREV[Math.max(0, Math.min(4, Number(s.brevity) ?? 1))]}.`);
+  parts.push(`- Tone: ${TONE[s.tone] || TONE.stale}.`);
+  parts.push(`- Emojis: ${s.emoji ? 'a few are fine' : 'avoid emojis in prose'}.`);
+  const freq = Math.max(0, Math.min(4, Number(s.stickyFreq) ?? 3));
+  const types = Array.isArray(s.stickyTypes) && s.stickyTypes.length ? s.stickyTypes.filter((t) => ['slides', 'repos', 'moderators', 'dashboard'].includes(t)) : ['slides', 'repos', 'moderators', 'dashboard'];
+  parts.push(`- Page sticky-notes: ${FREQ[freq]}.${freq === 0 ? ' Do NOT emit any [[page:*]] markers.' : ` When you do, use ONLY these page types: ${types.map((t) => `[[page:${t}]]`).join(', ')}.`}`);
+  return `\n\nUSER PREFERENCES (these OVERRIDE the defaults above where they conflict):\n${parts.join('\n')}`;
+}
+
+function buildCoachChatSystem({ progress, username, tools = [], recentChats = [], settings = null }) {
   return `You are the SketchLearn coach: a task-focused assistant inside a learning website that is also a conversational tool-builder. On this site a learner can either play a PREMADE slide presentation (a scored, AI-generated slide deck ending in quizzes) or follow a REPO pathway (a structured collection of lessons/resources for learning a subject step by step). Slides can include text, images, audio, code, tables and formulas.
 
 TONE: plain, brief, matter-of-fact. No emotional filler, no exclamation, no praise, no small talk, no pep. Do not open with greetings or "great question". State things directly and move to the objective. Prefer 1–3 short sentences; use a short list only when proposing options.
@@ -47,7 +65,7 @@ POINTING TO A PAGE: to suggest the learner explore a whole section of the site a
 
 Here is this learner's progress spreadsheet (their recent completed activities), as JSON:
 ${JSON.stringify(progress, null, 1)}
-${tools && tools.length ? `Tools this learner has created or played (title — type):\n${tools.map((t) => `- ${t.title} (${t.archetype || t.kind || 'tool'})`).join('\n')}\n` : ''}${recentChats && recentChats.length ? `Topics from this learner's recent chats with you: ${recentChats.join('; ')}.\n` : ''}Use ALL of this to target the recommendation: build on stated interests, avoid repeating what they've already done, and pick the right level. Keep replies brief and plain (under 80 words). The learner is "${username}".`;
+${tools && tools.length ? `Tools this learner has created or played (title — type):\n${tools.map((t) => `- ${t.title} (${t.archetype || t.kind || 'tool'})`).join('\n')}\n` : ''}${recentChats && recentChats.length ? `Topics from this learner's recent chats with you: ${recentChats.join('; ')}.\n` : ''}Use ALL of this to target the recommendation: build on stated interests, avoid repeating what they've already done, and pick the right level. Keep replies brief and plain (under 80 words). The learner is "${username}".${promptPrefsBlock(settings)}`;
 }
 
 module.exports = { buildRecommendPrompt, buildAnswerNotePrompt, buildCoachChatSystem };

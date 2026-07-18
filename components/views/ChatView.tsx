@@ -10,6 +10,8 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting } from '@/lib/app-state';
 import { CoachRail } from '@/components/coach/CoachRail';
+import { PromptSettingsModal } from '@/components/coach/PromptSettingsModal';
+import { usePromptSettings, loadPromptSettings, ICON_PX } from '@/lib/prompt-settings';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { useApp } from '@/components/AppContext';
 import { estimateLessonTokens } from '@/lib/cost-estimate';
@@ -31,7 +33,7 @@ const PAGE_STICKIES: Record<string, { view: string; emoji: string; title: string
 // Bare emoji toolbar buttons: no card/background — just the glyph. A toggle button
 // shows a green line along its bottom edge when it's active (`on`), so all buttons
 // keep a transparent 3px bottom border to stay vertically aligned.
-const EMOJI_BTN: CSSProperties = { background: 'none', border: 'none', borderBottom: '3px solid transparent', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '3px 6px', borderRadius: 4, color: 'inherit' };
+const EMOJI_BTN: CSSProperties = { background: 'none', border: 'none', borderBottom: '3px solid transparent', cursor: 'pointer', fontSize: 'inherit', lineHeight: 1, padding: '3px 6px', borderRadius: 4, color: 'inherit' };
 const emojiBtn = (on = false): CSSProperties => (on ? { ...EMOJI_BTN, borderBottomColor: 'var(--green,#7fb069)' } : EMOJI_BTN);
 
 // The four places the welcome message points a fresh visitor to — each is a
@@ -78,6 +80,9 @@ export function ChatView() {
   const [recommending, setRecommending] = useState(false);
   const [recVideos, setRecVideos] = useState(false);   // fetching YouTube videos
   const [youtubeOn, setYoutubeOn] = useState(false);   // YOUTUBE_API_KEY configured?
+  const [promptOpen, setPromptOpen] = useState(false); // ChatBot settings modal
+  const [prompt] = usePromptSettings();                // behavior settings (live)
+  const iconPx = ICON_PX[prompt.toolbarIcon] ?? 18;    // chat toolbar icon size
   const [freeOnly, setFreeOnly] = useState(false);   // recommend only free (premade) tools
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
@@ -251,7 +256,7 @@ export function ChatView() {
           const r: any = await API.post('/api/ai/chat', {
             messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content })),
             recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
-            free: true,
+            free: true, promptSettings: loadPromptSettings(),
           });
           if (r?.reply) { setMessages([...next, ...replyToMessages(r.reply, r.provider)]); setThinking(false); return; }
         } catch { /* fall through to recommendation */ }
@@ -266,6 +271,7 @@ export function ChatView() {
         messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content + (m.images?.length ? ` [attached ${m.images.length} image(s)]` : '') })),
         images: imgs,
         recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
+        promptSettings: loadPromptSettings(),
       });
       setMessages([...next, ...replyToMessages(r.reply, r.provider)]);
     } catch (e: any) { setMessages([...next, { role: 'assistant', content: `(The coach dropped their pencil: ${e.message})` }]); }
@@ -578,15 +584,16 @@ export function ChatView() {
           {/* Bare emoji toolbar inside a dashed box (like the repo settings panel).
               Toggle buttons (history, free-only) light a green line at the bottom
               when active; the others are plain tap actions. Credits float right. */}
-          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, marginBottom: 22, gap: 4, flexWrap: 'wrap', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 10, padding: '6px 10px' }}>
+          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, marginBottom: 22, gap: 4, flexWrap: 'wrap', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 10, padding: '6px 10px', fontSize: iconPx }}>
             <button style={emojiBtn(appState.railOpen !== false)} title="Show / hide chat history" aria-pressed={appState.railOpen !== false} onClick={() => { appState.railOpen = appState.railOpen === false; app.rerender(); }}>🗂</button>
             <button style={emojiBtn()} title="Start a new chat" onClick={newChat}>🆕</button>
             <button style={emojiBtn()} title="Build a tool from this chat (spends your credits)" disabled={building} onClick={buildTool}>{building ? '⏳' : '🧰'}</button>
             <button style={emojiBtn()} title="Recommend an existing presentation or repo to play (free)" disabled={recommending} onClick={recommend}>{recommending ? '⏳' : '⭐'}</button>
             <button style={emojiBtn(freeOnly)} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)}
               title={freeOnly ? 'Free only: ON — no AI is used, only free premade tools are recommended (tap to turn off)' : 'Free only: off — tap to only recommend free tools and skip the AI (no token cost)'}>🆓</button>
-            <button style={emojiBtn()} title="Draw the chat: the coach's anthropomorphic take on our conversation, as a Polaroid" disabled={drawing} onClick={drawImage}>{drawing ? '⏳' : '🎨'}</button>
-            {youtubeOn && <button style={emojiBtn()} title="Recommend YouTube videos for this topic (free)" disabled={recVideos} onClick={recommendVideos}>{recVideos ? '⏳' : '📺'}</button>}
+            <button style={{ ...emojiBtn(), fontSize: iconPx }} title="Draw the chat: the coach's anthropomorphic take on our conversation, as a Polaroid" disabled={drawing} onClick={drawImage}>{drawing ? '⏳' : '🎨'}</button>
+            {youtubeOn && <button style={{ ...emojiBtn(), fontSize: iconPx }} title="Recommend YouTube videos for this topic (free)" disabled={recVideos} onClick={recommendVideos}>{recVideos ? '⏳' : '📺'}</button>}
+            <button style={{ ...emojiBtn(), fontSize: iconPx }} title="ChatBot settings — tone, length, sticky-note publicity…" onClick={() => setPromptOpen(true)}>⚙️</button>
             <span style={{ flex: 1 }} />
             {app.user && (tokenRole === 'admin'
               ? <span title="Admin — unlimited credits" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
@@ -594,6 +601,7 @@ export function ChatView() {
           </div>
         </div>
       </div>
+      {promptOpen && <PromptSettingsModal onClose={() => setPromptOpen(false)} />}
     </>
   );
 }

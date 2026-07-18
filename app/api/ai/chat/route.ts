@@ -18,7 +18,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const a = await requireAuth(req);
   if (!a.ok) return a.response;
-  const { messages = [], recentChats = [], free = false } = (await req.json().catch(() => ({}))) || {};
+  const { messages = [], recentChats = [], free = false, promptSettings = null } = (await req.json().catch(() => ({}))) || {};
   // Free chat (no-credit users): only ever use a free OpenRouter model, never a paid
   // one, so it costs nothing. If no free model is configured, tell the client to fall
   // back to its no-AI recommendation mode.
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   try {
     let provider = '';
     const reply = await generateText([
-      { role: 'system', content: buildCoachChatSystem({ progress, username: a.user.username, tools, recentChats: chats }) },
+      { role: 'system', content: buildCoachChatSystem({ progress, username: a.user.username, tools, recentChats: chats, settings: promptSettings }) },
       ...messages.slice(-16).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
     ], { ...opts, onProvider: (p: string) => { provider = p; } } as any);
     return NextResponse.json({ reply, free, provider });

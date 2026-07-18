@@ -11,6 +11,7 @@ import { ToolCard } from '@/components/tools/ToolCard';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { useCardSize, galleryLayout } from '@/lib/card-size';
+import { CardSizeMini } from '@/components/ui/CardSizeMini';
 
 const GALLERY_PER_PAGE = 6;
 
@@ -184,6 +185,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind
           {filters.map((f) => (
             <button key={f.key} className={`btn small ${filter === f.key ? 'green' : 'ghost'}`} onClick={() => setFilter(f.key)}>{f.label}</button>
           ))}
+          {pageKey && <CardSizeMini pageKey={pageKey} />}
         </div>
 
         {loading ? (

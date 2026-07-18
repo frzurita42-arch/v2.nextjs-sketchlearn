@@ -24,7 +24,7 @@ export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export const initialCoachGreeting: ChatMessage = {
   role: 'assistant',
-  content: "Hi! I'm your SketchLearn coach — tell me what you want to learn and I'll recommend or build a repo or slide presentation. Here are a few places to explore to get started:",
+  content: "Hi! I'm the SketchLearn ChatBot — tell me what you want to learn and I'll recommend or build a repo or slide presentation. Here are a few places to explore to get started:",
 };
 
 export interface AppState {

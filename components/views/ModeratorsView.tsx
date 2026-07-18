@@ -11,6 +11,7 @@ import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { useCardSize, galleryLayout } from '@/lib/card-size';
+import { CardSizeMini } from '@/components/ui/CardSizeMini';
 
 type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number; image?: string };
 type Moderator = { username: string; role: 'admin' | 'moderator' | 'user'; createdAt?: string | null; gamesPlayed?: number; profile: Profile };
@@ -84,6 +85,7 @@ export function ModeratorsView() {
           <input value={maxAge} onChange={(e) => setMaxAge(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric"
             placeholder="max" style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '2px solid var(--ink)', fontSize: 14 }} />
           {(q || minAge || maxAge) && <button className="btn small ghost" onClick={() => { setQ(''); setMinAge(''); setMaxAge(''); }}>Clear</button>}
+          <CardSizeMini pageKey="moderators" />
         </div>
 
         {err && <p style={{ color: 'var(--danger,#e4572e)' }}>{err}</p>}
