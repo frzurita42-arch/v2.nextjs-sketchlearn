@@ -2,7 +2,7 @@ import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled } from '@/src/config';
 import { generateStructured } from '@/src/ai/providers';
-import { requireAuth } from '@/lib/auth-guard';
+import { optionalAuth } from '@/lib/auth-guard';
 import { toolCategory } from '@/lib/tool-category';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { listTools, getExampleOverrides } = require('@/src/db/platform');
@@ -27,28 +27,35 @@ const wordsOf = (t: any): string[] => {
 const pickFields = (t: any, reason: string) => ({ slug: t.slug, title: t.title, description: t.description || '', thumbnail: t.thumbnail || '', archetype: t.archetype, owner: t.owner, visibility: t.visibility || 'public', tags: Array.isArray(t.tags) ? t.tags : [], category: toolCategory(t), reason });
 
 export async function POST(req: Request) {
-  const a = await requireAuth(req);
-  if (!a.ok) return a.response;
+  const { user } = await optionalAuth(req);   // public: guests get recommendations too
+  const uname = user?.username || '';
+  const isAdmin = user?.role === 'admin';
   const b = (await req.json().catch(() => ({}))) || {};
   const favs = new Set(String(b.favs || '').split(',').map((s: string) => s.trim()).filter(Boolean));
   const like = String(b.like || '');
   const limit = Math.max(1, Math.min(20, parseInt(b.limit, 10) || 10));
+  // Optional free-text query (e.g. the coach chat topic) to bias toward a subject.
+  const queryWords = String(b.query || '').toLowerCase().split(/[^a-z0-9]+/).filter((w: string) => w.length > 3);
+  // Optionally restrict to PLAYABLE presentations (a "run to play").
+  const playableOnly = !!b.playable;
 
-  const real: any[] = (await listTools({ viewer: a.user.username, viewerIsAdmin: a.user.role === 'admin', limit: 300 })) || [];
+  const real: any[] = (await listTools({ viewer: uname, viewerIsAdmin: isAdmin, limit: 300 })) || [];
   const exs = applyOverrides(Array.isArray(EXAMPLE_TOOLS) ? EXAMPLE_TOOLS : [], await getExampleOverrides());
-  const all = [...real, ...exs].filter(t => t.slug && (t.visibility !== 'private' || t.owner === a.user.username));
+  const all = [...real, ...exs].filter(t => t.slug && (t.visibility !== 'private' || t.owner === uname));
 
-  // Interest profile from owned + favorited (+ current tool), and the known set.
+  // Interest profile from owned + favorited (+ current tool) + the chat query, and
+  // the known set.
   const profile = new Map<string, number>();
   const known = new Set<string>();
   const bump = (t: any, w: number) => { for (const k of wordsOf(t)) profile.set(k, (profile.get(k) || 0) + w); };
   for (const t of all) {
-    if (t.owner === a.user.username) { bump(t, 2); known.add(t.slug); }
+    if (uname && t.owner === uname) { bump(t, 2); known.add(t.slug); }
     if (favs.has(t.slug)) { bump(t, 3); known.add(t.slug); }
     if (t.slug === like) { bump(t, 4); known.add(t.slug); }
   }
+  for (const w of queryWords) profile.set(w, (profile.get(w) || 0) + 5);   // topic dominates
   const hasProfile = profile.size > 0;
-  const candidates = all.filter(t => !known.has(t.slug));
+  const candidates = all.filter(t => !known.has(t.slug) && (!playableOnly || t.archetype === 'lesson'));
   // Rank a shortlist deterministically first (bounds the AI prompt).
   const shortlist = candidates
     .map(t => ({ t, s: hasProfile ? wordsOf(t).reduce((n, k) => n + (profile.get(k) || 0), 0) : 0 }))
