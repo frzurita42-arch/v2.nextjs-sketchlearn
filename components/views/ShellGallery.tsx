@@ -181,8 +181,8 @@ export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind
 
         {/* Search + favorites/mine filters. */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
-            style={{ flex: '1 1 220px', minWidth: 0, padding: '7px 10px', border: '1.5px solid var(--ink)', borderRadius: 8, font: 'inherit', fontSize: 13, background: 'var(--card,#fff8ee)' }} />
+          <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
+            style={{ flex: '1 1 220px', minWidth: 0 }} />
           {filters.map((f) => (
             <button key={f.key} className={`btn small ${filter === f.key ? 'green' : 'ghost'}`} onClick={() => setFilter(f.key)}>{f.label}</button>
           ))}
