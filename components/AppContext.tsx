@@ -2,7 +2,7 @@
 import { createContext, useContext } from 'react';
 import type { SessionUser } from '@/lib/api';
 
-export type ViewName = 'home' | 'path' | 'settings' | 'activity' | 'language' | 'chat' | 'stats' | 'dashboard' | 'cspath' | 'feed' | 'tools' | 'slides' | 'tool' | 'toolbuilder' | 'toolsettings';
+export type ViewName = 'home' | 'path' | 'settings' | 'activity' | 'language' | 'chat' | 'stats' | 'dashboard' | 'cspath' | 'feed' | 'tools' | 'slides' | 'tool' | 'toolbuilder' | 'toolsettings' | 'moderators';
 
 // "View as" preview: render the page as a given kind of viewer would see it,
 // WITHOUT changing the real session (server-side permission is unaffected).

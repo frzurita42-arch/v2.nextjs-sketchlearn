@@ -27,6 +27,8 @@ export function Header() {
         {link('tools', 'Repos')}
         {/* Feed and My stats hidden for now — restore when needed. */}
         {link('chat', 'Coach chat')}
+        {/* Public directory of moderators — open to everyone, even guests. */}
+        {link('moderators', 'Moderators')}
         {/* Everyone signed in can open the Dashboard now — a plain user sees only
             their 🎟 token window, a moderator their own work, an admin everything. */}
         {user && link('dashboard', 'Dashboard', 'nav-dashboard')}

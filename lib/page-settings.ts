@@ -78,6 +78,12 @@ export const PAGE_HEADERS: Record<string, PageHeaderDef> = {
     defaultEmoji: '🧑‍🏫', defaultTitle: '🧑‍🏫 Teacher’s dashboard',
     defaultSubtitle: 'One page at a time — pick a section below.',
   },
+  moderators: {
+    titleKey: 'modTitle', subtitleKey: 'modSubtitle',
+    emojiKey: 'modEmoji', emojiOffKey: 'modEmojiOff',
+    defaultEmoji: '🛡️', defaultTitle: '🛡️ Moderators',
+    defaultSubtitle: 'Meet the people who keep SketchLearn running — reach out on WhatsApp.',
+  },
 };
 
 export const PAGE_HEADER_KEYS = Object.values(PAGE_HEADERS).flatMap((d) => [d.titleKey, d.subtitleKey, d.emojiKey, d.emojiOffKey]);

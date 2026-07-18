@@ -33,6 +33,8 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   // flags ('1' = hidden from regular users). The gallery titles themselves are
   // already covered by PAGE_FIELD_KEYS (repoDiscussionTitle/slideDiscussionTitle).
   'toolDiscussionTitle', 'repoDiscussionCollapsed', 'slideDiscussionCollapsed', 'toolDiscussionCollapsed',
+  // Moderators directory: editable discussion heading + 👁 hide flag.
+  'moderatorsDiscussionTitle', 'moderatorsDiscussionCollapsed',
   // Per-page chrome for the Repositories & Slides landing pages (banner title/
   // subtitle, discussion heading, cards-per-page) — edited from the dashboard.
   ...PAGE_FIELD_KEYS,

@@ -26,17 +26,18 @@ import { ToolsView } from '@/components/views/ToolsView';
 import { ToolRunnerView } from '@/components/views/ToolRunnerView';
 import { BuilderStudioView } from '@/components/views/BuilderStudioView';
 import { ToolSettingsView } from '@/components/views/ToolSettingsView';
+import { ModeratorsView } from '@/components/views/ModeratorsView';
 
 // Views that can be restored from the URL on refresh (they fetch their own data
 // or, for 'tool', reload from the ?tool=<slug>). Transient flow views (path,
 // settings, activity, language, toolsettings) depend on in-memory state, so a
 // refresh on those returns home instead of showing a broken screen.
-const RESTORABLE: ViewName[] = ['chat', 'dashboard', 'tools', 'slides', 'tool', 'toolbuilder', 'toolsettings'];
+const RESTORABLE: ViewName[] = ['chat', 'dashboard', 'tools', 'slides', 'tool', 'toolbuilder', 'toolsettings', 'moderators'];
 // The only pages reachable now. The legacy built-in activities (Learning Path
 // home, Cybersecurity Academy, Structured Explanations, Suggested Topic, Time
 // Travel, the Feed, My stats…) are retired: any attempt to open them — a nav
 // call, a stale ?view= URL, an old in-app link — is redirected to Slides.
-const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 'toolbuilder', 'toolsettings'];
+const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 'toolbuilder', 'toolsettings', 'moderators'];
 const liveView = (v: ViewName): ViewName => (LIVE_VIEWS.includes(v) ? v : 'slides');
 
 type NavEntry = { view: ViewName; tool: string | null; key?: string };
@@ -306,6 +307,7 @@ export default function AppRoot() {
     tool: <ToolRunnerView />,
     toolbuilder: <BuilderStudioView />,
     toolsettings: <ToolSettingsView />,
+    moderators: <ModeratorsView />,
   };
 
   return (
