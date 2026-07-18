@@ -108,6 +108,35 @@ export function ChatView() {
   };
   const pickFiles = () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.onchange = () => addFiles(inp.files); inp.click(); };
 
+  // Free chat mode: guests, anyone with the 🆓 toggle on, or a non-admin who has run
+  // out of credits. In this mode we NEVER call the paid AI chat — every message just
+  // gets a canned line + a random tool recommendation, so there's zero token spend.
+  const noCredits = tokenRole !== 'admin' && typeof balance === 'number' && balance <= 0;
+  const freeMode = !app.user || freeOnly || noCredits;
+
+  const FREE_LINES = ['Here’s something to try:', 'You might like this:', 'A pick for you:', 'Try this one:', 'How about this:'];
+
+  const freeReply = async (next: ChatMsg[], topic: string) => {
+    setThinking(true);
+    try {
+      const r: any = await API.post('/api/tools/recommend', { query: topic, free: freeOnly, limit: 1, noai: true, random: true });
+      const p = (Array.isArray(r?.picks) ? r.picks : [])[0];
+      const nudge = (noCredits && !freeOnly) ? ' (You’re out of credits — turn on 🆓 Free only for free-to-play picks.)' : '';
+      if (!p) {
+        setMessages([...next, { role: 'assistant', content: 'Nothing to recommend yet — browse the Slides or Repos page.' + nudge }]);
+      } else {
+        setMessages([...next,
+          { role: 'assistant', content: FREE_LINES[Math.floor(Math.random() * FREE_LINES.length)] + nudge },
+          { role: 'assistant', content: '', sticky: {
+            slug: p.slug, title: p.title || 'Tool', kind: p.archetype === 'repo' ? 'repo' : 'lesson',
+            runCost: p.free ? 0 : (p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0),
+            reason: p.reason || '', recommended: true, free: !!p.free,
+          } }]);
+      }
+    } catch (e: any) { setMessages([...next, { role: 'assistant', content: `(Could not fetch a recommendation: ${e.message})` }]); }
+    setThinking(false);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text && !attachments.length) return;
@@ -115,7 +144,10 @@ export function ChatView() {
     const imgs = attachments; setAttachments([]);
     const userMsg: ChatMsg = { role: 'user', content: text || '(shared an image)', ...(imgs.length ? { images: imgs } : {}) };
     const next = [...messages, userMsg];
-    setMessages(next); setThinking(true);
+    setMessages(next);
+    // No AI call for free-mode users — recommend a tool instead (zero token spend).
+    if (freeMode) { await freeReply(next, text); return; }
+    setThinking(true);
     try {
       const r = await API.post('/api/ai/chat', {
         messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content + (m.images?.length ? ` [attached ${m.images.length} image(s)]` : '') })),
@@ -331,10 +363,17 @@ export function ChatView() {
             <MicButton lang="en-US" title="Speak your message" onText={(t: string) => setInput((v) => (v ? v + ' ' : '') + t)} />
             <button className="btn primary" id="chat-send" onClick={send}>Send</button>
           </div>
+          {freeMode && (
+            <div style={{ fontSize: 11, color: 'var(--muted,#8a7f70)', marginTop: 4 }}>
+              {!app.user ? 'Free mode (guest): messages recommend a tool to play — no AI, no cost. Sign in to chat with the coach and build.'
+                : noCredits && !freeOnly ? 'You’re out of credits, so messages recommend tools instead of using the AI. Add credits, or turn on 🆓 Free only.'
+                : 'Free mode: messages recommend a random tool — no AI is used, so nothing is charged.'}
+            </div>
+          )}
           <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
             <button className="btn small green" disabled={building} onClick={buildTool}>{building ? '🧰 Building…' : '🧰 Build a tool from this chat'}</button>
             <button className="btn small" disabled={recommending} onClick={recommend} title="Recommend an existing presentation or repo to play">{recommending ? '⭐ Finding…' : '⭐ Recommend a run to play'}</button>
-            <button className={`btn small ${freeOnly ? 'green' : 'ghost'}`} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)} title="When on, only free premade tools are recommended">{freeOnly ? '🆓 Free only: ON' : '🆓 Free only: off'}</button>
+            <button className={`btn small ${freeOnly ? 'green' : 'ghost'}`} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)} title="When on: no AI is called (no token cost) — every message just recommends a free premade tool">{freeOnly ? '🆓 Free only: ON' : '🆓 Free only: off'}</button>
             <button className="btn small" disabled={drawing} onClick={drawImage} title="Generate an AI image from the text box">{drawing ? '🎨 Drawing…' : '🎨 Draw an image'}</button>
           </div>
         </div>

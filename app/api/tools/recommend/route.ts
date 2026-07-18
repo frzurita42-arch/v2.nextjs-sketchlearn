@@ -41,6 +41,11 @@ export async function POST(req: Request) {
   // Optionally restrict to FREE tools — the built-in premade examples, which are
   // offered at no charge.
   const freeOnly = !!b.free;
+  // noai: never call the AI model (used for the no-credit / guest chat so it costs
+  // nothing). random: pick at random instead of by interest rank (varied replies).
+  const noai = !!b.noai;
+  const random = !!b.random;
+  const shuffle = <T,>(arr: T[]): T[] => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
   const real: any[] = (await listTools({ viewer: uname, viewerIsAdmin: isAdmin, limit: 300 })) || [];
   const exs = applyOverrides(Array.isArray(EXAMPLE_TOOLS) ? EXAMPLE_TOOLS : [], await getExampleOverrides());
@@ -60,17 +65,20 @@ export async function POST(req: Request) {
   for (const w of queryWords) profile.set(w, (profile.get(w) || 0) + 5);   // topic dominates
   const hasProfile = profile.size > 0;
   const candidates = all.filter(t => !known.has(t.slug) && (!playableOnly || t.archetype === 'lesson') && (!freeOnly || freeSlugs.has(t.slug)));
-  // Rank a shortlist deterministically first (bounds the AI prompt).
-  const shortlist = candidates
-    .map(t => ({ t, s: hasProfile ? wordsOf(t).reduce((n, k) => n + (profile.get(k) || 0), 0) : 0 }))
-    .sort((x, y) => y.s - x.s)
-    .slice(0, 30)
-    .map(x => x.t);
+  // Rank a shortlist deterministically first (bounds the AI prompt). When `random`
+  // is set (free/no-credit chat), shuffle instead so replies vary each time.
+  const shortlist = random
+    ? shuffle(candidates).slice(0, 30)
+    : candidates
+      .map(t => ({ t, s: hasProfile ? wordsOf(t).reduce((n, k) => n + (profile.get(k) || 0), 0) : 0 }))
+      .sort((x, y) => y.s - x.s)
+      .slice(0, 30)
+      .map(x => x.t);
 
   const interests = Array.from(profile.entries()).sort((x, y) => y[1] - x[1]).slice(0, 8).map(e => e[0]).join(', ');
 
-  // Ask the AI to choose, when a model is available.
-  if ((openrouterEnabled || geminiEnabled || deepseekEnabled) && shortlist.length) {
+  // Ask the AI to choose, when a model is available — unless `noai` (free chat).
+  if (!noai && (openrouterEnabled || geminiEnabled || deepseekEnabled) && shortlist.length) {
     const menu = shortlist.map((t, i) => `${i + 1}. [${t.slug}] "${t.title}" (${toolCategory(t)}) — ${String(t.description || '').slice(0, 100)}`).join('\n');
     const system = [
       'You are the warm curator of SketchLearn, a community of AI-built tools and repositories.',
