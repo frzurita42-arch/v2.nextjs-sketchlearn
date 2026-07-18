@@ -251,11 +251,16 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
   // favorites store (sl_tool_likes, shared with the tool page + the per-card star)
   // is keyed by SLUG. Remap slug→id so the filter actually matches — this is why
   // the Favorites filter was showing an empty gallery.
+  // Favorites are PER-USER. The local store (sl_tool_likes) persists across a
+  // logout, so a signed-out visitor must not inherit whoever used this browser
+  // last — a guest has no favorites, so the Favorites view is empty (and shows the
+  // get-started / demo empty state).
   const favsById = useMemo(() => {
+    if (!app.user) return {};
     const m: Record<string, boolean> = {};
     for (const t of tools) if (favs[t.slug]) m[t.id] = true;
     return m;
-  }, [tools, favs]);
+  }, [tools, favs, app.user]);
 
   // The gallery list carries a LIGHT tool (heavy embedded media stripped for a fast
   // gallery), so fetch the FULL definition by slug before opening the tool page —
@@ -301,7 +306,7 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
     // gated inside the tool.
     return (
       <ToolCard tool={t} view={view} onOpen={open}
-        favs={favs} onToggleFav={isGuest ? undefined : toggleFav}
+        favs={isGuest ? {} : favs} onToggleFav={isGuest ? undefined : toggleFav}
         hideOpen={hideOpen}
         canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
         onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} onDice={diceThumb} thumbing={!!thumbing[t.slug]}
