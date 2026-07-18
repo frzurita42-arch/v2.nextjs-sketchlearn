@@ -110,6 +110,8 @@ export function DashboardView() {
   // Remember the last dashboard section so it reopens where you left off, and log
   // the navigation to the activity trail.
   const [tab, setTab] = useState<number>(() => { const v = parseInt(recallPreset('dash_tab', '0'), 10); return Number.isFinite(v) && v >= 0 ? v : 0; });
+  // The moderator dashboard's own section picker (Tokens / My work / Played / …).
+  const [modTab, setModTab] = useState(0);
   const selectTab = (i: number, label?: string) => { setTab(i); rememberPreset('dash_tab', String(i)); logActivity('nav', 'dashboard', { section: label || `#${i}` }); };
   // Standard, DB-editable SectionHeaders for the two dashboard areas.
   const sectionsHdr = useShelfTitle('dashSectionsShelfTitle', '📂 Dashboard sections');
@@ -252,19 +254,48 @@ export function DashboardView() {
   const myRole = app.eff().role;
   if (myRole !== 'admin') {
     const isMod = myRole === 'moderator';
-    const rule = <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '18px auto', maxWidth: 820 }} />;
+    const errBar = error ? <p style={{ color: 'var(--danger,#e4572e)', textAlign: 'center', fontSize: 13 }}>{error}</p> : null;
+    // A plain user only has the token window — no picker needed.
+    if (!isMod) {
+      return (
+        <>
+          <PageHeader page="dashboard" />
+          <SectionHeader title="🪙 My tokens" maxWidth={820} />
+          <TokenWindow tokens={tokens} isAdmin={false} />
+          {errBar}
+        </>
+      );
+    }
+    // A moderator gets a section picker (same look as the admin SECTIONS box) to
+    // page through their dashboard instead of one long stack.
+    const modSections = [
+      { key: 'tokens', label: '🪙 Tokens', count: null as number | null },
+      { key: 'work', label: '🗂 My work', count: slideTools.length + repoTools.length + runs.length },
+      { key: 'played', label: '🕹 Played', count: plays.length },
+      { key: 'gen', label: '💸 Generations', count: usage.length },
+    ];
+    const mt = Math.min(modTab, modSections.length - 1);
     return (
       <>
         <PageHeader page="dashboard" />
-        <SectionHeader title="🎟 My tokens" maxWidth={820} />
-        <TokenWindow tokens={tokens} isAdmin={false} />
-        {error && <p style={{ color: 'var(--danger,#e4572e)', textAlign: 'center', fontSize: 13 }}>{error}</p>}
-        {isMod && (<>
-          {rule}
-          <SectionHeader title="🗂 My work" maxWidth={820} />
-          {/* minmax(0,1fr) + min-width:0 let each card shrink to the page width so
-              the wide table scrolls INSIDE its own .table-wrap instead of pushing
-              the whole page wider. */}
+        <OutlineBox title="SECTIONS" maxWidth={900} style={{ margin: '8px auto 4px' }}>
+          {modSections.map((s, i) => (
+            <button key={s.key} className={`btn small ${i === mt ? 'blue' : 'ghost'}`} onClick={() => setModTab(i)}>
+              {s.label}{s.count != null ? <span style={{ opacity: 0.6 }}> ({s.count})</span> : null}
+            </button>
+          ))}
+        </OutlineBox>
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '16px auto', maxWidth: 820 }} />
+        {errBar}
+
+        {mt === 0 && (<>
+          <SectionHeader title="🪙 My tokens" maxWidth={820} />
+          <TokenWindow tokens={tokens} isAdmin={false} />
+        </>)}
+
+        {/* minmax(0,1fr) + min-width:0 let each card shrink to the page width so the
+            wide table scrolls INSIDE its own .table-wrap instead of widening the page. */}
+        {mt === 1 && (
           <div style={{ maxWidth: 820, margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14 }}>
             <div className="card" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>🎬 My slide tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({slideTools.length})</span></h3>
               <PagedTable compact headers={['Title', 'Slides', 'Visibility', 'Created']} empty="You haven't created any slide tools yet."
@@ -275,18 +306,26 @@ export function DashboardView() {
             <div className="card" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>▶️ Runs of my tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({runs.length})</span></h3>
               <PagedTable compact headers={['Tool', 'User', 'Topic', 'Score', 'When']} empty="No one has played your tools yet."
                 rows={runs.map((r: any) => [r.toolTitle, r.user, r.topic, r.score == null ? '—' : String(r.score), fmtDate(r.createdAt)])} /></div>
-            {/* History of activities I PLAYED (any tool, not just my own). */}
+          </div>
+        )}
+
+        {mt === 2 && (
+          <div style={{ maxWidth: 820, margin: '0 auto' }}>
             <div className="card alt" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>🕹 Activities I&apos;ve played <span style={{ opacity: 0.5, fontWeight: 400 }}>({plays.length})</span></h3>
               <PagedTable compact headers={['Tool', 'Topic', 'Level', 'Score', 'Played']} empty="You haven't played any activities yet."
                 rows={plays.map((r: any) => [r.toolTitle, r.topic || '—', r.level || '—', r.score == null ? '—' : String(r.score), fmtDate(r.createdAt)])} /></div>
-            {/* What each of my generations was worth (rough estimate) + the total. */}
+          </div>
+        )}
+
+        {mt === 3 && (
+          <div style={{ maxWidth: 820, margin: '0 auto' }}>
             <div className="card" style={{ minWidth: 0 }}>
               <h3 style={{ margin: '0 0 6px' }}>💸 My generations <span style={{ opacity: 0.5, fontWeight: 400 }}>({usage.length})</span></h3>
               <p style={{ fontSize: 13, opacity: 0.75, margin: '0 0 8px' }}>Estimated total worth: <b>{money(usage.reduce((s: number, u: any) => s + (Number(u.costUsd) || 0), 0))}</b> <span style={{ opacity: 0.6 }}>· rough public-rate estimate, not billing.</span></p>
               <PagedTable compact headers={['What', 'Provider', 'Subject', 'Tokens', 'Est. worth', 'When']} empty="No generations recorded yet."
                 rows={usage.map((u: any) => [u.kind || '—', u.provider || '—', u.subject || '—', u.totalTokens || 0, money(u.costUsd), fmtDate(u.createdAt)])} /></div>
           </div>
-        </>)}
+        )}
       </>
     );
   }
