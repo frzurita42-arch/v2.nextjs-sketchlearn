@@ -5,6 +5,7 @@
  * serverless runtime after the response). Never throws. */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { logUsage } = require('@/src/db/usage');
+import { TOKENS_PER_IMAGE } from '@/lib/cost-estimate';
 
 const estTokens = (s: string) => Math.max(0, Math.ceil(String(s || '').length / 4));
 
@@ -50,9 +51,13 @@ export async function recordImageUsage(o: {
   try {
     const n = Math.max(1, o.count || 1);
     const per = IMAGE_PRICE[o.provider || 'default'] ?? IMAGE_PRICE.default;
+    // Charge the wallet a flat credit cost per AI image (a placeholder/free
+    // Pollinations image still counts as content generated), so the up-front
+    // estimate that includes images matches what actually gets debited.
+    const walletTokens = (o.provider === 'placeholder') ? 0 : TOKENS_PER_IMAGE * n;
     await logUsage({
       username: o.username, kind: o.kind || 'image', provider: o.provider || '', model: 'image',
-      promptTokens: 0, completionTokens: 0, totalTokens: 0, costUsd: per * n, subject: o.subject,
+      promptTokens: 0, completionTokens: 0, totalTokens: walletTokens, costUsd: per * n, subject: o.subject,
       meta: { ...(o.meta || {}), images: n },
     });
   } catch { /* best-effort */ }

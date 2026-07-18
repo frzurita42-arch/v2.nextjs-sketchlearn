@@ -24,6 +24,7 @@ import { matchAnswer, answerHint } from '@/lib/answer-match';
 import { defaultEmojiFor, randomEmoji } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 import { IMAGE_STYLES } from '@/lib/image-styles';
+import { estimateLessonTokens } from '@/lib/cost-estimate';
 import { LESSON_THEMES } from '@/lib/lesson-themes';
 import { TTS_VOICES } from '@/lib/tts';
 import { type FilterKey } from '@/components/ui/Collection';
@@ -913,6 +914,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // background) show instantly on arrival.
   const [slideReady, setSlideReady] = useState<Record<number, boolean>>({});
   const markReady = (idx: number, ready: boolean) => setSlideReady((m) => ({ ...m, [idx]: ready }));
+  // The signed-in user's wallet balance (null = unknown / not signed in), used to
+  // check a generation is affordable before starting. A gate message is shown by
+  // the Generate button when a run would cost more credits than the user has.
+  const [balance, setBalance] = useState<number | null>(null);
+  const [gateMsg, setGateMsg] = useState('');
   const [results, setResults] = useState<Record<number, SlideRes>>({});
   const [genBusy, setGenBusy] = useState(false);                // fetching a slide
   const [err, setErr] = useState('');
@@ -1140,6 +1146,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     setTopicsBusy(false);
   };
   useEffect(() => { loadActivities(); refreshExample(); loadTopics(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [slug]);
+  // Keep the wallet balance handy so we can price a generation before starting it.
+  // Refresh when returning to the hub (a finished run has spent credits).
+  const loadBalance = () => { if (!app.user) { setBalance(null); return; } API.get('/api/tokens').then((t: any) => setBalance(typeof t?.balance === 'number' ? t.balance : null)).catch(() => { /* ignore */ }); };
+  useEffect(() => { if (phase === 'hub') loadBalance(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [phase, app.user?.username]);
 
   // Fetch slide `idx` (0-based) into the cache. Returns true on success.
   const fetchInto = async (idx: number, useCfg: Cfg): Promise<boolean> => {
@@ -1214,6 +1224,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // "Any (AI picks)" tone means: don't constrain the AI — drop it so the generator
     // chooses the voice itself.
     if ((cc as any).tone === 'Any (AI picks)') delete (cc as any).tone;
+    // Affordability gate: estimate the credits this generation will cost and block
+    // it if the (non-admin) user can't cover it — send them to buy credits.
+    if (!eff.isAdmin) {
+      const est = estimateLessonTokens({ ...cc, totalSlides: lesson.totalSlides, support: lesson.support });
+      if (typeof balance === 'number' && balance < est) {
+        setGateMsg(`This presentation is estimated to cost ~${est.toLocaleString()} credits, but you have ${balance.toLocaleString()}. Get more credits to generate it.`);
+        app.nav('dashboard');
+        return;
+      }
+    }
+    setGateMsg('');
     playedEntryId.current = null; savedRunEntry.current = false;
     play(cc);
   };
@@ -1861,6 +1882,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               : canPlay
               ? <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
               : <button className="btn green" title="You need play credits — get some from the dashboard" onClick={() => app.nav('dashboard')}>🎟 Get credits to play →</button>}
+            {/* Up-front price estimate for this generation (admins are unlimited). */}
+            {canPlay && !eff.isAdmin && (
+              <span title="Estimated credits for this generation (slides + images). Charged as it runs." style={{ fontSize: 12, opacity: 0.7 }}>
+                ~{estimateLessonTokens({ slides: (form as any).slides, totalSlides: lesson.totalSlides, support: lesson.support }).toLocaleString()} credits{typeof balance === 'number' ? ` · you have ${balance.toLocaleString()}` : ''}
+              </span>
+            )}
+            {gateMsg && <span style={{ fontSize: 12, color: 'var(--danger,#e4572e)' }}>{gateMsg}</span>}
             {/* 💡 Per-play tooltip switch: some students don't have access to the
                 on-slide helper tooltips (hints/links), so let the player turn them
                 off BEFORE playing. Default on. Saved with the run's config. */}
