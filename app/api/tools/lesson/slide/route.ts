@@ -281,7 +281,8 @@ export async function POST(req: Request) {
   // when it's configured, else fall back to the normal auto failover.
   const textProvider = String(b.values?.textProvider || '').trim() || (geminiEnabled ? 'gemini' : 'auto');
   try {
-    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 2600, provider: textProvider });
+    let provider = '';
+    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.7, maxTokens: 2600, provider: textProvider, onProvider: (p: string) => { provider = p; } });
     const content = cleanContent(r?.content);
     const questions = (Array.isArray(r?.questions) ? r.questions : []).map(cleanQuestion).filter(Boolean);
     // Fall back when the teaching TEXT is missing or too trivial (text is required on
@@ -295,6 +296,7 @@ export async function POST(req: Request) {
       translation: cleanContent(r.translation).slice(0, 800),
       // The support materials are streamed in separately, one request each.
       supportPlan: supportTypes, support: null, questions, fallback: false,
+      provider,   // which model wrote this slide's text (for attribution)
     });
   } catch {
     return NextResponse.json(fbSlide(subject, n, qKinds, mathish));

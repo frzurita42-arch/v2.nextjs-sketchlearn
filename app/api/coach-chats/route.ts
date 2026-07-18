@@ -23,6 +23,7 @@ function cleanSessions(raw: any): any[] {
       const out: any = { role: m?.role === 'user' ? 'user' : 'assistant', content: String(m?.content || '').slice(0, 8000) };
       if (m?.sticky && typeof m.sticky === 'object') out.sticky = m.sticky;
       if (m?.imageCredit) out.imageCredit = String(m.imageCredit).slice(0, 80);
+      if (m?.textCredit) out.textCredit = String(m.textCredit).slice(0, 80);
       return out;
     }),
   })).filter((s: any) => s.id && Array.isArray(s.messages) && s.messages.length);

@@ -48,11 +48,12 @@ export async function POST(req: Request) {
     ? { json: false, temperature: 0.8, maxTokens: 500, provider: 'openrouter', model: OPENROUTER_FREE_MODEL }
     : { json: false, temperature: 0.8, maxTokens: 800 };
   try {
+    let provider = '';
     const reply = await generateText([
       { role: 'system', content: buildCoachChatSystem({ progress, username: a.user.username, tools, recentChats: chats }) },
       ...messages.slice(-16).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) })),
-    ], opts as any);
-    return NextResponse.json({ reply, free });
+    ], { ...opts, onProvider: (p: string) => { provider = p; } } as any);
+    return NextResponse.json({ reply, free, provider });
   } catch (e: any) {
     // In free mode a failure (e.g. the free model is rate-limited) shouldn't error —
     // signal the client to fall back to its no-AI recommendation mode.

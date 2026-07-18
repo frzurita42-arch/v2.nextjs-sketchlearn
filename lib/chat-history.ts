@@ -6,7 +6,7 @@
 import type { ChatMessage } from '@/lib/app-state';
 
 export type Sticky = { slug: string; title: string; kind: string; runCost: number; reason?: string; recommended?: boolean; free?: boolean; page?: string };
-export type ChatMsg = ChatMessage & { images?: string[]; sticky?: Sticky; building?: boolean; imageCredit?: string };
+export type ChatMsg = ChatMessage & { images?: string[]; sticky?: Sticky; building?: boolean; imageCredit?: string; textCredit?: string };
 export type ChatSession = { id: string; title: string; ts: number; messages: ChatMsg[] };
 
 const MAX_SESSIONS = 30;
