@@ -12,6 +12,7 @@ import { useApp } from '@/components/AppContext';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu, filterSelect } from '@/components/ui/CardViewMenu';
+import { GalleryFilterRow } from '@/components/ui/GalleryChrome';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { ProfileCard } from '@/components/ui/ProfileCard';
 
@@ -93,19 +94,17 @@ export function ModeratorsView() {
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey="moderators" title="🛡️ Moderators" subtitle="The site's active moderators & admins." />
 
-        {/* Search + age filter (styled like the other galleries) */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 16px' }}>
-          <input type="text" value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="🔍 Search by name, interest or keyword…"
-            style={{ flex: '1 1 220px', minWidth: 0 }} />
-          {/* Age band — one dropdown, same paper look + monochrome emoji as the view/image menus. */}
-          <select title="Age band" aria-label="Age band" value={ageBand} onChange={(e) => setAgeBand(e.target.value)} style={filterSelect}>
+        {/* Search + age filter — the shared one-row GalleryFilterRow (no fav chips);
+            the age band, Clear and the view menu ride in the right slot. width:auto
+            keeps the select compact (the global select style is width:100%). */}
+        <GalleryFilterRow q={q} onQ={setQ} showChips={false} right={<>
+          <select title="Age band" aria-label="Age band" value={ageBand} onChange={(e) => setAgeBand(e.target.value)} style={{ ...filterSelect, width: 'auto', flex: '0 0 auto' }}>
             <option value="">👤 All ages</option>
             {AGE_BANDS.map((b) => <option key={b.key} value={b.key}>👤 {b.label}</option>)}
           </select>
           {(q || ageBand) && <button className="btn small ghost" onClick={() => { setQ(''); setAgeBand(''); }}>Clear</button>}
           <CardViewMenu pageKey="moderators" />
-        </div>
+        </>} />
 
         {err && <p style={{ color: 'var(--danger,#e4572e)' }}>{err}</p>}
         {mods === null && !err && <p style={{ color: 'var(--muted,#8a7f70)' }}>Loading moderators…</p>}

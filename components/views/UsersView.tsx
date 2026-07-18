@@ -8,6 +8,7 @@ import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
+import { GalleryFilterRow } from '@/components/ui/GalleryChrome';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { ProfileCard } from '@/components/ui/ProfileCard';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
@@ -47,11 +48,8 @@ export function UsersView() {
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey="users" title="👥 Users" subtitle={`Everyone on the system${rows ? ` — ${rows.length} total` : ''}.`} />
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-          <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name or role…"
-            style={{ flex: '1 1 220px', minWidth: 0 }} />
-          <CardViewMenu pageKey="users" />
-        </div>
+        <GalleryFilterRow q={q} onQ={setQ} showChips={false} placeholder="🔍 Search by name or role…"
+          right={<CardViewMenu pageKey="users" />} />
 
         {err && <p style={{ color: 'var(--muted,#8a7f70)' }}>{/403|admin|Unauthorized|Forbidden/i.test(err) ? 'The full user directory is available to admins only.' : err}</p>}
         {!err && rows === null && <p style={{ color: 'var(--muted,#8a7f70)' }}>Loading users…</p>}

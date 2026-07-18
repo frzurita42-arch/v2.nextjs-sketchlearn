@@ -1,22 +1,38 @@
 'use client';
-/* Generic, reusable gallery chrome: a filter row (search + All/Favorites chips +
- * an optional right slot for the view menu) and a bottom pager. Used on the
- * Sandbox / Empty preview pages so they carry the same frame as real galleries. */
+/* Generic, reusable gallery chrome: a filter row (search + optional All/Favorites
+ * chips + an optional right slot for extra controls / the view menu) and a bottom
+ * pager. Used on the Sandbox / Empty preview pages AND the real list pages so they
+ * all carry the same one-row filter frame.
+ *
+ * Search + chips can be UNCONTROLLED (internal state — the preview pages) or
+ * CONTROLLED via q/onQ + filter/onFilter (a page that does its own filtering). */
 import { useState } from 'react';
 
-export function GalleryFilterRow({ right }: { right?: React.ReactNode }) {
-  const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<'all' | 'fav'>('all');
+export function GalleryFilterRow({
+  q: qProp, onQ, placeholder = '🔍 Search by name, interest or keyword…',
+  showChips = true, filter: filterProp, onFilter, right,
+}: {
+  q?: string; onQ?: (v: string) => void; placeholder?: string;
+  showChips?: boolean; filter?: 'all' | 'fav'; onFilter?: (f: 'all' | 'fav') => void;
+  right?: React.ReactNode;
+}) {
+  const [qState, setQState] = useState('');
+  const [filterState, setFilterState] = useState<'all' | 'fav'>('all');
+  const q = qProp !== undefined ? qProp : qState;
+  const setQ = onQ || setQState;
+  const filter = filterProp !== undefined ? filterProp : filterState;
+  const setFilter = onFilter || setFilterState;
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-      {/* The shared "card-like" paper input used across the site — global
-          wobbly-bordered field (2.5px ink border, hand font, --wobble-2 radius).
-          NOTE: the global CSS selector is `input[type=text]`, so the type attr
-          must be present for the sketchbook styling to apply. */}
-      <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
+      {/* The shared "card-like" paper input (global input[type=text] styling). */}
+      <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder}
         style={{ flex: '1 1 220px', minWidth: 0 }} />
-      <button className={`btn small ${filter === 'all' ? 'green' : 'ghost'}`} onClick={() => setFilter('all')}>All</button>
-      <button className={`btn small ${filter === 'fav' ? 'green' : 'ghost'}`} onClick={() => setFilter('fav')}>★ Favorites</button>
+      {showChips && (
+        <>
+          <button className={`btn small ${filter === 'all' ? 'green' : 'ghost'}`} onClick={() => setFilter('all')}>All</button>
+          <button className={`btn small ${filter === 'fav' ? 'green' : 'ghost'}`} onClick={() => setFilter('fav')}>★ Favorites</button>
+        </>
+      )}
       {right}
     </div>
   );
