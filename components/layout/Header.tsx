@@ -21,9 +21,10 @@ export function Header({ chat }: { chat?: boolean } = {}) {
     // nav (which carries the logo and overlaps this bar's left edge).
     <nav id="topbar" className="topbar" style={chat ? { paddingTop: 3, paddingBottom: 3, paddingLeft: 'calc(var(--chat-rail, 0px) + 16px)', fontSize: 13 } : undefined}>
       {!chat && <span className="brand">✏️ SketchLearn</span>}
+      {/* Points sit on the LEFT of the bar. */}
+      {user && points}
       <div className="topbar-user" style={{ marginLeft: 'auto' }}>
         {user ? (<>
-          {points}
           <span id="whoami">☺ {user.username}</span>
           <button id="logout-btn" className="btn small ghost" onClick={logout}>Sign out</button>
         </>) : (

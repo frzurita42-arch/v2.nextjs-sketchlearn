@@ -6,10 +6,13 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
+import { useCardSize, galleryLayout } from '@/lib/card-size';
 
 export function EmptyView() {
   const app = useApp();
   const [repo, setRepo] = useState<any>(null);
+  const [cardSize] = useCardSize();
+  const layout = galleryLayout(cardSize);
 
   useEffect(() => {
     let alive = true;
@@ -34,8 +37,8 @@ export function EmptyView() {
         <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>📭 Empty</h2>
         <p style={{ margin: '0 0 16px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>Empty-gallery state preview.</p>
 
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'stretch' }}>
-          <div className="card" style={{ width: 260, minHeight: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
+        <div style={{ ...layout.container, alignItems: 'start' }}>
+          <div className="card" style={{ minHeight: 260, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
             <span className="sl-pencil" style={{ fontSize: 42, color: 'var(--ink)' }} aria-hidden>
               <span className="sl-pencil__line" />
               <span className="sl-pencil__tip">✏️</span>
@@ -43,11 +46,7 @@ export function EmptyView() {
             <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4 }}>Make a repository or create a Slide Tool to get started.</p>
             <button className="btn green" onClick={() => app.nav('chat')}>＋ Build one</button>
           </div>
-          {repo && (
-            <div style={{ width: 260 }}>
-              <ToolCard tool={repo} view="grid" hideOpen onOpen={openTool} />
-            </div>
-          )}
+          {repo && <ToolCard tool={repo} view={layout.view} hideOpen onOpen={openTool} />}
         </div>
       </div>
     </div>

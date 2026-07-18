@@ -390,9 +390,10 @@ export default function AppRoot() {
                 : lv === 'presrun' ? <PresentationRunsView />
                 : lv === 'slides' ? <ShellGallery kind="presentation" title="🎞️ Slides gallery" subtitle="Every slide tool on the site" />
                 : lv === 'tools' ? <ShellGallery kind="repository" title="📁 Repos gallery" subtitle="Every repository on the site" />
-                // Dashboard & Moderators render their REAL views inside the shell.
-                : (lv === 'dashboard' || lv === 'moderators')
-                  ? <div style={{ height: '100%', overflowY: 'auto', padding: '8px 16px 40px' }}>{views[lv]}</div>
+                // Moderators self-manages its shell column; Dashboard scrolls in a wrapper.
+                : lv === 'moderators' ? views.moderators
+                : lv === 'dashboard'
+                  ? <div style={{ height: '100%', overflowY: 'auto', padding: '8px 16px 40px' }}>{views.dashboard}</div>
                 : <EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} />
               }</>)
             : views[lv]}

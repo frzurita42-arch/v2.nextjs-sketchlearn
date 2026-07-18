@@ -9,9 +9,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
+import { useCardSize, galleryLayout } from '@/lib/card-size';
 
 type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number; image?: string };
 type Moderator = { username: string; role: 'admin' | 'moderator' | 'user'; createdAt?: string | null; gamesPlayed?: number; profile: Profile };
@@ -65,18 +64,19 @@ export function ModeratorsView() {
     });
   }, [mods, q, minAge, maxAge]);
 
+  const [cardSize] = useCardSize();
+  const layout = galleryLayout(cardSize);
   return (
-    <>
-      <PageHeader page="moderators" />
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+        <h2 className="scribble-underline" style={{ display: 'inline-block', margin: '0 0 4px' }}>🛡️ Moderators</h2>
+        <p style={{ margin: '0 0 12px', color: 'var(--muted,#8a7f70)', fontSize: 14 }}>The site&apos;s active moderators &amp; admins.</p>
 
-      <div style={{ maxWidth: 980, margin: '0 auto' }}>
-        <SectionHeader title="🛡️ Active moderators" maxWidth={980} />
-
-        {/* Search + age filter */}
+        {/* Search + age filter (styled like the other galleries) */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 16px' }}>
           <input value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name, interest, or keyword…"
-            style={{ flex: '1 1 260px', minWidth: 180, padding: '8px 12px', borderRadius: 10, border: '2px solid var(--ink)', fontSize: 14 }} />
+            placeholder="🔍 Search by name, interest or keyword…"
+            style={{ flex: '1 1 220px', minWidth: 0, padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--ink)', fontSize: 13, background: 'var(--card,#fff8ee)', font: 'inherit' }} />
           <span style={{ fontSize: 13, color: 'var(--muted,#8a7f70)' }}>Age</span>
           <input value={minAge} onChange={(e) => setMinAge(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric"
             placeholder="min" style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '2px solid var(--ink)', fontSize: 14 }} />
@@ -92,7 +92,7 @@ export function ModeratorsView() {
           <p style={{ color: 'var(--muted,#8a7f70)' }}>{mods.length === 0 ? 'No moderators yet.' : 'No moderators match your search.'}</p>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+        <div style={{ ...layout.container, alignItems: 'start' }}>
           {filtered.map((m) => (
             <ModeratorCard key={m.username} mod={m}
               canEdit={perms.isAdmin || perms.username === m.username}
@@ -107,7 +107,7 @@ export function ModeratorsView() {
           collapseKey="moderatorsDiscussionCollapsed"
           targetType="tool" targetId="__moderators__" maxWidth={980} />
       </div>
-    </>
+    </div>
   );
 }
 
