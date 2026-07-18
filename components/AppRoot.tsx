@@ -272,11 +272,12 @@ export default function AppRoot() {
       {/* Sign-in / create-account overlay for guests. Dismissible so they can keep
           browsing; closes automatically once they're signed in. */}
       {authOpen && !user && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'auto', padding: '4vh 12px' }}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'auto', padding: '3vh 12px' }}
           onClick={() => setAuthOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
-            <button aria-label="Close" onClick={() => setAuthOpen(false)} style={{ position: 'absolute', top: 6, right: 6, zIndex: 1, background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink)' }}>✕</button>
-            <LoginView onDone={() => setAuthOpen(false)} initialMode="register" />
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420 }}>
+            {/* The ✕ lives INSIDE the card (via onClose) so it sits on the opaque
+                card and nothing on the page shows through. Opens on Sign in. */}
+            <LoginView onDone={() => setAuthOpen(false)} onClose={() => setAuthOpen(false)} initialMode="login" />
           </div>
         </div>
       )}

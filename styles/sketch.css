@@ -299,7 +299,7 @@ h3 { font-size: 1.5rem; }
 .btn:disabled { opacity: .5; cursor: wait; transform: none; }
 
 /* ---------- forms ---------- */
-input[type=text], input[type=password], input[type=number], textarea, select {
+input[type=text], input[type=password], input[type=number], input[type=email], input[type=date], textarea, select {
   font-family: var(--font-hand); font-size: 1.05rem; color: var(--ink);
   width: 100%;
   padding: 10px 14px;
