@@ -204,6 +204,14 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_API_URL = process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io/v1';
 const elevenlabsEnabled = hasConfiguredKey(ELEVENLABS_API_KEY);
 
+// Optional: YouTube Data API v3 for real video recommendations in the coach chat.
+// Set YOUTUBE_API_KEY (free from Google Cloud) to enable the 📺 "recommend videos"
+// button; without it the feature stays hidden. Read-only search.list — no cost to
+// the learner's token wallet (it's a free Google quota, not an AI generation).
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+const YOUTUBE_API_BASE = process.env.YOUTUBE_API_BASE || 'https://www.googleapis.com/youtube/v3';
+const youtubeEnabled = hasConfiguredKey(YOUTUBE_API_KEY);
+
 // Optional: use Anthropic's Claude to DRAW each slide's SVG (Claude writes far more
 // accurate, well-labelled sketch diagrams than a text model). DeepSeek still writes
 // the lesson text + quiz; when a key is set, Claude illustrates each slide fresh,
@@ -297,6 +305,9 @@ module.exports = {
   ELEVENLABS_API_KEY,
   ELEVENLABS_API_URL,
   elevenlabsEnabled,
+  YOUTUBE_API_KEY,
+  YOUTUBE_API_BASE,
+  youtubeEnabled,
   ANTHROPIC_API_KEY,
   ANTHROPIC_API_URL,
   ANTHROPIC_MODEL,

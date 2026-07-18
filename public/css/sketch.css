@@ -343,6 +343,7 @@ label.field > span { display: block; margin-bottom: 4px; }
 .sticky-blue   { background: #c6e6ff; }
 .sticky-green  { background: #cdeeb8; }
 .sticky-orange { background: #ffd9a8; }
+.sticky-red    { background: #ffc4c0; }
 
 /* ---------- chat Polaroid (the coach's "draw the chat" keepsake) ---------- */
 .chat-polaroid {

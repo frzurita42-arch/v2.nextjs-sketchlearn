@@ -70,6 +70,8 @@ export function ChatView() {
   const [drawing, setDrawing] = useState(false);
   const [building, setBuilding] = useState(false);
   const [recommending, setRecommending] = useState(false);
+  const [recVideos, setRecVideos] = useState(false);   // fetching YouTube videos
+  const [youtubeOn, setYoutubeOn] = useState(false);   // YOUTUBE_API_KEY configured?
   const [freeOnly, setFreeOnly] = useState(false);   // recommend only free (premade) tools
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
@@ -153,6 +155,8 @@ export function ChatView() {
     API.get('/api/tokens').then((t: any) => { setBalance(typeof t?.balance === 'number' ? t.balance : null); setTokenRole(String(t?.role || '')); }).catch(() => { /* ignore */ });
   };
   useEffect(() => { loadBalance(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [app.user?.username]);
+  // Is the YouTube recommendation feature available (key configured)?
+  useEffect(() => { API.get('/api/config').then((c: any) => setYoutubeOn(!!c?.youtubeEnabled)).catch(() => { /* leave off */ }); }, []);
 
   const newChat = () => {
     const fresh = [initialCoachGreeting as ChatMsg];
@@ -346,6 +350,31 @@ export function ChatView() {
     setRecommending(false);
   };
 
+  // Recommend real YouTube videos for the current topic (typed text, else the last
+  // few things the learner asked about). Each result becomes a red "video" sticky
+  // with a Watch button. Free — it uses the YouTube Data API's read-only quota.
+  const recommendVideos = async () => {
+    if (recVideos) return;
+    const typed = input.trim();
+    const topic = (typed || messages.filter((m) => m.role === 'user' && m.content).slice(-3).map((m) => m.content).join(' ')).slice(0, 200);
+    if (!topic) { setMessages((m) => [...m, { role: 'assistant', content: 'Tell me what you want to learn first, then tap 📺 to find videos.' }]); return; }
+    if (typed) { setInput(''); setMessages((m) => [...m, { role: 'user', content: `📺 Videos: ${typed}` }]); }
+    setRecVideos(true);
+    try {
+      const r: any = await API.post('/api/tools/youtube', { query: topic, limit: 4 });
+      const vids: any[] = Array.isArray(r?.videos) ? r.videos : [];
+      if (!vids.length) {
+        setMessages((m) => [...m, { role: 'assistant', content: r?.error || 'No videos found for that — try rephrasing the topic.' }]);
+      } else {
+        const stickies: ChatMsg[] = vids.map((v) => ({ role: 'assistant', content: '', sticky: {
+          slug: v.videoId, kind: 'video', runCost: 0, title: v.title, channel: v.channel, thumb: v.thumb, url: v.url, reason: v.channel, free: true,
+        } }));
+        setMessages((m) => [...m, ...stickies]);
+      }
+    } catch (e: any) { setMessages((m) => [...m, { role: 'assistant', content: `(Could not fetch videos: ${e.message})` }]); }
+    setRecVideos(false);
+  };
+
   const visibleSessions = expanded ? sessions : sessions.slice(0, COLLAPSED_COUNT);
 
   return (
@@ -429,6 +458,24 @@ export function ChatView() {
                       )}
                       {desc && <p style={{ margin: '3px 0 8px', fontSize: 12.5 }}>{desc}. Come back to the chat anytime.</p>}
                       <button className="btn small green" onClick={() => openPage(m.sticky!)}>Open the {title} page →</button>
+                    </div>
+                  </div>
+                );
+              }
+              // A recommended YouTube video — a red sticky with the thumbnail + a
+              // Watch button that opens the real video in a new tab.
+              if (m.sticky && m.sticky.kind === 'video') {
+                const v = m.sticky;
+                return (
+                  <div key={i} style={{ marginRight: 'auto', marginBottom: 14, maxWidth: 320 }}>
+                    <div className="slide-comp comp-sticky sticky-red" style={{ transform: 'rotate(-1deg)', marginBottom: 0 }}>
+                      <b className="sticky-title" style={{ display: 'block' }}>📺 {v.title}</b>
+                      {v.thumb && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={v.thumb} alt="" style={{ display: 'block', width: '100%', borderRadius: 6, border: '1.5px solid var(--ink)', margin: '6px 0' }} />
+                      )}
+                      {v.channel && <p style={{ margin: '2px 0 8px', fontSize: 12, fontStyle: 'italic', opacity: 0.8 }}>{v.channel}</p>}
+                      <a className="btn small green" href={v.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>▶ Watch on YouTube</a>
                     </div>
                   </div>
                 );
@@ -522,6 +569,7 @@ export function ChatView() {
             <button className={`btn small ${freeOnly ? 'green' : 'ghost'}`} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)}
               title={freeOnly ? 'Free only: ON — no AI is used, only free premade tools are recommended (tap to turn off)' : 'Free only: off — tap to only recommend free tools and skip the AI (no token cost)'}>🆓</button>
             <button className="btn small" title="Draw the chat: the coach's anthropomorphic take on our conversation, as a Polaroid" disabled={drawing} onClick={drawImage}>{drawing ? '⏳' : '🎨'}</button>
+            {youtubeOn && <button className="btn small" title="Recommend YouTube videos for this topic (free)" disabled={recVideos} onClick={recommendVideos}>{recVideos ? '⏳' : '📺'}</button>}
             <span style={{ flex: 1 }} />
             {app.user && (tokenRole === 'admin'
               ? <span title="Admin — unlimited credits" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>

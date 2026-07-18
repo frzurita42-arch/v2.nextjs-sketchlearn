@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled, grokEnabled, leonardoEnabled, replicateEnabled, pollinationsEnabled, IMAGE_API_KEY } from '@/src/config';
+import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled, grokEnabled, leonardoEnabled, replicateEnabled, pollinationsEnabled, IMAGE_API_KEY, youtubeEnabled } from '@/src/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,6 +33,7 @@ export async function GET() {
         pollinationsEnabled && { id: 'pollinations', label: 'Pollinations · free' },
       ].filter(Boolean),
       voiceEnabled: !!elevenlabsEnabled,
+      youtubeEnabled: !!youtubeEnabled,
       dbEnabled: !!dbEnabled,
       dbPooled: !!dbPooled,
       // Capability flags for the Studio catalog (a component is selectable only
