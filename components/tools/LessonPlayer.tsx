@@ -753,6 +753,36 @@ function AnswerKey({ q }: { q: Q }) {
   );
 }
 
+// A recommendation card for when THIS tool's history is empty: pick a random
+// playable lesson from the rest of the platform and offer to open it. `nonce`
+// reshuffles the pick so it's different each time.
+function ElsewhereRecCard({ excludeSlug, nonce }: { excludeSlug?: string; nonce: number }) {
+  const app = useApp();
+  const [tool, setTool] = useState<any>(null);
+  useEffect(() => {
+    let alive = true;
+    API.get('/api/tools').then((r: any) => {
+      const list = (Array.isArray(r?.tools) ? r.tools : []).filter((t: any) => t?.slug && t.slug !== excludeSlug && (t.archetype === 'lesson' || t.hasSavedDeck));
+      if (alive && list.length) setTool(list[Math.floor(Math.random() * list.length)]);
+      else if (alive) setTool(null);
+    }).catch(() => { /* ignore */ });
+    return () => { alive = false; };
+  }, [excludeSlug, nonce]);
+  if (!tool) return null;
+  const open = async () => {
+    try { const r = await API.get(`/api/tools?slug=${encodeURIComponent(tool.slug)}`); appState.activeTool = r?.tool || tool; } catch { appState.activeTool = tool; }
+    app.nav('tool');
+  };
+  return (
+    <div className="card" style={{ width: 260, minHeight: 300, display: 'flex', flexDirection: 'column', padding: 18 }}>
+      <div style={{ fontSize: 11, opacity: 0.55, fontWeight: 700 }}>TRY ANOTHER LESSON</div>
+      <h4 style={{ margin: '6px 0' }}>{tool.title}</h4>
+      <p style={{ fontSize: 13, opacity: 0.8, flex: 1 }}>{String(tool.description || '').slice(0, 130)}</p>
+      <button className="btn small green" onClick={open}>Open →</button>
+    </div>
+  );
+}
+
 export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: { def: any; slug: string; canEdit?: boolean; onImmersiveChange?: (immersive: boolean) => void }) {
   const lesson = def?.lesson || {};
   // Conversation / journal modes are a growing canvas thread, not a slide deck.
@@ -849,9 +879,15 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     try { await API.put('/api/tools/donation', { slug, address }); } catch { /* ignore */ }
   };
   // Activities-feed controls.
+  // Per-run favorites, keyed by the signed-in user so a new account / a guest
+  // doesn't inherit whoever used this browser last.
+  const favKey = () => { const u = app.user?.username; return u ? `sl_gen_favs:${u}` : null; };
   const [favs, setFavs] = useState<Record<string, boolean>>({});
-  useEffect(() => { try { setFavs(JSON.parse(localStorage.getItem('sl_gen_favs') || '{}')); } catch { /* ignore */ } }, []);
-  const toggleFav = (id: string) => setFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; try { localStorage.setItem('sl_gen_favs', JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  useEffect(() => { const k = favKey(); if (!k) { setFavs({}); return; } try { setFavs(JSON.parse(localStorage.getItem(k) || '{}')); } catch { setFavs({}); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [app.user?.username]);
+  const toggleFav = (id: string) => setFavs(f => { const n = { ...f }; if (n[id]) delete n[id]; else n[id] = true; const k = favKey(); if (k) try { localStorage.setItem(k, JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  const isGuest = !app.user;
+  // A rotating recommendation for the empty-history state; the nonce reshuffles it.
+  const [recNonce, setRecNonce] = useState(0);
 
   // --- Rendition cards: the same AI-changing distortion powers as a tool card. ---
   // Anyone may edit their OWN rendition; the owner/admin may edit any. `data` on
@@ -1973,25 +2009,38 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         <GallerySection
           titleKey="historyShelfTitle" titleFallback="📖 History"
           bannerKey="historyBanner" bannerDefault="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order."
-          onRefresh={loadActivities}
+          onRefresh={() => { loadActivities(); setRecNonce((n) => n + 1); }}
           showCollapse
           items={feedItems}
           id={(e: any) => e.id}
           searchText={(e: any) => `${label(e.data || {})} ${e.username || ''} ${e.data?.topic || ''}`}
           time={(e: any) => new Date(e.createdAt || 0).getTime()}
-          favs={favs}
+          favs={isGuest ? {} : favs}
           likedByAdmin={(e: any) => !!e.byAdmin}
           likedByOwner={(e: any) => !!e.byModerator}
           ownerLabel="🧑‍🏫 Moderator" ownerTitle="Only runs a moderator saved"
           perPage={6}
           storageKey="sl_lessonfeed_view"
           sortPrefKey="lessonfeed"
-          defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(def?.feedFilter || '') ? def.feedFilter : 'all') as FilterKey}
+          /* Default to ★ Favorites (guests always; the saved feed filter only
+             applies to signed-in users who can save it). */
+          defaultFilter={(isGuest ? 'fav' : (['all', 'fav', 'admin', 'owner'].includes(def?.feedFilter || '') ? def.feedFilter : 'fav')) as FilterKey}
           canSaveFilter={canEdit}
           onSaveFilter={(f) => { if (def) def.feedFilter = f; API.post('/api/tools/feed-filter', { slug, filter: f }).catch(() => { /* ignore */ }); }}
           searchPlaceholder="🔍 name / @user"
           emptyAll="No activities yet — generate the first one above."
           emptyFiltered="No activities match these filters."
+          emptyState={
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'stretch', margin: '4px auto 6px' }}>
+              <div className="card" style={{ width: 260, minHeight: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 12, padding: 18 }}>
+                <span className="sl-pencil" style={{ fontSize: 40, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4 }}>{activities.length ? 'Nothing favorited yet — ★ a run to keep it here. Meanwhile, try one:' : (canPlay ? 'Generate a lesson above to start the history. Or try one from elsewhere:' : 'No runs on this lesson yet. Try one from elsewhere:')}</p>
+              </div>
+              {activities.length
+                ? <div style={{ width: 260 }}>{feedCard(activities[recNonce % activities.length], false)}</div>
+                : <ElsewhereRecCard excludeSlug={slug} nonce={recNonce} />}
+            </div>
+          }
           renderGrid={(e: any) => feedCard(e, false)}
           renderRow={(e: any) => feedCard(e, true)}
         />
