@@ -9,9 +9,12 @@ import { estimateLessonTokens } from '@/lib/cost-estimate';
 
 type Pkg = { tokens: number; usd: number; note: string };
 
-// A default note: roughly how many 5-slide lessons a package can generate, so the
-// price reads "relative to what it costs to generate slides".
-const perLesson = Math.max(1, estimateLessonTokens({ slides: 5 }));
+// The reference "lesson" used to price packages: a 5-slide presentation. Each
+// slide ≈ a teaching passage + question, one AI image, and a support visual
+// (table/diagram); read-aloud audio is generated on demand (and cached), so it's
+// not part of this base estimate.
+const LESSON_SLIDES = 5;
+const perLesson = Math.max(1, estimateLessonTokens({ slides: LESSON_SLIDES }));
 const lessonsFor = (tokens: number) => Math.max(1, Math.round((Number(tokens) || 0) / perLesson));
 const DEFAULT_PACKAGES: Pkg[] = [
   { tokens: 5000, usd: 5, note: `≈ ${lessonsFor(5000)} slide lessons` },
@@ -56,7 +59,9 @@ export function TokenPackagesNote() {
           <li key={i}><b>{fmt(p.tokens)} tokens</b> — ${Number(p.usd).toFixed(2)}{p.note ? <span style={{ opacity: 0.75 }}> · {p.note}</span> : null}</li>
         ))}
       </ul>
-      <p style={{ fontSize: 11, opacity: 0.7, margin: '6px 0 0' }}>Request a package by coupon on WhatsApp (see the note beside this one).</p>
+      <p style={{ fontSize: 11, opacity: 0.7, margin: '6px 0 0' }}>
+        A <b>slide lesson</b> ≈ a {LESSON_SLIDES}-slide presentation: about {LESSON_SLIDES} AI images, {LESSON_SLIDES} teaching passages with questions, and a few tables/diagrams. Read-aloud audio is generated on demand. Request a package by coupon on WhatsApp (see the note beside this one).
+      </p>
 
       {edit && (
         <div onClick={() => setEdit(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
