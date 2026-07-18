@@ -53,9 +53,15 @@ export async function GET(req: Request) {
   // My used-tokens per month, and my available balance shown against them.
   const mine = byMonth(usage, me);
   const myMonthly = months.map((m) => ({ month: m, used: Math.round(mine[m]?.tokens || 0) }));
+  // Raw usage events (timestamp + tokens + cost) so the client can bucket the
+  // history into minutes / hours / days / weeks / months, finance-app style.
+  const myEvents = usage
+    .filter((u: any) => u.username === me)
+    .map((u: any) => ({ t: u.createdAt, tokens: Math.round(Number(u.totalTokens) || 0), cost: Number(u.costUsd) || 0 }))
+    .filter((e: any) => e.t);
 
   if (!isAdmin) {
-    return NextResponse.json({ role, balance, months, myMonthly });
+    return NextResponse.json({ role, balance, months, myMonthly, myEvents });
   }
 
   // Admin extras: platform-wide monthly usage + spend, and every wallet + role.
@@ -72,7 +78,7 @@ export async function GET(req: Request) {
     usedThisMonth: Math.round(byMonth(usage, u.username)[thisMonth]?.tokens || 0),
   })).sort((x: any, y: any) => y.usedThisMonth - x.usedThisMonth);
 
-  return NextResponse.json({ role, balance, months, myMonthly, platformMonthly, wallets });
+  return NextResponse.json({ role, balance, months, myMonthly, myEvents, platformMonthly, wallets });
 }
 
 // POST /api/tokens (admin only) -> grant tokens to a user's wallet. Granting to a

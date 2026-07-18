@@ -8,14 +8,16 @@
  * Data comes from GET /api/tokens; granting posts to the same route. */
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
-import { MiniChart, type Datum } from '@/components/ui/MiniChart';
+import { MiniChart } from '@/components/ui/MiniChart';
 import { WhatsAppCouponNote } from '@/components/dashboard/WhatsAppCouponNote';
 import { ModelPricesPanel } from '@/components/dashboard/ModelPricesPanel';
+import { UsageHistory } from '@/components/dashboard/UsageHistory';
 
 type Wallet = { username: string; role: string; balance: number; usedThisMonth: number };
 type Tokens = {
   role: string; balance: number; months: string[];
   myMonthly: { month: string; used: number }[];
+  myEvents?: { t: string; tokens: number; cost: number }[];
   platformMonthly?: { month: string; used: number; cost: number }[];
   wallets?: Wallet[];
 };
@@ -131,7 +133,6 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
 
   if (!tokens) return <p style={{ opacity: 0.6 }}>Loading your tokens…</p>;
 
-  const usedData: Datum[] = (tokens.myMonthly || []).map((m) => ({ label: shortMonth(m.month), value: m.used }));
   const usedThisMonth = tokens.myMonthly?.length ? tokens.myMonthly[tokens.myMonthly.length - 1].used : 0;
 
   const grant = async (delta: number) => {
@@ -203,13 +204,14 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
         );
       })()}
 
-      {/* Used-per-month bar chart (available balance is the number above). */}
-      <div className="card" style={{ padding: '12px 14px', marginBottom: 12 }}>
-        <MiniChart type="bar" data={usedData} title="🎟 Tokens you used per month" unit="" />
-        {!isAdmin && tokens.balance <= 0 && (
-          <p style={{ fontSize: 12, opacity: 0.7, margin: '8px 0 0' }}>You have no tokens left. Token-costing actions (generating lessons, AI images) are disabled until an admin adds more to your wallet.</p>
-        )}
-      </div>
+      {/* Token usage history with selectable time windows (min / hour / day /
+          week / month), finance-app style. */}
+      <UsageHistory events={tokens.myEvents || []} />
+      {!isAdmin && tokens.balance <= 0 && (
+        <div className="card" style={{ padding: '12px 14px', marginBottom: 12 }}>
+          <p style={{ fontSize: 12, opacity: 0.7, margin: 0 }}>You have no credits left. Token-costing actions (generating lessons, AI images) are disabled until you top up — redeem a coupon above.</p>
+        </div>
+      )}
 
       {isAdmin && (
         <>
