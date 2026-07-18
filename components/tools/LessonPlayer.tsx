@@ -1005,30 +1005,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     appState.activeTool = appState.activeTool || { slug, definition: def };
     app.nav('toolbuilder');
   };
-  // 🎛 Slide-tool COMMAND CENTER (owner only) — a place to attach the study source /
-  // AI guidance the generator uses, and to jump into full tool settings. The source
-  // text persists into lesson.style, which is fed into every slide's generation
-  // prompt, so pasting a document outline / activity instructions here really steers
-  // what gets made. Collapsed by default (remembered in localStorage).
-  const [ccOpen, setCcOpen] = useState(false);
-  useEffect(() => { try { setCcOpen(localStorage.getItem('sl_lesson_cc_open') === '1'); } catch { /* ignore */ } }, []);
-  const toggleCc = () => setCcOpen((o) => { const n = !o; try { localStorage.setItem('sl_lesson_cc_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
-  const [studyDoc, setStudyDoc] = useState<string>(lesson.style || '');
-  const [ccMsg, setCcMsg] = useState('');
-  const [ccBusy, setCcBusy] = useState(false);
-  // Persist the study source / AI guidance into the tool's lesson.style (the whole
-  // definition is re-validated and saved via the owner settings route).
-  const saveStudyDoc = async () => {
-    const next = studyDoc.trim().slice(0, 500);
-    setCcBusy(true); setCcMsg('Saving…');
-    try {
-      const nextDef = { ...(def || {}), lesson: { ...(def?.lesson || {}), style: next } };
-      const r: any = await API.put('/api/tools/settings', { slug, definition: nextDef });
-      if (r?.error) { setCcMsg(r.error); }
-      else { if (def) def.lesson = { ...(def.lesson || {}), style: next }; setStudyDoc(next); setCcMsg('Saved ✓ — the generator will use this.'); setTimeout(() => setCcMsg(''), 3500); }
-    } catch (e: any) { setCcMsg(e?.message || 'Could not save.'); }
-    setCcBusy(false);
-  };
+  // The study source / AI guidance (lesson.style) is still fed into every slide's
+  // generation prompt; it is now edited via the Studio ("✏️ Edit layout &
+  // activities"), not an on-page command center.
   // Available image backends (from /api/config) + the run's chosen one's dropdown.
   const [imageProviders, setImageProviders] = useState<{ id: string; label: string }[]>([]);
   const [providerOpen, setProviderOpen] = useState(false);
@@ -1792,42 +1771,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           </div>
         )}
 
-        {/* 🎛 SLIDE-TOOL COMMAND CENTER (owner/admin only). A dashed panel to attach
-            the study source / AI guidance the generator uses, jump into full tool
-            settings (the AI-edit chat that reshapes the activity layout), and manage
-            the tool. Collapsed by default. */}
-        {canEdit && (
-          <div style={{ border: '1.5px dashed var(--ink)', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 800, opacity: 0.6, cursor: 'pointer', userSelect: 'none' }}
-                onClick={toggleCc} title={ccOpen ? 'Collapse the command center' : 'Expand the command center'}>
-                <span style={{ display: 'inline-block', width: 14 }}>{ccOpen ? '▾' : '▸'}</span>🎛 SLIDE-TOOL COMMAND CENTER
-              </span>
-              <span style={{ fontSize: 11, opacity: 0.55 }}>attachments · settings · activity layout</span>
-            </div>
-            {ccOpen && (
-              <div style={{ marginTop: 10 }}>
-                <label className="field" style={{ display: 'block' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>📎 Study source &amp; AI guidance</span>
-                  <textarea value={studyDoc} onChange={(e) => setStudyDoc(e.target.value)} disabled={ccBusy}
-                    placeholder="Paste the course/unit outline, source notes, or the kinds of activities to use (e.g. code snippets, diagrams, GeoGebra/Wolfram-style math, infographics, file-tree outlines). The generator uses this for every slide."
-                    style={{ width: '100%', minHeight: 96, fontSize: 13, marginTop: 4 }} maxLength={500} />
-                  <span style={{ fontSize: 10, opacity: 0.5 }}>{studyDoc.trim().length}/500 — fed into every slide&apos;s generation prompt.</span>
-                </label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-                  <button className="btn small blue" disabled={ccBusy || studyDoc.trim() === (lesson.style || '')} onClick={saveStudyDoc}>{ccBusy ? <><Spinner />Saving…</> : '💾 Save guidance'}</button>
-                  <button className="btn small ghost" title="Open the full tool settings: the AI-edit chat that reshapes the activity layout (add/remove activity types), API keys and visibility." onClick={() => { appState.activeTool = appState.activeTool || { slug, definition: def }; app.nav('toolsettings'); }}>⚙ Tool settings &amp; activity layout →</button>
-                  {/* Reopen the card-templated Studio pre-loaded with this tool; publishing
-                      there UPDATES this same tool instead of creating a new one. */}
-                  <button className="btn small ghost" title="Edit this tool's card-templated settings in the Studio. Loads its slide/card plan; saving updates THIS tool (no new copy)."
-                    onClick={openLayoutEditor}>✏️ Edit tool (card settings) →</button>
-                  {ccMsg && <span style={{ fontSize: 11, opacity: 0.7 }}>{ccMsg}</span>}
-                </div>
-                <p style={{ fontSize: 11, opacity: 0.55, margin: '8px 0 0' }}>Tip: this tool is a reusable generator — paste a unit&apos;s prompt into the topic below (or use a study-path repo&apos;s 🎬 button) and pick how many slides; it composes that many from your activity layout, at random, for variety.</p>
-              </div>
-            )}
-          </div>
-        )}
+        {/* The owner-only command center was removed — editing the slide layout /
+            proposed activities is done via the "✏️ Edit layout & activities" button
+            beside "New topics". The study source (lesson.style) is still fed into
+            every slide's generation prompt; it's just no longer editable here. */}
 
         {showGenerate && (
         <div className="card alt" style={{ padding: '14px 16px' }}>
