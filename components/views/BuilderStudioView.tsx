@@ -120,6 +120,7 @@ export function BuilderStudioView() {
   // A topic pick can hand us an AI-designed slide plan (seed.pages) to prefill the
   // Studio so the user reviews/edits the preset slides before generating.
   const [pages, setPages] = useState<StudioPage[]>(seed?.pages && seed.pages.length ? (seed.pages as StudioPage[]) : [newPage()]);
+  const [addMenu, setAddMenu] = useState<number | null>(null);   // which slide's "＋ Add" menu is open
   useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>(seed?.cards && seed.cards.length ? (seed.cards as RepoCard[]) : [{ name: '', link: '', description: '', children: [] }]);
@@ -255,34 +256,35 @@ export function BuilderStudioView() {
   const setComp = (i: number, li: number, uid: string, patch: Partial<StudioComponent>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.map((c) => ((c.uid || c.id) === uid ? { ...c, ...patch } : c)) } : l)));
   const rmComp = (i: number, li: number, uid: string) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.filter((c) => (c.uid || c.id) !== uid) } : l)));
 
-  // ---- Simplified chip editing for a slide (reading always → support → evaluation) ----
+  // ---- Stack editing for a slide: an ordered list of elements (reading paragraphs,
+  // support/visuals, evaluations), each with its own optional AI instruction. A "＋
+  // Add" menu appends another reading / support / evaluation anywhere. ----
   const flatComps = (pg: StudioPage): StudioComponent[] => layoutsOf(pg).flatMap((l) => l.components);
-  const hasComp = (pg: StudioPage, id: string) => flatComps(pg).some((c) => c.id === id);
+  // Elements shown in the stack (the slide context "note" is edited separately below).
+  const stackOf = (pg: StudioPage): StudioComponent[] => flatComps(pg).filter((c) => c.id !== 'note');
   const slideNote = (pg: StudioPage) => flatComps(pg).find((c) => c.id === 'note')?.instr || '';
-  // Rebuild a slide's components into a single layout in canonical order — reading,
-  // support/visuals, evaluations, any other components (decorations…), then the
-  // context note — preserving each component's uid/instr.
-  const rewriteSlide = (i: number, mutate: (s: { supports: Set<string>; evals: Set<string>; note: string }) => void) => {
-    setPages((ps) => ps.map((p, j) => {
-      if (j !== i) return p;
-      const cur = flatComps(p);
-      const byId = new Map<string, StudioComponent>();
-      cur.forEach((c) => { if (!byId.has(c.id)) byId.set(c.id, c); });
-      const s = { supports: new Set(SUP_IDS.filter((id) => byId.has(id))), evals: new Set(EVAL_IDS.filter((id) => byId.has(id))), note: slideNote(p) };
-      mutate(s);
-      const mk = (id: string): StudioComponent => byId.get(id) || { id, uid: mkUid(), instr: '' };
-      const extras = cur.filter((c) => c.id !== 'reading' && c.id !== 'note' && !SUP_IDS.includes(c.id) && !EVAL_IDS.includes(c.id));
-      const comps: StudioComponent[] = [mk('reading')];
-      SUPPORT_CHIPS.forEach((c) => { if (s.supports.has(c.id)) comps.push(mk(c.id)); });
-      EVAL_CHIPS.forEach((c) => { if (s.evals.has(c.id)) comps.push(mk(c.id)); });
-      extras.forEach((c) => comps.push(c));
-      if (String(s.note || '').trim()) comps.push({ id: 'note', uid: byId.get('note')?.uid || mkUid(), instr: s.note });
-      return { ...p, layouts: [{ template: 'auto', components: comps }], components: undefined, template: undefined };
-    }));
+  // Write a slide as ONE layout: the stack elements, then the context note (if any).
+  const writeStack = (i: number, comps: StudioComponent[], note?: string) => setPages((ps) => ps.map((p, j) => {
+    if (j !== i) return p;
+    const nt = note !== undefined ? note : slideNote(p);
+    const out = nt && nt.trim() ? [...comps, { id: 'note', uid: flatComps(p).find((c) => c.id === 'note')?.uid || mkUid(), instr: nt }] : comps;
+    return { ...p, layouts: [{ template: 'auto', components: out }], components: undefined, template: undefined };
+  }));
+  const addEl = (i: number, id: string) => { const it = studioItem(id); const opt = it?.sizes ? ANNOTATION_SIZES[1] : it?.button ? 'ask' : undefined; writeStack(i, [...stackOf(pages[i]), { id, uid: mkUid(), instr: '', opt }]); setAddMenu(null); };
+  const setElInstr = (i: number, uid: string, instr: string) => writeStack(i, stackOf(pages[i]).map((c) => ((c.uid || c.id) === uid ? { ...c, instr } : c)));
+  const rmEl = (i: number, uid: string) => writeStack(i, stackOf(pages[i]).filter((c) => (c.uid || c.id) !== uid));
+  const moveEl = (i: number, uid: string, dir: -1 | 1) => { const cs = stackOf(pages[i]); const k = cs.findIndex((c) => (c.uid || c.id) === uid); const m = k + dir; if (k < 0 || m < 0 || m >= cs.length) return; const n = cs.slice(); [n[k], n[m]] = [n[m], n[k]]; writeStack(i, n); };
+  const setSlideNote = (i: number, text: string) => writeStack(i, stackOf(pages[i]), text);
+  const readingCount = (pg: StudioPage) => stackOf(pg).filter((c) => c.id === 'reading').length;
+  // How an element is labelled + its instruction placeholder.
+  const elMeta = (id: string): { emoji: string; name: string; ph: string } => {
+    const it = studioItem(id);
+    const ph = id === 'reading' ? 'How should the AI write this paragraph? (optional)'
+      : SUP_IDS.includes(id) ? 'What should this show? (optional)'
+      : EVAL_IDS.includes(id) ? 'What should this question test? (optional)'
+      : 'Instruction for the AI (optional)';
+    return { emoji: it?.emoji || '•', name: it?.name || id, ph };
   };
-  const toggleSupport = (i: number, id: string) => rewriteSlide(i, (s) => { if (s.supports.has(id)) s.supports.delete(id); else s.supports.add(id); });
-  const toggleEval = (i: number, id: string) => rewriteSlide(i, (s) => { if (s.evals.has(id)) s.evals.delete(id); else s.evals.add(id); });
-  const setSlideNote = (i: number, text: string) => rewriteSlide(i, (s) => { s.note = text; });
 
   // ---- Presentation "Suggest / Edit with AI" (mirrors the repository flow) ----
   // Map the designer's simple pages [{components:[id|{id,instr}], length, paragraphs}]
@@ -510,45 +512,82 @@ export function BuilderStudioView() {
 
           {artifact === 'presentation' ? (
             <>
-              {/* SLIDES — each slide always has teaching text; add support/visuals
-                  (first) then an evaluation (question). Chip layout matches the
-                  tool's "Edit layout & activities" editor. */}
+              {/* SLIDES — each slide is a STACK of elements you add with ＋: reading
+                  paragraphs (each with its own writing instruction), support/visuals,
+                  and evaluations. Every slide keeps at least one reading paragraph. */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — every slide has text; add support, then an evaluation</div>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — stack reading paragraphs, support and evaluations with ＋</div>
               </div>
               <div style={{ display: 'grid', gap: 12 }}>
-                {pages.map((pg, i) => (
+                {pages.map((pg, i) => {
+                  const stack = stackOf(pg);
+                  const rc = readingCount(pg);
+                  return (
                   <div key={i} className="card" style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <strong>📄 Slide {i + 1}</strong>
                       <span style={{ display: 'inline-flex', gap: 4 }}>
-                        <button className="btn small ghost" title="Move up" disabled={i === 0} onClick={() => movePage(i, -1)} style={{ padding: '0 8px' }}>↑</button>
-                        <button className="btn small ghost" title="Move down" disabled={i === pages.length - 1} onClick={() => movePage(i, 1)} style={{ padding: '0 8px' }}>↓</button>
+                        <button className="btn small ghost" title="Move slide up" disabled={i === 0} onClick={() => movePage(i, -1)} style={{ padding: '0 8px' }}>↑</button>
+                        <button className="btn small ghost" title="Move slide down" disabled={i === pages.length - 1} onClick={() => movePage(i, 1)} style={{ padding: '0 8px' }}>↓</button>
                         <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)} style={{ padding: '0 8px' }}>🗑</button>
                       </span>
                     </div>
 
-                    {/* Reading text — always present. */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, background: 'var(--paper-2,#f3ead6)', border: '1.5px dashed var(--ink)', borderRadius: 8, padding: '3px 9px', margin: '2px 0 8px' }}>
-                      📖 Reading text <span style={{ fontWeight: 400, opacity: 0.7 }}>· always on every slide</span>
+                    {/* The slide's element stack (reading paragraphs / support / evaluation). */}
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {stack.map((c) => {
+                        const uid = c.uid || c.id; const m = elMeta(c.id);
+                        const canRemove = !(c.id === 'reading' && rc <= 1);
+                        return (
+                          <div key={uid} className="card alt" style={{ padding: '8px 10px', borderStyle: 'dashed' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 12.5, fontWeight: 700 }}>{m.emoji} {m.name}</span>
+                              <span style={{ display: 'inline-flex', gap: 4 }}>
+                                <button className="btn small ghost" title="Move up" onClick={() => moveEl(i, uid, -1)} style={{ padding: '0 7px' }}>↑</button>
+                                <button className="btn small ghost" title="Move down" onClick={() => moveEl(i, uid, 1)} style={{ padding: '0 7px' }}>↓</button>
+                                <button className="btn small ghost" disabled={!canRemove} title={canRemove ? 'Remove' : 'Every slide keeps at least one reading paragraph'} onClick={() => rmEl(i, uid)} style={{ padding: '0 7px' }}>✕</button>
+                              </span>
+                            </div>
+                            <input value={c.instr || ''} onChange={(e) => setElInstr(i, uid, e.target.value)} placeholder={m.ph}
+                              style={{ width: '100%', fontSize: 12, marginTop: 5, padding: '5px 8px', borderRadius: 8, border: '1.5px solid var(--ink)' }} maxLength={2000} />
+                          </div>
+                        );
+                      })}
                     </div>
 
-                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Support / visuals — optional</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
-                      {SUPPORT_CHIPS.map((s) => <span key={s.id} onClick={() => toggleSupport(i, s.id)} style={chipSt(hasComp(pg, s.id))}>{s.label}</span>)}
+                    {/* ＋ Add — reading paragraph / support / evaluation. */}
+                    <div style={{ marginTop: 8 }}>
+                      {addMenu === i ? (
+                        <div className="card alt" style={{ padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <b style={{ fontSize: 12 }}>Add to slide {i + 1}</b>
+                            <button className="btn small ghost" onClick={() => setAddMenu(null)}>✕</button>
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>Text</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                            <span onClick={() => addEl(i, 'reading')} style={chipSt(false)}>📖 Reading paragraph</span>
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>Support / visuals</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                            {SUPPORT_CHIPS.map((s) => <span key={s.id} onClick={() => addEl(i, s.id)} style={chipSt(false)}>{s.label}</span>)}
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>Evaluation (question)</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                            {EVAL_CHIPS.map((s) => <span key={s.id} onClick={() => addEl(i, s.id)} style={chipSt(false)}>{s.label}</span>)}
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="btn small" onClick={() => setAddMenu(i)}>＋ Add reading · support · evaluation</button>
+                      )}
                     </div>
 
-                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Evaluation (question) — optional, leave all off for none</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
-                      {EVAL_CHIPS.map((s) => <span key={s.id} onClick={() => toggleEval(i, s.id)} style={chipSt(hasComp(pg, s.id))}>{s.label}</span>)}
-                    </div>
-
-                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '8px 0 2px' }}>Slide context (what this slide teaches / must show — guides the AI)</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '10px 0 2px' }}>Slide context — overall instruction for the AI (optional)</div>
                     <textarea value={slideNote(pg)} onChange={(e) => setSlideNote(i, e.target.value)}
-                      placeholder="e.g. Welcome slide: greet ESL learners, AI image of a design studio, one easy multiple-choice question."
-                      style={{ width: '100%', fontSize: 12, minHeight: 46, padding: '6px 8px', borderRadius: 8, border: '1.5px solid var(--ink)' }} maxLength={2000} />
+                      placeholder="e.g. Welcome slide: greet ESL learners and introduce fashion design."
+                      style={{ width: '100%', fontSize: 12, minHeight: 40, padding: '6px 8px', borderRadius: 8, border: '1.5px solid var(--ink)' }} maxLength={2000} />
                   </div>
-                ))}
+                  );
+                })}
               </div>
               <div style={{ textAlign: 'center', margin: '12px 0' }}>
                 <button className="btn" onClick={addPage}>＋ Add slide ({pages.length + 1})</button>
