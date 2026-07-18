@@ -46,7 +46,7 @@ const clickable = { cursor: 'pointer' } as const;
 
 export function CardShell(p: CardShellProps) {
   const { view, title, subtitle, badge, fav, thumbnail, onOpen } = p;
-  const h = p.thumbHeight ?? 130;
+  const h = p.thumbHeight ?? 110;   // grid picture height — 15% smaller than the old 130
   const hasImg = isRenderableImage(thumbnail || undefined);
 
   const imageBox = (

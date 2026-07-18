@@ -21,6 +21,7 @@ import { ChatView } from '@/components/views/ChatView';
 import { CoachRail } from '@/components/coach/CoachRail';
 import { EmptyShellView } from '@/components/views/EmptyShellView';
 import { SandboxView } from '@/components/views/SandboxView';
+import { ShellGallery } from '@/components/views/ShellGallery';
 import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
 import { CsPathView } from '@/components/views/CsPathView';
@@ -373,7 +374,12 @@ export default function AppRoot() {
         style={isShell ? { flex: 1, minHeight: 0, maxWidth: 'none', margin: 0, padding: 0, paddingLeft: 'var(--chat-rail, 0px)', border: 'none', overflow: 'hidden' } : undefined}>
         <ErrorBoundary onHome={() => nav(HOME)}>
           {isShell && !isChat
-            ? (<><CoachRail />{lv === 'sandbox' ? <SandboxView /> : <EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} />}</>)
+            ? (<><CoachRail />{
+                lv === 'sandbox' ? <SandboxView />
+                : lv === 'slides' ? <ShellGallery kind="presentation" title="🎞️ Slides gallery" subtitle="Every slide tool on the site" />
+                : lv === 'tools' ? <ShellGallery kind="repository" title="📁 Repos gallery" subtitle="Every repository on the site" />
+                : <EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} />
+              }</>)
             : views[lv]}
         </ErrorBoundary>
       </main>
