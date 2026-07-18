@@ -121,7 +121,9 @@ const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash';
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image';
 const forceFallback = /^(1|true|yes)$/i.test(String(process.env.SKETCHLEARN_FORCE_FALLBACK || '').trim());
 const geminiEnabled = !forceFallback && hasConfiguredKey(GEMINI_API_KEY);
-const deepseekEnabled = !forceFallback && hasConfiguredKey(DEEPSEEK_API_KEY);
+// DeepSeek is intentionally disabled as a provider (not used as an endpoint),
+// even if a DEEPSEEK_API_KEY is present.
+const deepseekEnabled = false;
 
 // Optional: OpenRouter — ONE key routes to many chat LLMs (GPT, Claude, Gemini,
 // Grok, DeepSeek, Kimi, Llama…) via an OpenAI-compatible endpoint, plus vision

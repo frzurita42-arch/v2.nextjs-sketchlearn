@@ -97,11 +97,30 @@ export function ChatView() {
   // On every visit: start a brand-new chat. The previously active chat was saved
   // live into history as it was typed. Signed-in users load their history from the
   // DB (so it follows them across devices); guests use the browser cache only.
+  // After the greeting, drop a SECOND welcome message: a recommended presentation
+  // run to play, picked from the learner's history/interests + platform usage
+  // (deterministic, no AI cost). Only appended while the chat is still untouched.
+  const welcomeRecommend = () => {
+    const favs = loadLikes ? Object.keys(loadLikes() || {}).join(',') : '';
+    API.post('/api/tools/recommend', { favs, limit: 1, playable: true, noai: true }).then((r: any) => {
+      const p = (Array.isArray(r?.picks) ? r.picks : [])[0];
+      if (!p) return;
+      const intro: ChatMsg = { role: 'assistant', content: 'Based on your history and what’s popular, here’s a presentation you could start with:' };
+      const sticky: ChatMsg = { role: 'assistant', content: '', sticky: {
+        slug: p.slug, title: p.title || 'Tool', kind: p.archetype === 'repo' ? 'repo' : 'lesson',
+        runCost: p.free ? 0 : (p.archetype === 'lesson' ? estimateLessonTokens({ slides: 5 }) : 0),
+        reason: p.reason || 'Recommended for you', recommended: true, free: !!p.free,
+      } };
+      setMessages((cur) => (cur.length === 1 && !cur.some((x) => x.role === 'user') ? [...cur, intro, sticky] : cur));
+    }).catch(() => { /* skip the welcome pick */ });
+  };
+
   useEffect(() => {
     // Every visit opens a fresh chat; the previous chat was saved live, so it's in
     // the history list. Signed-in users load their history from the DB.
     const fresh = [initialCoachGreeting as ChatMsg];
     setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
+    welcomeRecommend();
     if (username) {
       API.get('/api/coach-chats').then((r: any) => {
         const db = Array.isArray(r?.sessions) ? (r.sessions as ChatSession[]) : [];
@@ -326,6 +345,15 @@ export function ChatView() {
               <button title="Collapse the history panel" onClick={() => setSidebar(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: 'var(--muted,#8a7f70)', padding: 0 }}>«</button>
             </div>
             <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>🆕 New chat</button>
+
+            {/* Quick links to the main pages (Claude-style side nav). */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+              {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'moderators', label: '🛡️ Moderators' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => (
+                <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}
+                  style={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left' }}>{n.label}</button>
+              ))}
+            </div>
+
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 6px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
 
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
