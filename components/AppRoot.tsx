@@ -28,6 +28,7 @@ import { UsersView } from '@/components/views/UsersView';
 import { ShellGallery } from '@/components/views/ShellGallery';
 import { StatsView } from '@/components/views/StatsView';
 import { DashboardView } from '@/components/views/DashboardView';
+import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { CsPathView } from '@/components/views/CsPathView';
 import { FeedView } from '@/components/views/FeedView';
 import { ToolsView } from '@/components/views/ToolsView';
@@ -398,7 +399,15 @@ export default function AppRoot() {
                 : lv === 'users' ? views.users
                 : lv === 'dashboard'
                   ? <div style={{ height: '100%', overflowY: 'auto' }}>
-                      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>{views.dashboard}</div>
+                      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+                        {views.dashboard}
+                        {/* The shared discussion/comment section — one container, sitting beneath the dashboard. */}
+                        <div style={{ marginTop: 28 }}>
+                          <DiscussionSection titleKey="dashboardDiscussionTitle" titleFallback="💬 Discussion"
+                            collapseKey="dashboardDiscussionCollapsed"
+                            targetType="tool" targetId="__dashboard__" maxWidth={840} />
+                        </div>
+                      </div>
                     </div>
                 : <EmptyShellView emoji={SHELL[lv].emoji} name={SHELL[lv].name} />
               }</>)

@@ -10,6 +10,7 @@ import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { ProfileCard } from '@/components/ui/ProfileCard';
+import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 
 type Row = { username: string; role: string; createdAt?: string | null; gamesPlayed?: number };
 
@@ -69,6 +70,19 @@ export function UsersView() {
               );
             })}
           </div>
+        )}
+
+        {/* The same data table the Slides/Repos/Presentation pages carry. */}
+        {!err && filtered.length > 0 && (
+          <>
+            <hr style={{ border: 'none', borderTop: '2px dashed var(--line,#d9cfc0)', margin: '26px 0 18px' }} />
+            <h3 style={{ margin: '0 0 10px' }}>All users — table</h3>
+            <PagedTable
+              headers={['User', 'Role', 'Joined', 'Games']}
+              rows={filtered.map((u): Cell[] => [u.username, u.role, fmtDate(u.createdAt), u.gamesPlayed ?? 0])}
+              empty="No users to show."
+            />
+          </>
         )}
       </div>
     </div>

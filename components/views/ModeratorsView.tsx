@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
-import { DiscussionSection } from '@/components/social/DiscussionSection';
+import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu, filterSelect } from '@/components/ui/CardViewMenu';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
@@ -142,9 +142,26 @@ export function ModeratorsView() {
           })}
         </div>
 
-        <DiscussionSection titleKey="moderatorsDiscussionTitle" titleFallback="💬 Discussion"
-          collapseKey="moderatorsDiscussionCollapsed"
-          targetType="tool" targetId="__moderators__" maxWidth={980} />
+        {/* The same data table the Slides/Repos/Presentation pages carry. */}
+        {mods !== null && filtered.length > 0 && (
+          <>
+            <hr style={{ border: 'none', borderTop: '2px dashed var(--line,#d9cfc0)', margin: '26px 0 18px' }} />
+            <h3 style={{ margin: '0 0 10px' }}>All moderators — table</h3>
+            <PagedTable
+              headers={['Name', 'Title', 'Role', 'Age', 'Interests', 'WhatsApp', 'Joined']}
+              rows={filtered.map((m): Cell[] => {
+                const p = m.profile || {};
+                return [
+                  m.username, p.title || '—',
+                  m.role === 'admin' ? 'Admin' : 'Moderator',
+                  p.age || '—', p.interests || '—', p.whatsapp || '—',
+                  m.createdAt ? new Date(m.createdAt).toLocaleDateString() : '—',
+                ];
+              })}
+              empty="No moderators to show."
+            />
+          </>
+        )}
       </div>
     </div>
   );
