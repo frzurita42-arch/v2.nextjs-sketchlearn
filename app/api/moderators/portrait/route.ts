@@ -54,6 +54,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Not a moderator.' }, { status: 404 });
   }
 
+  // The portrait's generation cost is charged to the MODERATOR's own wallet (not the
+  // platform/admin). A non-admin generating their own portrait must have credits;
+  // the moderator is the one debited either way (below).
+  let targetBalance = 0; try { targetBalance = Number(await getUserTokens(username)) || 0; } catch { /* 0 */ }
+  if (target.role !== 'admin' && !(targetBalance > 0)) {
+    return NextResponse.json({ error: 'This moderator is out of credits — a portrait generation is charged to their wallet.', outOfTokens: true }, { status: 402 });
+  }
+
   if (!imageEnabled && !geminiEnabled && !openrouterEnabled && !deepseekEnabled && !moonshotEnabled) {
     return NextResponse.json({ error: 'No image model is configured.' }, { status: 200 });
   }
@@ -100,7 +108,9 @@ export async function POST(req: Request) {
       const why = (typeof getLastImageError === 'function' && getLastImageError()) || '';
       return NextResponse.json({ error: why ? `Could not generate a portrait. ${String(why).slice(0, 300)}` : 'Could not generate a portrait — try again.' }, { status: 200 });
     }
-    await recordImageUsage({ username: a.user.username, kind: 'moderator-portrait', provider, subject: username, meta: { ethnicity } });
+    // Charge the MODERATOR whose card this is (not the requester), so the cost lands
+    // on their wallet even when an admin generates it for them.
+    await recordImageUsage({ username, kind: 'moderator-portrait', provider, subject: username, meta: { ethnicity, by: a.user.username } });
 
     // Offload a data: URL to the blob store when configured (keeps the public
     // directory payload light); otherwise keep the data URL.
