@@ -9,7 +9,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting } from '@/lib/app-state';
-import { downloadCsv } from '@/lib/util';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { MicButton } from '@/components/ui/MicButton';
 import { useApp } from '@/components/AppContext';
@@ -283,18 +282,10 @@ export function ChatView() {
 
   return (
     <>
-      {/* A slim control strip replaces the tall page header (no more scrolling to
-          reach the chat). The Coach identity moves to the bottom of the sidebar. */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '2px 0 8px' }}>
-        <button className="btn small ghost" onClick={() => setSidebar((v) => !v)} title="Chat history">🗂 History</button>
-        <button className="btn small green" onClick={newChat} title="Start a new chat">＋ New chat</button>
-        <button className="btn small" id="chat-export" onClick={downloadCsv}>⬇ spreadsheet</button>
-        {app.user && (tokenRole === 'admin'
-          ? <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
-          : <span style={{ fontSize: 13, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()} credits</span>)}
-      </div>
-
-      <div style={{ display: 'flex', gap: 14, alignItems: 'stretch', height: 'calc(100vh - 150px)', minHeight: 420 }}>
+      {/* No top strip — every control lives in the emoji row under the input, and
+          the Coach identity sits at the bottom of the sidebar. The chat fills the
+          space down to the footer (no dead gap). */}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'stretch', height: 'calc(100vh - 104px)', minHeight: 380 }}>
         {sidebar && (
           <aside style={{ flex: '0 0 210px', maxWidth: 210, borderRight: '2px dashed var(--line,#d9cfc0)', paddingRight: 10, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>＋ New chat</button>
@@ -413,11 +404,19 @@ export function ChatView() {
                 : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
             </div>
           )}
-          <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn small green" disabled={building} onClick={buildTool}>{building ? '🧰 Building…' : '🧰 Build a tool from this chat'}</button>
-            <button className="btn small" disabled={recommending} onClick={recommend} title="Recommend an existing presentation or repo to play">{recommending ? '⭐ Finding…' : '⭐ Recommend a run to play'}</button>
-            <button className={`btn small ${freeOnly ? 'green' : 'ghost'}`} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)} title="When on: no AI is called (no token cost) — every message just recommends a free premade tool">{freeOnly ? '🆓 Free only: ON' : '🆓 Free only: off'}</button>
-            <button className="btn small" disabled={drawing} onClick={drawImage} title="Generate an AI image from the text box">{drawing ? '🎨 Drawing…' : '🎨 Draw an image'}</button>
+          {/* One compact emoji toolbar (each button hover-explained); credits float right. */}
+          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn small ghost" title="Show / hide chat history" aria-pressed={sidebar} onClick={() => setSidebar((v) => !v)}>🗂</button>
+            <button className="btn small green" title="Start a new chat" onClick={newChat}>🆕</button>
+            <button className="btn small green" title="Build a tool from this chat (spends your credits)" disabled={building} onClick={buildTool}>{building ? '⏳' : '🧰'}</button>
+            <button className="btn small" title="Recommend an existing presentation or repo to play (free)" disabled={recommending} onClick={recommend}>{recommending ? '⏳' : '⭐'}</button>
+            <button className={`btn small ${freeOnly ? 'green' : 'ghost'}`} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)}
+              title={freeOnly ? 'Free only: ON — no AI is used, only free premade tools are recommended (tap to turn off)' : 'Free only: off — tap to only recommend free tools and skip the AI (no token cost)'}>🆓</button>
+            <button className="btn small" title="Generate an AI image from the text box" disabled={drawing} onClick={drawImage}>{drawing ? '⏳' : '🎨'}</button>
+            <span style={{ flex: 1 }} />
+            {app.user && (tokenRole === 'admin'
+              ? <span title="Admin — unlimited credits" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
+              : <span title="Your remaining credits" style={{ fontSize: 13, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()}</span>)}
           </div>
         </div>
       </div>
