@@ -5,25 +5,26 @@
  * serverless runtime after the response). Never throws. */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { logUsage } = require('@/src/db/usage');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getSiteSettings } = require('@/src/db/platform');
 import { TOKENS_PER_IMAGE } from '@/lib/cost-estimate';
+import { DEFAULT_TEXT_PRICE, DEFAULT_IMAGE_PRICE, mergePrices, type PriceTable } from '@/lib/model-registry';
 
 const estTokens = (s: string) => Math.max(0, Math.ceil(String(s || '').length / 4));
 
-// USD per 1K tokens (input / output), by text provider. Approximate.
-const TEXT_PRICE: Record<string, { in: number; out: number }> = {
-  deepseek: { in: 0.00027, out: 0.0011 },
-  openrouter: { in: 0.0006, out: 0.0018 },
-  gemini: { in: 0.000075, out: 0.0003 },
-  grok: { in: 0.0005, out: 0.0015 },
-  moonshot: { in: 0.00015, out: 0.0025 },
-  auto: { in: 0.0005, out: 0.0015 },
-  default: { in: 0.0005, out: 0.0015 },
-};
-// USD per generated image, by image provider. Approximate; Pollinations is free.
-const IMAGE_PRICE: Record<string, number> = {
-  openai: 0.04, grok: 0.07, replicate: 0.003, gemini: 0.03, leonardo: 0.01,
-  pollinations: 0, placeholder: 0, default: 0.02,
-};
+// The live price table = the admin's saved DB prices merged over the defaults,
+// cached briefly so logging a generation doesn't hit the DB every time.
+let priceCache: { prices: PriceTable; at: number } | null = null;
+async function loadPrices(): Promise<PriceTable> {
+  if (priceCache && Date.now() - priceCache.at < 5 * 60 * 1000) return priceCache.prices;
+  let saved: any = null;
+  try { const s = await getSiteSettings(); saved = s?.modelPrices || null; } catch { /* use defaults */ }
+  const prices = mergePrices(saved);
+  priceCache = { prices, at: Date.now() };
+  return prices;
+}
+const TEXT_PRICE = DEFAULT_TEXT_PRICE;
+const IMAGE_PRICE = DEFAULT_IMAGE_PRICE;
 
 export async function recordTextUsage(o: {
   username?: string; kind: string; provider?: string; model?: string;
@@ -32,7 +33,8 @@ export async function recordTextUsage(o: {
   try {
     const p = estTokens(o.input || '');
     const c = estTokens(o.output || '');
-    const price = TEXT_PRICE[o.provider || 'auto'] || TEXT_PRICE.default;
+    const prices = await loadPrices();
+    const price = prices.text[o.provider || 'auto'] || prices.text.default || TEXT_PRICE.default;
     const cost = (p / 1000) * price.in + (c / 1000) * price.out;
     // Keep the PROMPT that produced this generation (trimmed) so the dashboard can
     // show exactly what was sent to the model.
@@ -50,7 +52,8 @@ export async function recordImageUsage(o: {
 }): Promise<void> {
   try {
     const n = Math.max(1, o.count || 1);
-    const per = IMAGE_PRICE[o.provider || 'default'] ?? IMAGE_PRICE.default;
+    const prices = await loadPrices();
+    const per = prices.image[o.provider || 'default'] ?? prices.image.default ?? IMAGE_PRICE.default;
     // Charge the wallet a flat credit cost per AI image (a placeholder/free
     // Pollinations image still counts as content generated), so the up-front
     // estimate that includes images matches what actually gets debited.

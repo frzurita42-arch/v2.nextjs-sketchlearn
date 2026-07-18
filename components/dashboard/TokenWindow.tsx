@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { MiniChart, type Datum } from '@/components/ui/MiniChart';
 import { WhatsAppCouponNote } from '@/components/dashboard/WhatsAppCouponNote';
+import { ModelPricesPanel } from '@/components/dashboard/ModelPricesPanel';
 
 type Wallet = { username: string; role: string; balance: number; usedThisMonth: number };
 type Tokens = {
@@ -219,6 +220,9 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
             <MiniChart type="line" title="💵 Platform spend per month" unit="$"
               data={(tokens.platformMonthly || []).map((m) => ({ label: shortMonth(m.month), value: m.cost }))} />
           </div>
+
+          {/* AI model catalog + their token/image prices (refreshable from the web). */}
+          <ModelPricesPanel />
 
           {/* Grant control */}
           <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>

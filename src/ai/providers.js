@@ -806,8 +806,38 @@ async function generateSpeech(text, voiceId) {
 
 const SKETCH_SVG_RULES = `SVG rules: self-contained <svg> with a viewBox (around 0 0 400 260), no external references, no scripts, no <text> smaller than 14px. Draw in a hand-sketched style: stroke-based shapes with stroke="#2d2a26" stroke-width="2.5" stroke-linecap="round", slightly irregular lines, fills only from this palette: #f9a03f (orange), #7fb069 (green), #5c80bc (blue), #e4572e (red), #f7f3e9 (paper), #fadf63 (yellow). CRITICAL: the drawing must accurately depict THIS slide's specific concept — a real diagram, labeled figure, graph, or visual metaphor of what the paragraphs explain. Label its parts with <text> so a viewer can map the picture onto the idea. A generic, decorative, or unrelated shape (a plain circle, a random zig-zag) is unacceptable; if the concept is a process show the steps, if it is a relationship show the axes/quantities, if it is a structure show and name the parts.`;
 
+// Look up CURRENT public API prices for a set of models using OpenRouter's web
+// search (the ':online' model suffix). Returns { data } with the parsed price
+// table, or { error }. Best-effort — web-sourced prices are estimates.
+async function fetchModelPricesOnline(models) {
+  if (!openrouterEnabled) return { error: 'Web price search needs OPENROUTER_API_KEY (OpenRouter provides the web results).' };
+  const list = (Array.isArray(models) ? models : [])
+    .map((m) => `- provider "${m.provider}", ${m.kind} model "${m.model}" (${m.label})`).join('\n');
+  const sys = 'You are a pricing researcher with live web access. Search the web for the vendors\' CURRENT public API prices and answer ONLY with strict JSON.';
+  const user = `Find today's public API prices for these AI models:\n${list}\n\nReturn strictly this JSON shape:\n{"text":{"<provider>":{"in":<USD per 1K INPUT tokens>,"out":<USD per 1K OUTPUT tokens>}},"image":{"<provider>":<USD per generated image>}}\nRules: use the exact provider keys given. Put text models under "text" and image models under "image". Free services (e.g. pollinations) are 0. Convert any per-million-token price to per-1K (divide by 1000). Give your best current number for each; do not omit a provider. No commentary, JSON only.`;
+  try {
+    const res = await fetchWithTimeout(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENROUTER_API_KEY}`, 'HTTP-Referer': 'https://sketchlearn.app', 'X-Title': 'SketchLearn' },
+      body: JSON.stringify({
+        model: `${OPENROUTER_MODEL_REASON || OPENROUTER_MODEL}:online`,
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+        temperature: 0.1, max_tokens: 1400, response_format: { type: 'json_object' },
+      }),
+    }, 60000, 'OpenRouter web price search');
+    if (!res.ok) { const t = await res.text().catch(() => ''); return { error: `OpenRouter ${res.status}: ${t.slice(0, 200)}` }; }
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return { error: 'Empty response from the price search.' };
+    const parsed = parseModelJson(content);
+    if (!parsed || typeof parsed !== 'object') return { error: 'Could not parse the price results.' };
+    return { data: parsed };
+  } catch (e) { return { error: (e && e.message) || 'Price search failed.' }; }
+}
+
 module.exports = {
   parseModelJson,
+  fetchModelPricesOnline,
   deepseek,
   gemini,
   moonshot,
