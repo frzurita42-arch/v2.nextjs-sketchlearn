@@ -58,12 +58,29 @@ export function ChatView() {
     }).catch(() => { /* keep defaults */ });
   }, []);
 
+  // Debounced push of the whole history to the DB (signed-in users only — guests
+  // keep their chats in the browser, never the server).
+  const dbTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushToDb = (next: ChatSession[]) => {
+    if (!username) return;
+    if (dbTimer.current) clearTimeout(dbTimer.current);
+    dbTimer.current = setTimeout(() => { API.put('/api/coach-chats', { sessions: next }).catch(() => { /* stays in local cache */ }); }, 900);
+  };
+
   // On every visit: start a brand-new chat. The previously active chat was saved
-  // live into history as it was typed, so it's already listed in the sidebar.
+  // live into history as it was typed. Signed-in users load their history from the
+  // DB (so it follows them across devices); guests use the browser cache only.
   useEffect(() => {
     const fresh = [initialCoachGreeting as ChatMsg];
     setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
-    setSessions(loadSessions(username));
+    if (username) {
+      API.get('/api/coach-chats').then((r: any) => {
+        const db = Array.isArray(r?.sessions) ? (r.sessions as ChatSession[]) : [];
+        setSessions(db.length ? db : loadSessions(username));
+      }).catch(() => setSessions(loadSessions(username)));
+    } else {
+      setSessions(loadSessions(username));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
@@ -71,10 +88,12 @@ export function ChatView() {
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, thinking, building, drawing]);
 
   // Persist the active chat into history whenever it gains content, so the sidebar
-  // stays live and the chat survives navigating away.
+  // stays live and the chat survives navigating away. Mirror it to the DB too.
   useEffect(() => {
     if (!hasContent(messages)) return;
-    setSessions(saveSession(username, { id: sessionId, ts: Date.now(), title: '', messages }));
+    const next = saveSession(username, { id: sessionId, ts: Date.now(), title: '', messages });
+    setSessions(next);
+    pushToDb(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
@@ -95,7 +114,9 @@ export function ChatView() {
     setInput(''); setAttachments([]);
   };
   const removeSession = (id: string) => {
-    setSessions(deleteSession(username, id));
+    const next = deleteSession(username, id);
+    setSessions(next);
+    pushToDb(next);
     if (id === sessionId) newChat();
   };
 

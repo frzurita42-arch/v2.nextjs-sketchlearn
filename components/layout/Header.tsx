@@ -21,12 +21,12 @@ export function Header() {
   );
   return (
     <nav id="topbar" className="topbar">
-      <button className="brand" onClick={() => nav('slides')}>✏️ SketchLearn</button>
+      <button className="brand" onClick={() => nav('chat')}>✏️ SketchLearn</button>
       <div className="topbar-links">
+        {/* Coach chat is the home page. */}
+        {link('chat', 'Coach chat')}
         {link('slides', 'Slides')}
         {link('tools', 'Repos')}
-        {/* Feed and My stats hidden for now — restore when needed. */}
-        {link('chat', 'Coach chat')}
         {/* Public directory of moderators — open to everyone, even guests. */}
         {link('moderators', 'Moderators')}
         {/* Everyone signed in can open the Dashboard now — a plain user sees only
