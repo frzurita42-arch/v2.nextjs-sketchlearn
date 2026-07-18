@@ -10,11 +10,11 @@ import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting } from '@/lib/app-state';
 import { downloadCsv } from '@/lib/util';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { MicButton } from '@/components/ui/MicButton';
 import { useApp } from '@/components/AppContext';
 import { estimateLessonTokens } from '@/lib/cost-estimate';
+import { PAGE_HEADERS } from '@/lib/page-settings';
 import {
   type ChatMsg, type ChatSession,
   newSessionId, loadSessions, saveSession, deleteSession, relTime, hasContent,
@@ -33,7 +33,27 @@ export function ChatView() {
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
   const [sidebar, setSidebar] = useState(true);
+  const [expanded, setExpanded] = useState(false);   // history "read more/less"
+  const [coach, setCoach] = useState<{ emoji: string; title: string; subtitle: string }>(() => {
+    const d = PAGE_HEADERS.coach;
+    return { emoji: d.defaultEmoji, title: String(d.defaultTitle).replace(/^[\p{Extended_Pictographic}️‍\s]+/u, '') || d.defaultTitle, subtitle: d.defaultSubtitle };
+  });
   const logRef = useRef<HTMLDivElement>(null);
+  const COLLAPSED_COUNT = 6;
+
+  // The Coach identity (emoji/title/subtitle) now lives at the BOTTOM of the
+  // sidebar instead of a tall page header. Read the editable copy from the DB.
+  useEffect(() => {
+    API.get('/api/site-settings').then((r: any) => {
+      const s = r?.settings || {}; const d = PAGE_HEADERS.coach;
+      const title = s[d.titleKey] || d.defaultTitle;
+      setCoach({
+        emoji: s[d.emojiKey] || d.defaultEmoji,
+        title: String(title).replace(/^[\p{Extended_Pictographic}️‍\s]+/u, '') || title,
+        subtitle: s[d.subtitleKey] || d.defaultSubtitle,
+      });
+    }).catch(() => { /* keep defaults */ });
+  }, []);
 
   // On every visit: start a brand-new chat. The previously active chat was saved
   // live into history as it was typed, so it's already listed in the sidebar.
@@ -55,7 +75,11 @@ export function ChatView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  const loadBalance = () => { if (!app.user) { setBalance(null); return; } API.get('/api/tokens').then((t: any) => setBalance(typeof t?.balance === 'number' ? t.balance : null)).catch(() => { /* ignore */ }); };
+  const [tokenRole, setTokenRole] = useState<string>('');
+  const loadBalance = () => {
+    if (!app.user) { setBalance(null); setTokenRole(''); return; }
+    API.get('/api/tokens').then((t: any) => { setBalance(typeof t?.balance === 'number' ? t.balance : null); setTokenRole(String(t?.role || '')); }).catch(() => { /* ignore */ });
+  };
   useEffect(() => { loadBalance(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [app.user?.username]);
 
   const newChat = () => {
@@ -154,24 +178,33 @@ export function ChatView() {
     app.nav('tool');
   };
 
+  const visibleSessions = expanded ? sessions : sessions.slice(0, COLLAPSED_COUNT);
+
   return (
     <>
-      <PageHeader page="coach" />
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0 10px' }}>
+      {/* A slim control strip replaces the tall page header (no more scrolling to
+          reach the chat). The Coach identity moves to the bottom of the sidebar. */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '2px 0 8px' }}>
         <button className="btn small ghost" onClick={() => setSidebar((v) => !v)} title="Chat history">🗂 History</button>
         <button className="btn small green" onClick={newChat} title="Start a new chat">＋ New chat</button>
         <button className="btn small" id="chat-export" onClick={downloadCsv}>⬇ spreadsheet</button>
-        {app.user && <span style={{ fontSize: 13, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()} credits</span>}
+        {app.user && (tokenRole === 'admin'
+          ? <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
+          : <span style={{ fontSize: 13, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()} credits</span>)}
       </div>
 
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'stretch', height: 'calc(100vh - 150px)', minHeight: 420 }}>
         {sidebar && (
-          <aside style={{ flex: '0 0 200px', maxWidth: 200, borderRight: '2px dashed var(--line,#d9cfc0)', paddingRight: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 8px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
+          <aside style={{ flex: '0 0 210px', maxWidth: 210, borderRight: '2px dashed var(--line,#d9cfc0)', paddingRight: 10, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>＋ New chat</button>
-            {sessions.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No past chats yet. Say something and it’ll show up here.</p>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 420, overflowY: 'auto' }}>
-              {sessions.map((s) => (
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 6px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
+
+            {/* The history list scrolls in its own window and, when it fills up,
+                offers read-more/less — so it never overlaps the Coach identity
+                pinned at the bottom of the sidebar. */}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {sessions.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No past chats yet. Say something and it’ll show up here.</p>}
+              {visibleSessions.map((s) => (
                 <div key={s.id} className={s.id === sessionId ? 'card' : ''}
                   style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 8, cursor: 'pointer', background: s.id === sessionId ? 'var(--card,#fff8ee)' : 'transparent', border: s.id === sessionId ? '1.5px solid var(--ink)' : '1.5px solid transparent' }}
                   onClick={() => openSession(s)}>
@@ -182,11 +215,23 @@ export function ChatView() {
                   <button title="Delete chat" onClick={(e) => { e.stopPropagation(); removeSession(s.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--muted,#8a7f70)', padding: 2 }}>✕</button>
                 </div>
               ))}
+              {sessions.length > COLLAPSED_COUNT && (
+                <button className="btn small ghost" onClick={() => setExpanded((v) => !v)} style={{ alignSelf: 'flex-start', marginTop: 2, fontSize: 12 }}>
+                  {expanded ? '▲ Read less' : `▼ Read more (${sessions.length - COLLAPSED_COUNT})`}
+                </button>
+              )}
+            </div>
+
+            {/* Coach identity — pinned at the bottom of the side navigation. */}
+            <div style={{ borderTop: '2px dashed var(--line,#d9cfc0)', marginTop: 8, paddingTop: 10, textAlign: 'center', flex: '0 0 auto' }}>
+              <div style={{ fontSize: 26, lineHeight: 1 }}>{coach.emoji}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2 }}>{coach.title}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--muted,#8a7f70)', marginTop: 2 }}>{coach.subtitle}</div>
             </div>
           </aside>
         )}
 
-        <div className="chat-shell" style={{ flex: 1, minWidth: 0 }}>
+        <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', maxWidth: 'none' }}>
           <div className="chat-log" id="chat-log" ref={logRef}>
             {messages.map((m, i) => {
               if (m.building) return (
