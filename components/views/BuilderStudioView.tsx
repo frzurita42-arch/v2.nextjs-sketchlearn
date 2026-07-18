@@ -19,6 +19,24 @@ import {
 type Msg = { role: 'assistant' | 'user'; content: string };
 const newLayout = (): StudioLayout => ({ template: 'auto', components: [] });
 const newPage = (): StudioPage => ({ layouts: [newLayout()], length: 'medium', paragraphs: 1 });
+
+// Simplified per-slide chips (same design as the tool's layout editor): a slide
+// ALWAYS has reading text; you add SUPPORT/visuals (first) then EVALUATION (a
+// question). These map onto the studio component catalog ids.
+const SUPPORT_CHIPS = [
+  { id: 'image', label: '🖼 Image' }, { id: 'table', label: '▦ Table' },
+  { id: 'latex', label: '∑ Formula' }, { id: 'codeblock', label: '{ } Code' },
+  { id: 'audio', label: '🔊 Audio' }, { id: 'geogebra', label: '📐 Graph' },
+];
+const EVAL_CHIPS = [
+  { id: 'mcq4', label: 'Multiple choice' }, { id: 'mcq2', label: 'True / false' },
+  { id: 'fill-blank', label: 'Fill the blank' }, { id: 'input', label: 'Typed answer' },
+  { id: 'writing', label: 'Handwriting' }, { id: 'annotation', label: 'Annotation pad' },
+  { id: 'code', label: 'Code box' },
+];
+const SUP_IDS = SUPPORT_CHIPS.map((c) => c.id);
+const EVAL_IDS = EVAL_CHIPS.map((c) => c.id);
+const chipSt = (on: boolean) => ({ fontSize: 11.5, padding: '3px 9px', borderRadius: 999, cursor: 'pointer', border: '1.5px solid var(--ink)', background: on ? 'var(--yellow,#fdf0a6)' : 'transparent', fontWeight: on ? 700 : 400 } as const);
 const TONES = ['Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling', 'Encouraging', 'Concise', 'Enthusiastic', 'Professional'];
 const blankRepoCard = (): RepoCard => ({ name: '', link: '', description: '', children: [] });
 
@@ -221,8 +239,10 @@ export function BuilderStudioView() {
 
   // ---- per-page / per-layout editing ----
   const setPage = (i: number, patch: Partial<StudioPage>) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)));
-  const addPage = () => setPages((ps) => [...ps, newPage()]);
+  // New slides start with the always-present reading text.
+  const addPage = () => setPages((ps) => [...ps, { layouts: [{ template: 'auto', components: [{ id: 'reading', uid: mkUid() }] }], length: 'medium', paragraphs: 1 }]);
   const removePage = (i: number) => setPages((ps) => ps.length > 1 ? ps.filter((_, j) => j !== i) : ps);
+  const movePage = (i: number, dir: -1 | 1) => setPages((ps) => { const j = i + dir; if (j < 0 || j >= ps.length) return ps; const n = ps.slice(); [n[i], n[j]] = [n[j], n[i]]; return n; });
   const layoutsOf = (p: StudioPage): StudioLayout[] => (p.layouts && p.layouts.length ? p.layouts : [{ template: p.template || 'auto', components: p.components || [] }]);
   const mapLayouts = (i: number, fn: (ls: StudioLayout[]) => StudioLayout[]) => setPages((ps) => ps.map((p, j) => (j === i ? { ...p, layouts: fn(layoutsOf(p)), components: undefined, template: undefined } : p)));
   const addLayout = (i: number) => mapLayouts(i, (ls) => [...ls, newLayout()]);
@@ -234,6 +254,35 @@ export function BuilderStudioView() {
   const addComp = (i: number, li: number, id: string) => { if (!id) return; const it = studioItem(id); const opt = it?.sizes ? ANNOTATION_SIZES[1] : it?.button ? 'ask' : undefined; mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: [...l.components, { id, uid: mkUid(), instr: '', opt }] } : l))); };
   const setComp = (i: number, li: number, uid: string, patch: Partial<StudioComponent>) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.map((c) => ((c.uid || c.id) === uid ? { ...c, ...patch } : c)) } : l)));
   const rmComp = (i: number, li: number, uid: string) => mapLayouts(i, (ls) => ls.map((l, k) => (k === li ? { ...l, components: l.components.filter((c) => (c.uid || c.id) !== uid) } : l)));
+
+  // ---- Simplified chip editing for a slide (reading always → support → evaluation) ----
+  const flatComps = (pg: StudioPage): StudioComponent[] => layoutsOf(pg).flatMap((l) => l.components);
+  const hasComp = (pg: StudioPage, id: string) => flatComps(pg).some((c) => c.id === id);
+  const slideNote = (pg: StudioPage) => flatComps(pg).find((c) => c.id === 'note')?.instr || '';
+  // Rebuild a slide's components into a single layout in canonical order — reading,
+  // support/visuals, evaluations, any other components (decorations…), then the
+  // context note — preserving each component's uid/instr.
+  const rewriteSlide = (i: number, mutate: (s: { supports: Set<string>; evals: Set<string>; note: string }) => void) => {
+    setPages((ps) => ps.map((p, j) => {
+      if (j !== i) return p;
+      const cur = flatComps(p);
+      const byId = new Map<string, StudioComponent>();
+      cur.forEach((c) => { if (!byId.has(c.id)) byId.set(c.id, c); });
+      const s = { supports: new Set(SUP_IDS.filter((id) => byId.has(id))), evals: new Set(EVAL_IDS.filter((id) => byId.has(id))), note: slideNote(p) };
+      mutate(s);
+      const mk = (id: string): StudioComponent => byId.get(id) || { id, uid: mkUid(), instr: '' };
+      const extras = cur.filter((c) => c.id !== 'reading' && c.id !== 'note' && !SUP_IDS.includes(c.id) && !EVAL_IDS.includes(c.id));
+      const comps: StudioComponent[] = [mk('reading')];
+      SUPPORT_CHIPS.forEach((c) => { if (s.supports.has(c.id)) comps.push(mk(c.id)); });
+      EVAL_CHIPS.forEach((c) => { if (s.evals.has(c.id)) comps.push(mk(c.id)); });
+      extras.forEach((c) => comps.push(c));
+      if (String(s.note || '').trim()) comps.push({ id: 'note', uid: byId.get('note')?.uid || mkUid(), instr: s.note });
+      return { ...p, layouts: [{ template: 'auto', components: comps }], components: undefined, template: undefined };
+    }));
+  };
+  const toggleSupport = (i: number, id: string) => rewriteSlide(i, (s) => { if (s.supports.has(id)) s.supports.delete(id); else s.supports.add(id); });
+  const toggleEval = (i: number, id: string) => rewriteSlide(i, (s) => { if (s.evals.has(id)) s.evals.delete(id); else s.evals.add(id); });
+  const setSlideNote = (i: number, text: string) => rewriteSlide(i, (s) => { s.note = text; });
 
   // ---- Presentation "Suggest / Edit with AI" (mirrors the repository flow) ----
   // Map the designer's simple pages [{components:[id|{id,instr}], length, paragraphs}]
@@ -461,60 +510,48 @@ export function BuilderStudioView() {
 
           {artifact === 'presentation' ? (
             <>
-              {/* PAGES — one slide each; a slide is a STACK of layout sections,
-                  and each layout section holds one or more components. */}
+              {/* SLIDES — each slide always has teaching text; add support/visuals
+                  (first) then an evaluation (question). Chip layout matches the
+                  tool's "Edit layout & activities" editor. */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — stack layouts, fill each with components</div>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — every slide has text; add support, then an evaluation</div>
               </div>
               <div style={{ display: 'grid', gap: 12 }}>
-                {pages.map((pg, i) => {
-                  const layouts = layoutsOf(pg);
-                  return (
+                {pages.map((pg, i) => (
                   <div key={i} className="card" style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <strong>📄 Slide {i + 1}</strong>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span style={{ fontSize: 12, opacity: 0.55 }}>{layouts.length} layout{layouts.length === 1 ? '' : 's'}</span>
-                        <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)}>🗑</button>
-                      </div>
+                      <span style={{ display: 'inline-flex', gap: 4 }}>
+                        <button className="btn small ghost" title="Move up" disabled={i === 0} onClick={() => movePage(i, -1)} style={{ padding: '0 8px' }}>↑</button>
+                        <button className="btn small ghost" title="Move down" disabled={i === pages.length - 1} onClick={() => movePage(i, 1)} style={{ padding: '0 8px' }}>↓</button>
+                        <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)} style={{ padding: '0 8px' }}>🗑</button>
+                      </span>
                     </div>
 
-                    {/* Stacked layout sections (scroll down the slide). */}
-                    <div style={{ display: 'grid', gap: 10 }}>
-                      {layouts.map((ly, li) => (
-                        <div key={li} className="card alt" style={{ padding: '10px 12px', borderStyle: 'dashed' }}>
-                          {/* layout dropdown + add-component picker share ONE row */}
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, flex: '0 0 auto' }}>▦{li + 1}</span>
-                            <select value={ly.template || 'auto'} onChange={(e) => setLayout(i, li, { template: e.target.value })} style={{ fontSize: 12, flex: '1 1 120px', minWidth: 0 }}>
-                              {LAYOUT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-                            </select>
-                            {picker(presCats, [], (id) => addComp(i, li, id), '＋ Add component…')}
-                            <button className="btn small ghost" style={{ flex: '0 0 auto' }} disabled={layouts.length <= 1} title="Remove layout" onClick={() => removeLayout(i, li)}>✕</button>
-                          </div>
-                          {ly.components.length === 0
-                            ? <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>Pick a layout above, then add the components that go in this section (you can add the same type more than once).</p>
-                            : <div style={{ display: 'grid', gap: 8 }}>{ly.components.map((c) => componentBar(c, (p) => setComp(i, li, c.uid || c.id, p), () => rmComp(i, li, c.uid || c.id)))}</div>}
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                      <button className="btn small" onClick={() => addLayout(i)}>＋ Add layout (another section below)</button>
+                    {/* Reading text — always present. */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, background: 'var(--paper-2,#f3ead6)', border: '1.5px dashed var(--ink)', borderRadius: 8, padding: '3px 9px', margin: '2px 0 8px' }}>
+                      📖 Reading text <span style={{ fontWeight: 400, opacity: 0.7 }}>· always on every slide</span>
                     </div>
 
-                    {/* per-page density */}
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', borderTop: '1.5px dashed var(--ink)', paddingTop: 10 }}>
-                      <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Paragraph length</span>
-                        <select value={pg.length} onChange={(e) => setPage(i, { length: e.target.value as any })}><option value="brief">brief</option><option value="medium">medium</option><option value="detailed">detailed</option></select></label>
-                      <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Paragraphs</span>
-                        <input type="number" min={1} max={4} value={pg.paragraphs} onChange={(e) => setPage(i, { paragraphs: Number(e.target.value) })} style={{ width: 70 }} /></label>
+                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Support / visuals — optional</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                      {SUPPORT_CHIPS.map((s) => <span key={s.id} onClick={() => toggleSupport(i, s.id)} style={chipSt(hasComp(pg, s.id))}>{s.label}</span>)}
                     </div>
+
+                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '2px 0' }}>Evaluation (question) — optional, leave all off for none</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                      {EVAL_CHIPS.map((s) => <span key={s.id} onClick={() => toggleEval(i, s.id)} style={chipSt(hasComp(pg, s.id))}>{s.label}</span>)}
+                    </div>
+
+                    <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, margin: '8px 0 2px' }}>Slide context (what this slide teaches / must show — guides the AI)</div>
+                    <textarea value={slideNote(pg)} onChange={(e) => setSlideNote(i, e.target.value)}
+                      placeholder="e.g. Welcome slide: greet ESL learners, AI image of a design studio, one easy multiple-choice question."
+                      style={{ width: '100%', fontSize: 12, minHeight: 46, padding: '6px 8px', borderRadius: 8, border: '1.5px solid var(--ink)' }} maxLength={2000} />
                   </div>
-                  );
-                })}
+                ))}
               </div>
               <div style={{ textAlign: 'center', margin: '12px 0' }}>
-                <button className="btn" onClick={addPage}>＋ Add page (slide {pages.length + 1})</button>
+                <button className="btn" onClick={addPage}>＋ Add slide ({pages.length + 1})</button>
               </div>
             </>
           ) : (
