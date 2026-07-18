@@ -313,8 +313,13 @@ export default function AppRoot() {
     moderators: <ModeratorsView />,
   };
 
+  // The Coach chat runs as a fixed-viewport app (like a chat client): the shell
+  // fills the screen exactly, the footer is hidden, and only the chat log scrolls.
+  const isChat = liveView(view) === 'chat';
+
   return (
     <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner), requireLogin }}>
+      <div style={isChat ? { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' } : undefined}>
       <Header />
       {/* Sign-in / create-account overlay for guests. Dismissible so they can keep
           browsing; closes automatically once they're signed in. */}
@@ -349,10 +354,12 @@ export default function AppRoot() {
           the key also carries the active tool's slug, so opening a DIFFERENT tool
           while already on a tool page (e.g. "Make a lesson" from a repo's topic
           shelf) remounts the runner onto the new tool instead of staying put. */}
-      <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}>
+      <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}
+        style={isChat ? { flex: 1, minHeight: 0, maxWidth: 'none', margin: 0, padding: 0, overflow: 'hidden' } : undefined}>
         <ErrorBoundary onHome={() => nav(HOME)}>{views[liveView(view)]}</ErrorBoundary>
       </main>
-      <Footer />
+      {!isChat && <Footer />}
+      </div>
     </AppContext.Provider>
   );
 }

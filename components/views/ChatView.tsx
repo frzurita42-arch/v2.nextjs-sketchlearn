@@ -336,9 +336,10 @@ export function ChatView() {
 
   return (
     <>
-      {/* Full-bleed row: the history side-nav sits flush against the LEFT edge of
-          the screen (breaking out of the centered #app container), Claude-style. */}
-      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: 'calc(100vh - 104px)', minHeight: 380, marginLeft: 'calc(50% - 50vw)', marginRight: 'calc(50% - 50vw)', width: '100vw' }}>
+      {/* Fills the fixed-viewport chat shell (see AppRoot): the history side-nav
+          sits flush against the LEFT edge of the screen, Claude-style, and only the
+          chat log scrolls — the page itself never scrolls. */}
+      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: '100%', width: '100%' }}>
         {sidebar ? (
           <aside style={{ flex: '0 0 250px', maxWidth: 250, borderRight: '2px dashed var(--line,#d9cfc0)', padding: '4px 12px 10px 22px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {/* Coach logo top-left (orange scribble underline, larger) + collapse. */}
