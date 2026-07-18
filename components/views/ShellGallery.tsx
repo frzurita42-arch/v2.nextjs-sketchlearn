@@ -62,9 +62,10 @@ function unitCount(t: any, kind: Kind): number {
   return Number(t?.definition?.cards?.length || t?.definition?.entries?.length || 0) || 0;
 }
 
-export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind: Kind; title: string; subtitle: string; topSlot?: React.ReactNode; pageKey?: string }) {
+export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pageKey }: { kind: Kind; title: string; subtitle: string; topSlot?: React.ReactNode; topSlotLabel?: string; pageKey?: string }) {
   const app = useApp();
   const isGuest = !app.user;
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [tools, setTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [favs, setFavs] = useState<Record<string, boolean>>({});
@@ -177,17 +178,31 @@ export function ShellGallery({ kind, title, subtitle, topSlot, pageKey }: { kind
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey={pageKey} title={title} subtitle={`${subtitle}${tools.length ? ` — ${tools.length} total` : ''}.`} />
 
-        {topSlot}
-
-        {/* Search + favorites/mine filters. */}
+        {/* Search + favorites/mine filters. The optional topSlot (e.g. the slide
+            settings form) opens from the ⚙️ gear here as a popup, not inline. */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
           <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
             style={{ flex: '1 1 220px', minWidth: 0 }} />
           {filters.map((f) => (
             <button key={f.key} className={`btn small ${filter === f.key ? 'green' : 'ghost'}`} onClick={() => setFilter(f.key)}>{f.label}</button>
           ))}
+          {topSlot && (
+            <button className="btn small ghost" title={topSlotLabel || 'Settings'} aria-label={topSlotLabel || 'Settings'}
+              onClick={() => setSettingsOpen(true)} style={{ fontSize: 16, padding: '0 9px' }}>⚙️</button>
+          )}
           {pageKey && <CardViewMenu pageKey={pageKey} />}
         </div>
+
+        {topSlot && settingsOpen && (
+          <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 150, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, width: '100%', margin: '32px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+                <button className="btn small ghost" onClick={() => setSettingsOpen(false)} style={{ background: 'var(--card,#fff8ee)' }}>✕ Close</button>
+              </div>
+              {topSlot}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--muted,#8a7f70)', padding: '20px 0' }}>

@@ -40,7 +40,9 @@ function SlideSettings() {
     app.nav('toolbuilder');
   };
 
-  const sel: React.CSSProperties = { width: '100%', padding: '6px 8px', fontSize: 13, borderRadius: 8, border: '1.5px solid var(--ink)', background: 'var(--card,#fff8ee)', font: 'inherit' };
+  // Use the shared "card-like" sketchbook paper input/select (global styling) —
+  // the same look as the gallery search box; just size to the column.
+  const sel: React.CSSProperties = { width: '100%' };
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 3, display: 'block' };
 
   return (
@@ -48,7 +50,7 @@ function SlideSettings() {
       <b style={{ display: 'block', marginBottom: 10 }}>🎬 Make a slide presentation</b>
       <div className="settings-compact" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 12px' }}>
         <label style={{ gridColumn: '1 / -1' }}><span style={lbl}>Topic</span>
-          <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Photosynthesis, French greetings…" style={sel} /></label>
+          <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Photosynthesis, French greetings…" style={sel} /></label>
         <label><span style={lbl}>Slides</span>
           <input type="number" min={1} max={30} value={slides} onChange={(e) => setSlides(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 5)))} style={sel} /></label>
         <label><span style={lbl}>Level</span>
@@ -76,6 +78,6 @@ function SlideSettings() {
 export function PresentationRunsView() {
   return (
     <ShellGallery pageKey="presrun" kind="presentation" title="🎬 Presentation runs" subtitle="Set up a new presentation, or open one of the slide tools"
-      topSlot={<SlideSettings />} />
+      topSlot={<SlideSettings />} topSlotLabel="Make a slide presentation" />
   );
 }
