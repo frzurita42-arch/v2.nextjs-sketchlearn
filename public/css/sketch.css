@@ -344,6 +344,35 @@ label.field > span { display: block; margin-bottom: 4px; }
 .sticky-green  { background: #cdeeb8; }
 .sticky-orange { background: #ffd9a8; }
 
+/* ---------- chat Polaroid (the coach's "draw the chat" keepsake) ---------- */
+.chat-polaroid {
+  display: inline-block;
+  margin: 0;
+  padding: 10px 10px 0;
+  width: 232px;
+  max-width: 100%;
+  background: #fffef9;
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: 2px 5px 12px rgba(40,26,8,.26);
+  transform: rotate(-2deg);
+}
+.chat-polaroid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: #efe9dc;
+  border: 1px solid rgba(0,0,0,.06);
+}
+.chat-polaroid figcaption {
+  font-family: var(--font-hand);
+  font-size: 1.02rem;
+  color: #3a3320;
+  text-align: center;
+  padding: 10px 4px 14px;
+  line-height: 1.2;
+}
+
 /* ---------- data chart ---------- */
 .comp-chart {
   text-align: center;

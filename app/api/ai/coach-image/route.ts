@@ -30,17 +30,31 @@ export async function POST(req: Request) {
   if (!a.ok) return a.response;
   const b = (await req.json().catch(() => ({}))) || {};
   const idea = String(b.prompt || '').slice(0, 500).trim();
-  if (!idea) return NextResponse.json({ error: 'Tell me what to draw.' }, { status: 400 });
+  // "interpret" mode: no typed prompt required — the coach draws its own read of
+  // the conversation so far as an anthropomorphic scene (a Polaroid keepsake).
+  const mode = String(b.mode || '').trim();
+  const convo = String(b.convo || '').slice(0, 1500).trim();
+  const interpret = mode === 'interpret';
+  if (!idea && !interpret) return NextResponse.json({ error: 'Tell me what to draw.' }, { status: 400 });
 
   if (!imageEnabled && !geminiEnabled && !openrouterEnabled && !deepseekEnabled && !moonshotEnabled) {
     return NextResponse.json({ error: 'No image model is configured.' }, { status: 200 });
   }
 
-  const prompt = [
-    'A warm, friendly, hand-illustrated educational picture — clean composition, tasteful colour, gentle lighting; the kind of image that helps a learner picture the idea.',
-    `Draw this: "${idea}".`,
-    NO_TEXT_RULE,
-  ].join(' ');
+  const prompt = interpret
+    ? [
+        'A whimsical, warm hand-illustrated scene of friendly ANTHROPOMORPHIC animal characters (animals that walk, talk and gesture like people) — the coach\'s playful interpretation of a tutoring conversation.',
+        'Show the characters acting out or surrounded by the ideas and topics being discussed, as if it were a candid snapshot of the lesson happening.',
+        convo ? `The conversation so far (interpret its mood and subjects visually, do NOT write any of these words in the picture): ${convo}` : 'A learner and their animal coach chatting about what to study next.',
+        idea ? `Extra direction from the learner: "${idea}".` : '',
+        'Storybook illustration, gentle lighting, tasteful colour, expressive characters.',
+        NO_TEXT_RULE,
+      ].filter(Boolean).join(' ')
+    : [
+        'A warm, friendly, hand-illustrated educational picture — clean composition, tasteful colour, gentle lighting; the kind of image that helps a learner picture the idea.',
+        `Draw this: "${idea}".`,
+        NO_TEXT_RULE,
+      ].join(' ');
 
   const GEN_BUDGET_MS = 38000;
   const timeout = <T,>(p: Promise<T>, ms: number) => Promise.race([
@@ -57,7 +71,7 @@ export async function POST(req: Request) {
       provider = r?.provider || '';
       // No image model reachable — fall back to a hand-drawn SVG via the text model
       // so the chat still gets a picture rather than an error.
-      if (!url) { url = await timeout((generateSvgSketch as any)(idea), 12000); if (url) provider = 'sketch'; }
+      if (!url) { url = await timeout((generateSvgSketch as any)(idea || 'our chat so far'), 12000); if (url) provider = 'sketch'; }
     } catch (e: any) {
       if (String(e?.message) === 'image-timeout') {
         return NextResponse.json({ error: 'The image generator is taking too long right now — please try again in a moment.' }, { status: 200 });
@@ -69,7 +83,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: why ? `Could not generate an image. ${String(why).slice(0, 400)}` : 'Could not generate an image — try again.' }, { status: 200 });
     }
 
-    await recordImageUsage({ username: a.user.username, kind: 'coach-image', provider, subject: idea, meta: { prompt: idea } });
+    const subject = idea || (interpret ? 'chat interpretation' : '');
+    await recordImageUsage({ username: a.user.username, kind: 'coach-image', provider, subject, meta: { prompt: subject, mode } });
 
     // Offload a data: URL to the blob store when configured, so we don't carry
     // megabytes of base64 around the chat.
