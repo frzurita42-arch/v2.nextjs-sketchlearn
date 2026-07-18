@@ -2116,14 +2116,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   return (
     <div>
       <style>{'@keyframes sl-spin{to{transform:rotate(360deg)}}'}</style>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn small ghost" onClick={() => { setPhase('hub'); loadActivities(); }}>← Lessons</button>
-        <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 13, opacity: 0.7 }}>{label(cfg)}</span>
-          {/* ★ favorite THIS slide — saved with the finished run (data.favorites). */}
-          <button className="btn small ghost" title={favSlides[cur] ? 'Unfavorite this slide' : 'Favorite this slide (saved with the run)'}
-            onClick={() => toggleFavSlide(cur)} style={{ fontSize: 15, padding: '2px 8px', color: favSlides[cur] ? '#f5b301' : undefined }}>{favSlides[cur] ? '★' : '☆'}</button>
-        </span>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 13, opacity: 0.7, textAlign: 'center' }}>{label(cfg)}</span>
       </div>
       {/* Always show the current slide's LEVEL, just under the back button and above
           the progress bar (reflects a per-slide ⚙ level change too). */}
@@ -2245,6 +2239,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </div>
             )}
           </div>
+          {/* A dashed rule under the title separates it from the teaching text. */}
+          <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.5, margin: '8px 0 12px' }} />
           {/* On-slide helper tooltips (hints/links/ask-AI). Hidden when the player
               turned Tooltips OFF for this run (some students lack tooltip access). */}
           {cfg.tooltips !== false && curPage?.decorations?.length ? <Decorations items={curPage.decorations} subject={lesson.subject || ''} topic={cfg.topic || ''} onFinish={() => { setPhase('done'); window.scrollTo(0, 0); }} /> : null}
