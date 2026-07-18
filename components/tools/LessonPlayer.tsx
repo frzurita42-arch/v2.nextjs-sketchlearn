@@ -11,7 +11,32 @@ import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
-import { LayoutEditor } from '@/components/tools/LayoutEditor';
+
+// Reconstruct the Studio's editable page stack from a tool's saved lesson.pages,
+// so "Edit layout & activities" opens the SAME builder used to create slide tools,
+// pre-loaded with this tool's real layout. Order per slide: reading → support →
+// evaluation → per-slide note. Maps our stored activity/support flags back to the
+// Studio component catalog ids.
+const ACT_TO_ID: Record<string, string> = { mcq: 'mcq4', mcq4: 'mcq4', mcq2: 'mcq2', 'fill-blank': 'fill-blank', input: 'input', annotation: 'annotation', code: 'code', writing: 'writing' };
+const SUP_TO_ID: Record<string, string> = { images: 'image', tables: 'table', formulas: 'latex', code: 'codeblock', audio: 'audio', geogebra: 'geogebra' };
+const mkUid = () => Math.random().toString(36).slice(2, 8);
+function lessonPageToStudio(pg: any): any {
+  const comps: any[] = [];
+  if (pg?.reading !== false) comps.push({ id: 'reading', uid: mkUid() });   // teaching text — always
+  const sup = pg?.support || {};
+  ['images', 'tables', 'formulas', 'code', 'audio', 'geogebra'].forEach((k) => { if (sup[k]) comps.push({ id: SUP_TO_ID[k], uid: mkUid() }); });   // support before evaluation
+  (Array.isArray(pg?.activityTypes) ? pg.activityTypes : []).forEach((a: string) => { const id = ACT_TO_ID[a]; if (id) comps.push({ id, uid: mkUid() }); });
+  if (pg?.style) comps.push({ id: 'note', uid: mkUid(), instr: String(pg.style).slice(0, 2000) });
+  return { layouts: [{ template: 'auto', components: comps }], length: pg?.paragraphLength || 'medium', paragraphs: pg?.paragraphsPerSlide || 1 };
+}
+function lessonToStudioPages(lesson: any): any[] {
+  if (Array.isArray(lesson?.pages) && lesson.pages.length) return lesson.pages.map(lessonPageToStudio);
+  // No per-slide pages yet (e.g. built from the coach chat): synthesise one row per
+  // slide from the lesson-wide activity/support settings so the builder isn't empty.
+  const count = Math.max(1, Math.min(30, parseInt(lesson?.totalSlides, 10) || 5));
+  const base = { reading: true, activityTypes: lesson?.activityTypes, support: lesson?.support, paragraphsPerSlide: lesson?.paragraphsPerSlide, paragraphLength: lesson?.paragraphLength };
+  return Array.from({ length: count }, () => lessonPageToStudio(base));
+}
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { RichText } from '@/components/tools/RichText';
@@ -989,10 +1014,24 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => { try { setSettingsOpen(localStorage.getItem('sl_lesson_settings_open') === '1'); } catch { /* ignore */ } }, []);
   const toggleSettings = () => setSettingsOpen((o) => { const n = !o; try { localStorage.setItem('sl_lesson_settings_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
-  // Edit this tool's PER-SLIDE layout (proposed slide types) + the whole generation
-  // prompt, in place, loading the tool's saved layout and saving it back to the DB.
-  const [layoutOpen, setLayoutOpen] = useState(false);
-  const openLayoutEditor = () => setLayoutOpen(true);
+  // Edit this tool's layout in the SAME Studio used to create slide tools, pre-loaded
+  // with the tool's saved per-slide layout (from its studioConfig if present, else
+  // reconstructed from lesson.pages). Publishing there updates THIS tool.
+  const openLayoutEditor = () => {
+    const sc: any = (def as any).studioConfig;
+    const pages = sc && Array.isArray(sc.pages) && sc.pages.length ? sc.pages : lessonToStudioPages(lesson);
+    appState.builderSeed = {
+      artifact: 'presentation',
+      title: String(def.title || '').replace(/^(Presentation|Collection) — /, ''),
+      subject: (lesson as any).subject || '',
+      tone: (lesson as any).tone || (sc?.tone) || '',
+      context: (def as any).description || '',
+      pages,
+      editSlug: slug,
+    };
+    appState.activeTool = appState.activeTool || { slug, definition: def };
+    app.nav('toolbuilder');
+  };
   // The study source / AI guidance (lesson.style) is still fed into every slide's
   // generation prompt; it is now edited via the Studio ("✏️ Edit layout &
   // activities"), not an on-page command center.
@@ -1759,18 +1798,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           </div>
         )}
 
-        {/* Editing the slide layout / proposed activities is done via the "✏️ Edit
-            layout & activities" button beside "New topics", which opens this in-place
-            editor (loads the tool's saved layout, saves it back to the DB). */}
-        {layoutOpen && canEdit && (
-          <LayoutEditor slug={slug} def={def}
-            onClose={() => setLayoutOpen(false)}
-            onSaved={(nextDef) => {
-              appState.activeTool = { ...(appState.activeTool || { slug }), definition: nextDef };
-              if (def) def.lesson = nextDef.lesson;
-              app.rerender();
-            }} />
-        )}
+        {/* Editing the slide layout / proposed activities opens the Studio (the same
+            builder used to create slide tools), pre-loaded with this tool's layout,
+            via the "✏️ Edit layout & activities" button beside "New topics". */}
 
         {showGenerate && (
         <div className="card alt" style={{ padding: '14px 16px' }}>
