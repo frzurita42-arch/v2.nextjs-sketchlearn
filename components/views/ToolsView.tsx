@@ -272,15 +272,8 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
     catch { appState.activeTool = t; }
     app.nav('tool');
   };
-  // Open straight to a presentation's SAVED results (the 📖 book) — no play, no
-  // token spend. Used for signed-out visitors, who can review saved decks but not
-  // generate a fresh run.
-  const openResults = async (t: any) => {
-    appState.openIntent = { action: 'results' };
-    await open(t);
-  };
-  // A signed-out visitor browses as a plain viewer: they can review saved
-  // presentations but can't favorite or play (playing prompts them to sign in).
+  // A signed-out visitor browses as a plain viewer: they can open tools and review
+  // saved runs on a tool's own page, but can't favorite here (no account).
   const isGuest = !app.user;
 
   const isExample = (t: any) => (t.tags || []).includes('example');
@@ -303,15 +296,13 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
   // `hideOpen` (used in the carousel) drops the Open button — image + title open it.
   const card = (t: any, view: 'grid' | 'row', hideOpen?: boolean) => {
     // Signed-out visitors: every card keeps its Open button (same as repos), but
-    // they can't favorite (no ★). Presentations with saved results also get a 📖
-    // shortcut straight to those results. Playing/generating is gated inside the
-    // tool (it prompts them to sign in).
-    const isLesson = t.archetype === 'lesson';
+    // they can't favorite (no ★). The saved-results 📖 lives on the tool's own
+    // page (its runs feed), NOT here on the gallery card. Playing/generating is
+    // gated inside the tool.
     return (
       <ToolCard tool={t} view={view} onOpen={open}
         favs={favs} onToggleFav={isGuest ? undefined : toggleFav}
         hideOpen={hideOpen}
-        onHistory={isGuest && isLesson && t.hasSavedDeck ? openResults : undefined}
         canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
         onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} onDice={diceThumb} thumbing={!!thumbing[t.slug]}
         canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />

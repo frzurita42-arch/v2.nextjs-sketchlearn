@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { MiniChart, type Datum } from '@/components/ui/MiniChart';
+import { WhatsAppCouponNote } from '@/components/dashboard/WhatsAppCouponNote';
 
 type Wallet = { username: string; role: string; balance: number; usedThisMonth: number };
 type Tokens = {
@@ -102,6 +103,9 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
         {stat('Your role', tokens.role)}
       </div>
 
+      {/* How to get credits: request a coupon on WhatsApp. Shown to non-admins
+          (admins mint their own coupons and never spend their own tokens). */}
+      {!isAdmin && <WhatsAppCouponNote />}
       {/* Redeem a coupon — anyone with a code can cash it in for credits. */}
       <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
         <h4 style={{ margin: '0 0 6px' }}>🎫 Redeem a coupon</h4>

@@ -767,6 +767,16 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // (or a guest / an admin previewing as a user) can only VIEW the saved history.
   const eff = app.eff();
   const canPlay = !!(eff.isAdmin || eff.isModerator);
+  // A ▶ Play press is offered to everyone but gated by who they are:
+  //   • signed-out visitor → prompted to sign in
+  //   • signed-in normal user (no play credits) → sent to the dashboard to buy
+  //     credits (request a coupon — see the WhatsApp note there)
+  //   • moderator / admin → actually plays
+  const gatedPlay = (run: () => void) => {
+    if (!app.user) { app.requireLogin(); return; }
+    if (!canPlay) { app.nav('dashboard'); return; }
+    run();
+  };
   const [phase, setPhase] = useState<'hub' | 'play' | 'done' | 'history'>('hub');
   // "Immersive" = actually inside a run (a slide, results, or the saved deck) — as
   // opposed to the hub (create form + gallery). The parent tool page hides its
@@ -1636,7 +1646,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           gridHeight={row ? undefined : 372}   // uniform tiles: title clamps to 2 lines (…), edit icons stay
           thumbnail={emoji ? null : thumb}
           iconNode={emoji ? <span aria-hidden>{emoji}</span> : undefined}
-          onOpen={canPlay ? play : (hasSaved ? () => { setPhase('history'); window.scrollTo(0, 0); } : undefined)}
+          onOpen={hasSaved ? () => { setPhase('history'); window.scrollTo(0, 0); } : (canPlay ? play : () => gatedPlay(play))}
           overlay={overlay}
           placeholder={placeholder}
           editBtns={editIcons}
@@ -1664,13 +1674,16 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           del={del}
           actions={
             <>
-              <button style={iconBtn} title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>
+              {app.user && <button style={iconBtn} title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>}
+              {/* 📖 review the owner's saved results — visible to EVERYONE (guests
+                  and normal users too) whenever a run has been saved. */}
               {(hasSaved || canEdit) && (
                 <button className="btn small" style={{ background: '#fbe08a', padding: '5px 9px' }} title={hasSaved ? "View the saved run (history)" : 'No results saved yet'}
                   onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No results saved yet — a moderator plays a run and it saves automatically.'); }}>📖</button>
               )}
-              {/* Only moderators/admins can play; a normal user just views the history. */}
-              {canPlay && <button className="btn small green" title="Play a fresh replica (no answers)" onClick={play}>▶ Play</button>}
+              {/* ▶ Play is offered to everyone; the gate routes guests to sign in and
+                  normal users to the dashboard to buy credits. */}
+              <button className="btn small green" title="Play a fresh replica (no answers)" onClick={() => gatedPlay(play)}>▶ Play</button>
             </>
           }
         />
@@ -1847,7 +1860,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               ? <button className="btn green" onClick={() => app.requireLogin()}>▶ Sign in to play this lesson</button>
               : canPlay
               ? <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
-              : <p style={{ margin: 0, fontSize: 13, opacity: 0.7, fontStyle: 'italic' }}>Only moderators can generate a lesson. Browse the saved lessons below and open one to view it.</p>}
+              : <button className="btn green" title="You need play credits — get some from the dashboard" onClick={() => app.nav('dashboard')}>🎟 Get credits to play →</button>}
             {/* 💡 Per-play tooltip switch: some students don't have access to the
                 on-slide helper tooltips (hints/links), so let the player turn them
                 off BEFORE playing. Default on. Saved with the run's config. */}

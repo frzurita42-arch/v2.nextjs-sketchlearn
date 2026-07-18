@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuth, optionalAuth } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug, insertEntry, listEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -22,20 +22,22 @@ async function resolveTool(slug: string) {
 // GET /api/tools/entries?slug=xyz -> entries for an app tool.
 // Non-owners only see 'active'/'approved'; the owner sees everything (incl. pending).
 export async function GET(req: Request) {
-  const a = await requireAuth(req);
-  if (!a.ok) return a.response;
+  // Public read: signed-out visitors can browse a tool's saved presentation runs
+  // (and open the owner's saved results). A user (if any) unlocks their own
+  // private submissions and the owner/admin view.
+  const { user } = await optionalAuth(req);
   const slug = new URL(req.url).searchParams.get('slug') || '';
   const tool = await resolveTool(slug);
   if (!tool || !['app', 'lesson', 'repo'].includes(tool.archetype)) return NextResponse.json({ entries: [] });
   const all = await listEntries(tool.id, { limit: 300 });
-  const isOwner = tool.owner === a.user.username || a.user.role === 'admin';
+  const isOwner = !!user && (tool.owner === user.username || user.role === 'admin');
   // Repository contributions (e.g. payment proofs) are private-by-default: each
   // user sees only their own submissions; the owner/admin sees everyone's.
   let entries;
   if (tool.archetype === 'repo') {
     // Contributions are private (each user sees only their own); favorites (__fav)
     // are public signals so the ★ / liked-by-admin / OP filters work for everyone.
-    entries = isOwner ? all : all.filter((e: any) => e.username === a.user.username || e?.data?.__fav);
+    entries = isOwner ? all : all.filter((e: any) => (user && e.username === user.username) || e?.data?.__fav);
   } else {
     entries = isOwner ? all : all.filter((e: any) => e.status === 'active' || e.status === 'approved');
   }
