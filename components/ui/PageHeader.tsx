@@ -18,10 +18,6 @@ const CACHE = 'sl_site_settings';
 
 export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEADERS | string; left?: React.ReactNode; right?: React.ReactNode }) {
   const def = PAGE_HEADERS[page as string];
-  // The emoji rides inside the title text on every page (repos/slides/coach/
-  // dashboard), so hide the separate toggleable emoji slot everywhere — that
-  // keeps the emoji consistent and immune to a stale per-page emoji-off flag.
-  const hidePageEmoji = page === 'repos' || page === 'slides' || page === 'coach' || page === 'dashboard';
   // Seed synchronously from the shared site-settings cache so the DB copy paints
   // on the first frame (no flash of the default), then refresh from the server.
   const [site, setSite] = useState<Record<string, string | undefined>>(() => {
@@ -39,7 +35,10 @@ export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEAD
   const title = site[def.titleKey] || def.defaultTitle;
   const subtitle = site[def.subtitleKey] || def.defaultSubtitle;
   const emoji = site[def.emojiKey] || def.defaultEmoji;
-  const emojiOff = hidePageEmoji || site[def.emojiOffKey] === '1';
+  // The emoji always shows in its own slot before the title (no per-page off-flag
+  // that a stale setting could suppress). Strip a leading emoji from the title
+  // text so pages whose stored title already begins with one don't show it twice.
+  const displayTitle = String(title).replace(/^[\p{Extended_Pictographic}️‍\s]+/u, '') || title;
 
   const save = async (key: string, value: string) => {
     setSite((s) => { const n = { ...s, [key]: value }; try { localStorage.setItem(CACHE, JSON.stringify(n)); } catch { /* ignore */ } return n; });
@@ -52,7 +51,6 @@ export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEAD
     try { const r: any = await API.post('/api/site-settings/remix', { text: cur, kind }); if (r?.text) await save(key, r.text); } catch { /* ignore */ }
     setMix((m) => { const n = { ...m }; delete n[key]; return n; });
   };
-  const toggleEmoji = () => save(def.emojiOffKey, emojiOff ? '' : '1');
   const changeEmoji = () => { const v = window.prompt('Emoji to show before the title (leave blank to keep):', emoji); if (v && v.trim()) save(def.emojiKey, v.trim().slice(0, 8)); };
 
   return (
@@ -75,19 +73,12 @@ export function PageHeader({ page, left, right }: { page: keyof typeof PAGE_HEAD
         <h1 className="view-title">
           {/* The scribble underline spans the emoji AND the title as one stroke. */}
           <span className="scribble-underline">
-            {!emojiOff && (
-              isAdmin
-                ? <button title="Change the emoji" onClick={changeEmoji} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', padding: 0, marginRight: 8 }}>{emoji}</button>
-                : <span style={{ marginRight: 8 }}>{emoji}</span>
-            )}
-            {title}
+            {isAdmin
+              ? <button title="Change the emoji" onClick={changeEmoji} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', padding: 0, marginRight: 8 }}>{emoji}</button>
+              : <span style={{ marginRight: 8 }}>{emoji}</span>}
+            {displayTitle}
           </span>
-          {isAdmin && !hidePageEmoji && <>
-            <button title="Edit the title" onClick={() => { setDraft(title); setEditing('title'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>
-            <button title="AI reword the title" disabled={!!mix[def.titleKey]} onClick={() => remix(def.titleKey, 'title')} style={{ ...headIcon, fontSize: 15 }}>{mix[def.titleKey] ? '…' : '🎨'}</button>
-            <button title={emojiOff ? 'Show the emoji' : 'Hide the emoji'} onClick={toggleEmoji} style={{ ...headIcon, fontSize: 15, opacity: emojiOff ? 0.4 : 1 }}>👁</button>
-          </>}
-          {isAdmin && hidePageEmoji && <>
+          {isAdmin && <>
             <button title="Edit the title" onClick={() => { setDraft(title); setEditing('title'); }} style={{ ...headIcon, fontSize: 15 }}>✎</button>
             <button title="AI reword the title" disabled={!!mix[def.titleKey]} onClick={() => remix(def.titleKey, 'title')} style={{ ...headIcon, fontSize: 15 }}>{mix[def.titleKey] ? '…' : '🎨'}</button>
           </>}

@@ -302,17 +302,16 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
   // One card via the shared ToolCard, wired with this view's owner/admin handlers.
   // `hideOpen` (used in the carousel) drops the Open button — image + title open it.
   const card = (t: any, view: 'grid' | 'row', hideOpen?: boolean) => {
-    // Signed-out visitors get a review-only card for playable presentations: no
-    // ★ favorite (they have none), no ▶ play/Open, and a 📖 button ONLY when the
-    // presentation has saved results to review. Repos stay openable (viewing
-    // their cards is free and needs no account).
+    // Signed-out visitors: every card keeps its Open button (same as repos), but
+    // they can't favorite (no ★). Presentations with saved results also get a 📖
+    // shortcut straight to those results. Playing/generating is gated inside the
+    // tool (it prompts them to sign in).
     const isLesson = t.archetype === 'lesson';
-    const guestReview = isGuest && isLesson;
     return (
       <ToolCard tool={t} view={view} onOpen={open}
         favs={favs} onToggleFav={isGuest ? undefined : toggleFav}
-        hideOpen={hideOpen || guestReview}
-        onHistory={guestReview && t.hasSavedDeck ? openResults : undefined}
+        hideOpen={hideOpen}
+        onHistory={isGuest && isLesson && t.hasSavedDeck ? openResults : undefined}
         canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
         onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} onDice={diceThumb} thumbing={!!thumbing[t.slug]}
         canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
