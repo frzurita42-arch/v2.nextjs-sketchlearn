@@ -31,7 +31,13 @@ import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 // or, for 'tool', reload from the ?tool=<slug>). Transient flow views (path,
 // settings, activity, language, toolsettings) depend on in-memory state, so a
 // refresh on those returns home instead of showing a broken screen.
-const RESTORABLE: ViewName[] = ['home', 'chat', 'stats', 'dashboard', 'cspath', 'feed', 'tools', 'slides', 'tool', 'toolbuilder'];
+const RESTORABLE: ViewName[] = ['chat', 'dashboard', 'tools', 'slides', 'tool', 'toolbuilder', 'toolsettings'];
+// The only pages reachable now. The legacy built-in activities (Learning Path
+// home, Cybersecurity Academy, Structured Explanations, Suggested Topic, Time
+// Travel, the Feed, My stats…) are retired: any attempt to open them — a nav
+// call, a stale ?view= URL, an old in-app link — is redirected to Slides.
+const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 'toolbuilder', 'toolsettings'];
+const liveView = (v: ViewName): ViewName => (LIVE_VIEWS.includes(v) ? v : 'slides');
 
 type NavEntry = { view: ViewName; tool: string | null; key?: string };
 
@@ -138,7 +144,9 @@ export default function AppRoot() {
     return url.toString();
   };
 
-  const nav = useCallback((next: ViewName) => {
+  const nav = useCallback((nextRaw: ViewName) => {
+    // Retired pages redirect to Slides (the home page).
+    const next = liveView(nextRaw);
     if (appState.game && !appState.game.finished && next !== 'activity' &&
         !window.confirm('Leave the current activity? Your progress will be lost.')) return;
     const cur = viewRef.current;
@@ -337,7 +345,7 @@ export default function AppRoot() {
           while already on a tool page (e.g. "Make a lesson" from a repo's topic
           shelf) remounts the runner onto the new tool instead of staying put. */}
       <main id="app" key={view === 'tool' ? `tool:${appState.activeTool?.slug || ''}` : view}>
-        <ErrorBoundary onHome={() => nav('slides')}>{views[view]}</ErrorBoundary>
+        <ErrorBoundary onHome={() => nav('slides')}>{views[liveView(view)]}</ErrorBoundary>
       </main>
       <Footer />
     </AppContext.Provider>
