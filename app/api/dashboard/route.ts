@@ -157,18 +157,20 @@ export async function GET(req: Request) {
   // just the token window, fed by /api/tokens).
   if (!isAdmin) {
     if (role !== 'moderator') {
-      return NextResponse.json({ tools: [], runs: [], usage: [], usageByUser: [], componentUsage: [], buildLog: [], registry: [], hiddenRows: [], role, scope: 'none' }, { headers: { 'Cache-Control': 'no-cache' } });
+      return NextResponse.json({ tools: [], runs: [], plays: [], usage: [], usageByUser: [], componentUsage: [], buildLog: [], registry: [], hiddenRows: [], role, scope: 'none' }, { headers: { 'Cache-Control': 'no-cache' } });
     }
     const myTools = tools.filter((t: any) => t.owner === me);
     const mySlugs = new Set(myTools.map((t: any) => t.slug));
     const myRuns = runs.filter((r: any) => mySlugs.has(r.toolSlug));
+    // Activities THIS moderator played (any tool, not just their own).
+    const myPlays = runs.filter((r: any) => r.user === me);
     const myUsage = usage.filter((u: any) => u.user === me);
     const myByUser = [{ user: me, events: myUsage.length, tokens: myUsage.reduce((s: number, u: any) => s + (u.totalTokens || 0), 0), images: myUsage.filter((u: any) => u.kind.includes('image') || u.kind === 'thumbnail').length, cost: myUsage.reduce((s: number, u: any) => s + (u.costUsd || 0), 0) }];
     const myComponentUsage = componentUsage.filter((c: any) => c.user === me);
-    return NextResponse.json({ tools: myTools, runs: myRuns, usage: myUsage, usageByUser: myByUser, componentUsage: myComponentUsage, buildLog: [], registry: [], hiddenRows: [], role, scope: 'own' }, { headers: { 'Cache-Control': 'no-cache' } });
+    return NextResponse.json({ tools: myTools, runs: myRuns, plays: myPlays, usage: myUsage, usageByUser: myByUser, componentUsage: myComponentUsage, buildLog: [], registry: [], hiddenRows: [], role, scope: 'own' }, { headers: { 'Cache-Control': 'no-cache' } });
   }
 
-  return NextResponse.json({ tools, runs, usage, usageByUser, componentUsage, buildLog: WEBSITE_BUILD_LOG, registry: COMPONENT_REGISTRY, hiddenRows, role, scope: 'all' }, { headers: { 'Cache-Control': 'no-cache' } });
+  return NextResponse.json({ tools, runs, plays: runs.filter((r: any) => r.user === me), usage, usageByUser, componentUsage, buildLog: WEBSITE_BUILD_LOG, registry: COMPONENT_REGISTRY, hiddenRows, role, scope: 'all' }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 function countCards(cards: any[]): number {

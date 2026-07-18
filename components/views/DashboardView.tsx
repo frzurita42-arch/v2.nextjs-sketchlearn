@@ -103,7 +103,7 @@ export function DashboardView() {
   const app = useApp();
   const [usersList, setUsersList] = useState<any[] | null>(null);
   const [games, setGames] = useState<any[]>([]);
-  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[]; buildLog?: any[]; registry?: any[]; hiddenRows?: string[] } | null>(null);
+  const [dash, setDash] = useState<{ tools: any[]; runs: any[]; plays?: any[]; usage?: any[]; usageByUser?: any[]; componentUsage?: any[]; buildLog?: any[]; registry?: any[]; hiddenRows?: string[] } | null>(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [tokens, setTokens] = useState<any>(null);
@@ -213,6 +213,7 @@ export function DashboardView() {
   const slideTools = useMemo(() => (dash?.tools || []).filter((t: any) => t.archetype === 'lesson'), [dash]);
   const repoTools = useMemo(() => (dash?.tools || []).filter((t: any) => t.archetype !== 'lesson'), [dash]);
   const runs = dash?.runs || [];
+  const plays = dash?.plays || [];
   const usage = dash?.usage || [];
   const usageByUser = dash?.usageByUser || [];
   const componentUsage = dash?.componentUsage || [];
@@ -271,6 +272,16 @@ export function DashboardView() {
             <div className="card" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>▶️ Runs of my tools <span style={{ opacity: 0.5, fontWeight: 400 }}>({runs.length})</span></h3>
               <PagedTable compact headers={['Tool', 'User', 'Topic', 'Score', 'When']} empty="No one has played your tools yet."
                 rows={runs.map((r: any) => [r.toolTitle, r.user, r.topic, r.score == null ? '—' : String(r.score), fmtDate(r.createdAt)])} /></div>
+            {/* History of activities I PLAYED (any tool, not just my own). */}
+            <div className="card alt" style={{ minWidth: 0 }}><h3 style={{ margin: '0 0 6px' }}>🕹 Activities I&apos;ve played <span style={{ opacity: 0.5, fontWeight: 400 }}>({plays.length})</span></h3>
+              <PagedTable compact headers={['Tool', 'Topic', 'Level', 'Score', 'Played']} empty="You haven't played any activities yet."
+                rows={plays.map((r: any) => [r.toolTitle, r.topic || '—', r.level || '—', r.score == null ? '—' : String(r.score), fmtDate(r.createdAt)])} /></div>
+            {/* What each of my generations was worth (rough estimate) + the total. */}
+            <div className="card" style={{ minWidth: 0 }}>
+              <h3 style={{ margin: '0 0 6px' }}>💸 My generations <span style={{ opacity: 0.5, fontWeight: 400 }}>({usage.length})</span></h3>
+              <p style={{ fontSize: 13, opacity: 0.75, margin: '0 0 8px' }}>Estimated total worth: <b>{money(usage.reduce((s: number, u: any) => s + (Number(u.costUsd) || 0), 0))}</b> <span style={{ opacity: 0.6 }}>· rough public-rate estimate, not billing.</span></p>
+              <PagedTable compact headers={['What', 'Provider', 'Subject', 'Tokens', 'Est. worth', 'When']} empty="No generations recorded yet."
+                rows={usage.map((u: any) => [u.kind || '—', u.provider || '—', u.subject || '—', u.totalTokens || 0, money(u.costUsd), fmtDate(u.createdAt)])} /></div>
           </div>
         </>)}
       </>
