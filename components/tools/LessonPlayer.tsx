@@ -230,6 +230,36 @@ function SupportSkeleton({ type }: { type: string }) {
   );
 }
 
+// One support request. Images get a WATCHDOG: the default backend order tries
+// Nano Banana (Gemini) first, which sometimes hangs — so if the image hasn't
+// come back within IMG_SWITCH_MS (or comes back failed sooner), we fire a second
+// request that forces a fast, keyless provider (Pollinations) and take whichever
+// returns a usable image first. That way a slow/hung image model never leaves the
+// slide spinning on the pencil. Non-image materials are quick text generations
+// and just resolve normally. A hard cap guarantees the promise always settles.
+const IMG_SWITCH_MS = 18000;
+const IMG_HARD_CAP_MS = 45000;
+function loadSupport(type: string, ctx: any, slide: Slide): Promise<any> {
+  const body: any = { lesson: ctx.lesson, values: ctx.values, type, content: slide.content, title: slide.title, imageStyle: ctx.imageStyle || '', imageProvider: ctx.imageProvider || '' };
+  const post = (extra?: any) => API.post('/api/tools/lesson/support', { ...body, ...extra }).then((r: any) => r?.support || null).catch(() => null);
+  const first = post();
+  if (type !== 'image') return first;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: any) => { if (!done) { done = true; resolve(v); } };
+    let retryStarted = false;
+    const startRetry = () => {
+      if (retryStarted) return; retryStarted = true;
+      // Force the free, keyless Pollinations backend so we don't wait on the same
+      // slow model again. Whichever request yields a usable image first wins.
+      post({ imageProvider: 'pollinations' }).then((v) => { if (v) finish(v); });
+    };
+    first.then((v) => { if (v) finish(v); else startRetry(); }); // fast success wins; fast failure -> switch now
+    setTimeout(startRetry, IMG_SWITCH_MS);                        // first too slow -> switch provider
+    setTimeout(() => finish(null), IMG_HARD_CAP_MS);             // give up gracefully so the spinner never hangs
+  });
+}
+
 // Streams a slide's support materials in, one request per planned type, each
 // rendering into its own spinner placeholder. Loaded materials are cached on the
 // slide object so navigating back/forward doesn't refetch them.
@@ -250,8 +280,8 @@ function SupportsLoader({ slide, ctx }: { slide: Slide; ctx: any }) {
     plan.forEach((type, i) => {
       if (sl._supports[i] !== undefined) return; // already loaded (or failed)
       if (!sl._supportP[i]) {
-        sl._supportP[i] = API.post('/api/tools/lesson/support', { lesson: ctx.lesson, values: ctx.values, type, content: slide.content, title: slide.title, imageStyle: ctx.imageStyle || '', imageProvider: ctx.imageProvider || '' })
-          .then((r: any) => { sl._supports[i] = r?.support || null; })
+        sl._supportP[i] = loadSupport(type, ctx, slide)
+          .then((support: any) => { sl._supports[i] = support ?? null; })
           .catch(() => { sl._supports[i] = null; });
       }
       sl._supportP[i].then(sync); // this mount re-renders when the request resolves
