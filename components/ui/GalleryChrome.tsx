@@ -9,9 +9,11 @@ export function GalleryFilterRow({ right }: { right?: React.ReactNode }) {
   const [filter, setFilter] = useState<'all' | 'fav'>('all');
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-      {/* The shared "card-like" input used across the site — global wobbly-bordered
-          field (2.5px ink border, hand font, --wobble-2 radius). No flat override. */}
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
+      {/* The shared "card-like" paper input used across the site — global
+          wobbly-bordered field (2.5px ink border, hand font, --wobble-2 radius).
+          NOTE: the global CSS selector is `input[type=text]`, so the type attr
+          must be present for the sketchbook styling to apply. */}
+      <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
         style={{ flex: '1 1 220px', minWidth: 0 }} />
       <button className={`btn small ${filter === 'all' ? 'green' : 'ghost'}`} onClick={() => setFilter('all')}>All</button>
       <button className={`btn small ${filter === 'fav' ? 'green' : 'ghost'}`} onClick={() => setFilter('fav')}>★ Favorites</button>
