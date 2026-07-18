@@ -8,6 +8,8 @@ import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { PageHeading } from '@/components/ui/PageHeading';
+import { CardViewMenu } from '@/components/ui/CardViewMenu';
+import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
 
 export function EmptyView() {
   const app = useApp();
@@ -38,6 +40,8 @@ export function EmptyView() {
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeading pageKey="empty" title="📭 Empty" subtitle="Empty-gallery state preview." />
 
+        <GalleryFilterRow right={<CardViewMenu pageKey="empty" />} />
+
         <div style={{ ...layout.container, alignItems: 'stretch' }}>
           <div className="card" style={{ height: '100%', minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
             <span className="sl-pencil" style={{ fontSize: 42, color: 'var(--ink)' }} aria-hidden>
@@ -49,6 +53,8 @@ export function EmptyView() {
           </div>
           {repo && <ToolCard tool={repo} view={layout.view} hideOpen onOpen={openTool} imageMode={imgMode} />}
         </div>
+
+        <GalleryPager />
       </div>
     </div>
   );
