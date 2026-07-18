@@ -205,7 +205,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
         )}
 
         {loading ? (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--muted,#8a7f70)', padding: '20px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', color: 'var(--muted,#8a7f70)', padding: '48px 0' }}>
             <span className="sl-pencil" style={{ fontSize: 30, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span>
             Loading…
           </div>
