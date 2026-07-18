@@ -6,7 +6,7 @@
  * conversation into a real tool (spending credits) and drops a sticky note with a
  * button to open/play it. "🎨 Draw" generates an AI image inline, attributed to
  * whichever model made it. You can also attach images to your messages. */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { API } from '@/lib/api';
 import { appState, initialCoachGreeting } from '@/lib/app-state';
 import { AudioButton } from '@/components/ui/AudioButton';
@@ -27,6 +27,12 @@ const PAGE_STICKIES: Record<string, { view: string; emoji: string; title: string
   moderators: { view: 'moderators', emoji: '🛡️', title: 'Moderators', desc: 'Meet the moderators' },
   dashboard: { view: 'dashboard', emoji: '🧑‍🏫', title: 'Dashboard', desc: 'Your tokens & work' },
 };
+// Bare emoji toolbar buttons: no card/background — just the glyph. A toggle button
+// shows a green line along its bottom edge when it's active (`on`), so all buttons
+// keep a transparent 3px bottom border to stay vertically aligned.
+const EMOJI_BTN: CSSProperties = { background: 'none', border: 'none', borderBottom: '3px solid transparent', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '3px 6px', borderRadius: 4, color: 'inherit' };
+const emojiBtn = (on = false): CSSProperties => (on ? { ...EMOJI_BTN, borderBottomColor: 'var(--green,#7fb069)' } : EMOJI_BTN);
+
 // The four places the welcome message points a fresh visitor to — each is a
 // self-describing page sticky (its own view/emoji/title + a free/paid tag), so
 // it does not depend on a unique PAGE_STICKIES key.
@@ -98,9 +104,11 @@ export function ChatView() {
   // while the chat is still untouched.
   const welcomePages = () => {
     const w = WELCOME_PAGES[Math.floor(Math.random() * WELCOME_PAGES.length)];
+    // A paid page (Presentation runs) shows the estimated tokens a typical run costs.
+    const runCost = w.access === 'paid' ? estimateLessonTokens({ slides: 5 }) : 0;
     const sticky: ChatMsg = {
       role: 'assistant', content: '', sticky: {
-        slug: '', kind: 'page', runCost: 0, page: w.page, view: w.view,
+        slug: '', kind: 'page', runCost, page: w.page, view: w.view,
         emoji: w.emoji, title: w.title, reason: w.desc, access: w.access, recommended: true,
       },
     };
@@ -431,18 +439,21 @@ export function ChatView() {
               {visibleSessions.map((s) => {
                 const active = s.id === sessionId;
                 return (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
-                  {/* The chat card is a real button; the active one gets a green line
-                      along its bottom edge. */}
+                  // The whole chat card is a real button; the active one gets a green
+                  // line along its bottom edge. The trash-can sits INSIDE the card
+                  // (its own click deletes and doesn't open the chat).
                   <button
+                    key={s.id}
                     onClick={() => openSession(s)}
                     title={s.title || 'New chat'}
-                    style={{ flex: 1, minWidth: 0, textAlign: 'left', cursor: 'pointer', padding: '6px 8px', borderRadius: 8, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#e5dccb)', borderBottom: active ? '3px solid var(--green,#7fb069)' : '1.5px solid var(--line,#e5dccb)', font: 'inherit', color: 'inherit' }}>
+                    style={{ position: 'relative', width: '100%', minWidth: 0, textAlign: 'left', cursor: 'pointer', padding: '6px 26px 6px 8px', borderRadius: 8, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#e5dccb)', borderBottom: active ? '3px solid var(--green,#7fb069)' : '1.5px solid var(--line,#e5dccb)', font: 'inherit', color: 'inherit' }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title || 'New chat'}</div>
                     <div style={{ fontSize: 10.5, color: 'var(--muted,#8a7f70)' }}>{relTime(s.ts)}</div>
+                    <span role="button" tabIndex={0} aria-label="Delete chat" title="Delete chat"
+                      onClick={(e) => { e.stopPropagation(); removeSession(s.id); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); removeSession(s.id); } }}
+                      style={{ position: 'absolute', top: 6, right: 6, cursor: 'pointer', fontSize: 13, lineHeight: 1, color: 'var(--muted,#8a7f70)' }}>🗑</span>
                   </button>
-                  <button title="Delete chat" onClick={(e) => { e.stopPropagation(); removeSession(s.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--muted,#8a7f70)', padding: 2 }}>✕</button>
-                </div>
                 );
               })}
               {sessions.length > COLLAPSED_COUNT && (
@@ -484,7 +495,9 @@ export function ChatView() {
                       <b className="sticky-title" style={{ display: 'block' }}>{emoji} {title}</b>
                       {access && (
                         <span style={{ display: 'inline-block', margin: '2px 0 4px', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, padding: '1px 7px', borderRadius: 999, border: '1.5px solid var(--ink)', background: access === 'paid' ? 'rgba(255,138,76,0.18)' : 'rgba(102,187,106,0.2)' }}>
-                          {access === 'paid' ? '💳 Paid to run' : '🆓 Free to view'}
+                          {access === 'paid'
+                            ? `💳 Paid — ≈ ${(m.sticky.runCost || 0).toLocaleString()} tokens to run`
+                            : '🆓 Free to view'}
                         </span>
                       )}
                       {desc && <p style={{ margin: '3px 0 8px', fontSize: 12.5 }}>{desc}. Come back to the chat anytime.</p>}
@@ -602,16 +615,18 @@ export function ChatView() {
                 : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
             </div>
           )}
-          {/* One compact emoji toolbar (each button hover-explained); credits float right. */}
-          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, gap: 6, flexWrap: 'wrap' }}>
-            <button className="btn small ghost" title="Show / hide chat history" aria-pressed={sidebar} onClick={() => setSidebar((v) => !v)}>🗂</button>
-            <button className="btn small green" title="Start a new chat" onClick={newChat}>🆕</button>
-            <button className="btn small green" title="Build a tool from this chat (spends your credits)" disabled={building} onClick={buildTool}>{building ? '⏳' : '🧰'}</button>
-            <button className="btn small" title="Recommend an existing presentation or repo to play (free)" disabled={recommending} onClick={recommend}>{recommending ? '⏳' : '⭐'}</button>
-            <button className={`btn small ${freeOnly ? 'green' : 'ghost'}`} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)}
+          {/* Bare emoji toolbar inside a dashed box (like the repo settings panel).
+              Toggle buttons (history, free-only) light a green line at the bottom
+              when active; the others are plain tap actions. Credits float right. */}
+          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, gap: 4, flexWrap: 'wrap', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 10, padding: '6px 10px' }}>
+            <button style={emojiBtn(sidebar)} title="Show / hide chat history" aria-pressed={sidebar} onClick={() => setSidebar((v) => !v)}>🗂</button>
+            <button style={emojiBtn()} title="Start a new chat" onClick={newChat}>🆕</button>
+            <button style={emojiBtn()} title="Build a tool from this chat (spends your credits)" disabled={building} onClick={buildTool}>{building ? '⏳' : '🧰'}</button>
+            <button style={emojiBtn()} title="Recommend an existing presentation or repo to play (free)" disabled={recommending} onClick={recommend}>{recommending ? '⏳' : '⭐'}</button>
+            <button style={emojiBtn(freeOnly)} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)}
               title={freeOnly ? 'Free only: ON — no AI is used, only free premade tools are recommended (tap to turn off)' : 'Free only: off — tap to only recommend free tools and skip the AI (no token cost)'}>🆓</button>
-            <button className="btn small" title="Draw the chat: the coach's anthropomorphic take on our conversation, as a Polaroid" disabled={drawing} onClick={drawImage}>{drawing ? '⏳' : '🎨'}</button>
-            {youtubeOn && <button className="btn small" title="Recommend YouTube videos for this topic (free)" disabled={recVideos} onClick={recommendVideos}>{recVideos ? '⏳' : '📺'}</button>}
+            <button style={emojiBtn()} title="Draw the chat: the coach's anthropomorphic take on our conversation, as a Polaroid" disabled={drawing} onClick={drawImage}>{drawing ? '⏳' : '🎨'}</button>
+            {youtubeOn && <button style={emojiBtn()} title="Recommend YouTube videos for this topic (free)" disabled={recVideos} onClick={recommendVideos}>{recVideos ? '⏳' : '📺'}</button>}
             <span style={{ flex: 1 }} />
             {app.user && (tokenRole === 'admin'
               ? <span title="Admin — unlimited credits" style={{ fontSize: 13, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
