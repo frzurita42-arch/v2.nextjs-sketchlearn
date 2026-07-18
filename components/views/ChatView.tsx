@@ -1,37 +1,76 @@
 'use client';
-/* Coach chat — now a conversational builder too. You chat about what you want to
- * learn; the coach's job is to gather enough to recommend (and build) a slide tool
- * or repo. "🧰 Build from this chat" turns the conversation into a real tool
- * (spending your credits), shows a writing-pencil card while it works, then drops a
- * sticky note with a button to open/play it (and the estimated credits to run it).
- * You can also attach images to your messages. Your credit balance is shown up top. */
+/* Coach chat — a conversational builder with saved history. Each visit opens a
+ * FRESH chat; a left sidebar lists past chats so you can reopen them. You chat
+ * about what you want to learn; the coach's job is to gather enough to recommend
+ * (and build) a slide tool or repo. "🧰 Build from this chat" turns the
+ * conversation into a real tool (spending credits) and drops a sticky note with a
+ * button to open/play it. "🎨 Draw" generates an AI image inline, attributed to
+ * whichever model made it. You can also attach images to your messages. */
 import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
-import { appState, initialCoachGreeting, type ChatMessage } from '@/lib/app-state';
+import { appState, initialCoachGreeting } from '@/lib/app-state';
 import { downloadCsv } from '@/lib/util';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { MicButton } from '@/components/ui/MicButton';
 import { useApp } from '@/components/AppContext';
 import { estimateLessonTokens } from '@/lib/cost-estimate';
-
-type Sticky = { slug: string; title: string; kind: string; runCost: number };
-type ChatMsg = ChatMessage & { images?: string[]; sticky?: Sticky; building?: boolean };
+import {
+  type ChatMsg, type ChatSession,
+  newSessionId, loadSessions, saveSession, deleteSession, relTime, hasContent,
+} from '@/lib/chat-history';
 
 export function ChatView() {
   const app = useApp();
-  const [messages, setMessages] = useState<ChatMsg[]>(appState.chat as ChatMsg[]);
+  const username = app.user?.username || null;
+  const [sessionId, setSessionId] = useState<string>(() => newSessionId());
+  const [messages, setMessages] = useState<ChatMsg[]>([initialCoachGreeting as ChatMsg]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [drawing, setDrawing] = useState(false);
   const [building, setBuilding] = useState(false);
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
+  const [sidebar, setSidebar] = useState(true);
   const logRef = useRef<HTMLDivElement>(null);
 
+  // On every visit: start a brand-new chat. The previously active chat was saved
+  // live into history as it was typed, so it's already listed in the sidebar.
+  useEffect(() => {
+    const fresh = [initialCoachGreeting as ChatMsg];
+    setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
+    setSessions(loadSessions(username));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username]);
+
   useEffect(() => { appState.chat = messages; }, [messages]);
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, thinking, building]);
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, thinking, building, drawing]);
+
+  // Persist the active chat into history whenever it gains content, so the sidebar
+  // stays live and the chat survives navigating away.
+  useEffect(() => {
+    if (!hasContent(messages)) return;
+    setSessions(saveSession(username, { id: sessionId, ts: Date.now(), title: '', messages }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
   const loadBalance = () => { if (!app.user) { setBalance(null); return; } API.get('/api/tokens').then((t: any) => setBalance(typeof t?.balance === 'number' ? t.balance : null)).catch(() => { /* ignore */ }); };
   useEffect(() => { loadBalance(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [app.user?.username]);
+
+  const newChat = () => {
+    const fresh = [initialCoachGreeting as ChatMsg];
+    setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
+    setInput(''); setAttachments([]);
+  };
+  const openSession = (s: ChatSession) => {
+    setMessages(s.messages); setSessionId(s.id); appState.chat = s.messages;
+    setInput(''); setAttachments([]);
+  };
+  const removeSession = (id: string) => {
+    setSessions(deleteSession(username, id));
+    if (id === sessionId) newChat();
+  };
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
@@ -51,15 +90,35 @@ export function ChatView() {
     const next = [...messages, userMsg];
     setMessages(next); setThinking(true);
     try {
-      const r = await API.post('/api/ai/chat', { messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content + (m.images?.length ? ` [attached ${m.images.length} image(s)]` : '') })), images: imgs });
+      const r = await API.post('/api/ai/chat', {
+        messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content + (m.images?.length ? ` [attached ${m.images.length} image(s)]` : '') })),
+        images: imgs,
+        recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
+      });
       setMessages([...next, { role: 'assistant', content: r.reply }]);
     } catch (e: any) { setMessages([...next, { role: 'assistant', content: `(The coach dropped their pencil: ${e.message})` }]); }
     setThinking(false); loadBalance();
   };
 
+  // Generate an AI image straight from the chat, attributed to the model that made it.
+  const drawImage = async () => {
+    if (!app.user) { app.requireLogin(); return; }
+    const idea = input.trim();
+    if (!idea || drawing) return;
+    setInput('');
+    const next = [...messages, { role: 'user', content: `🎨 Draw: ${idea}` } as ChatMsg];
+    setMessages(next); setDrawing(true);
+    try {
+      const r: any = await API.post('/api/ai/coach-image', { prompt: idea });
+      if (r?.url) setMessages([...next, { role: 'assistant', content: 'Here you go 🎨', images: [r.url], imageCredit: r.providerLabel || r.provider || 'AI' }]);
+      else setMessages([...next, { role: 'assistant', content: r?.error || 'Could not draw that — try again.' }]);
+    } catch (e: any) { setMessages([...next, { role: 'assistant', content: `(Could not draw that: ${e.message})` }]); }
+    setDrawing(false); loadBalance();
+  };
+
   // Turn the conversation into a real tool: build a proposal, publish it, drop a
-  // sticky note with a link. Auto-answers any builder questions with best-guess so
-  // it reaches a proposal from the chat.
+  // sticky note with a link. Auto-answers any builder questions so it reaches a
+  // proposal from the chat.
   const buildTool = async () => {
     if (!app.user) { app.requireLogin(); return; }
     if (building) return;
@@ -95,77 +154,103 @@ export function ChatView() {
     app.nav('tool');
   };
 
-  const clear = () => { if (!confirm('Clear the chat window?')) return; setMessages([initialCoachGreeting]); };
-
   return (
     <>
       <PageHeader page="coach" />
       <div style={{ display: 'flex', justifyContent: 'center', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0 10px' }}>
+        <button className="btn small ghost" onClick={() => setSidebar((v) => !v)} title="Chat history">🗂 History</button>
+        <button className="btn small green" onClick={newChat} title="Start a new chat">＋ New chat</button>
         <button className="btn small" id="chat-export" onClick={downloadCsv}>⬇ spreadsheet</button>
         {app.user && <span style={{ fontSize: 13, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()} credits</span>}
       </div>
-      <div className="chat-shell">
-        <div className="chat-log" id="chat-log" ref={logRef}>
-          {messages.map((m, i) => {
-            if (m.building) return (
-              <div key={i} className="msg ai">
-                <div className="card" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px' }}>
-                  <span className="sl-pencil" style={{ fontSize: 26, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span>
-                  <span style={{ fontSize: 13 }}>Building your tool…</span>
-                </div>
-              </div>
-            );
-            if (m.sticky) return (
-              <div key={i} className="msg ai">
-                <div className="slide-comp comp-sticky sticky-yellow" style={{ transform: 'rotate(-1deg)', maxWidth: 320 }}>
-                  <b className="sticky-title" style={{ display: 'block' }}>{m.sticky.kind === 'repo' ? '📁' : '🎬'} {m.sticky.title}</b>
-                  <p style={{ margin: '4px 0 8px', fontSize: 13 }}>Ready to {m.sticky.kind === 'repo' ? 'open' : 'play'}.{m.sticky.runCost ? ` ≈ ${m.sticky.runCost.toLocaleString()} credits to run.` : ''}</p>
-                  <button className="btn small green" onClick={() => openTool(m.sticky!.slug)}>{m.sticky.kind === 'repo' ? 'Open →' : '▶ Open & play'}</button>
-                </div>
-              </div>
-            );
-            return (
-              <div key={i} className={`msg ${m.role === 'user' ? 'user' : 'ai'}`}>
-                {m.images?.length ? (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: m.content ? 6 : 0 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {m.images.map((src, k) => <img key={k} src={src} alt="attachment" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)' }} />)}
-                  </div>
-                ) : null}
-                {m.content && <span>{m.content}</span>}
-                {m.role === 'assistant' && m.content && (
-                  <div style={{ marginTop: 6 }}><AudioButton text={m.content} label="🔊" small showTextOnFail={false} /></div>
-                )}
-              </div>
-            );
-          })}
-          {thinking && <div className="msg ai">✏️ …</div>}
-        </div>
 
-        {/* Attachment previews */}
-        {attachments.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
-            {attachments.map((src, k) => (
-              <div key={k} style={{ position: 'relative' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt="attachment" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)' }} />
-                <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== k))} title="Remove" style={{ position: 'absolute', top: -6, right: -6, background: '#fff', border: '1.5px solid var(--ink)', borderRadius: '50%', width: 18, height: 18, lineHeight: 1, cursor: 'pointer', fontSize: 11 }}>✕</button>
-              </div>
-            ))}
-          </div>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        {sidebar && (
+          <aside style={{ flex: '0 0 200px', maxWidth: 200, borderRight: '2px dashed var(--line,#d9cfc0)', paddingRight: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 8px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
+            <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>＋ New chat</button>
+            {sessions.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No past chats yet. Say something and it’ll show up here.</p>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 420, overflowY: 'auto' }}>
+              {sessions.map((s) => (
+                <div key={s.id} className={s.id === sessionId ? 'card' : ''}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 8, cursor: 'pointer', background: s.id === sessionId ? 'var(--card,#fff8ee)' : 'transparent', border: s.id === sessionId ? '1.5px solid var(--ink)' : '1.5px solid transparent' }}
+                  onClick={() => openSession(s)}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title || 'New chat'}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--muted,#8a7f70)' }}>{relTime(s.ts)}</div>
+                  </div>
+                  <button title="Delete chat" onClick={(e) => { e.stopPropagation(); removeSession(s.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--muted,#8a7f70)', padding: 2 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          </aside>
         )}
 
-        <div className="chat-input-row">
-          <button className="btn small ghost" title="Attach images" onClick={pickFiles} style={{ padding: '0 10px' }}>📎</button>
-          <textarea id="chat-input" placeholder="Tell me what you want to learn… I'll help you build a lesson or repo (or tap 🎤 / 📎)"
-            value={input} onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
-          <MicButton lang="en-US" title="Speak your message" onText={(t: string) => setInput((v) => (v ? v + ' ' : '') + t)} />
-          <button className="btn primary" id="chat-send" onClick={send}>Send</button>
-        </div>
-        <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn small green" disabled={building} onClick={buildTool}>{building ? '🧰 Building…' : '🧰 Build a tool from this chat'}</button>
-          <button className="btn small ghost" id="chat-clear" onClick={clear}>Clear chat</button>
+        <div className="chat-shell" style={{ flex: 1, minWidth: 0 }}>
+          <div className="chat-log" id="chat-log" ref={logRef}>
+            {messages.map((m, i) => {
+              if (m.building) return (
+                <div key={i} className="msg ai">
+                  <div className="card" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px' }}>
+                    <span className="sl-pencil" style={{ fontSize: 26, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span>
+                    <span style={{ fontSize: 13 }}>Building your tool…</span>
+                  </div>
+                </div>
+              );
+              if (m.sticky) return (
+                <div key={i} className="msg ai">
+                  <div className="slide-comp comp-sticky sticky-yellow" style={{ transform: 'rotate(-1deg)', maxWidth: 320 }}>
+                    <b className="sticky-title" style={{ display: 'block' }}>{m.sticky.kind === 'repo' ? '📁' : '🎬'} {m.sticky.title}</b>
+                    <p style={{ margin: '4px 0 8px', fontSize: 13 }}>Ready to {m.sticky.kind === 'repo' ? 'open' : 'play'}.{m.sticky.runCost ? ` ≈ ${m.sticky.runCost.toLocaleString()} credits to run.` : ''}</p>
+                    <button className="btn small green" onClick={() => openTool(m.sticky!.slug)}>{m.sticky.kind === 'repo' ? 'Open →' : '▶ Open & play'}</button>
+                  </div>
+                </div>
+              );
+              return (
+                <div key={i} className={`msg ${m.role === 'user' ? 'user' : 'ai'}`}>
+                  {m.images?.length ? (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: m.content ? 6 : 0 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {m.images.map((src, k) => <img key={k} src={src} alt="attachment" style={{ maxWidth: 220, width: '100%', borderRadius: 8, border: '2px solid var(--ink)' }} />)}
+                    </div>
+                  ) : null}
+                  {m.content && <span>{m.content}</span>}
+                  {m.imageCredit && <div style={{ marginTop: 4, fontSize: 11, color: 'var(--muted,#8a7f70)' }}>🎨 Generated by {m.imageCredit}</div>}
+                  {m.role === 'assistant' && m.content && (
+                    <div style={{ marginTop: 6 }}><AudioButton text={m.content} label="🔊" small showTextOnFail={false} /></div>
+                  )}
+                </div>
+              );
+            })}
+            {thinking && <div className="msg ai">✏️ …</div>}
+            {drawing && <div className="msg ai"><span className="sl-pencil" style={{ fontSize: 22, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span> sketching your image…</div>}
+          </div>
+
+          {/* Attachment previews */}
+          {attachments.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+              {attachments.map((src, k) => (
+                <div key={k} style={{ position: 'relative' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="attachment" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)' }} />
+                  <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== k))} title="Remove" style={{ position: 'absolute', top: -6, right: -6, background: '#fff', border: '1.5px solid var(--ink)', borderRadius: '50%', width: 18, height: 18, lineHeight: 1, cursor: 'pointer', fontSize: 11 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="chat-input-row">
+            <button className="btn small ghost" title="Attach images" onClick={pickFiles} style={{ padding: '0 10px' }}>📎</button>
+            <textarea id="chat-input" placeholder="Tell me what you want to learn… I'll help you build a lesson or repo (or tap 🎤 / 📎 / 🎨)"
+              value={input} onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
+            <MicButton lang="en-US" title="Speak your message" onText={(t: string) => setInput((v) => (v ? v + ' ' : '') + t)} />
+            <button className="btn primary" id="chat-send" onClick={send}>Send</button>
+          </div>
+          <div className="slide-actions" style={{ justifyContent: 'flex-start', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn small green" disabled={building} onClick={buildTool}>{building ? '🧰 Building…' : '🧰 Build a tool from this chat'}</button>
+            <button className="btn small" disabled={drawing} onClick={drawImage} title="Generate an AI image from the text box">{drawing ? '🎨 Drawing…' : '🎨 Draw an image'}</button>
+          </div>
         </div>
       </div>
     </>
