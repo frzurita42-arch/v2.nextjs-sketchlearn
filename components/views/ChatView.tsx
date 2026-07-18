@@ -222,6 +222,12 @@ export function ChatView() {
     const userMsg: ChatMsg = { role: 'user', content: text || '(shared an image)', ...(imgs.length ? { images: imgs } : {}) };
     const next = [...messages, userMsg];
     setMessages(next);
+    // Natural-language "recommend YouTube videos on X" → embed real videos inline.
+    // Free (no token spend), so it runs for guests and out-of-credit users too.
+    if (!imgs.length) {
+      const vTopic = videoRequestTopic(text);
+      if (vTopic) { await fetchVideosInto(next, vTopic); return; }
+    }
     // Free-mode users (guests, 🆓 toggle, or out of credits) never spend credits: a
     // signed-in user gets a reply from a FREE OpenRouter model when one is configured,
     // otherwise (and for guests) we fall back to a no-AI tool recommendation.
@@ -350,29 +356,49 @@ export function ChatView() {
     setRecommending(false);
   };
 
-  // Recommend real YouTube videos for the current topic (typed text, else the last
-  // few things the learner asked about). Each result becomes a red "video" sticky
-  // with a Watch button. Free — it uses the YouTube Data API's read-only quota.
-  const recommendVideos = async () => {
-    if (recVideos) return;
-    const typed = input.trim();
-    const topic = (typed || messages.filter((m) => m.role === 'user' && m.content).slice(-3).map((m) => m.content).join(' ')).slice(0, 200);
-    if (!topic) { setMessages((m) => [...m, { role: 'assistant', content: 'Tell me what you want to learn first, then tap 📺 to find videos.' }]); return; }
-    if (typed) { setInput(''); setMessages((m) => [...m, { role: 'user', content: `📺 Videos: ${typed}` }]); }
+  // Fetch real, embeddable YouTube videos (Gemini + Google Search grounding) for a
+  // learning topic and append them to `base` as red "video" stickies whose player
+  // embeds right in the chat. Free — no token debit. Shared by the 📺 button and
+  // the natural-language "recommend videos" path.
+  const fetchVideosInto = async (base: ChatMsg[], topic: string) => {
     setRecVideos(true);
     try {
       const r: any = await API.post('/api/tools/youtube', { query: topic, limit: 4 });
       const vids: any[] = Array.isArray(r?.videos) ? r.videos : [];
       if (!vids.length) {
-        setMessages((m) => [...m, { role: 'assistant', content: r?.error || 'No videos found for that — try rephrasing the topic.' }]);
+        setMessages([...base, { role: 'assistant', content: r?.error || 'No videos found for that — try rephrasing the topic.' }]);
       } else {
+        const intro: ChatMsg = { role: 'assistant', content: `Here ${vids.length === 1 ? 'is a video' : 'are some videos'} to learn about that — play them right here:` };
         const stickies: ChatMsg[] = vids.map((v) => ({ role: 'assistant', content: '', sticky: {
-          slug: v.videoId, kind: 'video', runCost: 0, title: v.title, channel: v.channel, thumb: v.thumb, url: v.url, reason: v.channel, free: true,
+          slug: v.videoId, kind: 'video', runCost: 0, title: v.title, channel: v.channel, thumb: v.thumb, url: v.url, embed: v.embed, reason: v.channel, free: true,
         } }));
-        setMessages((m) => [...m, ...stickies]);
+        setMessages([...base, intro, ...stickies]);
       }
-    } catch (e: any) { setMessages((m) => [...m, { role: 'assistant', content: `(Could not fetch videos: ${e.message})` }]); }
+    } catch (e: any) { setMessages([...base, { role: 'assistant', content: `(Could not fetch videos: ${e.message})` }]); }
     setRecVideos(false);
+  };
+
+  // 📺 button: recommend videos for the typed text (else the last few asks).
+  const recommendVideos = async () => {
+    if (recVideos) return;
+    const typed = input.trim();
+    const topic = (typed || messages.filter((m) => m.role === 'user' && m.content).slice(-3).map((m) => m.content).join(' ')).slice(0, 200);
+    if (!topic) { setMessages((m) => [...m, { role: 'assistant', content: 'Tell me what you want to learn first, then tap 📺 to find videos.' }]); return; }
+    let base = messages;
+    if (typed) { setInput(''); base = [...messages, { role: 'user', content: `📺 Videos: ${typed}` } as ChatMsg]; setMessages(base); }
+    await fetchVideosInto(base, topic);
+  };
+
+  // Detect a natural-language "recommend YouTube videos on X" request and pull the
+  // topic out of it. Returns the cleaned topic, or null if it isn't a video ask.
+  const videoRequestTopic = (text: string): string | null => {
+    if (!youtubeOn) return null;
+    if (!/\b(you\s?tube|videos?|vids?)\b/i.test(text)) return null;
+    if (!/\b(recommend|show|find|suggest|watch|search|play|got|give|any|some|list|share)\b/i.test(text)) return null;
+    const topic = text
+      .replace(/\b(please|can you|could you|would you|i (?:want|need)|i'?d like|i would like|recommend(?:ed)?|show me|show|find me|find|suggest|search for|search|watch|play|share|list|give me|got any|any|some|a few|me|for|on|about|regarding|related to|of|the|good|best|top|great|helpful|educational|learning|learn|to|youtube|videos?|vids?)\b/gi, ' ')
+      .replace(/[?.!,]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return topic || text.slice(0, 200);
   };
 
   const visibleSessions = expanded ? sessions : sessions.slice(0, COLLAPSED_COUNT);
@@ -462,20 +488,32 @@ export function ChatView() {
                   </div>
                 );
               }
-              // A recommended YouTube video — a red sticky with the thumbnail + a
-              // Watch button that opens the real video in a new tab.
+              // A recommended YouTube video — a red sticky with the player embedded
+              // right in the chat so the learner never leaves the site. A small link
+              // still opens it on YouTube if they prefer.
               if (m.sticky && m.sticky.kind === 'video') {
                 const v = m.sticky;
                 return (
-                  <div key={i} style={{ marginRight: 'auto', marginBottom: 14, maxWidth: 320 }}>
+                  <div key={i} style={{ marginRight: 'auto', marginBottom: 14, maxWidth: 340, width: '100%' }}>
                     <div className="slide-comp comp-sticky sticky-red" style={{ transform: 'rotate(-1deg)', marginBottom: 0 }}>
                       <b className="sticky-title" style={{ display: 'block' }}>📺 {v.title}</b>
-                      {v.thumb && (
+                      {v.embed ? (
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', margin: '6px 0', borderRadius: 6, overflow: 'hidden', border: '1.5px solid var(--ink)', background: '#000' }}>
+                          <iframe
+                            src={v.embed}
+                            title={v.title}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : v.thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={v.thumb} alt="" style={{ display: 'block', width: '100%', borderRadius: 6, border: '1.5px solid var(--ink)', margin: '6px 0' }} />
-                      )}
-                      {v.channel && <p style={{ margin: '2px 0 8px', fontSize: 12, fontStyle: 'italic', opacity: 0.8 }}>{v.channel}</p>}
-                      <a className="btn small green" href={v.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>▶ Watch on YouTube</a>
+                      ) : null}
+                      {v.channel && <p style={{ margin: '2px 0 6px', fontSize: 12, fontStyle: 'italic', opacity: 0.8 }}>{v.channel}</p>}
+                      <a href={v.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: 'var(--muted,#8a7f70)' }}>Open on YouTube ↗</a>
                     </div>
                   </div>
                 );

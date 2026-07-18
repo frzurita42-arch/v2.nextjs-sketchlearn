@@ -246,6 +246,89 @@ async function gemini(messages, { json = true, temperature = 0.8, maxTokens = 40
   throw lastParseErr || new Error('Model returned invalid JSON');
 }
 
+// ── Real YouTube video recommendations via Gemini + Google Search grounding ──
+// Gemini's built-in google_search tool grounds the answer in live web results, so
+// it returns REAL, currently-available videos instead of hallucinated links. We
+// then validate every candidate against YouTube's keyless oEmbed endpoint (drops
+// dead/private IDs and gives us the canonical title, channel + thumbnail).
+
+// Pull the 11-char YouTube id out of any watch/short/embed/youtu.be URL.
+function youtubeIdFrom(url) {
+  const s = String(url || '');
+  const m = s.match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+// Keyless validation: youtube.com/oembed returns 200 (+ title/author/thumbnail)
+// for a real, embeddable public video, and 401/404 for a dead or private one.
+async function youtubeOEmbed(videoId) {
+  try {
+    const u = `https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`;
+    const res = await fetchWithTimeout(u, {}, 8000, 'YouTube oEmbed');
+    if (!res.ok) return null;
+    const j = await res.json().catch(() => null);
+    if (!j || !j.title) return null;
+    return {
+      videoId,
+      title: String(j.title).slice(0, 160),
+      channel: String(j.author_name || '').slice(0, 100),
+      thumb: j.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      embed: `https://www.youtube-nocookie.com/embed/${videoId}`,
+    };
+  } catch { return null; }
+}
+
+// Ask grounded Gemini for `limit` real educational YouTube videos on `query`,
+// then validate each. Returns a (possibly shorter) array of verified videos.
+async function geminiSearchVideos(query, limit = 4) {
+  if (!geminiEnabled) throw new Error('Video recommendations need GEMINI_API_KEY (Google Search grounding).');
+  const want = Math.max(1, Math.min(6, Number(limit) || 4));
+  const prompt = [
+    `Use Google Search to find ${want + 3} real, currently-available YouTube videos that TEACH or clearly EXPLAIN this learning topic: "${query}".`,
+    'Prefer reputable educational channels and lessons/tutorials/explainers. Only include videos you actually found via search (never invent a link).',
+    'Reply with ONLY a JSON array (no prose), each item: {"title": string, "channel": string, "url": "https://www.youtube.com/watch?v=VIDEOID"}.',
+  ].join(' ');
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.4, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
+  };
+  const res = await fetchWithTimeout(`${GEMINI_API_BASE}/models/${GEMINI_TEXT_MODEL}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+    body: JSON.stringify(body),
+  }, 45000, 'Gemini video search');
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Gemini video search error ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const content = parts.map((p) => p.text).filter(Boolean).join('');
+
+  // Collect candidate ids from the model's JSON AND from any raw youtube URLs it
+  // (or its grounding citations) surfaced, de-duped, in first-seen order.
+  const ids = [];
+  const pushId = (id) => { if (id && !ids.includes(id)) ids.push(id); };
+  try {
+    const arr = parseModelJson(content);
+    if (Array.isArray(arr)) arr.forEach((v) => pushId(youtubeIdFrom(v && v.url)));
+  } catch { /* fall through to regex scan */ }
+  const blob = JSON.stringify(data) + '\n' + content;
+  const re = /(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([A-Za-z0-9_-]{11})/g;
+  let m; while ((m = re.exec(blob))) pushId(m[1]);
+
+  // Validate candidates (keyless oEmbed) until we have `want` real videos.
+  const out = [];
+  for (const id of ids.slice(0, want + 6)) {
+    const v = await youtubeOEmbed(id);
+    if (v) out.push(v);
+    if (out.length >= want) break;
+  }
+  return out;
+}
+
 // Gemini with an attached DOCUMENT (a PDF or text file, base64) — Gemini reads
 // the file natively. `system` sets the rules, `userText` frames the ask, and
 // `docs` is [{ mimeType, data(base64) }]. Returns parsed JSON.
@@ -849,6 +932,7 @@ module.exports = {
   grok,
   generateText,
   generateStructured, geminiDoc,
+  geminiSearchVideos,
   generateVisionJSON,
   generateImage,
   generateImageWithMeta,

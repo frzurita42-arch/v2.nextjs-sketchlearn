@@ -5,7 +5,7 @@
  * quota — the transcript and any sticky-note links are what we keep. */
 import type { ChatMessage } from '@/lib/app-state';
 
-export type Sticky = { slug: string; title: string; kind: string; runCost: number; reason?: string; recommended?: boolean; free?: boolean; page?: string; view?: string; emoji?: string; access?: 'free' | 'paid'; url?: string; thumb?: string; channel?: string };
+export type Sticky = { slug: string; title: string; kind: string; runCost: number; reason?: string; recommended?: boolean; free?: boolean; page?: string; view?: string; emoji?: string; access?: 'free' | 'paid'; url?: string; thumb?: string; channel?: string; embed?: string };
 export type ChatMsg = ChatMessage & { images?: string[]; sticky?: Sticky; building?: boolean; imageCredit?: string; textCredit?: string; polaroid?: boolean; caption?: string };
 export type ChatSession = { id: string; title: string; ts: number; messages: ChatMsg[] };
 
