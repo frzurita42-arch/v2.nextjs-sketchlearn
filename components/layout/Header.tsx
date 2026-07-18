@@ -4,7 +4,7 @@
 import { useApp } from '@/components/AppContext';
 import { appState } from '@/lib/app-state';
 
-export function Header() {
+export function Header({ chat }: { chat?: boolean } = {}) {
   const { nav, user, logout, view, requireLogin } = useApp();
   // The current page gets an orange underline (the same orange as the ✏️ pencil)
   // so you always know where you are. A tool opened from a gallery keeps THAT
@@ -20,8 +20,10 @@ export function Header() {
     <button id={id} onClick={() => nav(v as never)} style={isActive(v) ? active : undefined} aria-current={isActive(v) ? 'page' : undefined}>{label}</button>
   );
   return (
-    <nav id="topbar" className="topbar">
-      <button className="brand" onClick={() => nav('chat')}>✏️ SketchLearn</button>
+    // On the Coach chat page the header is thin and indented past the full-height
+    // side nav (which carries the logo and overlaps this bar's left edge).
+    <nav id="topbar" className="topbar" style={chat ? { paddingTop: 5, paddingBottom: 5, paddingLeft: 'calc(var(--chat-rail, 0px) + 16px)' } : undefined}>
+      {!chat && <button className="brand" onClick={() => nav('chat')}>✏️ SketchLearn</button>}
       <div className="topbar-links">
         {/* Coach chat is the home page. */}
         {link('chat', 'Coach chat')}

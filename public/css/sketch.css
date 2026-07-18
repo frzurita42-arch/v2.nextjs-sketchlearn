@@ -595,8 +595,8 @@ table.sketch tr:nth-child(even) td { background: #fffbe8; }
 .site-footer--compact {
   max-width: none;
   margin: 0;
-  padding: 5px 0;
-  font-size: .74rem;
+  padding: 3px 0;
+  font-size: .64rem;
   border-top-width: 1.5px;
   opacity: .6;
 }

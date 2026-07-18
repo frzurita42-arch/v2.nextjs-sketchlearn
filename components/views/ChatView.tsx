@@ -163,6 +163,15 @@ export function ChatView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
+  // Publish the side-nav width as a CSS var so the (thin) app header can indent
+  // itself past the full-height rail — the Claude-style "sidebar over the header"
+  // effect. Reset to 0 when the chat page unmounts.
+  const RAIL_W = 250;
+  useEffect(() => {
+    document.documentElement.style.setProperty('--chat-rail', sidebar ? `${RAIL_W}px` : '0px');
+    return () => { document.documentElement.style.setProperty('--chat-rail', '0px'); };
+  }, [sidebar]);
+
   const [tokenRole, setTokenRole] = useState<string>('');
   const loadBalance = () => {
     if (!app.user) { setBalance(null); setTokenRole(''); return; }
@@ -422,11 +431,14 @@ export function ChatView() {
       {/* Fills the fixed-viewport chat shell (see AppRoot): the history side-nav
           sits flush against the LEFT edge of the screen, Claude-style, and only the
           chat log scrolls — the page itself never scrolls. */}
-      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: '100%', width: '100%' }}>
+      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', height: '100%', width: '100%', paddingLeft: sidebar ? RAIL_W : 0 }}>
         {sidebar ? (
-          <aside style={{ flex: '0 0 250px', maxWidth: 250, borderRight: '2px dashed var(--line,#d9cfc0)', padding: '4px 12px 10px 22px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {/* Collapse the history panel (coach logo removed). */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
+          // Full-height fixed rail: it runs from the very top of the viewport, up and
+          // over the thin app header (which indents itself past this rail), Claude-style.
+          <aside style={{ position: 'fixed', top: 0, left: 0, height: '100dvh', width: RAIL_W, zIndex: 60, background: 'var(--paper,#f7f3e9)', borderRight: '2px dashed var(--line,#d9cfc0)', padding: '10px 12px 10px 18px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {/* The logo lives at the TOP of the side nav (with the orange line). */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+              <button className="brand scribble-underline" onClick={() => app.nav('chat')} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, color: 'var(--ink)', padding: 0 }}>✏️ SketchLearn</button>
               <button title="Collapse the history panel" onClick={() => setSidebar(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: 'var(--muted,#8a7f70)', padding: 0 }}>«</button>
             </div>
             <button className="btn small green" onClick={newChat} style={{ width: '100%', marginBottom: 8 }}>🆕 New chat</button>
@@ -471,9 +483,10 @@ export function ChatView() {
             </div>
           </aside>
         ) : (
-          // Collapsed: a slim button flush-left to reopen the history panel.
+          // Collapsed: a slim fixed button in the top-left corner (over the header)
+          // to reopen the history panel.
           <button title="Show the history panel" onClick={() => setSidebar(true)}
-            style={{ flex: '0 0 auto', alignSelf: 'flex-start', margin: '4px 8px 0 8px', background: 'var(--card,#fff8ee)', border: '1.5px solid var(--ink)', borderRadius: 8, cursor: 'pointer', fontSize: 16, padding: '5px 9px', lineHeight: 1 }}>🗂 »</button>
+            style={{ position: 'fixed', top: 8, left: 8, zIndex: 60, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--ink)', borderRadius: 8, cursor: 'pointer', fontSize: 16, padding: '5px 9px', lineHeight: 1 }}>🗂 »</button>
         )}
 
         <div className="chat-shell" style={{ flex: 1, minWidth: 0, height: '100%', padding: '0 16px', maxWidth: 880 }}>

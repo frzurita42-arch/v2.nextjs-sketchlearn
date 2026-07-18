@@ -320,7 +320,7 @@ export default function AppRoot() {
   return (
     <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner), requireLogin }}>
       <div style={isChat ? { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' } : undefined}>
-      <Header />
+      <Header chat={isChat} />
       {/* Sign-in / create-account overlay for guests. Dismissible so they can keep
           browsing; closes automatically once they're signed in. */}
       {authOpen && !user && (
