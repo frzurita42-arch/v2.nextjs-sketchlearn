@@ -20,11 +20,39 @@ import {
   newSessionId, loadSessions, saveSession, deleteSession, relTime, hasContent,
 } from '@/lib/chat-history';
 
+// Pages the coach can point the learner to via a [[page:xxx]] marker in its reply.
+const PAGE_STICKIES: Record<string, { view: string; emoji: string; title: string; desc: string }> = {
+  slides: { view: 'slides', emoji: '🎞️', title: 'Slides', desc: 'Browse & play presentations' },
+  repos: { view: 'tools', emoji: '📁', title: 'Repos', desc: 'Explore repositories & pathways' },
+  tools: { view: 'tools', emoji: '📁', title: 'Repos', desc: 'Explore repositories & pathways' },
+  moderators: { view: 'moderators', emoji: '🛡️', title: 'Moderators', desc: 'Meet the moderators' },
+  dashboard: { view: 'dashboard', emoji: '🧑‍🏫', title: 'Dashboard', desc: 'Your tokens & work' },
+};
+// Pull [[page:xxx]] markers out of an assistant reply.
+function splitPageMarkers(reply: string): { text: string; pages: string[] } {
+  const pages: string[] = [];
+  const text = String(reply || '')
+    .replace(/\[\[\s*page\s*:\s*(slides|repos|tools|moderators|dashboard)\s*\]\]/gi, (_m, p) => { const k = String(p).toLowerCase(); if (PAGE_STICKIES[k]) pages.push(k); return ''; })
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { text, pages: Array.from(new Set(pages)) };
+}
+// Turn a reply into a text message + any page sticky notes it asked for.
+function replyToMessages(reply: string): ChatMsg[] {
+  const { text, pages } = splitPageMarkers(reply);
+  const out: ChatMsg[] = [];
+  if (text) out.push({ role: 'assistant', content: text });
+  pages.forEach((p) => out.push({ role: 'assistant', content: '', sticky: { slug: '', kind: 'page', page: p, title: PAGE_STICKIES[p].title, runCost: 0, recommended: true, reason: PAGE_STICKIES[p].desc } }));
+  if (!out.length) out.push({ role: 'assistant', content: reply });
+  return out;
+}
+
 export function ChatView() {
   const app = useApp();
   const username = app.user?.username || null;
-  const [sessionId, setSessionId] = useState<string>(() => newSessionId());
-  const [messages, setMessages] = useState<ChatMsg[]>([initialCoachGreeting as ChatMsg]);
+  // Continue the SAME conversation across visits: seed from the in-memory session
+  // (appState) rather than starting fresh each time.
+  const [sessionId, setSessionId] = useState<string>(() => appState.chatSessionId || newSessionId());
+  const [messages, setMessages] = useState<ChatMsg[]>(() => (Array.isArray(appState.chat) && appState.chat.length ? (appState.chat as ChatMsg[]) : [initialCoachGreeting as ChatMsg]));
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -70,20 +98,29 @@ export function ChatView() {
   // live into history as it was typed. Signed-in users load their history from the
   // DB (so it follows them across devices); guests use the browser cache only.
   useEffect(() => {
-    const fresh = [initialCoachGreeting as ChatMsg];
-    setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
+    // Load the history list. Continue the SAME conversation across visits — only
+    // "🆕 New chat" starts a fresh one. If nothing is open yet (first load),
+    // reopen the most recent saved chat, else start from the greeting.
+    const continuing = appState.chatSessionId && Array.isArray(appState.chat) && appState.chat.length;
+    const applyList = (list: ChatSession[]) => {
+      setSessions(list);
+      if (continuing) return;   // keep the in-memory conversation
+      const recent = list[0];
+      if (recent) { setMessages(recent.messages); setSessionId(recent.id); appState.chat = recent.messages; appState.chatSessionId = recent.id; }
+    };
     if (username) {
       API.get('/api/coach-chats').then((r: any) => {
         const db = Array.isArray(r?.sessions) ? (r.sessions as ChatSession[]) : [];
-        setSessions(db.length ? db : loadSessions(username));
-      }).catch(() => setSessions(loadSessions(username)));
+        applyList(db.length ? db : loadSessions(username));
+      }).catch(() => applyList(loadSessions(username)));
     } else {
-      setSessions(loadSessions(username));
+      applyList(loadSessions(username));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
   useEffect(() => { appState.chat = messages; }, [messages]);
+  useEffect(() => { appState.chatSessionId = sessionId; }, [sessionId]);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, thinking, building, drawing]);
 
   // Persist the active chat into history whenever it gains content, so the sidebar
@@ -177,7 +214,7 @@ export function ChatView() {
             recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
             free: true,
           });
-          if (r?.reply) { setMessages([...next, { role: 'assistant', content: r.reply }]); setThinking(false); return; }
+          if (r?.reply) { setMessages([...next, ...replyToMessages(r.reply)]); setThinking(false); return; }
         } catch { /* fall through to recommendation */ }
         setThinking(false);
       }
@@ -191,7 +228,7 @@ export function ChatView() {
         images: imgs,
         recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
       });
-      setMessages([...next, { role: 'assistant', content: r.reply }]);
+      setMessages([...next, ...replyToMessages(r.reply)]);
     } catch (e: any) { setMessages([...next, { role: 'assistant', content: `(The coach dropped their pencil: ${e.message})` }]); }
     setThinking(false); loadBalance();
   };
@@ -254,6 +291,9 @@ export function ChatView() {
     try { const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(slug)}`); appState.activeTool = r?.tool || { slug }; } catch { appState.activeTool = { slug }; }
     app.nav('tool');
   };
+  // Navigate to a whole PAGE the coach recommended (Slides / Repos / Moderators /
+  // Dashboard). The chat stays open, so the learner can come back and continue.
+  const openPage = (pageKey: string) => { const p = PAGE_STICKIES[pageKey]; if (p) app.nav(p.view as never); };
 
   // Recommend an EXISTING repo/slide tool to play, based on the conversation topic,
   // and drop it into the chat as a sticky note (with an Open/Play button). This is
@@ -334,6 +374,19 @@ export function ChatView() {
                   </div>
                 </div>
               );
+              // A page sticky — points to a whole section of the site (chat stays open).
+              if (m.sticky && m.sticky.kind === 'page') {
+                const pg = PAGE_STICKIES[m.sticky.page || ''] || { view: 'slides', emoji: '📄', title: m.sticky.title, desc: '' };
+                return (
+                  <div key={i} style={{ marginRight: 'auto', marginBottom: 14, maxWidth: 320 }}>
+                    <div className="slide-comp comp-sticky sticky-blue" style={{ transform: 'rotate(-1deg)', marginBottom: 0 }}>
+                      <b className="sticky-title" style={{ display: 'block' }}>{pg.emoji} {pg.title} page</b>
+                      {(m.sticky.reason || pg.desc) && <p style={{ margin: '3px 0 8px', fontSize: 12.5 }}>{m.sticky.reason || pg.desc}. Come back to the chat anytime.</p>}
+                      <button className="btn small green" onClick={() => openPage(m.sticky!.page || '')}>Open the {pg.title} page →</button>
+                    </div>
+                  </div>
+                );
+              }
               if (m.sticky) {
                 // Just the taped sticky note — no chat-bubble background. Recommended =
                 // green, a built slide tool = blue, a built repo = orange.

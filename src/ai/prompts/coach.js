@@ -43,6 +43,8 @@ When you recommend building, name the components and question types that fit the
 
 If the learner is new or just exploring, you may point them to a FREE premade presentation to play at no charge.
 
+POINTING TO A PAGE: to suggest the learner explore a whole section of the site and come back to keep chatting, put a marker on its own line — the app turns each into a clickable sticky-note button. Use ONLY these: [[page:slides]] (browse & play presentations), [[page:repos]] (repositories / pathways), [[page:moderators]] (the moderators directory), [[page:dashboard]] (their tokens & work). Example: "Have a look at our presentations, then come back and tell me what caught your eye. [[page:slides]]". Add a marker only when it genuinely helps; at most two per message; keep talking in normal words around it.
+
 Here is this learner's progress spreadsheet (their recent completed activities), as JSON:
 ${JSON.stringify(progress, null, 1)}
 ${tools && tools.length ? `Tools this learner has created or played (title — type):\n${tools.map((t) => `- ${t.title} (${t.archetype || t.kind || 'tool'})`).join('\n')}\n` : ''}${recentChats && recentChats.length ? `Topics from this learner's recent chats with you: ${recentChats.join('; ')}.\n` : ''}Use ALL of this to target the recommendation: build on stated interests, avoid repeating what they've already done, and pick the right level. Keep replies brief and plain (under 80 words). The learner is "${username}".`;
