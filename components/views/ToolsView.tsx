@@ -388,16 +388,17 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
               time={(t: any) => new Date(t.createdAt || 0).getTime()}
               favs={favsById}
               likedByAdmin={(t: any) => !!t.likedByAdmin}
-              likedByOwner={(t: any) => !!app.user?.username && t.owner === app.user.username}
-              ownerLabel="💛 Moderators"
-              ownerTitle="Only tools you created (you moderate)"
+              /* No "💛 Moderators" (owner-liked) filter on the top-level gallery:
+                 that button is for a specific tool's run history / a repo's cards
+                 (where the owner liked a particular generated run/card). Here we
+                 keep just All · ★ your Favorites · 🛡️ Admin. */
               perPage={perPageOf(isSlides ? site.slidePerPage : site.repoPerPage)}
               storageKey="sl_tools_view"
               sortPrefKey="gallery"
               /* Default to the viewer's ★ Favorites (their own — not the 🛡️ Admin
                  set next to it). Guests have no favorites, so they land on All. An
                  admin-saved page default (galleryFilter) still wins when present. */
-              defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(site.galleryFilter || '') ? site.galleryFilter : (isGuest ? 'all' : 'fav')) as FilterKey}
+              defaultFilter={(['all', 'fav', 'admin'].includes(site.galleryFilter || '') ? site.galleryFilter : (isGuest ? 'all' : 'fav')) as FilterKey}
               canSaveFilter={isAdmin}
               onSaveFilter={(f) => { setSite(s => ({ ...s, galleryFilter: f })); API.put('/api/site-settings', { key: 'galleryFilter', value: f }).catch(() => { /* ignore */ }); }}
               emptyFiltered="No tools match these filters."
