@@ -327,9 +327,10 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
       {emptyExample && (
         <div style={{ width: 260, position: 'relative' }}>
           {card(emptyExample, 'grid')}
-          {/* DEMO stamp over the example image so it reads as an advert, not real data. */}
-          <div style={{ position: 'absolute', top: 44, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 4 }}>
-            <DemoStamp width={160} />
+          {/* Small DEMO stamp in the top-right corner so it reads as an advert
+              without covering the card or overflowing its edge. */}
+          <div style={{ position: 'absolute', top: 8, right: 8, pointerEvents: 'none', zIndex: 4 }}>
+            <DemoStamp width={72} />
           </div>
         </div>
       )}
