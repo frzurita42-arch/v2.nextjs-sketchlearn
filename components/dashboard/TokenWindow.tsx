@@ -20,6 +20,7 @@ type Tokens = {
   myMonthly: { month: string; used: number }[];
   myEvents?: { t: string; tokens: number; cost: number }[];
   platformMonthly?: { month: string; used: number; cost: number }[];
+  platformEvents?: { t: string; tokens: number; cost: number }[];
   wallets?: Wallet[];
 };
 
@@ -221,10 +222,10 @@ export function TokenWindow({ tokens, isAdmin, onChanged }: { tokens: Tokens | n
 
       {isAdmin && (
         <>
-          {/* Platform-wide usage + spend */}
+          {/* Whole-platform token usage with the same sliding time window. */}
+          <UsageHistory events={tokens.platformEvents || []} title="🌍 Whole-platform token usage" />
+          {/* Platform spend per month (dollars). */}
           <div className="card" style={{ padding: '12px 14px', marginBottom: 12 }}>
-            <MiniChart type="bar" title="🌍 Whole-platform tokens per month" unit=""
-              data={(tokens.platformMonthly || []).map((m) => ({ label: shortMonth(m.month), value: m.used }))} />
             <MiniChart type="line" title="💵 Platform spend per month" unit="$"
               data={(tokens.platformMonthly || []).map((m) => ({ label: shortMonth(m.month), value: m.cost }))} />
           </div>

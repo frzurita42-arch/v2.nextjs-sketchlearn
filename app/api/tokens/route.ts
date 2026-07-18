@@ -78,7 +78,13 @@ export async function GET(req: Request) {
     usedThisMonth: Math.round(byMonth(usage, u.username)[thisMonth]?.tokens || 0),
   })).sort((x: any, y: any) => y.usedThisMonth - x.usedThisMonth);
 
-  return NextResponse.json({ role, balance, months, myMonthly, myEvents, platformMonthly, wallets });
+  // Raw platform-wide usage events so the admin chart can use the same sliding
+  // time-window as the personal one.
+  const platformEvents = usage
+    .map((u: any) => ({ t: u.createdAt, tokens: Math.round(Number(u.totalTokens) || 0), cost: Number(u.costUsd) || 0 }))
+    .filter((e: any) => e.t);
+
+  return NextResponse.json({ role, balance, months, myMonthly, myEvents, platformMonthly, platformEvents, wallets });
 }
 
 // POST /api/tokens (admin only) -> grant tokens to a user's wallet. Granting to a
