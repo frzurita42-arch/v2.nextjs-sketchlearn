@@ -491,7 +491,14 @@ export function ChatView() {
               );
             })}
             {thinking && <div className="msg ai">✏️ …</div>}
-            {drawing && <div className="msg ai"><span className="sl-pencil" style={{ fontSize: 22, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span> sketching your image…</div>}
+            {drawing && (
+              <div className="msg ai" style={{ maxWidth: 220 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '20px 14px', minHeight: 120 }}>
+                  <span className="sl-pencil" style={{ fontSize: 52, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span>
+                  <span style={{ fontSize: 14 }}>sketching your image…</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Attachment previews */}
