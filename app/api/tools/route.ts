@@ -73,11 +73,15 @@ export async function GET(req: Request) {
     const likedByAdmin = likers.some((u: string) => adminSet.has(u));
     const likedByOwner = likers.includes(t.owner);   // the creator (OP) favorited their own tool
     const { likedBy, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
-    return { ...rest, definition: slimForList(rest.definition), likedByAdmin, likedByOwner };
+    // Whether this tool has a saved presentation deck (its "original results"),
+    // computed BEFORE slimForList strips it — lets the gallery show a 📖 review
+    // button (e.g. for signed-out visitors, who can review but not play).
+    const hasSavedDeck = !!(rest.definition?.lesson?.savedDeck?.slides?.length);
+    return { ...rest, definition: slimForList(rest.definition), likedByAdmin, likedByOwner, hasSavedDeck };
   });
   // Prepend a couple of featured examples (with any admin overrides applied) so
   // the gallery always has a working lesson to try.
-  const featured = applyOverrides(GALLERY_EXAMPLES, await getExampleOverrides()).map((t: any) => ({ ...t, definition: slimForList(t.definition) }));
+  const featured = applyOverrides(GALLERY_EXAMPLES, await getExampleOverrides()).map((t: any) => ({ ...t, hasSavedDeck: !!(t.definition?.lesson?.savedDeck?.slides?.length), definition: slimForList(t.definition) }));
   return NextResponse.json({ tools: [...featured, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 

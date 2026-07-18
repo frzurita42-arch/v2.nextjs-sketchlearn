@@ -272,6 +272,16 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
     catch { appState.activeTool = t; }
     app.nav('tool');
   };
+  // Open straight to a presentation's SAVED results (the 📖 book) — no play, no
+  // token spend. Used for signed-out visitors, who can review saved decks but not
+  // generate a fresh run.
+  const openResults = async (t: any) => {
+    appState.openIntent = { action: 'results' };
+    await open(t);
+  };
+  // A signed-out visitor browses as a plain viewer: they can review saved
+  // presentations but can't favorite or play (playing prompts them to sign in).
+  const isGuest = !app.user;
 
   const isExample = (t: any) => (t.tags || []).includes('example');
   const mineToDelete = (t: any) => !isExample(t) && (app.user?.role === 'admin' || app.user?.username === t.owner);
@@ -291,12 +301,23 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
 
   // One card via the shared ToolCard, wired with this view's owner/admin handlers.
   // `hideOpen` (used in the carousel) drops the Open button — image + title open it.
-  const card = (t: any, view: 'grid' | 'row', hideOpen?: boolean) => (
-    <ToolCard tool={t} view={view} onOpen={open} favs={favs} onToggleFav={toggleFav} hideOpen={hideOpen}
-      canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
-      onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} onDice={diceThumb} thumbing={!!thumbing[t.slug]}
-      canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
-  );
+  const card = (t: any, view: 'grid' | 'row', hideOpen?: boolean) => {
+    // Signed-out visitors get a review-only card for playable presentations: no
+    // ★ favorite (they have none), no ▶ play/Open, and a 📖 button ONLY when the
+    // presentation has saved results to review. Repos stay openable (viewing
+    // their cards is free and needs no account).
+    const isLesson = t.archetype === 'lesson';
+    const guestReview = isGuest && isLesson;
+    return (
+      <ToolCard tool={t} view={view} onOpen={open}
+        favs={favs} onToggleFav={isGuest ? undefined : toggleFav}
+        hideOpen={hideOpen || guestReview}
+        onHistory={guestReview && t.hasSavedDeck ? openResults : undefined}
+        canEdit={canEditCard(t)} onEdit={setEditTool} onRemix={remix} mixing={!!mixing[t.slug]}
+        onGenThumb={genThumb} onThumbPrompt={openImgPrompt} onUploadThumb={uploadThumb} onDice={diceThumb} thumbing={!!thumbing[t.slug]}
+        canRemove={canRemove(t)} isExample={isExample(t)} onRemove={del} />
+    );
+  };
 
   // Empty-gallery state: a get-started CTA card (the looping ✏️ writing animation
   // + a prompt to create), and — when a free, already-saved example of this page's
@@ -373,7 +394,10 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
               perPage={perPageOf(isSlides ? site.slidePerPage : site.repoPerPage)}
               storageKey="sl_tools_view"
               sortPrefKey="gallery"
-              defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(site.galleryFilter || '') ? site.galleryFilter : 'all') as FilterKey}
+              /* Default to the viewer's ★ Favorites (their own — not the 🛡️ Admin
+                 set next to it). Guests have no favorites, so they land on All. An
+                 admin-saved page default (galleryFilter) still wins when present. */
+              defaultFilter={(['all', 'fav', 'admin', 'owner'].includes(site.galleryFilter || '') ? site.galleryFilter : (isGuest ? 'all' : 'fav')) as FilterKey}
               canSaveFilter={isAdmin}
               onSaveFilter={(f) => { setSite(s => ({ ...s, galleryFilter: f })); API.put('/api/site-settings', { key: 'galleryFilter', value: f }).catch(() => { /* ignore */ }); }}
               emptyFiltered="No tools match these filters."
