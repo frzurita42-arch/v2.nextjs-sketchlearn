@@ -37,10 +37,15 @@ export function loadSessions(username?: string | null): ChatSession[] {
 }
 
 function strip(messages: ChatMsg[]): ChatMsg[] {
-  // Drop heavy image data-URLs + transient build placeholders; keep text + stickies.
+  // Drop transient build placeholders + heavy inline data: image URLs (they blow the
+  // storage quota), but KEEP lightweight hosted image URLs (blob/http) so generated
+  // pictures survive when a chat is reopened from history. Text + stickies are kept.
   return messages
     .filter((m) => !m.building)
-    .map(({ images, building, ...rest }) => rest);
+    .map(({ images, building, ...rest }) => {
+      const keep = Array.isArray(images) ? images.filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u)) : [];
+      return keep.length ? { ...rest, images: keep } : rest;
+    });
 }
 
 export function saveSession(username: string | null | undefined, session: ChatSession): ChatSession[] {

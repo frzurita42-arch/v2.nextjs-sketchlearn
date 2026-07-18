@@ -24,6 +24,11 @@ function cleanSessions(raw: any): any[] {
       if (m?.sticky && typeof m.sticky === 'object') out.sticky = m.sticky;
       if (m?.imageCredit) out.imageCredit = String(m.imageCredit).slice(0, 80);
       if (m?.textCredit) out.textCredit = String(m.textCredit).slice(0, 80);
+      // Keep lightweight hosted image URLs (blob/http) so generated pictures reopen
+      // from history; heavy inline data: URLs are dropped to keep the row small.
+      const imgs = (Array.isArray(m?.images) ? m.images : []).filter((u: any) => typeof u === 'string' && /^https?:\/\//i.test(u)).slice(0, 4);
+      if (imgs.length) out.images = imgs;
+      if (m?.polaroid) out.polaroid = true;
       return out;
     }),
   })).filter((s: any) => s.id && Array.isArray(s.messages) && s.messages.length);

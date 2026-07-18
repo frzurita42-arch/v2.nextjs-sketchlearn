@@ -107,11 +107,21 @@ export function ChatView() {
   };
 
   useEffect(() => {
-    // Every visit opens a fresh chat; the previous chat was saved live, so it's in
-    // the history list. Signed-in users load their history from the DB.
-    const fresh = [initialCoachGreeting as ChatMsg];
-    setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
-    welcomePages();
+    // Keep the working chat alive across navigation: if a session is already open
+    // this visit (appState singleton survives view switches), restore it — WITH its
+    // generated images — instead of wiping it. Only the very first load, or an
+    // explicit "New chat", starts a fresh greeting + welcome card.
+    if (appState.chatSessionId && Array.isArray(appState.chat) && appState.chat.length) {
+      setMessages(appState.chat as ChatMsg[]);
+      setSessionId(appState.chatSessionId);
+    } else {
+      const fresh = [initialCoachGreeting as ChatMsg];
+      const id = newSessionId();
+      setMessages(fresh); setSessionId(id);
+      appState.chat = fresh; appState.chatSessionId = id;
+      welcomePages();
+    }
+    // Signed-in users load their history from the DB; guests use the browser cache.
     if (username) {
       API.get('/api/coach-chats').then((r: any) => {
         const db = Array.isArray(r?.sessions) ? (r.sessions as ChatSession[]) : [];
@@ -124,6 +134,7 @@ export function ChatView() {
   }, [username]);
 
   useEffect(() => { appState.chat = messages; }, [messages]);
+  useEffect(() => { appState.chatSessionId = sessionId; }, [sessionId]);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [messages, thinking, building, drawing]);
 
   // Persist the active chat into history whenever it gains content, so the sidebar
@@ -145,11 +156,13 @@ export function ChatView() {
 
   const newChat = () => {
     const fresh = [initialCoachGreeting as ChatMsg];
-    setMessages(fresh); setSessionId(newSessionId()); appState.chat = fresh;
+    const id = newSessionId();
+    setMessages(fresh); setSessionId(id); appState.chat = fresh; appState.chatSessionId = id;
     setInput(''); setAttachments([]);
+    welcomePages();
   };
   const openSession = (s: ChatSession) => {
-    setMessages(s.messages); setSessionId(s.id); appState.chat = s.messages;
+    setMessages(s.messages); setSessionId(s.id); appState.chat = s.messages; appState.chatSessionId = s.id;
     setInput(''); setAttachments([]);
   };
   const removeSession = (id: string) => {
