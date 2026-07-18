@@ -4,7 +4,11 @@
  * THIS page's setting (the "specific" path); the Settings page does it universally. */
 import { setPageCardSize, useCardSize, setPageImgSize, useImgSize, CARD_SIZE_LABELS, CARD_IMG_LABELS } from '@/lib/card-size';
 
-const sel: React.CSSProperties = { padding: '5px 8px', fontSize: 12.5, borderRadius: 8, border: '1.5px solid var(--ink)', background: 'var(--card,#fff8ee)', font: 'inherit', cursor: 'pointer' };
+// The shared compact "paper" dropdown look for a filter row — the sketchbook
+// border (2.5px ink + wobble radius) sized down to sit next to the search box.
+// Exported so sibling filters (e.g. the moderators age band) match exactly.
+export const filterSelect: React.CSSProperties = { padding: '6px 10px', fontSize: 12.5, borderRadius: 'var(--wobble-2, 10px)', border: '2.5px solid var(--ink)', background: '#fff', fontFamily: 'var(--font-hand)', cursor: 'pointer' };
+const sel = filterSelect;
 
 export function CardViewMenu({ pageKey, showImage = true }: { pageKey: string; showImage?: boolean }) {
   const size = useCardSize(pageKey);

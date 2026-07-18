@@ -11,9 +11,17 @@ import { API } from '@/lib/api';
 import { useApp } from '@/components/AppContext';
 import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
-import { CardViewMenu } from '@/components/ui/CardViewMenu';
+import { CardViewMenu, filterSelect } from '@/components/ui/CardViewMenu';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { ProfileCard } from '@/components/ui/ProfileCard';
+
+// Age filter as life-stage bands (a single dropdown instead of min/max boxes).
+const AGE_BANDS: { key: string; label: string; min: number; max: number }[] = [
+  { key: 'young', label: 'Young adult', min: 18, max: 29 },
+  { key: 'adult', label: 'Adult', min: 30, max: 44 },
+  { key: 'middle', label: 'Middle-aged adult', min: 45, max: 59 },
+  { key: 'senior', label: 'Senior', min: 60, max: 200 },
+];
 
 type Profile = { title?: string; subtitle?: string; interests?: string; whatsapp?: string; age?: number; image?: string };
 type Moderator = { username: string; role: 'admin' | 'moderator' | 'user'; createdAt?: string | null; gamesPlayed?: number; profile: Profile };
@@ -42,8 +50,7 @@ export function ModeratorsView() {
   const [mods, setMods] = useState<Moderator[] | null>(null);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
-  const [minAge, setMinAge] = useState('');
-  const [maxAge, setMaxAge] = useState('');
+  const [ageBand, setAgeBand] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [portraitBusy, setPortraitBusy] = useState<string | null>(null);
 
@@ -68,16 +75,15 @@ export function ModeratorsView() {
   const filtered = useMemo(() => {
     if (!mods) return [];
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const lo = parseInt(minAge, 10); const hi = parseInt(maxAge, 10);
+    const band = AGE_BANDS.find((b) => b.key === ageBand);
     return mods.filter((m) => {
       const p = m.profile || {};
       const hay = [m.username, p.title, p.subtitle, p.interests].filter(Boolean).join(' ').toLowerCase();
       if (terms.length && !terms.every((t) => hay.includes(t))) return false;
-      if (Number.isFinite(lo) && (!p.age || p.age < lo)) return false;
-      if (Number.isFinite(hi) && (!p.age || p.age > hi)) return false;
+      if (band && (!p.age || p.age < band.min || p.age > band.max)) return false;
       return true;
     });
-  }, [mods, q, minAge, maxAge]);
+  }, [mods, q, ageBand]);
 
   const cardSize = useCardSize('moderators');
   const imgMode = useImgSize('moderators');
@@ -92,13 +98,12 @@ export function ModeratorsView() {
           <input type="text" value={q} onChange={(e) => setQ(e.target.value)}
             placeholder="🔍 Search by name, interest or keyword…"
             style={{ flex: '1 1 220px', minWidth: 0 }} />
-          <span style={{ fontSize: 13, color: 'var(--muted,#8a7f70)' }}>Age</span>
-          <input value={minAge} onChange={(e) => setMinAge(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric"
-            placeholder="min" style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '2px solid var(--ink)', fontSize: 14 }} />
-          <span style={{ color: 'var(--muted,#8a7f70)' }}>–</span>
-          <input value={maxAge} onChange={(e) => setMaxAge(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric"
-            placeholder="max" style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '2px solid var(--ink)', fontSize: 14 }} />
-          {(q || minAge || maxAge) && <button className="btn small ghost" onClick={() => { setQ(''); setMinAge(''); setMaxAge(''); }}>Clear</button>}
+          {/* Age band — one dropdown, same paper look + monochrome emoji as the view/image menus. */}
+          <select title="Age band" aria-label="Age band" value={ageBand} onChange={(e) => setAgeBand(e.target.value)} style={filterSelect}>
+            <option value="">👤 All ages</option>
+            {AGE_BANDS.map((b) => <option key={b.key} value={b.key}>👤 {b.label}</option>)}
+          </select>
+          {(q || ageBand) && <button className="btn small ghost" onClick={() => { setQ(''); setAgeBand(''); }}>Clear</button>}
           <CardViewMenu pageKey="moderators" />
         </div>
 
