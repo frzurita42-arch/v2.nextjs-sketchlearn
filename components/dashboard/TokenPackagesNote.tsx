@@ -15,7 +15,9 @@ type Pkg = { tokens: number; usd: number; note: string };
 // not part of this base estimate.
 const LESSON_SLIDES = 5;
 const perLesson = Math.max(1, estimateLessonTokens({ slides: LESSON_SLIDES }));
+const perSlide = Math.max(1, perLesson / LESSON_SLIDES);
 const lessonsFor = (tokens: number) => Math.max(1, Math.round((Number(tokens) || 0) / perLesson));
+const slidesFor = (tokens: number) => Math.max(1, Math.round((Number(tokens) || 0) / perSlide));   // 1 AI image per slide
 const DEFAULT_PACKAGES: Pkg[] = [
   { tokens: 5000, usd: 5, note: `≈ ${lessonsFor(5000)} slide lessons` },
   { tokens: 10000, usd: 9, note: `≈ ${lessonsFor(10000)} slide lessons` },
@@ -56,7 +58,10 @@ export function TokenPackagesNote() {
       </div>
       <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
         {pkgs.map((p, i) => (
-          <li key={i}><b>{fmt(p.tokens)} tokens</b> — ${Number(p.usd).toFixed(2)}{p.note ? <span style={{ opacity: 0.75 }}> · {p.note}</span> : null}</li>
+          <li key={i}>
+            <b>{fmt(p.tokens)} tokens</b> — ${Number(p.usd).toFixed(2)}{p.note ? <span style={{ opacity: 0.75 }}> · {p.note}</span> : null}
+            <div style={{ fontSize: 11, opacity: 0.7 }}>≈ {fmt(lessonsFor(p.tokens))} presentations · {fmt(slidesFor(p.tokens))} slides · {fmt(slidesFor(p.tokens))} images</div>
+          </li>
         ))}
       </ul>
       <p style={{ fontSize: 11, opacity: 0.7, margin: '6px 0 0' }}>
