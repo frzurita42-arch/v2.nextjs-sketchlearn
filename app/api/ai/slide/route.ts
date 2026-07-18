@@ -139,8 +139,24 @@ export async function POST(req: Request) {
 
   const user = buildSlideUserPrompt({ topic, concept, level, slideNumber, totalSlides, historyText, branchText });
 
-  try {
-    const slide = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.85, maxTokens: 8192 });
+  // The layout contract: a teaching slide must carry prose TEXT and — unless the
+  // density is text-only — at least one support/visual component. It must never be a
+  // bare quiz. This is what guarantees a slide isn't returned as "just an MCQ".
+  const textOnly = settings.imageDensity === 'text-only';
+  const hasText = (s: any) => (s.components || []).some((c: any) =>
+    (c?.type === 'text' && String(c.content || '').trim())
+    || (c?.type === 'keypoints' && Array.isArray(c.items) && c.items.length)
+    || (c?.type === 'definition' && String(c.content || '').trim())
+    || (c?.type === 'example' && String(c.content || '').trim()));
+  const hasSupport = (s: any) => (s.components || []).some((c: any) => ['image', 'svg', 'table', 'chart', 'latex', 'code', 'stickynote'].includes(c?.type));
+  const layoutOk = (s: any) => hasText(s) && (textOnly || hasSupport(s));
+
+  // Run the model, then apply every subject/density enforcement so the returned
+  // slide matches the tool's layout guidelines. Extracted so a corrective retry runs
+  // the identical pipeline.
+  const finalize = async (extraInstruction: string, temperature: number) => {
+    const u = extraInstruction ? `${user}\n\n${extraInstruction}` : user;
+    const slide = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: u }], { temperature, maxTokens: 8192 });
     slide.components = sanitizeComponents(slide.components);
     enforceLatexNarrativeCadence(slide, { topic, concept, slideNumber, proofMode: effectiveProof, stemFocus: allowLatex, history, branch });
     if (!visualPlan.allowImages) {
@@ -156,7 +172,7 @@ export async function POST(req: Request) {
         caption: `Concept illustration: ${String(slide.title || concept).slice(0, 80)}`,
       });
     }
-    if (settings.imageDensity === 'text-only' && !effectiveProof) {
+    if (textOnly && !effectiveProof) {
       slide.components = slide.components.filter((c: any) => !['latex', 'code', 'table', 'chart'].includes(c.type));
     }
     // If the topic is not mathematical, strip any LaTeX the model added anyway.
@@ -181,6 +197,37 @@ export async function POST(req: Request) {
       await fillImages(slide.components || []);
     }
     enforceSlideVisualPolicy(slide, history, slideNumber);
+    return slide;
+  };
+
+  try {
+    let slide = await finalize('', 0.85);
+    // Double-check the slide against the layout contract. If the model ignored it
+    // (e.g. returned a bare multiple-choice question), regenerate ONCE with an
+    // explicit correction, then adopt whichever result is valid.
+    if (!layoutOk(slide)) {
+      try {
+        const missing = !hasText(slide)
+          ? `the required ${paraCount} prose "text" paragraph(s)${textOnly ? '' : ' and at least one support/visual component'}`
+          : 'at least one support/visual component (image, table, chart, svg, code or sticky note)';
+        const retry = await finalize(`YOUR PREVIOUS ATTEMPT WAS INVALID: it did not follow the slide layout — it was missing ${missing}. Regenerate the COMPLETE slide now: it MUST contain the ${paraCount} text paragraph(s)${textOnly ? '' : ', at least one support/visual component'} AND the quiz. Do not return a bare quiz.`, 0.6);
+        if (layoutOk(retry) || (hasText(retry) && !hasText(slide))) slide = retry;
+      } catch { /* keep the first attempt, fixed deterministically below */ }
+    }
+    // Deterministic guarantee so a slide is NEVER a bare quiz, even if both model
+    // passes fell short: synthesise a text block, and add a visual when allowed.
+    if (!hasText(slide)) {
+      slide.components = [{ type: 'text', content: String(slide.summary || slide.title || concept || 'This slide reviews the concept below.').trim() }, ...(slide.components || [])];
+    }
+    if (!textOnly && !hasSupport(slide) && visualPlan.allowImages) {
+      slide.components.push({
+        type: 'image',
+        prompt: buildGenericImagePrompt(slide, { topic, concept, slideNumber, totalSlides }),
+        frame: slideNumber % 2 === 0 ? 'polaroid' : 'paper',
+        caption: `Concept illustration: ${String(slide.title || concept).slice(0, 80)}`,
+      });
+      await fillImages(slide.components);
+    }
     if (!slide.quiz || !Array.isArray(slide.quiz.options) || !slide.quiz.options.some((o: any) => o.correct)) {
       throw new Error('Model returned a slide without a valid quiz, please retry');
     }
