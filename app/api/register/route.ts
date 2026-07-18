@@ -23,13 +23,13 @@ export async function POST(req: Request) {
   const dob = String(body.dob || '').trim();
   const country = String(body.country || '').trim();
 
+  // Required: email, username, password. Date of birth and country are optional.
   if (!username || !password) return NextResponse.json({ error: 'Username and password are required.' }, { status: 400 });
   if (username.length < 3) return NextResponse.json({ error: 'Username must be at least 3 characters.' }, { status: 400 });
-  if (password.length < 6) return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
+  if (password.length < 6 || password.length > 15) return NextResponse.json({ error: 'Password must be between 6 and 15 characters.' }, { status: 400 });
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
-  const dobDate = new Date(dob);
-  if (!dob || isNaN(dobDate.getTime()) || dobDate.getTime() > Date.now()) return NextResponse.json({ error: 'Enter a valid date of birth.' }, { status: 400 });
-  if (!country) return NextResponse.json({ error: 'Choose your country.' }, { status: 400 });
+  // Only validate a date of birth if one was given (it's optional).
+  if (dob) { const dobDate = new Date(dob); if (isNaN(dobDate.getTime()) || dobDate.getTime() > Date.now()) return NextResponse.json({ error: 'Enter a valid date of birth.' }, { status: 400 }); }
 
   // Sync fresh so a concurrent instance's stale list can't miss an existing name or
   // drop other users on persist.

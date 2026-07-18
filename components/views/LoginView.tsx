@@ -66,7 +66,10 @@ export function LoginView({ onDone, onClose, initialMode }: { onDone?: () => voi
   const [busy, setBusy] = useState(false);
 
   const go = async () => {
-    if (mode === 'register' && password !== confirm) { setErr('Passwords do not match.'); return; }
+    if (mode === 'register') {
+      if (password.length < 6 || password.length > 15) { setErr('Password must be between 6 and 15 characters.'); return; }
+      if (password !== confirm) { setErr('Passwords do not match.'); return; }
+    }
     setBusy(true); setErr('');
     try {
       const r = mode === 'login'
@@ -80,9 +83,12 @@ export function LoginView({ onDone, onClose, initialMode }: { onDone?: () => voi
     }
   };
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') go(); };
+  // Required fields only: email, username, password (6–15), confirm-password.
+  // Date of birth and country are optional.
+  const pwOk = password.length >= 6 && password.length <= 15;
   const canSubmit = mode === 'login'
     ? !!(username.trim() && password)
-    : !!(username.trim() && password && confirm && email.trim() && dob && country.trim());
+    : !!(email.trim() && username.trim() && pwOk && confirm === password);
 
   return (
     <div className="auth-wrap" style={{ margin: 0 }}>
@@ -103,10 +109,21 @@ export function LoginView({ onDone, onClose, initialMode }: { onDone?: () => voi
           <button className={`btn small ${mode === 'register' ? 'blue' : 'ghost'}`} style={{ flex: 1 }} onClick={() => { setMode('register'); setErr(''); }}>Create account</button>
         </div>
 
+        {/* Sign up asks for the email first; the "no verification required" note
+            sits on the same row as the label. */}
+        {mode === 'register' && (
+          <label className="field">
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>Email
+              <span style={{ fontWeight: 'normal', fontSize: 12, color: 'var(--danger,#e4572e)' }}>no verification required</span></span>
+            <input type="email" autoComplete="email" placeholder="you@example.com" value={email}
+              onChange={e => setEmail(e.target.value)} onKeyDown={onKey} />
+          </label>
+        )}
+
         <label className="field"><span>Username</span>
           <input type="text" id="login-user" autoComplete="username" value={username}
             onChange={e => setUsername(e.target.value)} onKeyDown={onKey} /></label>
-        <label className="field"><span>Password</span>
+        <label className="field"><span>Password{mode === 'register' && <span style={{ fontWeight: 'normal', fontSize: 12, opacity: 0.6 }}> (6–15 characters)</span>}</span>
           <input type="password" id="login-pass" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password}
             onChange={e => setPassword(e.target.value)} onKeyDown={onKey} /></label>
 
@@ -114,15 +131,10 @@ export function LoginView({ onDone, onClose, initialMode }: { onDone?: () => voi
           <label className="field"><span>Confirm password</span>
             <input type="password" autoComplete="new-password" value={confirm}
               onChange={e => setConfirm(e.target.value)} onKeyDown={onKey} /></label>
-          <label className="field"><span>Email</span>
-            <input type="email" autoComplete="email" placeholder="you@example.com" value={email}
-              onChange={e => setEmail(e.target.value)} onKeyDown={onKey} />
-            <span style={{ display: 'block', fontWeight: 'normal', fontSize: 12, color: 'var(--danger,#e4572e)', marginTop: 3 }}>no verification required</span>
-          </label>
-          <label className="field"><span>Date of birth</span>
+          <label className="field"><span>Date of birth <span style={{ fontWeight: 'normal', fontSize: 12, opacity: 0.6 }}>(optional)</span></span>
             <input type="date" value={dob} max={new Date().toISOString().slice(0, 10)}
               onChange={e => setDob(e.target.value)} /></label>
-          <label className="field"><span>Country</span>
+          <label className="field"><span>Country <span style={{ fontWeight: 'normal', fontSize: 12, opacity: 0.6 }}>(optional)</span></span>
             <CountrySelect value={country} onChange={setCountry} />
           </label>
         </>)}
