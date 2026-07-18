@@ -387,9 +387,11 @@ export function ToolsView({ kind = 'repository' }: { kind?: GalleryKind }) {
               storageKey="sl_tools_view"
               sortPrefKey="gallery"
               /* Default to the viewer's ★ Favorites (their own — not the 🛡️ Admin
-                 set next to it). Guests have no favorites, so they land on All. An
+                 set next to it). Guests have no favorites, so their Favorites view
+                 is empty and the Collection shows the get-started / demo empty state.
+                 Guests are always defaulted to Favorites; for signed-in users an
                  admin-saved page default (galleryFilter) still wins when present. */
-              defaultFilter={(['all', 'fav', 'admin'].includes(site.galleryFilter || '') ? site.galleryFilter : (isGuest ? 'all' : 'fav')) as FilterKey}
+              defaultFilter={(isGuest ? 'fav' : (['all', 'fav', 'admin'].includes(site.galleryFilter || '') ? site.galleryFilter : 'fav')) as FilterKey}
               canSaveFilter={isAdmin}
               onSaveFilter={(f) => { setSite(s => ({ ...s, galleryFilter: f })); API.put('/api/site-settings', { key: 'galleryFilter', value: f }).catch(() => { /* ignore */ }); }}
               emptyFiltered="No tools match these filters."
