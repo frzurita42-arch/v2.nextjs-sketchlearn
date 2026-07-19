@@ -195,20 +195,17 @@ export function Collection<T>({
   // (header+banner · filters+display · cards). Constrained to the content width so
   // it lines up with the rows above/below it.
   const sectionRule = { ...wrap, borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '14px auto' } as const;
-  // The pager row (buttons + count). It shows whenever pagination is configured —
-  // even on a single page (both buttons disabled) — so it's always visibly there.
-  const pagerRow = perPage ? (
+  // The pager (buttons + count). Like the Settings gallery, it only appears when
+  // there's MORE THAN ONE page — a single/empty gallery shows no pager. And it's a
+  // BOTTOM pager only (no top pager framing the empty state).
+  const showPager = !!perPage && pageCount > 1;
+  const pagerRow = showPager ? (
     <div style={{ ...wrap, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '10px 0' }}>
       <button className="btn small" disabled={page === 0} onClick={() => goPage(page - 1)}>← Prev</button>
       <span style={{ fontSize: 13, opacity: 0.7 }}>Page {page + 1} / {pageCount}</span>
       <button className="btn small" disabled={page >= pageCount - 1} onClick={() => goPage(page + 1)}>Next →</button>
     </div>
   ) : null;
-  // The TOP pager is framed by dashed rules on both sides (it sits between the
-  // count and the items). The BOTTOM pager gets a trailing rule too when
-  // `bottomRule` is set (closing the section); otherwise it omits it so it doesn't
-  // double up with whatever section divider follows it below.
-  const pagerTop = pagerRow ? (<div><div style={fullDash} />{pagerRow}<div style={fullDash} /></div>) : null;
   const pagerBottom = pagerRow ? (<div><div style={fullDash} />{pagerRow}{bottomRule && <div style={fullDash} />}</div>) : null;
 
   return (
@@ -268,7 +265,7 @@ export function Collection<T>({
       {/* Closing dashed rule — end of the filters container, right before the
           cards. When a pager is configured it already frames itself in dashes and
           serves as the divider instead. */}
-      {pagerTop ? <div style={{ margin: '4px 0 12px' }}>{pagerTop}</div> : <div style={sectionRule} />}
+      <div style={sectionRule} />
 
       {/* ═══ Container 3: the cards / nested items ═══ */}
       <section aria-label="Cards">
