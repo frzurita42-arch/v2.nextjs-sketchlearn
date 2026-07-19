@@ -346,6 +346,7 @@ export default function AppRoot() {
     appsettings: { emoji: '⚙️', name: 'Settings' },
     users: { emoji: '👥', name: 'Users' },
     comments: { emoji: '💬', name: 'Comments' },
+    tool: { emoji: '▶️', name: 'Playing' },
   };
   const isShell = isChat || lv in SHELL;
 
@@ -394,6 +395,14 @@ export default function AppRoot() {
                 lv === 'sandbox' ? <SandboxView />
                 : lv === 'empty' ? <EmptyView />
                 : lv === 'comments' ? <CommentsView />
+                // The tool runner / lesson player, adapted into the shell working
+                // column (dashed guide lines), scrolling within it.
+                : lv === 'tool'
+                  ? <div style={{ height: '100%', overflowY: 'auto' }}>
+                      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+                        {views.tool}
+                      </div>
+                    </div>
                 : lv === 'appsettings' ? <AppSettingsView />
                 : lv === 'presrun' ? <PresentationRunsView />
                 : lv === 'slides' ? <ShellGallery pageKey="slides" kind="presentation" title="🎞️ Slides gallery" subtitle="Every slide tool on the site" />
