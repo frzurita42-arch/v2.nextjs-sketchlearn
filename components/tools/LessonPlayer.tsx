@@ -39,6 +39,7 @@ function lessonToStudioPages(lesson: any): any[] {
 }
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
+import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { RichText } from '@/components/tools/RichText';
 import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
@@ -859,6 +860,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const viewMode: 'both' | 'history' | 'replica' = ['both', 'history', 'replica'].includes(lesson.viewMode) ? lesson.viewMode : 'replica';
   const [savedDeck, setSavedDeck] = useState<any>(lesson.savedDeck || null);
   const hasSaved = !!(savedDeck?.slides?.length);
+  const [wizardKey, setWizardKey] = useState(0);   // bump to reset the settings wizard to step 1
   const [deckMsg, setDeckMsg] = useState('');
   const offlineOn = lesson.offlineExport !== false;   // owner/admin can turn it off
   const [zipBusy, setZipBusy] = useState(false);
@@ -1817,88 +1819,94 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               <button className="btn small ghost" onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
             </span>
           </div>
-          {/* Collapsed (default) shows only topic / level / slides; expanded shows all. */}
-          {settings.length > 0 && <ToolFields fields={settingsOpen ? formFields : collapsedFields} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} />}
-          {/* Content theme + image art style presets for this lesson (expanded only). */}
-          {settingsOpen && (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
-            <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme{suggestBtn('theme', 'Theme', [...LESSON_THEMES])}</span>
-              <select value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
-                {LESSON_THEMES.map((th) => <option key={th} value={th}>{th === 'Any' ? 'Any (AI picks)' : th}</option>)}
-              </select>
-            </label>
-            <label className="field" style={{ maxWidth: 240 }}><span>📏 Text density{suggestBtn('density', 'Text density', PARA_DENSITIES)}</span>
-              <select value={(form as any).density || ''} onChange={(e) => setForm(s => ({ ...s, density: e.target.value }))}
-                title="How much text to show — independent of the level's vocabulary difficulty">
-                <option value="">Auto (match the level)</option>
-                {PARA_DENSITIES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </label>
-            <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style
-              {/* ✎ pencil flips the dropdown to a free-text box (and back). */}
-              <button type="button" title={customImg ? 'Pick from the list' : 'Type a custom style'}
-                onClick={() => { const goingCustom = !customImg; setCustomImg(goingCustom); if (!goingCustom && !(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle)) setForm(s => ({ ...s, imageStyle: 'Any' })); }}
-                style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{customImg ? '▾' : '✎'}</button>
-              {suggestBtn('imageStyle', 'Image style', [...IMAGE_STYLES])}
-            </span>
-              {customImg
-                ? <input type="text" placeholder="Describe your image style…" value={(form as any).imageStyle || ''}
-                    onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))} />
-                : <select value={(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle) ? (form as any).imageStyle : 'Any'}
-                    onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
-                    {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
-                  </select>}
-            </label>
-            <label className="field" style={{ maxWidth: 240 }}><span>🔌 Image API</span>
-              <select value={(form as any).imageProvider || ''} onChange={(e) => setForm(s => ({ ...s, imageProvider: e.target.value }))}
-                title="Which image generator to use — Pollinations is free & keyless">
-                <option value="">Auto (best available)</option>
-                {imageProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
-            </label>
-            <label className="field" style={{ maxWidth: 240 }}><span>🔤 Text API</span>
-              <select value={(form as any).textProvider ?? 'gemini'} onChange={(e) => setForm(s => ({ ...s, textProvider: e.target.value }))}
-                title="Which model writes the slide text & questions — Gemini is the default">
-                <option value="gemini">Gemini (default)</option>
-                <option value="">Auto (best available)</option>
-                {textProviders.filter((p) => p.id !== 'gemini').map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
-            </label>
-            <label className="field" style={{ maxWidth: 240 }}><span>🎙 Voice</span>
-              <select value={(form as any).voice || ''} onChange={(e) => setForm(s => ({ ...s, voice: e.target.value }))}
-                title="Which voice reads the text aloud / pronounces words">
-                <option value="">Default voice</option>
-                {TTS_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-              </select>
-            </label>
-          </div>
-          )}
-          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-            {!app.user
-              ? <button className="btn green" onClick={() => app.requireLogin()}>▶ Sign in to play this lesson</button>
-              : canPlay
-              ? <button className="btn green" onClick={createAndPlay}>✨ Generate &amp; play →</button>
-              : <button className="btn green" title="You need play credits — get some from the dashboard" onClick={() => app.nav('dashboard')}>🎟 Get credits to play →</button>}
-            {/* Up-front price estimate for this generation (admins are unlimited). */}
-            {canPlay && !eff.isAdmin && (
-              <span title="Estimated credits for this generation (slides + images). Charged as it runs." style={{ fontSize: 12, opacity: 0.7 }}>
-                ~{estimateLessonTokens({ slides: (form as any).slides, totalSlides: lesson.totalSlides, support: lesson.support }).toLocaleString()} credits{typeof balance === 'number' ? ` · you have ${balance.toLocaleString()}` : ''}
-              </span>
-            )}
-            {gateMsg && <span style={{ fontSize: 12, color: 'var(--danger,#e4572e)' }}>{gateMsg}</span>}
-            {/* 💡 Per-play tooltip switch: some students don't have access to the
-                on-slide helper tooltips (hints/links), so let the player turn them
-                off BEFORE playing. Default on. Saved with the run's config. */}
-            {canPlay && (
-              <button type="button" className={`btn small ${(form as any).tooltips === false ? 'ghost' : 'blue'}`}
-                title={(form as any).tooltips === false
-                  ? 'Tooltips are OFF — the on-slide helper hints/links stay hidden during this presentation. Click to turn them on.'
-                  : 'Tooltips are ON — the on-slide helper hints/links show during the presentation. Click to turn them off (for students without tooltip access).'}
-                onClick={() => setForm(s => ({ ...s, tooltips: (s as any).tooltips === false }))}>
-                💡 Tooltips: {(form as any).tooltips === false ? 'Off' : 'On'}
-              </button>
-            )}
-          </div>
+          {/* A guided wizard: Basics → Level & length → Style → Play/Generate. Reuses
+              the same <ToolFields> + form state; the last step carries the actions. */}
+          {(() => {
+            const fieldsFor = (ids: string[]) => formFields.filter((f: any) => ids.includes(f.id));
+            const stepFields = (ids: string[]) => {
+              const fs = fieldsFor(ids);
+              return fs.length ? <ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} /> : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>;
+            };
+            const styleStep = (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {fieldsFor(['tone', 'category', 'custom']).length > 0 && <div style={{ flex: '1 1 100%' }}><ToolFields fields={fieldsFor(['tone', 'category', 'custom'])} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} /></div>}
+                <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme{suggestBtn('theme', 'Theme', [...LESSON_THEMES])}</span>
+                  <select value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
+                    {LESSON_THEMES.map((th) => <option key={th} value={th}>{th === 'Any' ? 'Any (AI picks)' : th}</option>)}
+                  </select>
+                </label>
+                <label className="field" style={{ maxWidth: 240 }}><span>📏 Text density{suggestBtn('density', 'Text density', PARA_DENSITIES)}</span>
+                  <select value={(form as any).density || ''} onChange={(e) => setForm(s => ({ ...s, density: e.target.value }))} title="How much text to show — independent of the level's vocabulary difficulty">
+                    <option value="">Auto (match the level)</option>
+                    {PARA_DENSITIES.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </label>
+                <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style
+                  <button type="button" title={customImg ? 'Pick from the list' : 'Type a custom style'}
+                    onClick={() => { const goingCustom = !customImg; setCustomImg(goingCustom); if (!goingCustom && !(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle)) setForm(s => ({ ...s, imageStyle: 'Any' })); }}
+                    style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{customImg ? '▾' : '✎'}</button>
+                  {suggestBtn('imageStyle', 'Image style', [...IMAGE_STYLES])}
+                </span>
+                  {customImg
+                    ? <input type="text" placeholder="Describe your image style…" value={(form as any).imageStyle || ''} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))} />
+                    : <select value={(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle) ? (form as any).imageStyle : 'Any'} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
+                        {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
+                      </select>}
+                </label>
+                <label className="field" style={{ maxWidth: 240 }}><span>🔌 Image API</span>
+                  <select value={(form as any).imageProvider || ''} onChange={(e) => setForm(s => ({ ...s, imageProvider: e.target.value }))} title="Which image generator to use — Pollinations is free & keyless">
+                    <option value="">Auto (best available)</option>
+                    {imageProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </select>
+                </label>
+                <label className="field" style={{ maxWidth: 240 }}><span>🔤 Text API</span>
+                  <select value={(form as any).textProvider ?? 'gemini'} onChange={(e) => setForm(s => ({ ...s, textProvider: e.target.value }))} title="Which model writes the slide text & questions — Gemini is the default">
+                    <option value="gemini">Gemini (default)</option>
+                    <option value="">Auto (best available)</option>
+                    {textProviders.filter((p) => p.id !== 'gemini').map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </select>
+                </label>
+                <label className="field" style={{ maxWidth: 240 }}><span>🎙 Voice</span>
+                  <select value={(form as any).voice || ''} onChange={(e) => setForm(s => ({ ...s, voice: e.target.value }))} title="Which voice reads the text aloud / pronounces words">
+                    <option value="">Default voice</option>
+                    {TTS_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
+                </label>
+                {canPlay && (
+                  <label className="field" style={{ maxWidth: 240 }}><span>💡 Tooltips</span>
+                    <button type="button" className={`btn small ${(form as any).tooltips === false ? 'ghost' : 'blue'}`}
+                      onClick={() => setForm(s => ({ ...s, tooltips: (s as any).tooltips === false }))}>
+                      💡 Tooltips: {(form as any).tooltips === false ? 'Off' : 'On'}
+                    </button>
+                  </label>
+                )}
+              </div>
+            );
+            const steps: WizardStep[] = [
+              { key: 'basics', title: 'Name & topic', render: () => stepFields(['title', 'topic']) },
+              { key: 'level', title: 'Level & length', render: () => stepFields(['level', 'difficulty', 'slides']) },
+              { key: 'style', title: 'Style (optional)', render: () => styleStep },
+            ];
+            const finalActions = (
+              <>
+                {!app.user
+                  ? <button className="btn green" onClick={() => app.requireLogin()}>▶ Sign in to play this lesson</button>
+                  : canPlay
+                  ? <>
+                      {hasSaved && <button className="btn green" title="Play the saved version" onClick={() => { recordAndPlay(savedDeck?.config || form, { replica: true }); setWizardKey((k) => k + 1); }}>▶ Play</button>}
+                      <button className="btn green" onClick={() => { createAndPlay(); setWizardKey((k) => k + 1); }}>✨ Generate &amp; play →</button>
+                    </>
+                  : <button className="btn green" title="You need play credits — get some from the dashboard" onClick={() => app.nav('dashboard')}>🎟 Get credits to play →</button>}
+                {canPlay && !eff.isAdmin && (
+                  <span title="Estimated credits for this generation (slides + images). Charged as it runs." style={{ fontSize: 12, opacity: 0.7 }}>
+                    ~{estimateLessonTokens({ slides: (form as any).slides, totalSlides: lesson.totalSlides, support: lesson.support }).toLocaleString()} credits{typeof balance === 'number' ? ` · you have ${balance.toLocaleString()}` : ''}
+                  </span>
+                )}
+                {gateMsg && <span style={{ fontSize: 12, color: 'var(--danger,#e4572e)' }}>{gateMsg}</span>}
+              </>
+            );
+            return <StepWizard steps={steps} finalActions={finalActions} resetKey={wizardKey} onCancel={() => setForm(defaultsFor(def) as any)} />;
+          })()}
         </div>
         )}
 
