@@ -33,6 +33,10 @@ export function AppSettingsView() {
         {/* Title + header-size control (editors only), closed by a dotted separator. */}
         <PageHeaderBar pageKey="appsettings" title="⚙️ Settings" subtitle="Tweak how SketchLearn looks." global />
 
+        {/* Dotted line between the Settings header and the Galleries section (outside
+            the header encapsulation). */}
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '4px 0 22px' }} />
+
         {/* ── GALLERIES ─────────────────────────────────────────────────
             A thin filter-toolbar (same look as the Sandbox filter row) above a live
             preview of the whole gallery SKELETON — so a universal change is visible. */}
