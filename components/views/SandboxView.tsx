@@ -8,7 +8,7 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
-import { PageHeading } from '@/components/ui/PageHeading';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
 
@@ -40,7 +40,7 @@ export function SandboxView() {
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
-        <PageHeading pageKey="sandbox" title="🧪 Sandbox" subtitle="Empty-gallery state preview." />
+        <PageHeaderBar pageKey="sandbox" title="🧪 Sandbox" subtitle="Empty-gallery state preview." />
 
         <GalleryFilterRow right={<CardViewMenu pageKey="sandbox" />} />
 

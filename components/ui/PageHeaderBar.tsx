@@ -1,12 +1,13 @@
 'use client';
-/* A page's heading is a CONTAINER: the title + subtitle, closed off by a dotted
- * line at the bottom that separates this section from the filters below.
- *
- * The header-size "apply" controls are an EDITOR tool — only admins/moderators see
- * them (to the right, half-and-half). A regular user or guest sees just the title
- * and subtitle plus the dotted separator. On the Settings page (global) the editor
- * controls manage every page ("Customise per page…" + "Apply to all pages"); on an
- * individual page they only touch that page ("Apply to this page"). */
+/* The ONE shared page-heading component, in two instances:
+ *   • ADMIN — the title + subtitle ENCAPSULATED in a dotted box (title, subtitle and
+ *     a horizontal dotted line all inside it) with the header-size control card next
+ *     to it, half-and-half.
+ *   • MODERATOR / USER / GUEST — just the title + subtitle with a dotted line
+ *     underneath separating this section from the filters below. No controls.
+ * On the Settings page (global) the control manages every page ("Customise per
+ * page…" + "Apply to all pages"); on an individual page it only touches that page
+ * ("Apply to this page"). */
 import { useState } from 'react';
 import { useApp } from '@/components/AppContext';
 import { PageHeading } from './PageHeading';
@@ -23,7 +24,8 @@ const innerRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted 
 export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode; global?: boolean }) {
   const app = useApp();
   const perms = app.eff();
-  const showControls = perms.isAdmin || perms.isModerator;
+  // Admins get the encapsulated box + size tool; everyone else sees title + line.
+  const showControls = perms.isAdmin;
   const { title: tSize } = useHeaderSize(pageKey);
   const [popup, setPopup] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -33,12 +35,12 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
-        {/* The title + subtitle. On Settings (global) this is ENCAPSULATED in a dotted
-            box that also contains the horizontal dotted line; elsewhere it's plain and
-            the separator sits at the very bottom (below the whole header row). */}
-        <div style={{ flex: showControls ? '1 1 300px' : '1 1 100%', minWidth: 240, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(global ? titleBox : { padding: '2px 2px 4px' }) }}>
+        {/* Admin: the title + subtitle ENCAPSULATED in a dotted box that also contains
+            the horizontal dotted line. Non-admin: plain title + subtitle, with the
+            separator at the very bottom (below the whole header row). */}
+        <div style={{ flex: showControls ? '1 1 300px' : '1 1 100%', minWidth: 240, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(showControls ? titleBox : { padding: '2px 2px 4px' }) }}>
           <PageHeading pageKey={pageKey} title={title} subtitle={subtitle} />
-          {global && <hr style={innerRule} />}
+          {showControls && <hr style={innerRule} />}
         </div>
         {/* The header-size control card — editors only (admins & moderators). */}
         {showControls && (
