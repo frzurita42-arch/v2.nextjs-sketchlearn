@@ -625,6 +625,24 @@ async function setSiteSetting(key, value) {
   }
 }
 
+async function deleteSiteSetting(key) {
+  key = String(key || '').slice(0, 60);
+  if (!key) return false;
+  if (!db.pool) {
+    const s = readJSON('site_settings.json', {});
+    delete s[key];
+    writeJSON('site_settings.json', s);
+    return true;
+  }
+  try {
+    await withDbTimeout(dbQuery('DELETE FROM site_settings WHERE key = $1', [key]), 8000, 'Delete site setting');
+    return true;
+  } catch (e) {
+    console.error('Site settings delete failed:', e.message);
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // user_prefs — per-user key/value preferences (e.g. a page's saved sort order)
 // ---------------------------------------------------------------------------
@@ -832,7 +850,7 @@ module.exports = {
   insertEntry, listEntries, listRecentEntries, setEntryStatus, getEntry, updateEntryData, deleteEntry,
   insertComment, listComments, getComment, updateComment, deleteComment,
   insertPost, listPosts,
-  getSiteSettings, setSiteSetting,
+  getSiteSettings, setSiteSetting, deleteSiteSetting,
   getUserPrefs, setUserPref,
   getExampleOverrides, setExampleOverride,
   getDonation, setDonation,

@@ -5,6 +5,7 @@
  * grid → a full-width feed; the image goes from hidden → small → large → full
  * 16:9 / 9:16 covers. */
 import { useEffect, useState, type CSSProperties } from 'react';
+import { ensureSiteSettings, readSiteSetting, writeSiteSetting, deleteSiteSetting } from '@/lib/site-settings-client';
 
 // ── Layout size (how the cards are arranged / how wide) ──
 export const CARD_SIZE_LABELS = ['List', 'Small', 'Medium', 'Large', 'Feed', 'Full'];
@@ -25,34 +26,54 @@ export const CARD_PAGES: { key: string; label: string }[] = [
 const clampL = (v: number) => Math.max(0, Math.min(LAYOUT_MAX, isNaN(v) ? 2 : v));
 const clampI = (v: number) => Math.max(0, Math.min(IMG_MAX, isNaN(v) ? 2 : v));
 const emit = () => { try { window.dispatchEvent(new CustomEvent('sl-card-size')); } catch { /* ignore */ } };
-const readInt = (k: string, dflt: number) => { try { const v = localStorage.getItem(k); return v === null ? null : parseInt(v, 10); } catch { return null; } };
+const readInt = (k: string) => { const v = readSiteSetting(k); return (v === null || v === '') ? null : parseInt(v, 10); };
 
 // ── Layout ──
-export function loadGlobalCardSize(): number { if (typeof window === 'undefined') return 2; return clampL(readInt(GLOBAL, 2) ?? 2); }
-export function loadCardSize(page?: string): number { if (typeof window === 'undefined') return 2; if (page) { const v = readInt(pageKeyOf(page), 2); if (v !== null) return clampL(v); } return loadGlobalCardSize(); }
-export function hasPageOverride(page: string): boolean { if (typeof window === 'undefined') return false; try { return localStorage.getItem(pageKeyOf(page)) !== null; } catch { return false; } }
-export function setGlobalCardSize(v: number) { try { localStorage.setItem(GLOBAL, String(clampL(v))); emit(); } catch { /* ignore */ } }
-export function setPageCardSize(page: string, v: number) { try { localStorage.setItem(pageKeyOf(page), String(clampL(v))); emit(); } catch { /* ignore */ } }
-export function clearPageCardSize(page: string) { try { localStorage.removeItem(pageKeyOf(page)); emit(); } catch { /* ignore */ } }
-export function applyCardSizeAll(v: number) { try { localStorage.setItem(GLOBAL, String(clampL(v))); CARD_PAGES.forEach((p) => localStorage.removeItem(pageKeyOf(p.key))); emit(); } catch { /* ignore */ } }
+export function loadGlobalCardSize(): number { if (typeof window === 'undefined') return 2; ensureSiteSettings(); return clampL(readInt(GLOBAL) ?? 2); }
+export function loadCardSize(page?: string): number { if (typeof window === 'undefined') return 2; ensureSiteSettings(); if (page) { const v = readInt(pageKeyOf(page)); if (v !== null) return clampL(v); } return loadGlobalCardSize(); }
+export function hasPageOverride(page: string): boolean { if (typeof window === 'undefined') return false; ensureSiteSettings(); return readSiteSetting(pageKeyOf(page)) !== null; }
+export function setGlobalCardSize(v: number) { if (typeof window === 'undefined') return; writeSiteSetting(GLOBAL, String(clampL(v))); emit(); }
+export function setPageCardSize(page: string, v: number) { if (typeof window === 'undefined') return; writeSiteSetting(pageKeyOf(page), String(clampL(v))); emit(); }
+export function clearPageCardSize(page: string) { if (typeof window === 'undefined') return; deleteSiteSetting(pageKeyOf(page)); emit(); }
+export function applyCardSizeAll(v: number) { if (typeof window === 'undefined') return; writeSiteSetting(GLOBAL, String(clampL(v))); CARD_PAGES.forEach((p) => deleteSiteSetting(pageKeyOf(p.key))); emit(); }
 
 // ── Image ──
-export function loadGlobalImgSize(): number { if (typeof window === 'undefined') return 2; return clampI(readInt(IMG_GLOBAL, 2) ?? 2); }
-export function loadImgSize(page?: string): number { if (typeof window === 'undefined') return 2; if (page) { const v = readInt(imgKeyOf(page), 2); if (v !== null) return clampI(v); } return loadGlobalImgSize(); }
-export function setGlobalImgSize(v: number) { try { localStorage.setItem(IMG_GLOBAL, String(clampI(v))); emit(); } catch { /* ignore */ } }
-export function setPageImgSize(page: string, v: number) { try { localStorage.setItem(imgKeyOf(page), String(clampI(v))); emit(); } catch { /* ignore */ } }
-export function clearPageImgSize(page: string) { try { localStorage.removeItem(imgKeyOf(page)); emit(); } catch { /* ignore */ } }
-export function applyImgSizeAll(v: number) { try { localStorage.setItem(IMG_GLOBAL, String(clampI(v))); CARD_PAGES.forEach((p) => localStorage.removeItem(imgKeyOf(p.key))); emit(); } catch { /* ignore */ } }
+export function loadGlobalImgSize(): number { if (typeof window === 'undefined') return 2; ensureSiteSettings(); return clampI(readInt(IMG_GLOBAL) ?? 2); }
+export function loadImgSize(page?: string): number { if (typeof window === 'undefined') return 2; ensureSiteSettings(); if (page) { const v = readInt(imgKeyOf(page)); if (v !== null) return clampI(v); } return loadGlobalImgSize(); }
+export function setGlobalImgSize(v: number) { if (typeof window === 'undefined') return; writeSiteSetting(IMG_GLOBAL, String(clampI(v))); emit(); }
+export function setPageImgSize(page: string, v: number) { if (typeof window === 'undefined') return; writeSiteSetting(imgKeyOf(page), String(clampI(v))); emit(); }
+export function clearPageImgSize(page: string) { if (typeof window === 'undefined') return; deleteSiteSetting(imgKeyOf(page)); emit(); }
+export function applyImgSizeAll(v: number) { if (typeof window === 'undefined') return; writeSiteSetting(IMG_GLOBAL, String(clampI(v))); CARD_PAGES.forEach((p) => deleteSiteSetting(imgKeyOf(p.key))); emit(); }
 
 // Live, page-aware reads.
 export function useCardSize(page?: string): number {
   const [size, setSize] = useState<number>(() => loadCardSize(page));
-  useEffect(() => { const h = () => setSize(loadCardSize(page)); window.addEventListener('sl-card-size', h); h(); return () => window.removeEventListener('sl-card-size', h); }, [page]);
+  useEffect(() => {
+    const h = () => setSize(loadCardSize(page));
+    window.addEventListener('sl-card-size', h);
+    window.addEventListener('sl-site-settings', h);
+    ensureSiteSettings();
+    h();
+    return () => {
+      window.removeEventListener('sl-card-size', h);
+      window.removeEventListener('sl-site-settings', h);
+    };
+  }, [page]);
   return size;
 }
 export function useImgSize(page?: string): number {
   const [size, setSize] = useState<number>(() => loadImgSize(page));
-  useEffect(() => { const h = () => setSize(loadImgSize(page)); window.addEventListener('sl-card-size', h); h(); return () => window.removeEventListener('sl-card-size', h); }, [page]);
+  useEffect(() => {
+    const h = () => setSize(loadImgSize(page));
+    window.addEventListener('sl-card-size', h);
+    window.addEventListener('sl-site-settings', h);
+    ensureSiteSettings();
+    h();
+    return () => {
+      window.removeEventListener('sl-card-size', h);
+      window.removeEventListener('sl-site-settings', h);
+    };
+  }, [page]);
   return size;
 }
 

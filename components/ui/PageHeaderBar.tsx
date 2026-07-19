@@ -34,6 +34,11 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
   const setSize = (v: number) => { if (pageKey) { setPageTitleSize(pageKey, v); setPageSubSize(pageKey, subOf(v)); } };
   const applyAll = () => { applyHeaderAll(tSize, subOf(tSize)); setSaved(true); setTimeout(() => setSaved(false), 1600); };
   const applyPage = () => { setSize(tSize); setSaved(true); setTimeout(() => setSaved(false), 1600); };
+  const titleWrapStyle: React.CSSProperties = showControls
+    ? (open
+      ? { flex: '1 1 300px', minWidth: 240 }
+      : { flex: '0 0 auto', width: 'fit-content', maxWidth: '100%', alignSelf: 'flex-start' })
+    : { flex: '1 1 100%', minWidth: 240 };
 
   // The ⚙️ gear that toggles the header-size control — sits next to the title's
   // Aa / ✎ tools. Same little tool-button style as those.
@@ -48,7 +53,7 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
         {/* Admin: the title + subtitle ENCAPSULATED in a dotted box that also contains
             the horizontal dotted line. Non-admin: plain title + subtitle, with the
             separator at the very bottom (below the whole header row). */}
-        <div style={{ flex: (showControls && open) ? '1 1 300px' : '1 1 100%', minWidth: 240, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(showControls ? titleBox : { padding: '2px 2px 4px' }) }}>
+        <div style={{ ...titleWrapStyle, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(showControls ? titleBox : { padding: '2px 2px 4px' }) }}>
           <PageHeading pageKey={pageKey} title={title} subtitle={subtitle} extraTools={gear} />
           {showControls && <hr style={innerRule} />}
         </div>

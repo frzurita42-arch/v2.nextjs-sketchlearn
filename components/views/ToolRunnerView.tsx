@@ -21,6 +21,7 @@ import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
 import { isRenderableImage } from '@/lib/img';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
+import { useToolHeaderStyle } from '@/lib/tool-header-style';
 
 // Coerce anything the API/DB hands us into an array, so a stray non-array shape
 // (e.g. tags/entries returned oddly) can never throw `.map is not a function`.
@@ -215,6 +216,7 @@ export function ToolRunnerView() {
   const isApp = def?.archetype === 'app';
   const isLesson = def?.archetype === 'lesson';
   const isRepo = def?.archetype === 'repo';
+  const toolHeader = useToolHeaderStyle(isLesson ? 'lesson' : 'tool');
   const loadEntries = useMemo(() => async () => {
     if (!isApp || !tool?.slug) return;
     try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(tool.slug)}`); setEntries(asArray(r?.entries)); setIsOwner(!!r?.isOwner); } catch { /* ignore */ }
@@ -327,7 +329,8 @@ export function ToolRunnerView() {
   return (
     <>
       {!immersive && (
-        <h1 className="view-title">{tool.title}
+        <h1 className="view-title" style={{ fontSize: toolHeader.size, fontFamily: toolHeader.fontCss, lineHeight: 1.06, textAlign: 'left', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+          <span className={toolHeader.underline ? 'scribble-underline' : undefined} style={{ display: 'inline-block' }}>{tool.title}</span>
           {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
           {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
           {canSettings && <button title="Tool settings — API keys, AI edit, visibility, delete" onClick={() => setSettingsOpen(true)} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>}
