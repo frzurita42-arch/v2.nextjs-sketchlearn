@@ -1811,7 +1811,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         {/* The create wizard and the donation mug share one compact row (wrap on narrow). */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {showGenerate && (
-        <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed', flex: '1 1 340px', minWidth: 0 }}>
+        <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed', flex: '1 1 320px', minWidth: 280 }}>
           {/* Compact header: the title, then the edit-layout ⚙️ and new-topics 🔄 as
               inline icon chips (they used to be full buttons). */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -1892,7 +1892,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </div>
             );
             const steps: WizardStep[] = [
-              { key: 'basics', title: 'Name & topic', render: () => stepFields(['title', 'topic'], true) },
+              { key: 'basics', title: 'Name & topic', render: () => stepFields(['title', 'topic']) },
               { key: 'level', title: 'Level & length', render: () => stepFields(['level', 'difficulty', 'slides']) },
               { key: 'style', title: 'Style (optional)', render: () => styleStep },
             ];
@@ -1914,7 +1914,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 {gateMsg && <span style={{ fontSize: 12, color: 'var(--danger,#e4572e)' }}>{gateMsg}</span>}
               </>
             );
-            return <StepWizard steps={steps} finalActions={finalActions} resetKey={wizardKey} onCancel={() => setForm(defaultsFor(def) as any)} />;
+            return <StepWizard steps={steps} finalActions={finalActions} resetKey={wizardKey} bodyMinHeight={150} onCancel={() => setForm(defaultsFor(def) as any)} />;
           })()}
         </div>
         )}

@@ -7,11 +7,12 @@ import { useEffect, useState } from 'react';
 
 export interface WizardStep { key: string; title: string; render: () => React.ReactNode; }
 
-export function StepWizard({ steps, finalActions, onCancel, resetKey }: {
+export function StepWizard({ steps, finalActions, onCancel, resetKey, bodyMinHeight }: {
   steps: WizardStep[];
   finalActions: React.ReactNode;   // shown on the LAST step (Play / Generate …)
   onCancel?: () => void;
   resetKey?: unknown;              // change this to reset back to step 1
+  bodyMinHeight?: number;          // fix the step body height so the card doesn't jump between steps
 }) {
   const [i, setI] = useState(0);
   useEffect(() => { setI(0); }, [resetKey]);
@@ -30,7 +31,7 @@ export function StepWizard({ steps, finalActions, onCancel, resetKey }: {
       <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 8 }}>
         Step {clamped + 1} of {steps.length} — {step.title}
       </div>
-      <div>{step.render()}</div>
+      <div style={bodyMinHeight ? { minHeight: bodyMinHeight } : undefined}>{step.render()}</div>
       <div className="slide-actions" style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {clamped > 0 && <button className="btn small ghost" onClick={() => setI(clamped - 1)}>← Back</button>}
         {!last && <button className="btn small green" onClick={() => setI(clamped + 1)}>Next →</button>}
