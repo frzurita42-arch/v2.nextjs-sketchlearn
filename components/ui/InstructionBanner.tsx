@@ -70,20 +70,30 @@ export function InstructionBannerSettings() {
   const [title, setTitle] = useState(saved.title || BANNER_SUGGEST.title);
   const [body, setBody] = useState(saved.body || BANNER_SUGGEST.body);
   const [size, setSize] = useState<number>(saved.size || BANNER_SIZE_DEFAULT);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'' | 'title' | 'body'>('');
   const [popup, setPopup] = useState(false);
   const [okAll, setOkAll] = useState(false);
 
-  const genAI = async () => {
-    setBusy(true);
+  // The 🎨 palette next to a field label asks AI to write just THAT field from the
+  // current context (the other field + the page).
+  const genField = async (field: 'title' | 'body') => {
+    setBusy(field);
     try {
       const r: any = await API.post('/api/ai/banner', { page: 'the whole site', current: title, currentBody: body });
-      if (r?.title || r?.body) { if (r.title) setTitle(r.title); if (r.body) setBody(r.body); }
+      if (field === 'title' && r?.title) setTitle(r.title);
+      else if (field === 'body' && r?.body) setBody(r.body);
       else if (r?.error) alert(r.error);
     } catch { alert('AI unavailable — type it instead.'); }
-    setBusy(false);
+    setBusy('');
   };
   const applyAll = () => { applyBannerAll(title.trim(), body.trim(), size); setOkAll(true); setTimeout(() => setOkAll(false), 1600); };
+
+  // The palette icon shown next to an AI-suggestable field's label.
+  const palette = (field: 'title' | 'body') => (
+    <button title={`Let AI suggest the ${field === 'title' ? 'title' : 'subtitle'} from context`} disabled={busy === field}
+      onClick={() => genField(field)}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 6, fontSize: 13, lineHeight: 1, verticalAlign: 'middle' }}>{busy === field ? '…' : '🎨'}</button>
+  );
 
   // Fixed-size single-line inputs: they never grow with the text — it scrolls/hides,
   // you just keep typing.
@@ -97,12 +107,11 @@ export function InstructionBannerSettings() {
       <div className="card" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Row 1: title + subtitle + AI/customise/apply buttons, one row. */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <label style={{ flex: '1 1 160px', minWidth: 0 }}><span style={lbl}>Title</span>
+          <label style={{ flex: '1 1 160px', minWidth: 0 }}><span style={lbl}>Title{palette('title')}</span>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={BANNER_SUGGEST.title} style={fixedField} /></label>
-          <label style={{ flex: '2 1 220px', minWidth: 0 }}><span style={lbl}>Subtitle / instructions</span>
+          <label style={{ flex: '2 1 220px', minWidth: 0 }}><span style={lbl}>Subtitle / instructions{palette('body')}</span>
             <input type="text" value={body} onChange={(e) => setBody(e.target.value)} placeholder={BANNER_SUGGEST.body} style={fixedField} /></label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
-            <button className="btn small blue" disabled={busy} onClick={genAI} title="Generate an explanation with AI" style={{ padding: '0 8px' }}>{busy ? '…' : '🎨 AI explain'}</button>
             <button className="btn small ghost" onClick={() => setPopup(true)}>Customise per page…</button>
             <button className="btn small green" onClick={applyAll}>{okAll ? '✓ Applied' : 'Apply to all pages'}</button>
           </div>

@@ -13,6 +13,7 @@ import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { PerPagePopup } from '@/components/ui/PerPagePopup';
 import { InstructionBannerSettings } from '@/components/ui/InstructionBanner';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
+import { CardReference } from '@/components/ui/CardReference';
 import { filterSelect } from '@/components/ui/CardViewMenu';
 
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px', display: 'block' };
@@ -59,6 +60,13 @@ export function AppSettingsView() {
           <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
           <GallerySkeleton cardSize={layout} imgMode={img} editable />
         </div>
+
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />
+
+        {/* Cards — a display-only reference of the site's standard paper card. No
+            configuration; it just shows what a card looks like. */}
+        <span style={lbl}>Cards</span>
+        <div style={dashBox}><CardReference /></div>
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />
 
