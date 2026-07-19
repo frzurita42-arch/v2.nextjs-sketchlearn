@@ -5,15 +5,19 @@
  * working column. The presentation-specific tool — the "Make a slide presentation"
  * settings form — lives behind the ⚙️ gear in the filter row (and the CTA button),
  * opening as a popup. This is what makes it different from the Slides gallery. */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, LEVELS, TONES } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
-import { useCardSize, useImgSize } from '@/lib/card-size';
+import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
+import { loadLikes, saveLikes } from '@/lib/tool-likes';
+import { ToolCard } from '@/components/tools/ToolCard';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
-import { GalleryFilterRow } from '@/components/ui/GalleryChrome';
+import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
+
+const PER_PAGE = 8;
 
 function SlideSettings({ onClose }: { onClose: () => void }) {
   const app = useApp();
@@ -79,23 +83,58 @@ function SlideSettings({ onClose }: { onClose: () => void }) {
 
 export function PresentationRunsView() {
   const app = useApp();
-  const [rec, setRec] = useState<any>(null);
+  const [tools, setTools] = useState<any[]>([]);
+  const [favs, setFavs] = useState<Record<string, boolean>>({});
+  // Favorites is the DEFAULT selection; "All" shows every playable card from all
+  // categories (presentations, lessons, repos, apps…).
+  const [filter, setFilter] = useState<'all' | 'fav'>('fav');
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const cardSize = useCardSize('presrun');
   const imgMode = useImgSize('presrun');
+  const layout = galleryLayout(cardSize);
 
+  useEffect(() => { setFavs(loadLikes()); }, [app.user?.username]);
   useEffect(() => {
     let alive = true;
     API.get('/api/tools').then((r: any) => {
       if (!alive) return;
-      const all = Array.isArray(r?.tools) ? r.tools : [];
-      const lessons = all.filter((t: any) => (t?.archetype || t?.definition?.archetype) === 'lesson');
-      setRec(lessons.find((t: any) => (t.tags || []).includes('example')) || lessons[0] || null);
+      setTools(Array.isArray(r?.tools) ? r.tools : []);
     }).catch(() => { /* none */ });
     return () => { alive = false; };
   }, []);
 
-  const openRec = async (t: any) => {
+  const toggleFav = (t: any) => {
+    setFavs((prev) => {
+      const next = { ...prev }; const now = !next[t.slug];
+      if (now) next[t.slug] = true; else delete next[t.slug];
+      saveLikes(next); API.post('/api/tools/like', { slug: t.slug, liked: now }).catch(() => { /* ignore */ });
+      return next;
+    });
+  };
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return tools.filter((t) => {
+      if (filter === 'fav' && !favs[t.slug]) return false;
+      if (term) {
+        const hay = `${t.title || ''} ${t.description || ''} ${(t.tags || []).join(' ')} ${t.owner || ''}`.toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [tools, filter, favs, q]);
+
+  const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const shown = useMemo(() => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE), [filtered, page]);
+  useEffect(() => { setPage(1); }, [filter, q]);
+  useEffect(() => { if (page > pages) setPage(pages); }, [page, pages]);
+
+  // The recommended pick for the empty-state skeleton.
+  const rec = useMemo(() => tools.find((t: any) => (t.tags || []).includes('example')) || tools[0] || null, [tools]);
+
+  const openTool = async (t: any) => {
     try { const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(t.slug)}`); appState.activeTool = r?.tool || t; }
     catch { appState.activeTool = t; }
     app.nav('tool');
@@ -106,15 +145,28 @@ export function PresentationRunsView() {
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey="presrun" title="🎬 Presentation runs" subtitle="Set up a new presentation, or open one of the slide tools." />
 
-        {/* The ⚙️ gear opens the "Make a slide presentation" form as a popup. */}
-        <GalleryFilterRow right={<>
+        {/* Favorites is the default filter; All lists every playable card. The ⚙️ gear
+            opens the "Make a slide presentation" form as a popup. */}
+        <GalleryFilterRow q={q} onQ={setQ} filter={filter} onFilter={setFilter} right={<>
           <button className="btn small ghost" title="Make a slide presentation" aria-label="Make a slide presentation"
             onClick={() => setSettingsOpen(true)} style={{ fontSize: 16, padding: '0 9px' }}>⚙️</button>
           <CardViewMenu pageKey="presrun" />
         </>} />
 
-        {/* The generic empty-state skeleton; "Build one" opens the settings form. */}
-        <GallerySkeleton cardSize={cardSize} imgMode={imgMode} recommended={rec} onBuild={() => setSettingsOpen(true)} onOpen={openRec} />
+        {filtered.length === 0 ? (
+          // The generic empty-state skeleton; "Build one" opens the settings form.
+          <GallerySkeleton cardSize={cardSize} imgMode={imgMode} recommended={rec} onBuild={() => setSettingsOpen(true)} onOpen={openTool} />
+        ) : (
+          <>
+            <div style={{ ...layout.container, alignItems: 'stretch' }}>
+              {shown.map((t) => (
+                <ToolCard key={t.slug} tool={t} view={layout.view} hideOpen imageMode={imgMode}
+                  onOpen={openTool} favs={favs} onToggleFav={toggleFav} />
+              ))}
+            </div>
+            {pages > 1 && <GalleryPager page={page} pages={pages} onPrev={() => setPage((p) => Math.max(1, p - 1))} onNext={() => setPage((p) => Math.min(pages, p + 1))} />}
+          </>
+        )}
       </div>
 
       {settingsOpen && (
