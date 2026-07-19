@@ -38,10 +38,12 @@ export function AppSettingsView() {
             the header encapsulation). */}
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '4px 0 22px' }} />
 
-        {/* ── GALLERIES ─────────────────────────────────────────────────
-            A thin filter-toolbar (same look as the Sandbox filter row) above a live
-            preview of the whole gallery SKELETON — so a universal change is visible. */}
-        <span style={lbl}>Galleries</span>
+        {/* ── CARDS ─────────────────────────────────────────────────────
+            The card template + a "View"-style filter (like a file explorer): pick any
+            arrangement — every layout/size and every image mode, INCLUDING "No image"
+            (no photo at all). The blank card below previews it, and "Apply to all
+            pages" changes the card everywhere on the platform. */}
+        <span style={lbl}>Cards</span>
         <div className="card" style={{ padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <select title="Layout / size" aria-label="Card layout & size" value={layout} onChange={(e) => setLayout(parseInt(e.target.value, 10))} style={paperSel}>
             {CARD_SIZE_LABELS.map((l, i) => <option key={l} value={i}>▦ {l}</option>)}
@@ -54,19 +56,22 @@ export function AppSettingsView() {
             <button className="btn small green" onClick={applyAll}>{saved ? '✓ Applied' : 'Apply to all pages'}</button>
           </div>
         </div>
-        {/* The gallery skeleton: the "make/play one" card + a recommended card + pager,
-            exactly what an empty gallery shows — encapsulated in a dotted box. */}
+        {/* A BLANK card (no text, no image content) in the chosen arrangement. */}
         <div style={dashBox}>
-          <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
-          <GallerySkeleton cardSize={layout} imgMode={img} editable />
+          <span style={{ ...lbl, marginBottom: 8 }}>Blank card — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
+          <CardReference cardSize={layout} imgMode={img} />
         </div>
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />
 
-        {/* Cards — a display-only reference of the site's standard paper card. No
-            configuration; it just shows what a card looks like. */}
-        <span style={lbl}>Cards</span>
-        <div style={dashBox}><CardReference /></div>
+        {/* ── GALLERIES ─────────────────────────────────────────────────
+            How the cards look arranged in a gallery — the empty-state skeleton,
+            reflecting the same global card setting chosen above. */}
+        <span style={lbl}>Galleries</span>
+        <div style={dashBox}>
+          <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
+          <GallerySkeleton cardSize={layout} imgMode={img} editable />
+        </div>
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />
 
