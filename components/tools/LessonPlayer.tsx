@@ -1820,10 +1820,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               <span style={{ opacity: 0.45, fontSize: 12 }}>{settingsOpen ? '▾' : '▸'}</span>
               Create a {lesson.subject || 'lesson'} activity
             </h4>
-            {canEdit && <button onClick={openLayoutEditor} title="Edit layout & activities (opens the Studio)"
-              style={{ background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#d9cfc0)', borderRadius: 8, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '4px 8px' }}>⚙️</button>}
+            {/* Bare icons (no button box). ⚙️ opens the Studio to modify the proposed
+                lesson layouts set when the tool was created — shown to owners/admins
+                (incl. on example tools). 🔄 refreshes the suggested topics. */}
+            {(canEdit || eff.isAdmin) && <button onClick={openLayoutEditor} title="Modify the proposed lesson layouts (opens the Studio)"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
             <button onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics"
-              style={{ background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#d9cfc0)', borderRadius: 8, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '4px 8px' }}>{topicsBusy ? '…' : '🔄'}</button>
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>{topicsBusy ? '…' : '🔄'}</button>
           </div>
           {/* A guided wizard: Basics → Level & length → Style → Play/Generate. Reuses
               the same <ToolFields> + form state; the last step carries the actions. */}
