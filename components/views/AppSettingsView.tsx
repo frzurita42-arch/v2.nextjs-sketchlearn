@@ -23,11 +23,17 @@ const dashBox: React.CSSProperties = { border: '2px dashed var(--line,#d9cfc0)',
 const paperSel: React.CSSProperties = { ...filterSelect, width: 'auto', minWidth: 130 };
 
 export function AppSettingsView() {
-  const [layout, setLayout] = useState<number>(() => loadGlobalCardSize());
-  const [img, setImg] = useState<number>(() => loadGlobalImgSize());
+  // The Cards and Galleries sections each have their OWN filter (independent preview
+  // selection); either one's "Apply to all pages" writes the global card setting.
+  const [cLayout, setCLayout] = useState<number>(() => loadGlobalCardSize());
+  const [cImg, setCImg] = useState<number>(() => loadGlobalImgSize());
+  const [gLayout, setGLayout] = useState<number>(() => loadGlobalCardSize());
+  const [gImg, setGImg] = useState<number>(() => loadGlobalImgSize());
   const [popup, setPopup] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const applyAll = () => { applyCardSizeAll(layout); applyImgSizeAll(img); setSaved(true); setTimeout(() => setSaved(false), 1600); };
+  const [cSaved, setCSaved] = useState(false);
+  const [gSaved, setGSaved] = useState(false);
+  const applyCards = () => { applyCardSizeAll(cLayout); applyImgSizeAll(cImg); setCSaved(true); setTimeout(() => setCSaved(false), 1600); };
+  const applyGal = () => { applyCardSizeAll(gLayout); applyImgSizeAll(gImg); setGSaved(true); setTimeout(() => setGSaved(false), 1600); };
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
@@ -45,32 +51,43 @@ export function AppSettingsView() {
             pages" changes the card everywhere on the platform. */}
         <span style={lbl}>Cards</span>
         <div className="card" style={{ padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-          <select title="Layout / size" aria-label="Card layout & size" value={layout} onChange={(e) => setLayout(parseInt(e.target.value, 10))} style={paperSel}>
+          <select title="Layout / size" aria-label="Card layout & size" value={cLayout} onChange={(e) => setCLayout(parseInt(e.target.value, 10))} style={paperSel}>
             {CARD_SIZE_LABELS.map((l, i) => <option key={l} value={i}>▦ {l}</option>)}
           </select>
-          <select title="Card image" aria-label="Card image" value={img} onChange={(e) => setImg(parseInt(e.target.value, 10))} style={paperSel}>
+          <select title="Card image" aria-label="Card image" value={cImg} onChange={(e) => setCImg(parseInt(e.target.value, 10))} style={paperSel}>
             {CARD_IMG_LABELS.map((l, i) => <option key={l} value={i}>🖼 {l}</option>)}
           </select>
           <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
             <button className="btn small ghost" onClick={() => setPopup(true)}>Customise per page…</button>
-            <button className="btn small green" onClick={applyAll}>{saved ? '✓ Applied' : 'Apply to all pages'}</button>
+            <button className="btn small green" onClick={applyCards}>{cSaved ? '✓ Applied' : 'Apply to all pages'}</button>
           </div>
         </div>
         {/* A BLANK card (no text, no image content) in the chosen arrangement. */}
         <div style={dashBox}>
-          <span style={{ ...lbl, marginBottom: 8 }}>Blank card — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
-          <CardReference cardSize={layout} imgMode={img} />
+          <span style={{ ...lbl, marginBottom: 8 }}>Blank card — {CARD_SIZE_LABELS[cLayout]} · {CARD_IMG_LABELS[cImg]}</span>
+          <CardReference cardSize={cLayout} imgMode={cImg} />
         </div>
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />
 
         {/* ── GALLERIES ─────────────────────────────────────────────────
-            How the cards look arranged in a gallery — the empty-state skeleton,
-            reflecting the same global card setting chosen above. */}
+            Its OWN filter + preview of how cards look arranged in a gallery. */}
         <span style={lbl}>Galleries</span>
+        <div className="card" style={{ padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <select title="Layout / size" aria-label="Gallery layout & size" value={gLayout} onChange={(e) => setGLayout(parseInt(e.target.value, 10))} style={paperSel}>
+            {CARD_SIZE_LABELS.map((l, i) => <option key={l} value={i}>▦ {l}</option>)}
+          </select>
+          <select title="Card image" aria-label="Gallery card image" value={gImg} onChange={(e) => setGImg(parseInt(e.target.value, 10))} style={paperSel}>
+            {CARD_IMG_LABELS.map((l, i) => <option key={l} value={i}>🖼 {l}</option>)}
+          </select>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+            <button className="btn small ghost" onClick={() => setPopup(true)}>Customise per page…</button>
+            <button className="btn small green" onClick={applyGal}>{gSaved ? '✓ Applied' : 'Apply to all pages'}</button>
+          </div>
+        </div>
         <div style={dashBox}>
-          <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
-          <GallerySkeleton cardSize={layout} imgMode={img} editable />
+          <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[gLayout]} · {CARD_IMG_LABELS[gImg]}</span>
+          <GallerySkeleton cardSize={gLayout} imgMode={gImg} editable />
         </div>
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />
