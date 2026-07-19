@@ -64,6 +64,9 @@ export function AppSettingsView() {
 
         {/* Instruction banner — the wooden board, its editor + AI + apply controls. */}
         <InstructionBannerSettings />
+
+        {/* Dotted line closing the instructions-banner section from anything below. */}
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0 0' }} />
       </div>
       {popup && <PerPagePopup onClose={() => setPopup(false)} />}
     </div>

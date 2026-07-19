@@ -85,33 +85,31 @@ export function InstructionBannerSettings() {
   };
   const applyAll = () => { applyBannerAll(title.trim(), body.trim(), size); setOkAll(true); setTimeout(() => setOkAll(false), 1600); };
 
-  // Fixed-size inputs: they never grow with the text — it scrolls/hides, you just keep typing.
-  const fixedField: React.CSSProperties = { width: '100%', height: 40, resize: 'none', overflow: 'auto', marginTop: 3, boxSizing: 'border-box' };
+  // Fixed-size single-line inputs: they never grow with the text — it scrolls/hides,
+  // you just keep typing.
+  const fixedField: React.CSSProperties = { width: '100%', height: 38, marginTop: 3, boxSizing: 'border-box' };
   return (
     <div>
       <span style={lbl}>Instructions banner</span>
       {/* Live preview — the wooden board, encapsulated in a dotted box. */}
       <div style={{ ...dashBox, marginBottom: 12 }}><Plank title={title} body={body} size={size} /></div>
-      {/* Editor + tools. */}
-      <div className="card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={lbl}>Banner text</span>
-          <button className="btn small blue" disabled={busy} onClick={genAI} title="Generate an explanation with AI" style={{ padding: '0 8px' }}>{busy ? '…' : '🎨 AI explain'}</button>
-        </div>
-        {/* Title + subtitle on the same row; both are fixed-size boxes. */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <label style={{ flex: '1 1 180px', minWidth: 0 }}><span style={lbl}>Title</span>
+      {/* Editor laid out like the generic gallery filter toolbar. */}
+      <div className="card" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Row 1: title + subtitle + AI/customise/apply buttons, one row. */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <label style={{ flex: '1 1 160px', minWidth: 0 }}><span style={lbl}>Title</span>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={BANNER_SUGGEST.title} style={fixedField} /></label>
-          <label style={{ flex: '2 1 240px', minWidth: 0 }}><span style={lbl}>Subtitle / instructions</span>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={BANNER_SUGGEST.body} style={fixedField} /></label>
+          <label style={{ flex: '2 1 220px', minWidth: 0 }}><span style={lbl}>Subtitle / instructions</span>
+            <input type="text" value={body} onChange={(e) => setBody(e.target.value)} placeholder={BANNER_SUGGEST.body} style={fixedField} /></label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
+            <button className="btn small blue" disabled={busy} onClick={genAI} title="Generate an explanation with AI" style={{ padding: '0 8px' }}>{busy ? '…' : '🎨 AI explain'}</button>
+            <button className="btn small ghost" onClick={() => setPopup(true)}>Customise per page…</button>
+            <button className="btn small green" onClick={applyAll}>{okAll ? '✓ Applied' : 'Apply to all pages'}</button>
+          </div>
         </div>
-        {/* Banner text size. */}
+        {/* Row 2: the size scroll bar. */}
         <label style={{ display: 'block' }}><span style={lbl}>Size — {size}px</span>
           <input type="range" min={BANNER_SIZE_MIN} max={BANNER_SIZE_MAX} value={size} onChange={(e) => setSize(parseInt(e.target.value, 10))} style={{ width: '100%', accentColor: 'var(--green,#7fb069)' }} /></label>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: 2 }}>
-          <button className="btn small ghost" onClick={() => setPopup(true)}>Customise per page…</button>
-          <button className="btn small green" onClick={applyAll}>{okAll ? '✓ Applied' : 'Apply to all pages'}</button>
-        </div>
       </div>
       {popup && <BannerPerPagePopup title={title.trim()} body={body.trim()} size={size} onClose={() => setPopup(false)} />}
     </div>
