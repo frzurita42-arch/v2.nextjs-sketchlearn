@@ -1808,8 +1808,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             builder used to create slide tools), pre-loaded with this tool's layout,
             via the "✏️ Edit layout & activities" button beside "New topics". */}
 
+        {/* The create wizard and the donation mug share one compact row (wrap on narrow). */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {showGenerate && (
-        <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed' }}>
+        <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed', flex: '1 1 340px', minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <h4 style={{ margin: '0 0 8px', cursor: 'pointer', userSelect: 'none' }} onClick={toggleSettings}
               title={settingsOpen ? 'Collapse — show only the essentials' : 'Expand — show every setting'}>
@@ -1912,24 +1914,21 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         </div>
         )}
 
-        {/* The AI-example card was removed — the wizard above is the single "create
-            a presentation run" interface. Only the donation prompt remains here. */}
-        {!donateCollapsed ? (
-          <>
-            <div style={dashRule} />
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <div style={{ width: '100%', maxWidth: 460 }}>
-                <DonationPrompt mugWidth={220} mugHeight={183}
-                  address={donation.address} canManage={canManageDonation} onSaveAddress={saveDonateAddress}
-                  canCollapse={canManageDonation} onCollapse={toggleDonate} />
-              </div>
-            </div>
-          </>
-        ) : (canManageDonation && (
+        {/* The AI-example card was removed — the wizard is the single create interface.
+            The donation mug is the compact right column of the same row. */}
+        {!donateCollapsed && (
+          <div style={{ flex: '0 1 240px', minWidth: 200, display: 'flex', justifyContent: 'center' }}>
+            <DonationPrompt mugWidth={200} mugHeight={166}
+              address={donation.address} canManage={canManageDonation} onSaveAddress={saveDonateAddress}
+              canCollapse={canManageDonation} onCollapse={toggleDonate} />
+          </div>
+        )}
+        </div>
+        {donateCollapsed && canManageDonation && (
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <button className="btn small ghost" onClick={toggleDonate} title="Show the donation prompt to everyone">{'👁︎'} Donation hidden — click to show</button>
           </div>
-        ))}
+        )}
 
         {/* ┄ divider: create ┄ activities feed ┄ */}
         <div style={dashRule} />
