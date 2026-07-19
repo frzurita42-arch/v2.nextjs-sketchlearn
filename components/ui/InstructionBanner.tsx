@@ -100,12 +100,12 @@ export function InstructionBannerSettings() {
   const fixedField: React.CSSProperties = { width: '100%', height: 38, marginTop: 3, boxSizing: 'border-box' };
   return (
     <div>
+      {/* Same layout pattern as the other sections: small grey title, then the
+          filter (editor toolbar), then the component encapsulated in a dotted box. */}
       <span style={lbl}>Instructions banner</span>
-      {/* Live preview — the wooden board, encapsulated in a dotted box. */}
-      <div style={{ ...dashBox, marginBottom: 12 }}><Plank title={title} body={body} size={size} /></div>
-      {/* Editor laid out like the generic gallery filter toolbar. */}
-      <div className="card" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {/* Row 1: title + subtitle + AI/customise/apply buttons, one row. */}
+      {/* The filter / editor, laid out like the generic gallery filter toolbar. */}
+      <div className="card" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+        {/* Row 1: title + subtitle + customise/apply buttons, one row. */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <label style={{ flex: '1 1 160px', minWidth: 0 }}><span style={lbl}>Title{palette('title')}</span>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={BANNER_SUGGEST.title} style={fixedField} /></label>
@@ -120,6 +120,8 @@ export function InstructionBannerSettings() {
         <label style={{ display: 'block' }}><span style={lbl}>Size — {size}px</span>
           <input type="range" min={BANNER_SIZE_MIN} max={BANNER_SIZE_MAX} value={size} onChange={(e) => setSize(parseInt(e.target.value, 10))} style={{ width: '100%', accentColor: 'var(--green,#7fb069)' }} /></label>
       </div>
+      {/* The component — the wooden board, encapsulated in a dotted box. */}
+      <div style={dashBox}><Plank title={title} body={body} size={size} /></div>
       {popup && <BannerPerPagePopup title={title.trim()} body={body.trim()} size={size} onClose={() => setPopup(false)} />}
     </div>
   );
