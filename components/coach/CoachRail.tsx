@@ -77,7 +77,7 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
       {/* Quick links to the main pages (Claude-style side nav). The current page's
           option shows a green line underneath; the rest stay off. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'presrun', label: '🎬 Presentation runs' }, { v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'appsettings', label: '⚙️ Settings' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => (
+        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'presrun', label: '🎬 Presentation runs' }, { v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => (
           <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}
             style={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left', ...(app.view === n.v ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>{n.label}</button>
         ))}
