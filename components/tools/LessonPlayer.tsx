@@ -40,6 +40,8 @@ function lessonToStudioPages(lesson: any): any[] {
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
+import { filterSelect } from '@/components/ui/CardViewMenu';
+import { CARD_IMG_LABELS } from '@/lib/card-size';
 import { RichText } from '@/components/tools/RichText';
 import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
@@ -861,6 +863,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [savedDeck, setSavedDeck] = useState<any>(lesson.savedDeck || null);
   const hasSaved = !!(savedDeck?.slides?.length);
   const [wizardKey, setWizardKey] = useState(0);   // bump to reset the settings wizard to step 1
+  const [exImg, setExImg] = useState(2);           // AI-example card image arrangement (0 = No image)
   const [deckMsg, setDeckMsg] = useState('');
   const offlineOn = lesson.offlineExport !== false;   // owner/admin can turn it off
   const [zipBusy, setZipBusy] = useState(false);
@@ -1662,7 +1665,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       const busy = !!distBusy[e.id];
       const editable = canEditEntry(e);
       const title = e.data?.title || label(e.data || {});
-      const subtitle = e.data?.subtitle || (e.data?.why || '');
+      // Never blank: fall back to a description built from the run's topic/level.
+      const subtitle = e.data?.subtitle || e.data?.why
+        || `A ${String(e.data?.level || e.data?.difficulty || '').toLowerCase() || ''} ${lesson.subject || 'presentation'}${e.data?.topic ? ` on ${e.data.topic}` : ''}.`.replace(/\s+/g, ' ').trim();
       // Show a REAL uploaded/AI image if the card has one; otherwise a RANDOM
       // emoji, picked once per page load and re-shuffled on each refresh. A stored
       // "emoji:" default (creation default / 🎲) is intentionally NOT treated as a
@@ -1920,7 +1925,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed', minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {/* View the example card in any arrangement (No image / cover / etc.). */}
+                  <select value={exImg} onChange={(e) => setExImg(parseInt(e.target.value, 10))} title="View the card" aria-label="Card image arrangement" style={{ ...filterSelect, width: 'auto' }}>
+                    {CARD_IMG_LABELS.map((l, i) => <option key={l} value={i}>🖼 {l}</option>)}
+                  </select>
                   <input type="text" value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about…" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
                     style={{ width: 130, maxWidth: '42vw', minWidth: 0 }} />
                   <button className="btn small ghost" style={{ flex: '0 0 auto', padding: '5px 10px' }} title="Suggest an example with AI" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄'}</button>
@@ -1928,13 +1937,14 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </div>
               {example ? (
                 <div style={{ marginTop: 8 }}>
-                  {/* The AI example uses the SAME card component — a default emoji fills
-                      the image spot (no photo yet), plus slide count + date/time. */}
+                  {/* The AI example uses the SAME card component, and follows the chosen
+                      image arrangement (No image / small / large / cover 16:9 / 9:16). */}
                   <CardShell
                     view="grid"
                     title={label({ level: example.level, topic: example.topic })}
-                    subtitle={example.why || undefined}
+                    subtitle={example.why || `A ${String(example.level || '').toLowerCase()} ${lesson.subject || 'presentation'}${example.topic ? ` on ${example.topic}` : ''}.`.replace(/\s+/g, ' ').trim()}
                     thumbnail={null}
+                    {...(exImg === 0 ? { hideImage: true } : exImg === 1 ? { thumbHeight: 84 } : exImg === 3 ? { thumbHeight: 160 } : exImg === 4 ? { imageAspect: '16 / 9' } : exImg === 5 ? { imageAspect: '9 / 16' } : { thumbHeight: 110 })}
                     iconNode={<span aria-hidden>{defaultEmojiFor(`${example.topic || ''} ${example.level || ''} ${lesson.subject || ''}`, def?.tags)}</span>}
                     meta={<span style={{ fontSize: 11, opacity: 0.6 }}>📄 {slideCountOf(form)} slides · 🕒 {new Date().toLocaleString()}</span>}
                     onOpen={canPlay ? () => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' }) : undefined}
