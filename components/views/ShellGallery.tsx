@@ -13,6 +13,7 @@ import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
+import { filterLabel } from '@/components/ui/GalleryChrome';
 
 const GALLERY_PER_PAGE = 6;
 
@@ -180,6 +181,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
 
         {/* Search + favorites/mine filters. The optional topSlot (e.g. the slide
             settings form) opens from the ⚙️ gear here as a popup, not inline. */}
+        <span style={filterLabel}>Filters</span>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
           <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
             style={{ flex: '1 1 220px', minWidth: 0 }} />

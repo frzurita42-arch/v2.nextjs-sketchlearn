@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { useApp } from '@/components/AppContext';
 import { PageHeading } from './PageHeading';
+import { InstructionBanner } from './InstructionBanner';
 import { PerPagePopup, subOf } from './PerPagePopup';
 import { TITLE_MIN, TITLE_MAX, useHeaderSize, setPageTitleSize, setPageSubSize, applyHeaderAll } from '@/lib/header-size';
 
@@ -68,6 +69,8 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
       {/* Non-Settings pages: the separator sits at the bottom of the whole header row.
           (On Settings the line lives INSIDE the dotted title box above.) */}
       {!global && <hr style={sectionRule} />}
+      {/* The instruction banner, if one is set for this page (configured on Settings). */}
+      {!global && <InstructionBanner pageKey={pageKey} />}
       {global && popup && <PerPagePopup onClose={() => setPopup(false)} />}
     </div>
   );

@@ -8,13 +8,17 @@
  * CONTROLLED via q/onQ + filter/onFilter (a page that does its own filtering). */
 import { useState } from 'react';
 
+// The little uppercase caption above a gallery's filter row (matches the Settings
+// "Cards" label). Every filter that narrows a gallery carries it.
+export const filterLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px', display: 'block' };
+
 export function GalleryFilterRow({
   q: qProp, onQ, placeholder = '🔍 Search by name, interest or keyword…',
-  showChips = true, filter: filterProp, onFilter, right,
+  showChips = true, filter: filterProp, onFilter, right, label = 'Filters',
 }: {
   q?: string; onQ?: (v: string) => void; placeholder?: string;
   showChips?: boolean; filter?: 'all' | 'fav'; onFilter?: (f: 'all' | 'fav') => void;
-  right?: React.ReactNode;
+  right?: React.ReactNode; label?: string;
 }) {
   const [qState, setQState] = useState('');
   const [filterState, setFilterState] = useState<'all' | 'fav'>('all');
@@ -23,6 +27,8 @@ export function GalleryFilterRow({
   const filter = filterProp !== undefined ? filterProp : filterState;
   const setFilter = onFilter || setFilterState;
   return (
+    <>
+    {label && <span style={filterLabel}>{label}</span>}
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
       {/* The shared "card-like" paper input (global input[type=text] styling). */}
       <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder}
@@ -35,6 +41,7 @@ export function GalleryFilterRow({
       )}
       {right}
     </div>
+    </>
   );
 }
 

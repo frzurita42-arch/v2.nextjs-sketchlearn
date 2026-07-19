@@ -12,6 +12,7 @@ import {
 import { ToolCard } from '@/components/tools/ToolCard';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { PerPagePopup } from '@/components/ui/PerPagePopup';
+import { InstructionBannerSettings } from '@/components/ui/InstructionBanner';
 import { filterSelect } from '@/components/ui/CardViewMenu';
 
 // A fake tool for the live preview — an emoji thumbnail (no photo) + real card chrome.
@@ -70,6 +71,11 @@ export function AppSettingsView() {
           <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
           <CardPreview layout={layout} img={img} />
         </div>
+
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />
+
+        {/* Instruction banner — the wooden board, its editor + AI + apply controls. */}
+        <InstructionBannerSettings />
       </div>
       {popup && <PerPagePopup onClose={() => setPopup(false)} />}
     </div>
