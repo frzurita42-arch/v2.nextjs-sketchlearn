@@ -24,6 +24,9 @@ const noop = () => { /* preview only */ };
 const sel: React.CSSProperties = { width: '100%', padding: '7px 9px', fontSize: 13, borderRadius: 8, border: '1.5px solid var(--ink)', background: 'var(--card,#fff8ee)', font: 'inherit', cursor: 'pointer' };
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px', display: 'block' };
 const dashBox: React.CSSProperties = { border: '2px dashed var(--line,#d9cfc0)', borderRadius: 12, padding: 16, background: 'rgba(0,0,0,0.015)' };
+// The dotted rule that closes every settings section — the visual convention that
+// marks where one container of this type ends and the next begins.
+const sectionRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' };
 
 function Dropdown({ label, labels, value, onChange }: { label: string; labels: string[]; value: number; onChange: (v: number) => void }) {
   return (
@@ -57,6 +60,10 @@ export function AppSettingsView() {
         {/* Title (dotted box) + header-size control, half and half. */}
         <PageHeaderBar pageKey="appsettings" title="⚙️ Settings" subtitle="Tweak how SketchLearn looks." global />
 
+        {/* A dotted rule closes each settings section — the convention that separates
+            one container of this type from the next. */}
+        <hr style={sectionRule} />
+
         {/* ── CARDS ─────────────────────────────────────────────────────
             A thin filter-toolbar of controls sitting above the live preview. */}
         <span style={lbl}>Cards</span>
@@ -72,6 +79,9 @@ export function AppSettingsView() {
           <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
           <CardPreview layout={layout} img={img} />
         </div>
+
+        {/* Section separator — every settings container closes with this dotted rule. */}
+        <hr style={sectionRule} />
       </div>
       {popup && <PerPagePopup onClose={() => setPopup(false)} />}
     </div>
