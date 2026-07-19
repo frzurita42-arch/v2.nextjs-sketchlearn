@@ -6,38 +6,20 @@
  * (shared) targets specific pages. */
 import { useState } from 'react';
 import {
-  CARD_SIZE_LABELS, CARD_IMG_LABELS, galleryLayout,
+  CARD_SIZE_LABELS, CARD_IMG_LABELS,
   loadGlobalCardSize, loadGlobalImgSize, applyCardSizeAll, applyImgSizeAll,
 } from '@/lib/card-size';
-import { ToolCard } from '@/components/tools/ToolCard';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { PerPagePopup } from '@/components/ui/PerPagePopup';
 import { InstructionBannerSettings } from '@/components/ui/InstructionBanner';
+import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 import { filterSelect } from '@/components/ui/CardViewMenu';
-
-// A fake tool for the live preview — an emoji thumbnail (no photo) + real card chrome.
-const SAMPLE = {
-  slug: '__preview__', title: 'Sample presentation', archetype: 'lesson', owner: 'you', visibility: 'public',
-  description: 'A preview card — this is how your galleries will look with the current layout and image settings.',
-  tags: ['example', 'preview'], aiGenerated: true, thumbnail: null, createdAt: new Date().toISOString(),
-};
-const noop = () => { /* preview only */ };
 
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px', display: 'block' };
 const dashBox: React.CSSProperties = { border: '2px dashed var(--line,#d9cfc0)', borderRadius: 12, padding: 16, background: 'rgba(0,0,0,0.015)' };
 // The same paper dropdown as the Sandbox filter row (CardViewMenu) — width:auto so it
 // sizes to its content in a flex row instead of stretching (global select is 100%).
 const paperSel: React.CSSProperties = { ...filterSelect, width: 'auto', minWidth: 130 };
-
-function CardPreview({ layout, img }: { layout: number; img: number }) {
-  const l = galleryLayout(layout);
-  return (
-    <div style={{ ...l.container, alignItems: 'stretch' }}>
-      <ToolCard tool={SAMPLE} view={l.view} hideOpen imageMode={img} onOpen={noop}
-        canEdit onEdit={noop} onGenThumb={noop} onThumbPrompt={noop} onUploadThumb={noop} onDice={noop} thumbing={false} />
-    </div>
-  );
-}
 
 export function AppSettingsView() {
   const [layout, setLayout] = useState<number>(() => loadGlobalCardSize());
@@ -51,10 +33,10 @@ export function AppSettingsView() {
         {/* Title + header-size control (editors only), closed by a dotted separator. */}
         <PageHeaderBar pageKey="appsettings" title="⚙️ Settings" subtitle="Tweak how SketchLearn looks." global />
 
-        {/* ── CARDS ─────────────────────────────────────────────────────
-            A thin filter-toolbar (same look as the Sandbox filter row) above the
-            live preview: paper dropdowns with ▦/🖼 emojis + small buttons. */}
-        <span style={lbl}>Cards</span>
+        {/* ── GALLERIES ─────────────────────────────────────────────────
+            A thin filter-toolbar (same look as the Sandbox filter row) above a live
+            preview of the whole gallery SKELETON — so a universal change is visible. */}
+        <span style={lbl}>Galleries</span>
         <div className="card" style={{ padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <select title="Layout / size" aria-label="Card layout & size" value={layout} onChange={(e) => setLayout(parseInt(e.target.value, 10))} style={paperSel}>
             {CARD_SIZE_LABELS.map((l, i) => <option key={l} value={i}>▦ {l}</option>)}
@@ -67,9 +49,11 @@ export function AppSettingsView() {
             <button className="btn small green" onClick={applyAll}>{saved ? '✓ Applied' : 'Apply to all pages'}</button>
           </div>
         </div>
+        {/* The gallery skeleton: the "make/play one" card + a recommended card + pager,
+            exactly what an empty gallery shows — encapsulated in a dotted box. */}
         <div style={dashBox}>
           <span style={{ ...lbl, marginBottom: 8 }}>Preview — {CARD_SIZE_LABELS[layout]} · {CARD_IMG_LABELS[img]}</span>
-          <CardPreview layout={layout} img={img} />
+          <GallerySkeleton cardSize={layout} imgMode={img} editable />
         </div>
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '22px 0' }} />

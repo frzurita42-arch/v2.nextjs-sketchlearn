@@ -5,18 +5,17 @@ import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
-import { ToolCard } from '@/components/tools/ToolCard';
-import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
+import { useCardSize, useImgSize } from '@/lib/card-size';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
-import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
+import { GalleryFilterRow } from '@/components/ui/GalleryChrome';
+import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 
 export function EmptyView() {
   const app = useApp();
   const [repo, setRepo] = useState<any>(null);
   const cardSize = useCardSize('empty');
   const imgMode = useImgSize('empty');
-  const layout = galleryLayout(cardSize);
 
   useEffect(() => {
     let alive = true;
@@ -42,19 +41,8 @@ export function EmptyView() {
 
         <GalleryFilterRow right={<CardViewMenu pageKey="empty" />} />
 
-        <div style={{ ...layout.container, alignItems: 'stretch' }}>
-          <div className="card" style={{ height: '100%', minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
-            <span className="sl-pencil" style={{ fontSize: 42, color: 'var(--ink)' }} aria-hidden>
-              <span className="sl-pencil__line" />
-              <span className="sl-pencil__tip">✏️</span>
-            </span>
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4 }}>Make a repository or create a Slide Tool to get started.</p>
-            <button className="btn green" onClick={() => app.nav('chat')}>＋ Build one</button>
-          </div>
-          {repo && <ToolCard tool={repo} view={layout.view} hideOpen onOpen={openTool} imageMode={imgMode} />}
-        </div>
-
-        <GalleryPager />
+        {/* The shared gallery skeleton (make/play card + recommended + pager). */}
+        <GallerySkeleton cardSize={cardSize} imgMode={imgMode} recommended={repo} onBuild={() => app.nav('chat')} onOpen={openTool} />
       </div>
     </div>
   );
