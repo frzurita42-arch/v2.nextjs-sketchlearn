@@ -11,7 +11,7 @@ import { usePageText, setPageTitle, setPageSub, clearPageText } from '@/lib/page
 
 const asText = (v: React.ReactNode): string => (typeof v === 'string' ? v : '');
 
-export function PageHeading({ pageKey, title, subtitle }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode }) {
+export function PageHeading({ pageKey, title, subtitle, extraTools }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode; extraTools?: React.ReactNode }) {
   const { title: tSize, sub: sSize } = useHeaderSize(pageKey);
   const { title: tOverride, sub: sOverride } = usePageText(pageKey);
   const [open, setOpen] = useState(false);       // Aa size sliders
@@ -55,6 +55,7 @@ export function PageHeading({ pageKey, title, subtitle }: { pageKey?: string; ti
           <button title="Rename this page's title & subtitle" onClick={openEditor}
             style={{ ...toolBtn, background: edit ? 'var(--card,#fff8ee)' : 'none' }}>✎</button>
         )}
+        {extraTools}
       </div>
 
       {open && pageKey && (
