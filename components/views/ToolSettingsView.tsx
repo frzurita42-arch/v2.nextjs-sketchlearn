@@ -11,7 +11,7 @@ import { useApp } from '@/components/AppContext';
 
 type Key = { name: string; key: string };
 
-export function ToolSettingsView() {
+export function ToolSettingsView({ embedded = false }: { embedded?: boolean } = {}) {
   const app = useApp();
   const slug = appState.activeTool?.slug;
   const [tool, setTool] = useState<any>(null);
@@ -115,9 +115,13 @@ export function ToolSettingsView() {
 
   return (
     <>
-      <h1 className="view-title">Settings — <span className="scribble-underline">{tool?.title || 'tool'}</span></h1>
-      <p className="view-sub">Owner tools for this post.{' '}
-        <button className="btn small ghost" onClick={() => app.nav('tool')}>← Back to tool</button></p>
+      {/* When embedded (in the header ⚙️ popup) the modal supplies the title/close,
+          so we skip the page heading + back-nav. */}
+      {!embedded && (<>
+        <h1 className="view-title">Settings — <span className="scribble-underline">{tool?.title || 'tool'}</span></h1>
+        <p className="view-sub">Owner tools for this post.{' '}
+          <button className="btn small ghost" onClick={() => app.nav('tool')}>← Back to tool</button></p>
+      </>)}
 
       <section style={{ maxWidth: 720, margin: '8px auto 0' }}>
         {/* API keys */}

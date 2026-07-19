@@ -14,6 +14,7 @@ import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
+import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 import { AuthorBar } from '@/components/social/AuthorBar';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
@@ -158,8 +159,11 @@ export function ToolRunnerView() {
   // title / author / share / description / comments / "more like this" chrome is
   // hidden so only the slide presentation (plus the app header + footer) shows.
   const [immersive, setImmersive] = useState(false);
+  // The owner's tool settings, opened from the ⚙️ gear in the header as a popup
+  // (so the page itself stays clean, closer to what a normal user sees).
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Reset when the active tool changes so a new tool page starts with full chrome.
-  useEffect(() => { setImmersive(false); }, [tool?.slug]);
+  useEffect(() => { setImmersive(false); setSettingsOpen(false); }, [tool?.slug]);
 
   // Clear any leftover Posts-carousel open-intent once this tool page is up. Child
   // effects run first, so the LessonPlayer consumes it before this fires; for
@@ -253,6 +257,8 @@ export function ToolRunnerView() {
   // admin) so the whole page re-renders as that role would see it.
   const perms = app.eff(tool.owner);
   const canEdit = !(tool.tags || []).includes('example') && perms.canEdit;
+  // Whether this tool exposes owner Settings (Studio repos/presentations don't).
+  const canSettings = !(tool.tags || []).includes('example') && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && perms.canEdit;
 
   const saveTitle = async (t: string) => {
     setEditField(null);
@@ -324,11 +330,24 @@ export function ToolRunnerView() {
         <h1 className="view-title">{tool.title}
           {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
           {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
+          {canSettings && <button title="Tool settings — API keys, AI edit, visibility, delete" onClick={() => setSettingsOpen(true)} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>}
         </h1>
       )}
       {editField && (
         <AiEditPopup field={editField} slug={tool.slug} mode={editField === 'title' ? editMode : 'both'} initial={editField === 'title' ? tool.title : (descDraft || def.description || '')}
           onSave={editField === 'title' ? saveTitle : saveDesc} onClose={() => setEditField(null)} />
+      )}
+      {/* The tool-settings popup, opened from the header ⚙️ gear (owner/admin only). */}
+      {settingsOpen && canSettings && (
+        <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '4vh 12px' }}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, width: '100%', padding: '16px 18px', margin: '2vh 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <b style={{ fontSize: 16 }}>⚙️ Settings — {tool.title}</b>
+              <button className="btn small ghost" onClick={() => setSettingsOpen(false)}>✕ Close</button>
+            </div>
+            <ToolSettingsView embedded />
+          </div>
+        </div>
       )}
 
       {!immersive && (<>
@@ -349,12 +368,8 @@ export function ToolRunnerView() {
           shareSlug={tool.slug}
           shareTitle={tool.title}
           showShare={tool.visibility !== 'private'}
-          actions={
-            // Studio-made repositories & presentations don't expose Settings.
-            !(tool.tags || []).includes('example') && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && perms.canEdit
-              ? <button className="btn small ghost" onClick={() => app.nav('toolsettings')}>⚙️ Settings</button>
-              : null
-          }
+          /* Settings now live behind the ⚙️ gear in the header (a popup), so the
+             author bar stays clean — closer to what a normal user sees. */
         />
         {/* The description / outline "prompt" is intentionally NOT rendered on the
             page (it clutters mobile and isn't needed to read the tool). It is still
