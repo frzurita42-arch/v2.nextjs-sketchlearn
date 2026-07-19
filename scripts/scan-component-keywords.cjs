@@ -16,6 +16,17 @@
 const fs = require('fs');
 const path = require('path');
 
+// This index is a nice-to-have for the dashboard's component search — it must NEVER
+// break a production build. Any failure logs a warning and exits 0, leaving the
+// already-committed src/tools/component-keywords.json in place.
+try {
+  main();
+} catch (err) {
+  console.warn('[scan-component-keywords] skipped (non-fatal):', err && err.message ? err.message : err);
+  process.exit(0);
+}
+
+function main() {
 const ROOT = path.resolve(__dirname, '..');
 const { COMPONENT_REGISTRY } = require(path.join(ROOT, 'src/tools/component-registry.js'));
 
@@ -117,3 +128,4 @@ for (const [id, arr] of Object.entries(out)) {
 const dest = path.join(ROOT, 'src/tools/component-keywords.json');
 fs.writeFileSync(dest, JSON.stringify(serialized, null, 2) + '\n');
 console.log(`Wrote ${dest} — ${Object.keys(serialized).length} components indexed.`);
+}
