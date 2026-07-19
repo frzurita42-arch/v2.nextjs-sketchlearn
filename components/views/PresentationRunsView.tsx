@@ -1,15 +1,21 @@
 'use client';
-/* Presentation runs — the slide-tool page adapted to the new shell layout: the
- * settings to make a slide presentation on top, then the gallery of every slide
- * tool (the shared ShellGallery, with the same cards / filters / edit controls /
- * data table). "Build presentation" seeds the Studio with these settings. */
+/* Presentation runs — a GENERIC empty-state view (like Sandbox / Empty) that shows
+ * how a presentation gallery looks before there's data: the gallery skeleton (a
+ * "make/play one" card + a recommended presentation + pager) inside the shell
+ * working column. The presentation-specific tool — the "Make a slide presentation"
+ * settings form — lives behind the ⚙️ gear in the filter row (and the CTA button),
+ * opening as a popup. This is what makes it different from the Slides gallery. */
 import { useEffect, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, LEVELS, TONES } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
-import { ShellGallery } from '@/components/views/ShellGallery';
+import { useCardSize, useImgSize } from '@/lib/card-size';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
+import { CardViewMenu } from '@/components/ui/CardViewMenu';
+import { GalleryFilterRow } from '@/components/ui/GalleryChrome';
+import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 
-function SlideSettings() {
+function SlideSettings({ onClose }: { onClose: () => void }) {
   const app = useApp();
   const [topic, setTopic] = useState('');
   const [slides, setSlides] = useState(5);
@@ -31,23 +37,19 @@ function SlideSettings() {
     if (!app.user) { app.requireLogin(); return; }
     const subject = topic.trim() || 'New presentation';
     appState.builderSeed = {
-      artifact: 'presentation',
-      subject,
-      title: subject,
-      tone,
+      artifact: 'presentation', subject, title: subject, tone,
       context: `Level: ${level}. About ${slides} slides. Text model: ${textProv}${imgProv ? `, image model: ${imgProv}` : ''}.`,
     };
     app.nav('toolbuilder');
   };
 
-  // Use the shared "card-like" sketchbook paper input/select (global styling) —
-  // the same look as the gallery search box; just size to the column.
   const sel: React.CSSProperties = { width: '100%' };
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 3, display: 'block' };
-
   return (
-    <div className="card" style={{ padding: '14px 16px', marginBottom: 18 }}>
-      <b style={{ display: 'block', marginBottom: 10 }}>🎬 Make a slide presentation</b>
+    <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: '16px 18px', margin: '4vh 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <b>🎬 Make a slide presentation</b><button className="btn small ghost" onClick={onClose}>✕</button>
+      </div>
       <div className="settings-compact" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 12px' }}>
         <label style={{ gridColumn: '1 / -1' }}><span style={lbl}>Topic</span>
           <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Photosynthesis, French greetings…" style={sel} /></label>
@@ -76,8 +78,50 @@ function SlideSettings() {
 }
 
 export function PresentationRunsView() {
+  const app = useApp();
+  const [rec, setRec] = useState<any>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const cardSize = useCardSize('presrun');
+  const imgMode = useImgSize('presrun');
+
+  useEffect(() => {
+    let alive = true;
+    API.get('/api/tools').then((r: any) => {
+      if (!alive) return;
+      const all = Array.isArray(r?.tools) ? r.tools : [];
+      const lessons = all.filter((t: any) => (t?.archetype || t?.definition?.archetype) === 'lesson');
+      setRec(lessons.find((t: any) => (t.tags || []).includes('example')) || lessons[0] || null);
+    }).catch(() => { /* none */ });
+    return () => { alive = false; };
+  }, []);
+
+  const openRec = async (t: any) => {
+    try { const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(t.slug)}`); appState.activeTool = r?.tool || t; }
+    catch { appState.activeTool = t; }
+    app.nav('tool');
+  };
+
   return (
-    <ShellGallery pageKey="presrun" kind="presentation" title="🎬 Presentation runs" subtitle="Set up a new presentation, or open one of the slide tools"
-      topSlot={<SlideSettings />} topSlotLabel="Make a slide presentation" />
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+        <PageHeaderBar pageKey="presrun" title="🎬 Presentation runs" subtitle="Set up a new presentation, or open one of the slide tools." />
+
+        {/* The ⚙️ gear opens the "Make a slide presentation" form as a popup. */}
+        <GalleryFilterRow right={<>
+          <button className="btn small ghost" title="Make a slide presentation" aria-label="Make a slide presentation"
+            onClick={() => setSettingsOpen(true)} style={{ fontSize: 16, padding: '0 9px' }}>⚙️</button>
+          <CardViewMenu pageKey="presrun" />
+        </>} />
+
+        {/* The generic empty-state skeleton; "Build one" opens the settings form. */}
+        <GallerySkeleton cardSize={cardSize} imgMode={imgMode} recommended={rec} onBuild={() => setSettingsOpen(true)} onOpen={openRec} />
+      </div>
+
+      {settingsOpen && (
+        <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 150, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+          <SlideSettings onClose={() => setSettingsOpen(false)} />
+        </div>
+      )}
+    </div>
   );
 }
