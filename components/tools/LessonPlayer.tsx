@@ -40,8 +40,6 @@ function lessonToStudioPages(lesson: any): any[] {
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
-import { filterSelect } from '@/components/ui/CardViewMenu';
-import { CARD_IMG_LABELS } from '@/lib/card-size';
 import { RichText } from '@/components/tools/RichText';
 import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
@@ -863,7 +861,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [savedDeck, setSavedDeck] = useState<any>(lesson.savedDeck || null);
   const hasSaved = !!(savedDeck?.slides?.length);
   const [wizardKey, setWizardKey] = useState(0);   // bump to reset the settings wizard to step 1
-  const [exImg, setExImg] = useState(2);           // AI-example card image arrangement (0 = No image)
   const [deckMsg, setDeckMsg] = useState('');
   const offlineOn = lesson.offlineExport !== false;   // owner/admin can turn it off
   const [zipBusy, setZipBusy] = useState(false);
@@ -1812,7 +1809,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             via the "✏️ Edit layout & activities" button beside "New topics". */}
 
         {showGenerate && (
-        <div className="card alt" style={{ padding: '14px 16px' }}>
+        <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <h4 style={{ margin: '0 0 8px', cursor: 'pointer', userSelect: 'none' }} onClick={toggleSettings}
               title={settingsOpen ? 'Collapse — show only the essentials' : 'Expand — show every setting'}>
@@ -1915,70 +1912,26 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         </div>
         )}
 
-        {/* ┄ divider: settings ┄ AI example ┄ */}
-        <div style={dashRule} />
-
-        {/* The dashed AI-example card (header + the generated example). The
-            "Suggest about…" box uses the standard Sketchart input design. */}
-        {(() => {
-          const aiExampleCard = (
-            <div className="card" style={{ padding: '12px 14px', borderStyle: 'dashed', minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>✦ AI EXAMPLE</span>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {/* View the example card in any arrangement (No image / cover / etc.). */}
-                  <select value={exImg} onChange={(e) => setExImg(parseInt(e.target.value, 10))} title="View the card" aria-label="Card image arrangement" style={{ ...filterSelect, width: 'auto' }}>
-                    {CARD_IMG_LABELS.map((l, i) => <option key={l} value={i}>🖼 {l}</option>)}
-                  </select>
-                  <input type="text" value={exHint} onChange={e => setExHint(e.target.value)} placeholder="Suggest about…" onKeyDown={e => { if (e.key === 'Enter') refreshExample(); }}
-                    style={{ width: 130, maxWidth: '42vw', minWidth: 0 }} />
-                  <button className="btn small ghost" style={{ flex: '0 0 auto', padding: '5px 10px' }} title="Suggest an example with AI" onClick={refreshExample} disabled={exBusy}>{exBusy ? '…' : '🔄'}</button>
-                </div>
+        {/* The AI-example card was removed — the wizard above is the single "create
+            a presentation run" interface. Only the donation prompt remains here. */}
+        {!donateCollapsed ? (
+          <>
+            <div style={dashRule} />
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ width: '100%', maxWidth: 460 }}>
+                <DonationPrompt mugWidth={220} mugHeight={183}
+                  address={donation.address} canManage={canManageDonation} onSaveAddress={saveDonateAddress}
+                  canCollapse={canManageDonation} onCollapse={toggleDonate} />
               </div>
-              {example ? (
-                <div style={{ marginTop: 8 }}>
-                  {/* The AI example uses the SAME card component, and follows the chosen
-                      image arrangement (No image / small / large / cover 16:9 / 9:16). */}
-                  <CardShell
-                    view="grid"
-                    title={label({ level: example.level, topic: example.topic })}
-                    subtitle={example.why || `A ${String(example.level || '').toLowerCase()} ${lesson.subject || 'presentation'}${example.topic ? ` on ${example.topic}` : ''}.`.replace(/\s+/g, ' ').trim()}
-                    thumbnail={null}
-                    {...(exImg === 0 ? { hideImage: true } : exImg === 1 ? { thumbHeight: 84 } : exImg === 3 ? { thumbHeight: 160 } : exImg === 4 ? { imageAspect: '16 / 9' } : exImg === 5 ? { imageAspect: '9 / 16' } : { thumbHeight: 110 })}
-                    iconNode={<span aria-hidden>{defaultEmojiFor(`${example.topic || ''} ${example.level || ''} ${lesson.subject || ''}`, def?.tags)}</span>}
-                    meta={<span style={{ fontSize: 11, opacity: 0.6 }}>📄 {slideCountOf(form)} slides · 🕒 {new Date().toLocaleString()}</span>}
-                    onOpen={canPlay ? () => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' }) : undefined}
-                    actions={
-                      <>
-                        {canPlay && <button className="btn small green" title="Play this example now" onClick={() => recordAndPlay({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>▶ Play</button>}
-                        {canPlay && <button className="btn small" title="Add this as a preset lesson to the history below (no image yet)" onClick={() => addToHistory({ ...form, level: example.level, topic: example.topic, ...(example.tone ? { tone: example.tone } : {}) }, { suggested: true, why: example.why || '' })}>✨ Generate</button>}
-                      </>
-                    }
-                  />
-                  {addMsg && <p style={{ fontSize: 12, color: 'var(--accent,#5c80bc)', margin: '6px 0 0' }}>{addMsg}</p>}
-                </div>
-              ) : <p style={{ fontSize: 13, opacity: 0.6, margin: '6px 0 0' }}>Loading a suggestion…</p>}
             </div>
-          );
-          // When the donation prompt is hidden (admin's 👁), the example is centered.
-          return donateCollapsed ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: '100%', maxWidth: 460 }}>{aiExampleCard}</div>
-              {canManageDonation && <button className="btn small ghost" onClick={toggleDonate} title="Show the donation prompt to everyone">{'👁︎'} Donation hidden — click to show</button>}
-            </div>
-          ) : (
-            // Two columns: the example on the left, the coffee-mug donation prompt on
-            // the right. Wraps to one column when narrow.
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'center' }}>
-              {aiExampleCard}
-              <DonationPrompt mugWidth={220} mugHeight={183}
-                address={donation.address} canManage={canManageDonation} onSaveAddress={saveDonateAddress}
-                canCollapse={canManageDonation} onCollapse={toggleDonate} />
-            </div>
-          );
-        })()}
+          </>
+        ) : (canManageDonation && (
+          <div style={{ textAlign: 'center', marginTop: 8 }}>
+            <button className="btn small ghost" onClick={toggleDonate} title="Show the donation prompt to everyone">{'👁︎'} Donation hidden — click to show</button>
+          </div>
+        ))}
 
-        {/* ┄ divider: AI example ┄ activities feed ┄ */}
+        {/* ┄ divider: create ┄ activities feed ┄ */}
         <div style={dashRule} />
 
         {/* The History section uses the SAME shared Collection container as the
