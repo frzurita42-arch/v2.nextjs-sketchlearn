@@ -38,7 +38,7 @@ export interface ToolCardProps {
   onHistory?: (t: any) => void;   // 📖 OP history track (saved results)
 }
 
-const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'LESSON' : t.archetype === 'repo' ? 'REPO' : 'GEN';
+const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'SLIDES' : t.archetype === 'repo' ? 'REPO' : 'GEN';
 const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
 export function ToolCard(p: ToolCardProps) {

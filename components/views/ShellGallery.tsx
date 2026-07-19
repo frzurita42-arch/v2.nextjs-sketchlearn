@@ -14,6 +14,7 @@ import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { filterLabel } from '@/components/ui/GalleryChrome';
+import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 
 const GALLERY_PER_PAGE = 6;
 
@@ -70,7 +71,8 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   const [tools, setTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [favs, setFavs] = useState<Record<string, boolean>>({});
-  const [filter, setFilter] = useState<'all' | 'fav' | 'mine'>('all');
+  // Favorites is the default view; an empty result shows the gallery skeleton.
+  const [filter, setFilter] = useState<'all' | 'fav' | 'mine'>('fav');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [editTool, setEditTool] = useState<any>(null);
@@ -162,6 +164,9 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
     app.nav('tool');
   };
 
+  // A random suggestion for the empty-state skeleton (stable while the list is stable).
+  const skelRec = useMemo(() => (tools.length ? tools[Math.floor(Math.random() * tools.length)] : null), [tools]);
+
   const unitLabel = kind === 'presentation' ? 'Slides' : 'Cards';
   const rows: Cell[][] = filtered.map((t) => [
     t.title || 'Untitled', t.owner || '—', unitCount(t, kind) || '—',
@@ -212,7 +217,9 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
             Loading…
           </div>
         ) : filtered.length === 0 ? (
-          <p style={{ color: 'var(--muted,#8a7f70)' }}>Nothing matches — try a different search or filter.</p>
+          // Empty (e.g. no favorites yet) → the shared gallery skeleton: the pencil
+          // "make/play one" card + a random suggestion + pager (like Settings › Galleries).
+          <GallerySkeleton cardSize={cardSize} imgMode={imgMode} recommended={skelRec} onBuild={() => app.nav('chat')} onOpen={openTool} />
         ) : (
           <>
             <div style={{ ...layout.container, alignItems: 'stretch' }}>

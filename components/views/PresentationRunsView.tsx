@@ -100,7 +100,10 @@ export function PresentationRunsView() {
     let alive = true;
     API.get('/api/tools').then((r: any) => {
       if (!alive) return;
-      setTools(Array.isArray(r?.tools) ? r.tools : []);
+      // Presentation runs shows SLIDES only (the lesson/slide archetype), so "All"
+      // lists every slide — like the Repos page lists every repo.
+      const all = Array.isArray(r?.tools) ? r.tools : [];
+      setTools(all.filter((t: any) => (t?.archetype || t?.definition?.archetype) === 'lesson'));
     }).catch(() => { /* none */ });
     return () => { alive = false; };
   }, []);
