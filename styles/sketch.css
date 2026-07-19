@@ -662,6 +662,26 @@ table.sketch.compact td { font-size: .85rem; }
 /* Only fall back to a single column on the very smallest phones. */
 @media (max-width: 340px) { .settings-compact { grid-template-columns: 1fr; } }
 
+/* ---------- settings page: uniform control sizing ----------
+   Every button and cell stays a SINGLE line at a consistent height on all screen
+   sizes; if a label is longer than its box it clips to an ellipsis (…) instead of
+   wrapping to a second line and growing the control. Single-line + a shared min
+   height keeps every control the same size regardless of the viewport. */
+.sl-settings button,
+.sl-settings .btn,
+.sl-settings input:not([type=range]):not([type=checkbox]),
+.sl-settings select {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+}
+/* Range sliders and textareas keep their natural sizing. */
+.sl-settings input[type=range] { min-height: 0; }
+.sl-settings textarea { white-space: normal; overflow: auto; min-height: 38px; }
+
 /* ---------- home footer ---------- */
 .home-footer, .site-footer {
   max-width: 900px;

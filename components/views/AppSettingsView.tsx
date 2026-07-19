@@ -35,7 +35,7 @@ export function AppSettingsView() {
   const applyCards = () => { applyCardSizeAll(cLayout); applyImgSizeAll(cImg); setCSaved(true); setTimeout(() => setCSaved(false), 1600); };
   const applyGal = () => { applyCardSizeAll(gLayout); applyImgSizeAll(gImg); setGSaved(true); setTimeout(() => setGSaved(false), 1600); };
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
+    <div className="sl-settings" style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         {/* Title + header-size control (editors only), closed by a dotted separator. */}
         <PageHeaderBar pageKey="appsettings" title="⚙️ Settings" subtitle="Tweak how SketchLearn looks." global />
