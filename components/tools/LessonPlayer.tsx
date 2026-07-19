@@ -1812,16 +1812,18 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {showGenerate && (
         <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed', flex: '1 1 340px', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <h4 style={{ margin: '0 0 8px', cursor: 'pointer', userSelect: 'none' }} onClick={toggleSettings}
+          {/* Compact header: the title, then the edit-layout ⚙️ and new-topics 🔄 as
+              inline icon chips (they used to be full buttons). */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+            <h4 style={{ margin: 0, cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={toggleSettings}
               title={settingsOpen ? 'Collapse — show only the essentials' : 'Expand — show every setting'}>
-              <span style={{ display: 'inline-block', width: 16, opacity: 0.6 }}>{settingsOpen ? '▾' : '▸'}</span>
+              <span style={{ opacity: 0.45, fontSize: 12 }}>{settingsOpen ? '▾' : '▸'}</span>
               Create a {lesson.subject || 'lesson'} activity
             </h4>
-            <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
-              {canEdit && <button className="btn small" onClick={openLayoutEditor} title="Edit this tool's slide layout & proposed activities (opens the Studio; saving updates this tool for future generations)">✏️ Edit layout &amp; activities</button>}
-              <button className="btn small ghost" onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics">{topicsBusy ? '…' : '🔄 New topics'}</button>
-            </span>
+            {canEdit && <button onClick={openLayoutEditor} title="Edit layout & activities (opens the Studio)"
+              style={{ background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#d9cfc0)', borderRadius: 8, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '4px 8px' }}>⚙️</button>}
+            <button onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics"
+              style={{ background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#d9cfc0)', borderRadius: 8, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '4px 8px' }}>{topicsBusy ? '…' : '🔄'}</button>
           </div>
           {/* A guided wizard: Basics → Level & length → Style → Play/Generate. Reuses
               the same <ToolFields> + form state; the last step carries the actions. */}
