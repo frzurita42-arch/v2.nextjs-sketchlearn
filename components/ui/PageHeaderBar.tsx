@@ -66,9 +66,10 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
           </div>
         )}
       </div>
-      {/* Non-Settings pages: the separator sits at the bottom of the whole header row.
-          (On Settings the line lives INSIDE the dotted title box above.) */}
-      {!global && <hr style={sectionRule} />}
+      {/* Only the PLAIN (non-encapsulated) header needs a bottom separator. When the
+          title is encapsulated (admin), the dotted box + its inner line already do it,
+          so no extra rule below. */}
+      {!showControls && <hr style={sectionRule} />}
       {/* The instruction banner, if one is set for this page (configured on Settings). */}
       {!global && <InstructionBanner pageKey={pageKey} />}
       {global && popup && <PerPagePopup onClose={() => setPopup(false)} />}
