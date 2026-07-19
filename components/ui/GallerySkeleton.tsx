@@ -25,18 +25,36 @@ export function GallerySkeleton({ cardSize, imgMode, recommended, onBuild, onOpe
   const editProps = editable
     ? { canEdit: true, onEdit: noop, onGenThumb: noop, onThumbPrompt: noop, onUploadThumb: noop, onDice: noop, thumbing: false }
     : {};
+  const cta = layout.view === 'row' ? (
+    // Row/list layout: a HORIZONTAL card like the recommended card — small pencil on
+    // the left, title + subtitle in the middle, "Build one" on the right.
+    <div className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+      <span className="sl-pencil" style={{ fontSize: 24, color: 'var(--ink)', flex: '0 0 auto', width: 46, height: 46, display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden>
+        <span className="sl-pencil__line" />
+        <span className="sl-pencil__tip">✏️</span>
+      </span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <strong style={{ fontSize: 15 }}>Make a repository or play a lesson</strong>
+        <div style={{ fontSize: 12, opacity: 0.8 }}>Build one to get started.</div>
+      </div>
+      <button className="btn small green" style={{ flex: '0 0 auto' }} onClick={onBuild || noop}>＋ Build one</button>
+    </div>
+  ) : (
+    // Grid layout: the tall centred card that stretches to the tile height.
+    <div className="card" style={{ height: '100%', minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
+      <span className="sl-pencil" style={{ fontSize: 42, color: 'var(--ink)' }} aria-hidden>
+        <span className="sl-pencil__line" />
+        <span className="sl-pencil__tip">✏️</span>
+      </span>
+      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4 }}>Make a repository or play a lesson to get started.</p>
+      <button className="btn green" onClick={onBuild || noop}>＋ Build one</button>
+    </div>
+  );
+
   return (
     <div>
       <div style={{ ...layout.container, alignItems: 'stretch' }}>
-        {/* The looping pencil "make/play one" card — stretches to the card height. */}
-        <div className="card" style={{ height: '100%', minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 18 }}>
-          <span className="sl-pencil" style={{ fontSize: 42, color: 'var(--ink)' }} aria-hidden>
-            <span className="sl-pencil__line" />
-            <span className="sl-pencil__tip">✏️</span>
-          </span>
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4 }}>Make a repository or play a lesson to get started.</p>
-          <button className="btn green" onClick={onBuild || noop}>＋ Build one</button>
-        </div>
+        {cta}
         {/* A single recommended card (Open hidden — the picture/title still open it). */}
         <ToolCard tool={rec} view={layout.view} hideOpen imageMode={imgMode} onOpen={onOpen || noop} {...editProps} />
       </div>
