@@ -15,6 +15,10 @@ import { TITLE_MIN, TITLE_MAX, useHeaderSize, setPageTitleSize, setPageSubSize, 
 
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: 0, display: 'block' };
 const sectionRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '14px 0 0' };
+// On the Settings page the title column is ENCAPSULATED in a dotted box; the title,
+// subtitle and the horizontal dotted line all live inside it.
+const titleBox: React.CSSProperties = { border: '2px dashed var(--line,#d9cfc0)', borderRadius: 12, padding: '10px 16px', background: 'rgba(0,0,0,0.015)' };
+const innerRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 0' };
 
 export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode; global?: boolean }) {
   const app = useApp();
@@ -29,9 +33,12 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
-        {/* The title + subtitle — this container's contents. */}
-        <div style={{ flex: showControls ? '1 1 300px' : '1 1 100%', minWidth: 240, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '2px 2px 4px' }}>
+        {/* The title + subtitle. On Settings (global) this is ENCAPSULATED in a dotted
+            box that also contains the horizontal dotted line; elsewhere it's plain and
+            the separator sits at the very bottom (below the whole header row). */}
+        <div style={{ flex: showControls ? '1 1 300px' : '1 1 100%', minWidth: 240, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(global ? titleBox : { padding: '2px 2px 4px' }) }}>
           <PageHeading pageKey={pageKey} title={title} subtitle={subtitle} />
+          {global && <hr style={innerRule} />}
         </div>
         {/* The header-size control card — editors only (admins & moderators). */}
         {showControls && (
@@ -56,8 +63,9 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
           </div>
         )}
       </div>
-      {/* The dotted line at the bottom — separates this section from the filters below. */}
-      <hr style={sectionRule} />
+      {/* Non-Settings pages: the separator sits at the bottom of the whole header row.
+          (On Settings the line lives INSIDE the dotted title box above.) */}
+      {!global && <hr style={sectionRule} />}
       {global && popup && <PerPagePopup onClose={() => setPopup(false)} />}
     </div>
   );
