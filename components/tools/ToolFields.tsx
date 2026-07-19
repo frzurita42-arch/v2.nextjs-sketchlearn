@@ -82,13 +82,14 @@ function Field({ f, value, onChange, onSuggest, suggesting }: {
   );
 }
 
-export function ToolFields({ fields, values, onChange, onSuggest, suggesting }: {
+export function ToolFields({ fields, values, onChange, onSuggest, suggesting, single }: {
   fields: ToolField[]; values: Record<string, any>; onChange: (id: string, v: any) => void;
   onSuggest?: (id: string) => void; suggesting?: Record<string, boolean>;
+  single?: boolean;   // stack the fields in ONE column instead of the 2-column grid
 }) {
   if (!fields?.length) return null;
   return (
-    <div className="settings-compact">
+    <div className="settings-compact" style={single ? { gridTemplateColumns: 'minmax(0, 1fr)' } : undefined}>
       {fields.map(f => <Field key={f.id} f={f} value={values[f.id]} onChange={v => onChange(f.id, v)}
         onSuggest={onSuggest ? () => onSuggest(f.id) : undefined} suggesting={!!suggesting?.[f.id]} />)}
     </div>

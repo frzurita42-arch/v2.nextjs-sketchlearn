@@ -1832,9 +1832,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               the same <ToolFields> + form state; the last step carries the actions. */}
           {(() => {
             const fieldsFor = (ids: string[]) => formFields.filter((f: any) => ids.includes(f.id));
-            const stepFields = (ids: string[]) => {
+            const stepFields = (ids: string[], single?: boolean) => {
               const fs = fieldsFor(ids);
-              return fs.length ? <ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} /> : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>;
+              return fs.length ? <ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} single={single} /> : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>;
             };
             const styleStep = (
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -1892,7 +1892,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               </div>
             );
             const steps: WizardStep[] = [
-              { key: 'basics', title: 'Name & topic', render: () => stepFields(['title', 'topic']) },
+              { key: 'basics', title: 'Name & topic', render: () => stepFields(['title', 'topic'], true) },
               { key: 'level', title: 'Level & length', render: () => stepFields(['level', 'difficulty', 'slides']) },
               { key: 'style', title: 'Style (optional)', render: () => styleStep },
             ];
