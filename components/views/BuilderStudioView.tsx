@@ -11,6 +11,8 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
+import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
+import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
 import {
   STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, BUTTON_ACTIONS, parseTemplateSpec,
   studioItem, assembleDefinition, capAvailable,
@@ -129,13 +131,14 @@ export function BuilderStudioView() {
   // 🎨 palette "diffuser" — reword a field to a similar but different phrasing so
   // the author can shuffle it to taste.
   const [rewording, setRewording] = useState<'' | 'title' | 'subject' | 'tone'>('');
+  // Rewords the DRAFT field inside the settings popup (applied on Update).
   const rewordField = async (kind: 'title' | 'subject' | 'tone') => {
-    const cur = kind === 'title' ? title : kind === 'subject' ? subject : tone;
+    const cur = kind === 'title' ? dTitle : kind === 'subject' ? dSubject : dTone;
     if (!cur.trim() || rewording) return;
     setRewording(kind);
     try {
-      const r: any = await API.post('/api/tools/reword', { text: cur, kind: kind === 'tone' ? 'generic' : kind, context: `${title} ${subject}`.trim() });
-      if (r?.text) { if (kind === 'title') setTitle(r.text); else if (kind === 'subject') setSubject(r.text); else setTone(r.text); }
+      const r: any = await API.post('/api/tools/reword', { text: cur, kind: kind === 'tone' ? 'generic' : kind, context: `${dTitle} ${dSubject}`.trim() });
+      if (r?.text) { if (kind === 'title') setDTitle(r.text); else if (kind === 'subject') setDSubject(r.text); else setDTone(r.text); }
     } catch { /* ignore */ }
     setRewording('');
   };
@@ -145,6 +148,23 @@ export function BuilderStudioView() {
   const [addMenu, setAddMenu] = useState<number | null>(null);   // which slide's "＋ Add" menu is open
   useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
   const [sourcePrompt, setSourcePrompt] = useState(seed?.sourcePrompt || seed?.context || '');
+  // The ⚙️ settings popup edits a DRAFT (per artifact), applied only when the user
+  // presses Update — so it reads like the paginated create wizard. Snapshot the
+  // active values when it opens; write them back on Update; discard on close.
+  const [setStep, setSetStep] = useState(0);
+  const [dTitle, setDTitle] = useState('');
+  const [dSubject, setDSubject] = useState('');
+  const [dTone, setDTone] = useState('Friendly');
+  const [dToneCustom, setDToneCustom] = useState(false);
+  const [dPrompt, setDPrompt] = useState('');
+  const openSettings = () => {
+    setDTitle(title); setDSubject(subject); setDTone(tone); setDToneCustom(toneCustom); setDPrompt(sourcePrompt);
+    setSetStep(0); setSettingsOpen(true);
+  };
+  const applySettings = () => {
+    setTitle(dTitle); setSubject(dSubject); setTone(dTone); setToneCustom(dToneCustom); setSourcePrompt(dPrompt);
+    setSettingsOpen(false);
+  };
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>(seed?.cards && seed.cards.length ? (seed.cards as RepoCard[]) : [{ name: '', link: '', description: '', children: [] }]);
   // The user's HAND-AUTHORED cards, captured once, used as the seed for every AI
@@ -483,7 +503,7 @@ export function BuilderStudioView() {
   const labelRow = { display: 'inline-flex', alignItems: 'center', gap: 6 } as const;
   const miniBtn = { padding: '0 6px', fontSize: 12, lineHeight: 1.6 } as const;
   const paletteBtn = (kind: 'title' | 'subject' | 'tone') => {
-    const val = kind === 'title' ? title : kind === 'subject' ? subject : tone;
+    const val = kind === 'title' ? dTitle : kind === 'subject' ? dSubject : dTone;
     return <button type="button" className="btn small ghost" style={miniBtn} disabled={!val.trim() || !!rewording} title="Reword with AI — a similar but different phrasing" onClick={() => rewordField(kind)}>{rewording === kind ? '…' : '🎨'}</button>;
   };
   const repoPrompt = (sourcePrompt || context || `A layered collection of links & resources: ${subject || title}`).trim();
@@ -508,7 +528,7 @@ export function BuilderStudioView() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>WHAT ARE YOU MAKING?</div>
               <button type="button" title={`${isRepo ? 'Repository' : 'Presentation'} settings — title, subject, tone, prompt`} aria-label="Overall settings"
-                onClick={() => setSettingsOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>⚙️</button>
+                onClick={openSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>⚙️</button>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {([['presentation', '📊 Presentation', 'A playable slide deck — one slide per page you design'], ['repository', '🗂️ Repository', 'A collection / gallery of posted items (no slides)']] as const).map(([k, name, d]) => (
@@ -536,39 +556,51 @@ export function BuilderStudioView() {
                   <b style={{ fontSize: 16 }}>⚙️ {isRepo ? '🗂️ Repository' : '📊 Presentation'} settings</b>
                   <button className="btn small ghost" onClick={() => setSettingsOpen(false)}>✕ Close</button>
                 </div>
-                <div style={{ display: 'grid', gap: 12 }}>
-                  <div className="field">
-                    <span style={labelRow}>Title {paletteBtn('title')}</span>
-                    <input type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} />
-                  </div>
-                  <div className="field">
-                    <span style={labelRow}>Subject / topic {paletteBtn('subject')}</span>
-                    <input type="text" value={subject} placeholder={isRepo ? 'e.g. Small Payment System' : 'e.g. Trigonometry'} onChange={(e) => setSubject(e.target.value)} />
-                  </div>
-                  <div className="field">
-                    <span style={labelRow}>Tone
+                {/* Paginated — one setting per page (same wizard card as the create
+                    flow); changes apply only when you press Update on the last page. */}
+                {(() => {
+                  const fieldWrap: React.CSSProperties = { width: '100%', margin: 0 };
+                  const titleField = (
+                    <label className="field" style={fieldWrap}><span style={labelRow}>Title {paletteBtn('title')}</span>
+                      <input type="text" value={dTitle} placeholder="Name your tool" onChange={(e) => setDTitle(e.target.value)} style={{ width: '100%' }} />
+                    </label>
+                  );
+                  const subjectField = (
+                    <label className="field" style={fieldWrap}><span style={labelRow}>Subject / topic {paletteBtn('subject')}</span>
+                      <input type="text" value={dSubject} placeholder={isRepo ? 'e.g. Small Payment System' : 'e.g. Trigonometry'} onChange={(e) => setDSubject(e.target.value)} style={{ width: '100%' }} />
+                    </label>
+                  );
+                  const toneField = (
+                    <label className="field" style={fieldWrap}><span style={labelRow}>Tone
                       <button type="button" className="btn small ghost" style={miniBtn}
-                        title={toneCustom ? 'Pick from the list' : 'Type a custom tone'}
-                        onClick={() => setToneCustom((c) => { const next = !c; if (!next && !TONES.includes(tone)) setTone(TONES[0]); return next; })}>{toneCustom ? '▾' : '✎'}</button>
-                      <button type="button" className="btn small ghost" style={miniBtn} title="Roll a random tone" onClick={randomTone}>🎲</button>
+                        title={dToneCustom ? 'Pick from the list' : 'Type a custom tone'}
+                        onClick={() => setDToneCustom((c) => { const next = !c; if (!next && !TONES.includes(dTone)) setDTone(TONES[0]); return next; })}>{dToneCustom ? '▾' : '✎'}</button>
+                      <button type="button" className="btn small ghost" style={miniBtn} title="Roll a random tone" onClick={() => setDTone(TONES[Math.floor(Math.random() * TONES.length)])}>🎲</button>
                       {paletteBtn('tone')}
                     </span>
-                    {toneCustom
-                      ? <input type="text" value={tone} placeholder="Type a custom tone…" onChange={(e) => setTone(e.target.value)} />
-                      : <select value={TONES.includes(tone) ? tone : TONES[0]} onChange={(e) => setTone(e.target.value)}>
-                          {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>}
-                  </div>
-                  {/* The original prompt / brief that generated this artifact. */}
-                  <div className="field">
-                    <span style={labelRow}>Original prompt</span>
-                    <textarea value={sourcePrompt} placeholder={isRepo ? 'Describe the repository, the topics it should cover, and the structure of the cards…' : 'Describe the lesson / deck this presentation should teach…'} onChange={(e) => setSourcePrompt(e.target.value)} style={{ minHeight: 84, width: '100%' }} />
-                    <div style={{ fontSize: 11, opacity: 0.68, marginTop: 4 }}>Saved prompt preview: {repoPrompt}</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
-                  <button className="btn green" onClick={() => setSettingsOpen(false)}>✓ Done</button>
-                </div>
+                      {dToneCustom
+                        ? <input type="text" value={dTone} placeholder="Type a custom tone…" onChange={(e) => setDTone(e.target.value)} style={{ width: '100%' }} />
+                        : <select value={TONES.includes(dTone) ? dTone : TONES[0]} onChange={(e) => setDTone(e.target.value)} style={{ width: '100%' }}>
+                            {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>}
+                    </label>
+                  );
+                  const promptField = (
+                    <label className="field" style={fieldWrap}><span style={labelRow}>Original prompt</span>
+                      <textarea value={dPrompt} placeholder={isRepo ? 'Describe the repository, the topics it should cover, and the structure of the cards…' : 'Describe the lesson / deck this presentation should teach…'} onChange={(e) => setDPrompt(e.target.value)} style={{ minHeight: 150, width: '100%', boxSizing: 'border-box' }} />
+                    </label>
+                  );
+                  const updateBtn = <button className="btn small green" style={{ width: 96, height: 40, whiteSpace: 'nowrap' }} onClick={applySettings}>✓ Update</button>;
+                  const goN = () => setSetStep((s) => Math.min(3, s + 1));
+                  const goB = () => setSetStep((s) => Math.max(0, s - 1));
+                  const sSteps: WizardStep[] = [
+                    { key: 'title', title: 'Title', render: () => <WizardGridTemplate top={titleField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'subject', title: 'Subject / topic', render: () => <WizardGridTemplate top={subjectField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'tone', title: 'Tone', render: () => <WizardGridTemplate top={toneField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'prompt', title: 'Original prompt', render: () => <WizardGridTemplate tall top={promptField} onBack={goB} backDisabled={setStep === 0} rightTop={updateBtn} /> },
+                  ];
+                  return <StepWizard steps={sSteps} finalActions={null} bodyMinHeight={190} stepIndex={setStep} onStepChange={setSetStep} showFooter={false} />;
+                })()}
               </div>
             </div>
           )}
