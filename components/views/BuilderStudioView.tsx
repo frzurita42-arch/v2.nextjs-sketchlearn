@@ -575,7 +575,7 @@ export function BuilderStudioView() {
         return;
       }
       const assembled = assembleDefinition(config());
-      const r = await API.post('/api/tools/studio-build', { definition: assembled, messages }, { retries: 1 });
+      const r = await API.post('/api/tools/studio-build', { definition: assembled, messages, provider }, { retries: 1 });
       await publishDef(r?.definition || assembled, true);
     } catch (e: any) { setErr(e?.message || (editSlug ? 'Could not update the tool.' : 'Could not generate the tool.')); }
     setBusy(false);
@@ -589,7 +589,7 @@ export function BuilderStudioView() {
     if (busy || suggesting) return; setBusy(true); setErr('');
     try {
       const assembled = assembleDefinition(presConfig());
-      const r = await API.post('/api/tools/studio-build', { definition: assembled, messages }, { retries: 1 });
+      const r = await API.post('/api/tools/studio-build', { definition: assembled, messages, provider }, { retries: 1 });
       await publishDef(r?.definition || assembled, true, presConfig());
     } catch (e: any) { setErr(e?.message || 'Could not generate the presentation.'); }
     setBusy(false);
@@ -609,7 +609,7 @@ export function BuilderStudioView() {
       const repoDef: any = assembleDefinition(repoConfig()); repoDef.studioConfig = repoConfig();
       await API.post('/api/tools', { definition: repoDef, visibility, aiGenerated: false });
       const presAssembled = assembleDefinition(presConfig());
-      const built = await API.post('/api/tools/studio-build', { definition: presAssembled, messages }, { retries: 1 });
+      const built = await API.post('/api/tools/studio-build', { definition: presAssembled, messages, provider }, { retries: 1 });
       await publishDef(built?.definition || presAssembled, true, presConfig());
     } catch (e: any) { setErr(e?.message || 'Could not generate both.'); }
     setBusy(false);

@@ -22,6 +22,8 @@ export async function POST(req: Request) {
   const base = validateToolDefinition(b.definition);
   if (!base.ok || !base.def) return NextResponse.json({ error: (base.errors || ['Invalid tool.']).join('; ') }, { status: 400 });
 
+  // Honour the author's Model choice ('auto' = failover, or a specific provider).
+  const provider = ['openrouter', 'gemini', 'deepseek', 'moonshot'].includes(String(b.provider)) ? String(b.provider) : 'auto';
   const messages: any[] = Array.isArray(b.messages) ? b.messages.slice(-16) : [];
   const userChat = messages.filter((m) => m.role === 'user').map((m) => String(m.content || '').trim()).filter(Boolean).join('\n');
 
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
   const user = `DEFINITION:\n${JSON.stringify(base.def)}\n\nCHAT:\n${userChat}\n\nReturn the final definition JSON.`;
 
   try {
-    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.4, maxTokens: 1600 });
+    const r: any = await generateStructured([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.4, maxTokens: 1600, provider });
     const merged = validateToolDefinition(r?.definition || r);
     if (merged.ok && merged.def) return NextResponse.json({ definition: merged.def });
     return NextResponse.json({ definition: base.def });
