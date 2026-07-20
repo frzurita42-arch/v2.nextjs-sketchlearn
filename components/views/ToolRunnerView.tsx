@@ -344,21 +344,34 @@ export function ToolRunnerView() {
 
   return (
     <>
-      {!immersive && !isLesson && (
-        isRepo ? (
+      {!immersive && !isLesson && !isRepo && (
+        <h1 className="view-title" style={{ fontSize: toolHeader.size, fontFamily: toolHeader.fontCss, lineHeight: 1.06, textAlign: 'left', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+          <span className={toolHeader.underline ? 'scribble-underline' : undefined} style={{ display: 'inline-block' }}>{tool.title}</span>
+          {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
+          {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
+          {canSettings && <button title="Tool settings — API keys, AI edit, visibility, delete" onClick={() => setSettingsOpen(true)} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>}
+        </h1>
+      )}
+      {/* Repo header order: the shareable author/owner bar FIRST, then the title. */}
+      {!immersive && isRepo && (
+        <>
+          <AuthorBar
+            owner={tool.owner}
+            meta={`${created}${created ? ' · ' : ''}${tool.archetype} · ${tool.visibility}${tool.aiGenerated ? ' · ✦AI-built' : ''}`}
+            liked={liked}
+            likes={likes}
+            onToggleLike={toggleLike}
+            shareSlug={tool.slug}
+            shareTitle={tool.title}
+            showShare={tool.visibility !== 'private'}
+          />
+          <div style={dashRule} />
           <PageHeaderBar
             pageKey="tools"
             title={tool.title}
             subtitle={String(tool.description || '').trim() || 'A repository of nested cards.'}
           />
-        ) : (
-          <h1 className="view-title" style={{ fontSize: toolHeader.size, fontFamily: toolHeader.fontCss, lineHeight: 1.06, textAlign: 'left', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-            <span className={toolHeader.underline ? 'scribble-underline' : undefined} style={{ display: 'inline-block' }}>{tool.title}</span>
-            {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
-            {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
-            {canSettings && <button title="Tool settings — API keys, AI edit, visibility, delete" onClick={() => setSettingsOpen(true)} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>}
-          </h1>
-        )
+        </>
       )}
       {!immersive && isLesson && (
         <>
@@ -397,7 +410,7 @@ export function ToolRunnerView() {
         </div>
       )}
 
-      {!immersive && !isLesson && (<>
+      {!immersive && !isLesson && !isRepo && (<>
         {/* ┄ divider: title ┄ author/stats card ┄ */}
         <div style={dashRule} />
 
