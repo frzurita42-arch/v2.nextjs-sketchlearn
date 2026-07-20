@@ -216,8 +216,20 @@ export async function POST(req: Request) {
         }
       } else if (textAI()) {
         out = await runStructured();
+      } else if (binDocs.length) {
+        return NextResponse.json({ error: 'Reading a PDF needs Gemini. Paste the document text instead.' }, { status: 200 });
       } else {
-        return NextResponse.json({ error: binDocs.length ? 'Reading a PDF needs Gemini. Paste the document text instead.' : 'No AI model is configured.' }, { status: 200 });
+        // No AI configured — return a demo placeholder plan so the repo composer's
+        // "pre-build" still fills editable cards the owner can rename/confirm. The
+        // count follows an "exactly N" / "N units" hint in the goal, else defaults.
+        const topic = String(subject || title || goal || 'your topic').replace(/\n[\s\S]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'your topic';
+        const m = goal.match(/exactly\s+(\d+)/i) || goal.match(/\b(\d+)\s+units?\b/i) || goal.match(/\b(\d+)\s+cards?\b/i);
+        const n = Math.max(2, Math.min(12, m ? parseInt(m[1], 10) : 5));
+        const demo = Array.from({ length: nextOne ? 1 : n }, (_, i) => ({
+          kind: 'card', title: `Unit ${i + 1}`,
+          text: `Part ${i + 1} of ${n} for “${topic}”. (Demo plan — no AI connected.) Replace this with the concepts, links and notes for this unit, then publish.`,
+        }));
+        return NextResponse.json({ cards: demo, fallback: true }, { status: 200 });
       }
       if (!out) return NextResponse.json({ error: 'The AI could not build a plan. Add a bit more detail and try again.' }, { status: 200 });
       return NextResponse.json({ cards: out.slice(0, nextOne ? 1 : 20) });

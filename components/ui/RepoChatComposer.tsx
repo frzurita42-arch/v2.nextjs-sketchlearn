@@ -46,8 +46,18 @@ export function RepoChatComposer() {
     const prompt = text.trim();
     if (!prompt) return;
     if (!app.user) { app.requireLogin(); return; }
+    const unitHint = units === 'Custom' ? '' : units === 'AI decides' ? ' Choose a sensible number of units yourself.' : ` Produce exactly ${units} top-level units.`;
     const note = `\n\n[Repo settings] Type: ${lessonPath ? 'Learning Path' : 'Normal Repo'} · Units: ${units}${attachments.length ? ` · Attachments: ${attachments.join(', ')}` : ''}`;
-    (appState as any).builderSeed = { artifact: 'repository', sourcePrompt: prompt + note };
+    const seedText = prompt + note;
+    // `context` is the builder's GOAL box (what Suggest-with-AI reads); `autoSuggest`
+    // tells the builder to pre-build the cards on arrival so the owner reviews and
+    // confirms rather than starting from an empty plan.
+    (appState as any).builderSeed = {
+      artifact: 'repository',
+      sourcePrompt: seedText,
+      context: `${prompt}${unitHint}${lessonPath ? ' Structure it as a learning path.' : ''}`,
+      autoSuggest: true,
+    };
     app.nav('toolbuilder');
   };
 

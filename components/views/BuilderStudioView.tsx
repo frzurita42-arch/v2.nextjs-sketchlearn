@@ -94,6 +94,10 @@ export function BuilderStudioView() {
   // When set, we are EDITING an existing tool: publishing UPDATES it (same slug)
   // instead of creating a new one. Seeded by the "✏️ Edit tool" button.
   const [editSlug] = useState<string | undefined>(seed?.editSlug);
+  // When the chat composer hands off with a prompt, pre-build the plan on arrival
+  // (run Suggest-with-AI once) so the owner reviews & confirms rather than starting
+  // from an empty repo. Captured before the seed is consumed/cleared.
+  const [autoSuggestSeed] = useState<boolean>(!!seed?.autoSuggest);
   const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
   const [title, setTitle] = useState(seed?.title || '');
   const [subject, setSubject] = useState(seed?.subject || '');
@@ -226,6 +230,16 @@ export function BuilderStudioView() {
     } catch (e: any) { setErr(e?.message || (editSlug ? 'Could not update the tool.' : 'Could not generate the tool.')); }
     setBusy(false);
   };
+  // Pre-build once when arriving from the chat composer: fill the editable cards via
+  // Suggest-with-AI (no publish) so the owner can edit and confirm.
+  const didAutoSuggest = useRef(false);
+  useEffect(() => {
+    if (!autoSuggestSeed || didAutoSuggest.current) return;
+    if (artifact !== 'repository' || !context.trim()) return;
+    didAutoSuggest.current = true;
+    void suggestWithAI();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSuggestSeed, artifact, context]);
   const [visibility, setVisibility] = useState('unlisted');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
