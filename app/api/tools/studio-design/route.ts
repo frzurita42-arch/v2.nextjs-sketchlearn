@@ -4,6 +4,9 @@ import { geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled } fr
 import { generateStructured } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 import { recordTextUsage } from '@/lib/usage-log';
+import { MAX_SLIDES } from '@/lib/tool-schema';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { SAFETY_GUARDRAILS } = require('@/src/ai/prompts/guardrails');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -92,7 +95,8 @@ export async function POST(req: Request) {
     '• audio — the content is read aloud. translate — a translate button (language subjects).',
   ].join('\n');
   // An explicit "N slides/pages" in the goal is obeyed exactly; otherwise 5–8.
-  const wantCount = requestedCount(fullContext);
+  // Capped at MAX_SLIDES so "make 50 slides" in the goal can't run away.
+  const wantCount = Math.min(MAX_SLIDES, requestedCount(fullContext) || 0) || 0;
   const countRule = wantCount
     ? `1. Produce EXACTLY ${wantCount} slide${wantCount === 1 ? '' : 's'} — the author asked for ${wantCount}. Do NOT add or drop any. Fit the whole lesson into exactly ${wantCount}: if that is few, pack the needed teaching + activities into those slides (using several components, and more than one activity on a slide when it helps); if that is many, spread the material out. Never exceed or fall short of ${wantCount}.`
     : '1. Produce 5–8 slides in a sensible teaching ORDER: an intro/overview first, then each middle slide teaches ONE sub-idea and immediately PRACTISES it, and a final slide is a comprehension CHECK / recap.';
@@ -105,7 +109,7 @@ export async function POST(req: Request) {
     '5. ADAPT the mix to the subject KIND: STEM/quantitative → latex/codeblock/geogebra/image/table + wolfram + assess with annotation/code/input/mcq; Humanities/arts/text → reading/image/table (timelines) + mcq/fill-blank/input/deco-hint, few or no formulas; Language → reading/audio/translate/fill-blank/input, and for a GRAMMAR/syntax/conjugation point add a two-column "table" (rule/form on the left, a concrete example on the right). Pick activities that genuinely fit.',
     '6. The author will be able to EDIT every slide, its components and its order afterwards, so propose a confident best-effort design — don\'t leave slides empty "for them to fill in".',
   ].join('\n');
-  const shape = `Return STRICT JSON only: { "title": short lesson title, "subject": the subject/topic, "pages": [ { "components": ["reading",{"id":"mcq4","instr":"..."}], "length": "brief|medium|detailed", "paragraphs": 1 }, ... ] }. Always fill in a good "title" and "subject" (invent sensible ones if the user left them blank).${imageRule}`;
+  const shape = `Return STRICT JSON only: { "title": short lesson title, "subject": the subject/topic, "pages": [ { "components": ["reading",{"id":"mcq4","instr":"..."}], "length": "brief|medium|detailed", "paragraphs": 1 }, ... ] }. Always fill in a good "title" and "subject" (invent sensible ones if the user left them blank).${imageRule}\n${SAFETY_GUARDRAILS}`;
 
   let system: string; let user: string; let minPages = 3; let maxPages = 10;
   const existingJson = JSON.stringify(existing);
@@ -145,7 +149,7 @@ export async function POST(req: Request) {
       const length = ['brief', 'medium', 'detailed'].includes(pg?.length) ? pg.length : 'medium';
       const paragraphs = Math.max(1, Math.min(4, parseInt(pg?.paragraphs, 10) || 1));
       return { components: comps, length, paragraphs };
-    }).filter((pg: any) => pg.components.length > 0).slice(0, maxPages);
+    }).filter((pg: any) => pg.components.length > 0).slice(0, Math.min(maxPages, MAX_SLIDES));
     const outTitle = String(r?.title || title || subject || '').slice(0, 120);
     const outSubject = String(r?.subject || subject || title || '').slice(0, 120);
     if (pages.length < minPages) {

@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, LEVELS, TONES } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
-import { type ToolField } from '@/lib/tool-schema';
+import { type ToolField, MAX_SLIDES } from '@/lib/tool-schema';
 import { useCardSize, useImgSize, galleryLayout, cardImageProps } from '@/lib/card-size';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { ToolCard } from '@/components/tools/ToolCard';
@@ -68,7 +68,7 @@ function SlideSettings({ onClose }: { onClose: () => void }) {
         <label style={{ gridColumn: '1 / -1' }}><span style={lbl}>Topic</span>
           <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Photosynthesis, French greetings…" style={sel} /></label>
         <label><span style={lbl}>Slides</span>
-          <input type="number" min={1} max={30} value={slides} onChange={(e) => setSlides(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 5)))} style={sel} /></label>
+          <input type="number" min={1} max={MAX_SLIDES} value={slides} onChange={(e) => setSlides(Math.max(1, Math.min(MAX_SLIDES, parseInt(e.target.value, 10) || 5)))} style={sel} /></label>
         <label><span style={lbl}>Level</span>
           <select value={level} onChange={(e) => setLevel(e.target.value)} style={sel}>{LEVELS.map((l) => <option key={l}>{l}</option>)}</select></label>
         <label><span style={lbl}>Tone</span>

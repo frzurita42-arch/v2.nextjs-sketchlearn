@@ -5,6 +5,8 @@ import { generateStructured, generateImage, generateSvgSketch, geminiDoc, getLas
 import { requireTokens } from '@/lib/auth-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getToolBySlug } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { SAFETY_GUARDRAILS } = require('@/src/ai/prompts/guardrails');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -168,6 +170,7 @@ export async function POST(req: Request) {
         : '6. Do NOT add links, code or images.',
       `Each card is: { "kind": "card", "title": string, "text": string${withLinks ? ', "link"?: string, "linkLabel"?: string' : ''}, "children"?: [ ...cards ] }.`,
       'Return STRICT JSON: { "cards": [ ...the full ordered plan, at most 20 top-level... ] }.',
+      SAFETY_GUARDRAILS,
     ].join('\n');
     const userText = [
       `Tool title: ${title || '(untitled)'}`,

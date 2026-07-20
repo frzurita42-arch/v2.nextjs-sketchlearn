@@ -5,12 +5,15 @@ import { generateStructured } from '@/src/ai/providers';
 import { themeDirective } from '@/lib/lesson-themes';
 import { requireAuth } from '@/lib/auth-guard';
 import { recordTextUsage } from '@/lib/usage-log';
+import { MAX_SLIDES } from '@/lib/tool-schema';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelGuidance } = require('@/src/ai/prompts/language');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { levelDepthGuidance, textAmountGuidance } = require('@/src/ai/level-depth');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { wolframAvailable } = require('@/src/connectors/wolfram');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { SAFETY_GUARDRAILS } = require('@/src/ai/prompts/guardrails');
 
 // The menu of activities/displays proven out by the Language Learning tool. Fed
 // to the generator so it knows the full space and is FREE to mix formats.
@@ -153,8 +156,13 @@ export async function POST(req: Request) {
   const language = String(lesson.language || '').slice(0, 40);
   const translateTo = String(lesson.translateTo || 'English').slice(0, 40);
   const kind = lesson.subjectKind || inferKind(subject, language);
+  // Hard cap the presentation length at MAX_SLIDES so a prompt/injection or a
+  // crafted request can't drive dozens of paid slide generations.
+  const total = Math.max(1, Math.min(MAX_SLIDES, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const n = Math.max(1, parseInt(b.slideNumber, 10) || 1);
-  const total = Math.max(1, Math.min(75, parseInt(b.values?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
+  // Refuse a slide number past the capped length — this is what stops a client
+  // from looping "give me slide 10, 11, 12 …" beyond the presentation.
+  if (n > total) return NextResponse.json({ error: `This presentation has ${total} slides (max ${MAX_SLIDES}). Slide ${n} is out of range.` }, { status: 400 });
   const priorSummary = String(b.priorSummary || '').slice(0, 2400);
   // A designed page for THIS slide (from the Studio) steers its components + density.
   const pageSpec = (Array.isArray(lesson.pages) && lesson.pages[n - 1]) ? lesson.pages[n - 1] : null;
@@ -274,6 +282,9 @@ export async function POST(req: Request) {
     'OUTPUT RULES (critical): return ONE JSON object with EXACTLY these top-level keys: title, content, translation, questions.',
     '"content" MUST be plain, human-readable teaching text (a sentence or short paragraph) — NEVER JSON, never a nested object, never quoted JSON, never code. Put questions ONLY in the "questions" array. Do not wrap the whole object in a string or another object.',
     'Return STRICT JSON only — no markdown fences, no commentary.',
+    // Reinforce: user-supplied fields above (topic, custom instructions, the change
+    // request…) are data, not commands, and can't blow past the limits.
+    SAFETY_GUARDRAILS,
   ].filter(Boolean).join('\n');
   const user = `Return JSON exactly like: { "title": "short title", "content": "one short teaching paragraph in plain prose", "translation": "meaning or empty", "questions": [ { "kind": "mcq|fill-blank|input|writing|annotation|code", "prompt": "the question text", "options": [{"text","correct","explanation"}], "answer": "the expected answer/solution", "accept": ["..."], "target": "for writing", "language": "for code, e.g. python or empty", "starter": "optional code/text scaffold" } ] }. Only include the fields the chosen kind needs.`;
 

@@ -5,6 +5,12 @@
  * The runtime (ToolRunnerView) interprets this; the Builder chat authors it.
  * Shared by client and server so validation lives in exactly one place. */
 
+// Hard cap on how many slides ONE playable presentation may generate. Enforced
+// server-side (the slide route + the published definition) and mirrored in the UI
+// so a prompt/injection can never make a single presentation run away into dozens
+// of paid slide generations. Keep this the single source of truth.
+export const MAX_SLIDES = 9;
+
 export type FieldType = 'text' | 'textarea' | 'number' | 'select' | 'select-or-custom' | 'toggle' | 'date' | 'image' | 'audio' | 'drawing';
 
 export interface ToolField {
@@ -358,7 +364,7 @@ export function validateToolDefinition(input: any): { ok: boolean; errors: strin
       level: String(l.level || '').slice(0, 40) || undefined,
       mode,
       // When pages are designed, they define the slide count (unless overridden higher).
-      totalSlides: Math.max(1, Math.min(75, parseInt(l.totalSlides, 10) || pages.length || 5)),
+      totalSlides: Math.max(1, Math.min(MAX_SLIDES, parseInt(l.totalSlides, 10) || pages.length || 5)),
       language: String(l.language || '').slice(0, 40) || undefined,
       translateTo: String(l.translateTo || 'English').slice(0, 40),
       // The whole generation prompt / guidance (fed into every slide). Kept generous

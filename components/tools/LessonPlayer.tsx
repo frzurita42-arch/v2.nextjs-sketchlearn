@@ -38,7 +38,7 @@ function lessonToStudioPages(lesson: any): any[] {
   const base = { reading: true, activityTypes: lesson?.activityTypes, support: lesson?.support, paragraphsPerSlide: lesson?.paragraphsPerSlide, paragraphLength: lesson?.paragraphLength };
   return Array.from({ length: count }, () => lessonPageToStudio(base));
 }
-import { defaultsFor } from '@/lib/tool-schema';
+import { defaultsFor, MAX_SLIDES } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
@@ -1029,7 +1029,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   };
 
   const [cfg, setCfg] = useState<Cfg>({});
-  const total = () => Math.max(1, Math.min(75, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
+  const total = () => Math.max(1, Math.min(MAX_SLIDES, parseInt(cfg.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
   const [slides, setSlides] = useState<(Slide | null)[]>([]);   // cached by 0-based index
   const [cur, setCur] = useState(0);
   // Which slides are FULLY ready to reveal (text + all visuals warmed). Until a
@@ -1581,7 +1581,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
 
   const label = (c: Cfg) => [lesson.subject, c.level || c.difficulty, c.topic].filter(Boolean).join(' · ');
   // How many slides a run has — from its own config, else the lesson default.
-  const slideCountOf = (c: any) => Math.max(1, Math.min(75, parseInt(c?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
+  const slideCountOf = (c: any) => Math.max(1, Math.min(MAX_SLIDES, parseInt(c?.slides, 10) || parseInt(lesson.totalSlides, 10) || 5));
 
   // ---------------- ORIGINAL DECK (history, with answers) ----------------
   if (phase === 'history') {

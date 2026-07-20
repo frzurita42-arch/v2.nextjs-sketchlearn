@@ -3,6 +3,7 @@
  * afford. The wallet is still debited per-request as the run proceeds (see
  * usage-log); this just approximates the total BEFORE starting. Numbers are
  * intentionally simple and centralized here so they're easy to tune. */
+import { MAX_SLIDES } from '@/lib/tool-schema';
 
 // Per-slide costs, in the same "credit" unit the wallet is debited in.
 export const TOKENS_PER_SLIDE_TEXT = 500;   // the teaching text + questions
@@ -14,7 +15,7 @@ export const TOKENS_PER_REPO_CARD = 120;
 function clampSlides(n: any): number {
   const v = parseInt(String(n ?? ''), 10);
   if (!Number.isFinite(v)) return 5;
-  return Math.max(1, Math.min(75, v));
+  return Math.max(1, Math.min(MAX_SLIDES, v));
 }
 
 // Whether a lesson config plans images (default yes). Honors the various flags

@@ -1,5 +1,6 @@
 // The main lesson prompt: generates ONE adaptive slide (components + quiz).
 // This is the biggest, most-edited prompt — change teaching behaviour here.
+const { SAFETY_GUARDRAILS } = require('./guardrails');
 //
 // buildSlideSystemPrompt(ctx) returns the system message. ctx carries the
 // per-slide values computed in the route handler:
@@ -74,7 +75,8 @@ Rules:
 ${settings.language ? `- Write ALL text (including quiz and explanations) in ${settings.language}.\n` : ''}${settings.audience ? `- The reader is: ${settings.audience}. Pitch every explanation to them.\n` : ''}${settings.customInstructions ? `- Extra author instructions from the learner (follow them where they don't conflict with the schema): ${settings.customInstructions}\n` : ''}
 - The ${paraCount} substantive paragraph(s) are required every time, alongside any optional table.
 - LAYOUT SELF-CHECK (MANDATORY — do this before you answer): re-read your JSON and confirm the slide follows the layout for a teaching slide. It MUST contain the ${paraCount} required "text" paragraph(s)${densityRule.includes('NO visual') ? '' : ' AND at least one support/visual component (image, table, chart, svg, code, latex or sticky note) appropriate to the subject'}, in addition to the quiz. A slide that is ONLY a quiz — or has no prose text${densityRule.includes('NO visual') ? '' : ', or omits every visual/support component'} — is INVALID. If yours is missing any required part, add it and re-check before returning. Never return a bare multiple-choice question with no teaching content.
-- Make the next slide depend on the previous answer: if the learner was wrong, explicitly explain the misconception and steer them back toward the right reasoning; if the learner was right, reinforce the idea from a different angle and continue forward.`;
+- Make the next slide depend on the previous answer: if the learner was wrong, explicitly explain the misconception and steer them back toward the right reasoning; if the learner was right, reinforce the idea from a different angle and continue forward.
+${SAFETY_GUARDRAILS}`;
 }
 
 // Compact memory of the slides so far, sent as part of the user message.
