@@ -50,6 +50,9 @@ export async function POST(req: Request) {
   const context = String(b.context || '').slice(0, 2000);
   const difficulty = String(b.difficulty || '').slice(0, 40);
   const tone = String(b.tone || '').slice(0, 40);
+  // The author's slide-template library (component sequences + #hashtags) — the AI
+  // should build each slide from a matching template, or a custom one if none fits.
+  const templateGuide = String(b.templateGuide || '').slice(0, 4000);
   const provider = ['openrouter', 'gemini', 'deepseek', 'moonshot'].includes(String(b.provider)) ? String(b.provider) : 'auto';
   // mode: 'suggest' = fresh deck (default); 'next' = ONE new slide after the deck;
   // 'edit' = MODIFY the existing slides (and add more) per the instruction.
@@ -109,24 +112,32 @@ export async function POST(req: Request) {
     '5. ADAPT the mix to the subject KIND: STEM/quantitative → latex/codeblock/geogebra/image/table + wolfram + assess with annotation/code/input/mcq; Humanities/arts/text → reading/image/table (timelines) + mcq/fill-blank/input/deco-hint, few or no formulas; Language → reading/audio/translate/fill-blank/input, and for a GRAMMAR/syntax/conjugation point add a two-column "table" (rule/form on the left, a concrete example on the right). Pick activities that genuinely fit.',
     '6. The author will be able to EDIT every slide, its components and its order afterwards, so propose a confident best-effort design — don\'t leave slides empty "for them to fill in".',
   ].join('\n');
+  // Templates come first: the author curated a library of slide patterns. Tell the
+  // AI to PICK a matching template per slide (by #hashtags) and follow its order, or
+  // compose a custom one from the palette when nothing fits.
+  const templateRule = templateGuide ? [
+    'SLIDE TEMPLATES — USE THESE FIRST. The author curated a library of slide templates: ordered component sequences, each tagged with #hashtags for the subjects/levels it suits. For EVERY slide, PICK the template whose #hashtags best match this subject and level, and FOLLOW its component order. Only if NO template fits should you COMPOSE A CUSTOM slide from the palette above — still text-first. Vary templates across the deck so it is not repetitive.',
+    'Map template names/super-components to palette ids: Text/Statement → reading; Visual → image OR table OR latex OR geogebra (pick what fits); Multiple choice → mcq4; 2-option/True-false → mcq2; Multi-select → mcq4; Fill blank → fill-blank; Typed/Ask-AI → input; Code box → code; Code → codeblock; Formula → latex; Graph → geogebra; Audio → audio; Handwriting → writing; Annotate → annotation; Button/action → deco-note.',
+    `THE TEMPLATE LIBRARY: ${templateGuide}`,
+  ].join('\n') : '';
   const shape = `Return STRICT JSON only: { "title": short lesson title, "subject": the subject/topic, "pages": [ { "components": ["reading",{"id":"mcq4","instr":"..."}], "length": "brief|medium|detailed", "paragraphs": 1 }, ... ] }. Always fill in a good "title" and "subject" (invent sensible ones if the user left them blank).${imageRule}\n${SAFETY_GUARDRAILS}`;
 
   let system: string; let user: string; let minPages = 3; let maxPages = 10;
   const existingJson = JSON.stringify(existing);
   if (mode === 'edit' && existing.length) {
-    system = ['You are a curriculum designer for SketchLearn editing an EXISTING presentation.', palette, designRules,
-      'You are given the current slides. APPLY the user\'s instruction: modify the existing slides where asked (change/add/remove components, adjust order, level, density, and the per-component instr) AND add new slides if the instruction calls for it. Keep the slides that still make sense. Return the FULL updated deck.', shape].join('\n');
+    system = ['You are a curriculum designer for SketchLearn editing an EXISTING presentation as a chat-driven MODIFIER.', palette, designRules, templateRule,
+      'You are given the current slides. Read the user\'s instruction and apply EXACTLY the scope they ask for — it may be ANY of: modify ONE specific slide (e.g. "change slide 3"); change or ADD something to ALL/every slide; ADD one or more new slides; DELETE slide(s); rebuild a slide from a different template/components; or COMPLETELY REDESIGN the whole deck from scratch. If they name a slide number, change only that slide and keep the others EXACTLY as given. If they say "all"/"every"/"each", apply the change to every slide. If they ask to redesign/start over, produce a fresh deck. Otherwise make the smallest change that satisfies the request and preserve every slide you were not asked to touch. ALWAYS return the FULL updated deck (all slides, in order).', shape].join('\n');
     user = [`Subject / topic: ${subject || '(infer)'}`, title ? `Title: ${title}` : '', difficulty ? `Level: ${difficulty}` : '', tone ? `Tone: ${tone}` : '',
       `CURRENT SLIDES (JSON): ${existingJson}`, fullContext ? `INSTRUCTION / what to change:\n${fullContext}` : 'Improve and complete the deck.', 'Return the full updated presentation now.'].filter(Boolean).join('\n');
     maxPages = 12;
   } else if (mode === 'next') {
-    system = ['You are a curriculum designer for SketchLearn adding ONE next slide to a presentation.', palette,
+    system = ['You are a curriculum designer for SketchLearn adding ONE next slide to a presentation.', palette, templateRule,
       'Design exactly ONE new slide that logically FOLLOWS the current deck (a new sub-idea + a fitting activity). Do not repeat existing slides.', shape].join('\n');
     user = [`Subject / topic: ${subject || '(infer)'}`, title ? `Title: ${title}` : '', tone ? `Tone: ${tone}` : '',
       existing.length ? `CURRENT SLIDES (JSON): ${existingJson}` : '', fullContext ? `Focus / instruction:\n${fullContext}` : '', 'Return JSON with a single-item "pages" array (the one new slide).'].filter(Boolean).join('\n');
     minPages = 1; maxPages = 1;
   } else {
-    system = ['You are a curriculum designer for SketchLearn. Design a COMPLETE multi-slide presentation that TEACHES a subject and continuously EVALUATES comprehension.', palette, designRules, shape].join('\n');
+    system = ['You are a curriculum designer for SketchLearn. Design a COMPLETE multi-slide presentation that TEACHES a subject and continuously EVALUATES comprehension.', palette, designRules, templateRule, shape].join('\n');
     user = [`Subject / topic: ${subject}`, title && title !== subject ? `Lesson title: ${title}` : '', difficulty ? `Level: ${difficulty}` : '', tone ? `Tone: ${tone}` : '',
       fullContext ? `Extra context / goal:\n${fullContext}` : '', 'Design the full slide-by-slide presentation now.'].filter(Boolean).join('\n');
   }

@@ -300,6 +300,12 @@ export function BuilderStudioView() {
     setConfigNote([toolNote, superNote, tplNote].filter(Boolean).join('\n'));
     setSettingsOpen(false);
   };
+  // The template library handed to the slide designer on every generation (not just
+  // after Update), so the AI always builds slides FROM the templates — or a custom
+  // one composed from the components when none fits.
+  const templateGuideText = () => (dTemplates.length
+    ? dTemplates.map((t) => `${t.name} [${t.tags.join(' ')}]: ${t.slots.map(SLOT_NOTE).join(' → ')}`).join(' | ')
+    : '');
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>(seed?.cards && seed.cards.length ? (seed.cards as RepoCard[]) : [{ name: '', link: '', description: '', children: [] }]);
   // The user's HAND-AUTHORED cards, captured once, used as the seed for every AI
@@ -383,25 +389,6 @@ export function BuilderStudioView() {
     setSuggesting(false);
   };
   const [context, setContext] = useState(seed?.context || '');
-  // "Generate the tool" for a repository: let the AI build the plan from
-  // everything (goal, chat, document, current cards, toggles) AND publish it in
-  // one step. (The plain "Post" button publishes the current cards untouched.)
-  const generateWithAI = async () => {
-    if (busy || suggesting) return;
-    setBusy(true); setErr('');
-    try {
-      const r: any = await API.post('/api/tools/repo/ai', {
-        op: 'suggest', title, subject, goal: context, withLinks, provider,
-        docs: docsPayload(), cards: cardsToAi(repoCards), messages, lessonPath: lessonPathSeed,
-      }, { retries: 1 });
-      const mapped = mapAiCards(r?.cards || []);
-      const finalCards = mapped.length ? mapped : repoCards;
-      setRepoCards(finalCards);
-      const cfg: StudioConfig = { artifact: 'repository', title, subject, tone, context, cards: finalCards, imageGen: false };
-      await publishDef(assembleDefinition(cfg), true, cfg);
-    } catch (e: any) { setErr(e?.message || (editSlug ? 'Could not update the tool.' : 'Could not generate the tool.')); }
-    setBusy(false);
-  };
   // Pre-build once when arriving from the chat composer: fill the editable cards via
   // Suggest-with-AI (no publish) so the owner can edit and confirm.
   const didAutoSuggest = useRef(false);
@@ -415,7 +402,7 @@ export function BuilderStudioView() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSuggestSeed, artifact, context]);
-  const [visibility, setVisibility] = useState('unlisted');
+  const [visibility] = useState('unlisted');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -535,6 +522,7 @@ export function BuilderStudioView() {
       const r: any = await API.post('/api/tools/studio-design', {
         subject: presSubject || presTitle, title: presTitle, tone: presTone, provider,
         context: [context, configNote].filter(Boolean).join('\n'), docs: docsPayload(),
+        templateGuide: templateGuideText(),
         mode: nextCard ? 'next' : editing ? 'edit' : 'suggest',
         existing: (nextCard || editing) ? pagesToDesign(pages) : undefined,
       }, { retries: 1 });
@@ -590,6 +578,40 @@ export function BuilderStudioView() {
       const r = await API.post('/api/tools/studio-build', { definition: assembled, messages }, { retries: 1 });
       await publishDef(r?.definition || assembled, true);
     } catch (e: any) { setErr(e?.message || (editSlug ? 'Could not update the tool.' : 'Could not generate the tool.')); }
+    setBusy(false);
+  };
+  // Explicit per-artifact configs, so the bottom bar can publish the presentation,
+  // the repository, or BOTH regardless of which tab is currently active.
+  const presConfig = (): StudioConfig => ({ artifact: 'presentation', title: presTitle || repoTitle, subject: presSubject || repoSubject, tone: presTone, context, pages });
+  const repoConfig = (): StudioConfig => ({ artifact: 'repository', title: repoTitle || presTitle, subject: repoSubject || presSubject, tone: repoTone, context, sourcePrompt, cards: repoCards, imageGen: false });
+  // Publish the SLIDES as a playable presentation (runs studio-build for polish).
+  const generatePresentation = async () => {
+    if (busy || suggesting) return; setBusy(true); setErr('');
+    try {
+      const assembled = assembleDefinition(presConfig());
+      const r = await API.post('/api/tools/studio-build', { definition: assembled, messages }, { retries: 1 });
+      await publishDef(r?.definition || assembled, true, presConfig());
+    } catch (e: any) { setErr(e?.message || 'Could not generate the presentation.'); }
+    setBusy(false);
+  };
+  // Publish the CARDS as a repository (no AI — exactly what's in the tree).
+  const generateRepository = async () => {
+    if (busy || suggesting) return; setBusy(true); setErr('');
+    try { await publishDef(assembleDefinition(repoConfig()), false, repoConfig()); }
+    catch (e: any) { setErr(e?.message || 'Could not generate the repository.'); }
+    setBusy(false);
+  };
+  // Publish BOTH (a lesson path): the repository first (no nav), then the
+  // presentation (which navigates to the finished tool).
+  const generateBoth = async () => {
+    if (busy || suggesting) return; setBusy(true); setErr('');
+    try {
+      const repoDef: any = assembleDefinition(repoConfig()); repoDef.studioConfig = repoConfig();
+      await API.post('/api/tools', { definition: repoDef, visibility, aiGenerated: false });
+      const presAssembled = assembleDefinition(presConfig());
+      const built = await API.post('/api/tools/studio-build', { definition: presAssembled, messages }, { retries: 1 });
+      await publishDef(built?.definition || presAssembled, true, presConfig());
+    } catch (e: any) { setErr(e?.message || 'Could not generate both.'); }
     setBusy(false);
   };
 
@@ -1045,7 +1067,7 @@ export function BuilderStudioView() {
               {artifact === 'presentation' ? (
                 <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={() => suggestPresentation()}
                   title={nextCard ? 'Add ONE next slide after the current deck.'
-                    : presSuggested ? 'Edit the slides above with AI — describe your change in the box (e.g. “add multiple-choice questions about bananas on a harder level”) and it rewrites/adds slides.'
+                    : presSuggested ? 'Modify the slides with AI — type an instruction (and/or attach a document) and it reloads the slides. It can change ONE slide (“make slide 3 harder”), add to ALL (“add a hint to every slide”), add/remove slides, rebuild from other components, or redesign the whole deck.'
                     : 'Let the AI propose a full slide deck into the editor above — then edit it and Generate.'}>
                   {suggesting ? '🤖 Thinking…' : nextCard ? '🤖 Suggest next slide' : presSuggested ? '🤖 Edit with AI' : '🤖 Suggest with AI'}
                 </button>
@@ -1063,12 +1085,7 @@ export function BuilderStudioView() {
 
           {err && <p style={{ color: 'var(--danger,#e4572e)', textAlign: 'center' }}>{err}</p>}
           <div className="slide-actions" style={{ justifyContent: 'center', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Visibility</span>
-              <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
-                <option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>
-              </select></label>
-            {/* Model picker — same style as Visibility. Lists the API models that are
-                configured; "Auto" tries them in order (and falls over on a 503). */}
+            {/* Model picker — "Auto" tries the configured models in order (falls over on a 503). */}
             {textProviders.length > 0 && (
               <label className="field" style={{ margin: 0 }}><span style={{ fontSize: 12 }}>Model</span>
                 <select value={provider} onChange={(e) => setProvider(e.target.value)}>
@@ -1076,17 +1093,20 @@ export function BuilderStudioView() {
                   {textProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select></label>
             )}
-            {artifact === 'repository' ? (
-              <>
-                {/* AI builds the whole plan from your goal/chat/document and publishes it. */}
-                <button className="btn ghost" disabled={busy || suggesting} onClick={generateWithAI}
-                  title="Let the AI build the whole plan from your goal, chat and document — and publish it.">{busy ? genBusyLabel : genLabel}</button>
-                {/* Publishes EXACTLY the current cards — no AI changes. */}
-                <button className="btn green" disabled={busy || suggesting} onClick={generate}
-                  title="Publish exactly what is in the cards above right now (no AI changes).">{editSlug ? '📮 Update' : '📮 Post'}</button>
-              </>
-            ) : (
+            {editSlug ? (
+              /* Editing an existing tool: one Update button for the active artifact. */
               <button className="btn green" disabled={busy || suggesting} onClick={generate}>{busy ? genBusyLabel : genLabel}</button>
+            ) : (
+              /* Choose WHAT to publish — the repository, the presentation, or both
+                 (a lesson path: a repo plus its playable slide deck). */
+              <>
+                <button className="btn ghost" disabled={busy || suggesting} onClick={generateRepository}
+                  title="Publish the cards above as a repository / collection.">{busy ? genBusyLabel : '📁 Generate repository'}</button>
+                <button className="btn green" disabled={busy || suggesting} onClick={generatePresentation}
+                  title="Publish the slides above as a playable presentation.">{busy ? genBusyLabel : '📊 Generate presentation'}</button>
+                <button className="btn blue" disabled={busy || suggesting} onClick={generateBoth}
+                  title="Publish BOTH — a repository AND its presentation (a lesson path).">{busy ? genBusyLabel : '🎬 Generate both'}</button>
+              </>
             )}
           </div>
         </div>
