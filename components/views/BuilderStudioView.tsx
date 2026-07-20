@@ -161,6 +161,20 @@ const planChip = (id: string) => CATALOG_SHORT[id] || (studioItem(id) ? `${studi
 // Preset labels for the menu / navigation "action buttons".
 const ACTION_PRESETS = ['Next', 'Back', 'Order', 'Skip', 'Continue', 'Add to cart'];
 
+// Monochrome (black-and-white) line icons — they inherit the ink colour via
+// currentColor, so they render as clean b&w glyphs, not coloured emoji.
+const IconPencil = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
+const IconTrash = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+  </svg>
+);
+
 // One repository card in the builder — a compact Name + Link row, a roomier
 // Description, and any nested child cards (the same shape, one layer inward).
 function RepoCardNode({ card, onChange, onRemove, canRemove, depth }: {
@@ -470,6 +484,7 @@ export function BuilderStudioView() {
   // super-group's options) into that component's instruction so nothing is lost.
   const applyTemplate = (i: number, tplId: string) => {
     const tpl = TEMPLATE_LIBRARY.find((t) => t.id === tplId); if (!tpl) return;
+    const grp = `tpl-${Date.now().toString(36)}`;   // this template application's group
     const comps: StudioComponent[] = tpl.slots.map((slot) => {
       const id = TPL_TO_CATALOG[slot] || 'reading';
       const it = studioItem(id);
@@ -480,9 +495,25 @@ export function BuilderStudioView() {
       else if (slot === 'multiselect') instr = 'Allow more than one correct option.';
       else if (slot === 'askai') instr = 'Lenient AI check: accept an answer that is essentially correct, up to 3 tries.';
       else if (slot.startsWith('@')) { const g = SUPER_GROUPS[slot.slice(1)]; if (g) instr = `The machine may use any of: ${g.members.map(TOOL_SHORT).join(' / ')} — swap below to pin one.`; }
-      return { id, uid: mkUid(), instr, opt };
+      return { id, uid: mkUid(), instr, opt, grp };
     });
-    writeStack(i, comps);
+    // APPEND the template as its own row, so several templates can stack on one slide.
+    writeStack(i, [...stackOf(pages[i]), ...comps]);
+  };
+  // Split a slide's stack into consecutive template rows (by grp); ungrouped
+  // components (added by hand) merge into their own row. Each row is deletable.
+  const slideSegments = (stack: StudioComponent[]) => {
+    const segs: { key: string; comps: StudioComponent[] }[] = [];
+    for (const c of stack) {
+      const last = segs[segs.length - 1];
+      const sameRow = last && ((c.grp && last.comps[0].grp === c.grp) || (!c.grp && !last.comps[0].grp));
+      if (sameRow) last.comps.push(c); else segs.push({ key: c.uid || c.id, comps: [c] });
+    }
+    return segs;
+  };
+  const removeSegment = (i: number, comps: StudioComponent[]) => {
+    const uids = new Set(comps.map((c) => c.uid || c.id));
+    writeStack(i, stackOf(pages[i]).filter((c) => !uids.has(c.uid || c.id)));
   };
   // Add one menu / navigation action button (its label doubles as its instruction).
   const addButtonPreset = (i: number, label: string) => {
@@ -904,7 +935,10 @@ export function BuilderStudioView() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <strong>📄 Slide {i + 1}</strong>
                       <span style={{ display: 'inline-flex', gap: 4 }}>
-                        <button className={`btn small ${editing ? 'green' : 'ghost'}`} title={editing ? 'Done — collapse back to the whole template' : 'Break this slide into its components to edit'} onClick={() => { setEditSlideIdx(editing ? null : i); setAddMenu(null); }} style={{ padding: '0 10px' }}>{editing ? '✓ Done' : '✏️ Edit'}</button>
+                        <button title={editing ? 'Done — collapse back to the whole template' : 'Edit this slide’s components'} onClick={() => { setEditSlideIdx(editing ? null : i); setAddMenu(null); }}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 28, padding: 0, borderRadius: 8, cursor: 'pointer', border: '1.5px solid var(--ink,#2d2a26)', background: editing ? 'var(--ink,#2d2a26)' : 'transparent', color: editing ? 'var(--paper,#fbf7ee)' : 'var(--ink,#2d2a26)' }}>
+                          <IconPencil />
+                        </button>
                         <button className="btn small ghost" title="Move slide up" disabled={i === 0} onClick={() => movePage(i, -1)} style={{ padding: '0 8px' }}>↑</button>
                         <button className="btn small ghost" title="Move slide down" disabled={i === pages.length - 1} onClick={() => movePage(i, 1)} style={{ padding: '0 8px' }}>↓</button>
                         <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)} style={{ padding: '0 8px' }}>🗑</button>
@@ -921,19 +955,32 @@ export function BuilderStudioView() {
                       </select>
                     </div>
 
-                    {/* The WHOLE template — the full component sequence for this slide, shown
-                        as one card. Click it (or ✏️ Edit) to break it into editable components. */}
-                    <div onClick={() => !editing && setEditSlideIdx(i)} title={editing ? undefined : 'Click to edit this slide’s components'}
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginBottom: editing ? 10 : 0, padding: '8px 10px', borderRadius: 8, background: 'rgba(45,42,38,0.05)', cursor: editing ? 'default' : 'pointer' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginRight: 2 }}>🧩 Template:</span>
-                      {stack.length === 0
-                        ? <span style={{ fontSize: 11.5, opacity: 0.5 }}>empty — apply a template above or ✏️ Edit to add components</span>
-                        : stack.map((c, k) => (
+                    {/* The WHOLE template(s) — each applied template is its own row (the
+                        full component sequence), with a trashcan to delete that template.
+                        Click a row (or the ✏️ pencil) to break the slide into components. */}
+                    <div style={{ display: 'grid', gap: 6, marginBottom: editing ? 10 : 0 }}>
+                      {stack.length === 0 ? (
+                        <div onClick={() => setEditSlideIdx(i)} title="Click to add components"
+                          style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'rgba(45,42,38,0.05)', cursor: 'pointer' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginRight: 2 }}>🧩 Template:</span>
+                          <span style={{ fontSize: 11.5, opacity: 0.5 }}>empty — apply a template above or edit to add components</span>
+                        </div>
+                      ) : slideSegments(stack).map((seg) => (
+                        <div key={seg.key} onClick={() => !editing && setEditSlideIdx(i)} title={editing ? undefined : 'Click to edit this slide’s components'}
+                          style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'rgba(45,42,38,0.05)', cursor: editing ? 'default' : 'pointer' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginRight: 2 }}>🧩 Template:</span>
+                          {seg.comps.map((c, k) => (
                             <span key={c.uid || c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                               <span style={{ fontSize: 11, border: '1.5px solid var(--ink)', borderRadius: 6, padding: '2px 7px', background: 'var(--paper,#fbf7ee)' }}>{planChip(c.id)}</span>
-                              {k < stack.length - 1 && <span style={{ opacity: 0.4 }}>→</span>}
+                              {k < seg.comps.length - 1 && <span style={{ opacity: 0.4 }}>→</span>}
                             </span>
                           ))}
+                          <button onClick={(e) => { e.stopPropagation(); removeSegment(i, seg.comps); }} title="Delete this template" aria-label="Delete this template"
+                            style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 24, padding: 0, borderRadius: 6, cursor: 'pointer', border: '1.5px solid var(--ink,#2d2a26)', background: 'transparent', color: 'var(--ink,#2d2a26)' }}>
+                            <IconTrash />
+                          </button>
+                        </div>
+                      ))}
                     </div>
 
                     {/* EDIT mode — the whole template broken down into its editable components. */}
