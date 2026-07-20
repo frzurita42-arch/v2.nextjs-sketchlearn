@@ -43,6 +43,29 @@ const chipSt = (on: boolean) => ({ fontSize: 11.5, padding: '3px 9px', borderRad
 const TONES = ['Friendly', 'Formal', 'Playful', 'Socratic', 'Storytelling', 'Encouraging', 'Concise', 'Enthusiastic', 'Professional'];
 const blankRepoCard = (): RepoCard => ({ name: '', link: '', description: '', children: [] });
 
+// The slide-component toolbox — grouped exactly like the "Add to slide" menu, used
+// in the presentation config popup so the author picks which components the AI may
+// use, and which slide templates it should follow.
+const SLIDE_TOOL_SECTIONS: { title: string; items: { id: string; label: string }[] }[] = [
+  { title: 'Text', items: [{ id: 'reading', label: '📖 Reading paragraph' }] },
+  { title: 'Support / visuals', items: [
+    { id: 'image', label: '🖼 Image' }, { id: 'table', label: '▦ Table' }, { id: 'formula', label: '∑ Formula' },
+    { id: 'code', label: '{ } Code' }, { id: 'audio', label: '🔊 Audio' }, { id: 'graph', label: '📈 Graph' },
+  ] },
+  { title: 'Evaluation (question)', items: [
+    { id: 'mcq', label: 'Multiple choice' }, { id: 'truefalse', label: 'True / false' }, { id: 'fill', label: 'Fill the blank' },
+    { id: 'typed', label: 'Typed answer' }, { id: 'handwriting', label: 'Handwriting' }, { id: 'annotation', label: 'Annotation pad' }, { id: 'codebox', label: 'Code box' },
+  ] },
+];
+const SLIDE_TEMPLATES: { id: string; label: string; seq: string[] }[] = [
+  { id: 'read-look-check', label: 'Read → Look → Check', seq: ['📖 Text', '🖼 Image', '☑️ Multiple choice'] },
+  { id: 'explain-recap-quiz', label: 'Explain → Illustrate → Recap → Quiz', seq: ['📖 Text', '📖 Text', '🖼 Image', '📖 Text', '☑️ Multiple choice'] },
+  { id: 'concept-formula-solve', label: 'Concept → Formula → Compute → Solve', seq: ['📖 Text', '∑ Formula', '{ } Code', '📖 Text', '⌨️ Typed answer'] },
+  { id: 'demo-graph-practice', label: 'Demo → Graph → Practice', seq: ['📖 Text', '📈 Graph', '☑️ Multiple choice'] },
+  { id: 'code-run-quiz', label: 'Code → Explain → Quiz', seq: ['{ } Code', '📖 Text', '☑️ Multiple choice'] },
+];
+const TEMPLATE_LABEL: Record<string, string> = Object.fromEntries(SLIDE_TEMPLATES.map((t) => [t.id, t.label]));
+
 // One repository card in the builder — a compact Name + Link row, a roomier
 // Description, and any nested child cards (the same shape, one layer inward).
 function RepoCardNode({ card, onChange, onRemove, canRemove, depth }: {
@@ -157,12 +180,22 @@ export function BuilderStudioView() {
   const [dTone, setDTone] = useState('Friendly');
   const [dToneCustom, setDToneCustom] = useState(false);
   const [dPrompt, setDPrompt] = useState('');
+  // Which slide components the AI may use, which templates it should follow, and the
+  // template-carousel index. These persist across opens (they're a config, not a
+  // one-shot draft). On Update they become a config note fed to the slide designer.
+  const [dTools, setDTools] = useState<string[]>([]);
+  const [dTemplates, setDTemplates] = useState<string[]>([]);
+  const [tplIndex, setTplIndex] = useState(0);
+  const [configNote, setConfigNote] = useState('');
   const openSettings = () => {
     setDTitle(title); setDSubject(subject); setDTone(tone); setDToneCustom(toneCustom); setDPrompt(sourcePrompt);
     setSetStep(0); setSettingsOpen(true);
   };
   const applySettings = () => {
     setTitle(dTitle); setSubject(dSubject); setTone(dTone); setToneCustom(dToneCustom); setSourcePrompt(dPrompt);
+    const toolNote = dTools.length ? `Build the slides using ONLY these components: ${dTools.join(', ')}.` : '';
+    const tplNote = dTemplates.length ? `Prefer these slide templates (component order to follow): ${dTemplates.map((id) => TEMPLATE_LABEL[id] || id).join(' | ')}.` : '';
+    setConfigNote([toolNote, tplNote].filter(Boolean).join(' '));
     setSettingsOpen(false);
   };
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
@@ -373,7 +406,8 @@ export function BuilderStudioView() {
     try {
       const editing = presSuggested && !nextCard;
       const r: any = await API.post('/api/tools/studio-design', {
-        subject: presSubject || presTitle, title: presTitle, tone: presTone, provider, context, docs: docsPayload(),
+        subject: presSubject || presTitle, title: presTitle, tone: presTone, provider,
+        context: [context, configNote].filter(Boolean).join('\n'), docs: docsPayload(),
         mode: nextCard ? 'next' : editing ? 'edit' : 'suggest',
         existing: (nextCard || editing) ? pagesToDesign(pages) : undefined,
       }, { retries: 1 });
@@ -560,14 +594,17 @@ export function BuilderStudioView() {
                     flow); changes apply only when you press Update on the last page. */}
                 {(() => {
                   const fieldWrap: React.CSSProperties = { width: '100%', margin: 0 };
+                  // Same input sizing/padding as the slide-tool wizard fields.
+                  const ctl: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 14px', fontSize: '1.05rem', lineHeight: 1.2 };
+                  const chip = (active: boolean): React.CSSProperties => ({ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '4px 10px', borderRadius: 999, border: '2px solid var(--ink,#2d2a26)', background: active ? 'var(--green,#7fb069)' : 'transparent', color: active ? '#fff' : 'var(--ink,#2d2a26)' });
                   const titleField = (
                     <label className="field" style={fieldWrap}><span style={labelRow}>Title {paletteBtn('title')}</span>
-                      <input type="text" value={dTitle} placeholder="Name your tool" onChange={(e) => setDTitle(e.target.value)} style={{ width: '100%' }} />
+                      <input type="text" value={dTitle} placeholder="Name your tool" onChange={(e) => setDTitle(e.target.value)} style={ctl} />
                     </label>
                   );
                   const subjectField = (
                     <label className="field" style={fieldWrap}><span style={labelRow}>Subject / topic {paletteBtn('subject')}</span>
-                      <input type="text" value={dSubject} placeholder={isRepo ? 'e.g. Small Payment System' : 'e.g. Trigonometry'} onChange={(e) => setDSubject(e.target.value)} style={{ width: '100%' }} />
+                      <input type="text" value={dSubject} placeholder={isRepo ? 'e.g. Small Payment System' : 'e.g. Trigonometry'} onChange={(e) => setDSubject(e.target.value)} style={ctl} />
                     </label>
                   );
                   const toneField = (
@@ -579,27 +616,76 @@ export function BuilderStudioView() {
                       {paletteBtn('tone')}
                     </span>
                       {dToneCustom
-                        ? <input type="text" value={dTone} placeholder="Type a custom tone…" onChange={(e) => setDTone(e.target.value)} style={{ width: '100%' }} />
-                        : <select value={TONES.includes(dTone) ? dTone : TONES[0]} onChange={(e) => setDTone(e.target.value)} style={{ width: '100%' }}>
+                        ? <input type="text" value={dTone} placeholder="Type a custom tone…" onChange={(e) => setDTone(e.target.value)} style={ctl} />
+                        : <select value={TONES.includes(dTone) ? dTone : TONES[0]} onChange={(e) => setDTone(e.target.value)} style={ctl}>
                             {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
                           </select>}
                     </label>
                   );
                   const promptField = (
                     <label className="field" style={fieldWrap}><span style={labelRow}>Original prompt</span>
-                      <textarea value={dPrompt} placeholder={isRepo ? 'Describe the repository, the topics it should cover, and the structure of the cards…' : 'Describe the lesson / deck this presentation should teach…'} onChange={(e) => setDPrompt(e.target.value)} style={{ minHeight: 150, width: '100%', boxSizing: 'border-box' }} />
+                      <textarea value={dPrompt} placeholder={isRepo ? 'Describe the repository, the topics it should cover, and the structure of the cards…' : 'Describe the lesson / deck this presentation should teach…'} onChange={(e) => setDPrompt(e.target.value)} style={{ ...ctl, minHeight: 150, resize: 'vertical' }} />
                     </label>
                   );
+                  // Grouped, multi-select component picker (the "Add to slide" menu).
+                  const toolsField = (
+                    <div style={{ width: '100%' }}>
+                      <span style={{ display: 'block', marginBottom: 6, fontWeight: 700 }}>🧰 Components the AI may use{dTools.length ? ` (${dTools.length})` : ''}</span>
+                      <div style={{ maxHeight: 172, overflowY: 'auto', display: 'grid', gap: 8, paddingRight: 4 }}>
+                        {SLIDE_TOOL_SECTIONS.map((sec) => (
+                          <div key={sec.title}>
+                            <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px' }}>{sec.title}</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {sec.items.map((it) => {
+                                const on = dTools.includes(it.id);
+                                return <button key={it.id} type="button" style={chip(on)} onClick={() => setDTools((cur) => on ? cur.filter((x) => x !== it.id) : [...cur, it.id])}>{it.label}</button>;
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                  // Templates mini-slideshow: flip through the possible slide layouts;
+                  // "Use this template" adds it to the set the AI is told to follow.
+                  const t = SLIDE_TEMPLATES[Math.min(tplIndex, SLIDE_TEMPLATES.length - 1)];
+                  const tOn = dTemplates.includes(t.id);
+                  const templatesField = (
+                    <div style={{ width: '100%' }}>
+                      <span style={{ display: 'block', marginBottom: 6, fontWeight: 700 }}>🧩 Slide templates the AI can follow{dTemplates.length ? ` (${dTemplates.length})` : ''}</span>
+                      <div style={{ border: '2px solid var(--ink,#2d2a26)', borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <button type="button" className="btn small ghost" style={{ minWidth: 40 }} onClick={() => setTplIndex((i) => Math.max(0, i - 1))} disabled={tplIndex === 0}>◀</button>
+                          <div style={{ fontSize: 13, fontWeight: 700, textAlign: 'center', flex: 1 }}>{t.label}</div>
+                          <button type="button" className="btn small ghost" style={{ minWidth: 40 }} onClick={() => setTplIndex((i) => Math.min(SLIDE_TEMPLATES.length - 1, i + 1))} disabled={tplIndex >= SLIDE_TEMPLATES.length - 1}>▶</button>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', justifyContent: 'center', minHeight: 40 }}>
+                          {t.seq.map((c, i) => (
+                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 11, border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, padding: '1px 6px' }}>{c}</span>
+                              {i < t.seq.length - 1 && <span style={{ opacity: 0.5 }}>→</span>}
+                            </span>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                          <button type="button" className={`btn small ${tOn ? 'green' : 'ghost'}`} onClick={() => setDTemplates((cur) => tOn ? cur.filter((x) => x !== t.id) : [...cur, t.id])}>{tOn ? '✓ Selected' : 'Use this template'}</button>
+                          <span style={{ fontSize: 11, opacity: 0.6 }}>{tplIndex + 1} / {SLIDE_TEMPLATES.length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
                   const updateBtn = <button className="btn small green" style={{ width: 96, height: 40, whiteSpace: 'nowrap' }} onClick={applySettings}>✓ Update</button>;
-                  const goN = () => setSetStep((s) => Math.min(3, s + 1));
+                  const LAST = 4;
+                  const goN = () => setSetStep((s) => Math.min(LAST, s + 1));
                   const goB = () => setSetStep((s) => Math.max(0, s - 1));
                   const sSteps: WizardStep[] = [
-                    { key: 'title', title: 'Title', render: () => <WizardGridTemplate top={titleField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
-                    { key: 'subject', title: 'Subject / topic', render: () => <WizardGridTemplate top={subjectField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'basics', title: 'Title & subject', render: () => <WizardGridTemplate top={titleField} bottom={subjectField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'tone', title: 'Tone', render: () => <WizardGridTemplate top={toneField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'tools', title: 'Slide components', render: () => <WizardGridTemplate tall top={toolsField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'templates', title: 'Slide templates', render: () => <WizardGridTemplate tall top={templatesField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'prompt', title: 'Original prompt', render: () => <WizardGridTemplate tall top={promptField} onBack={goB} backDisabled={setStep === 0} rightTop={updateBtn} /> },
                   ];
-                  return <StepWizard steps={sSteps} finalActions={null} bodyMinHeight={190} stepIndex={setStep} onStepChange={setSetStep} showFooter={false} />;
+                  return <StepWizard steps={sSteps} finalActions={null} bodyMinHeight={210} stepIndex={setStep} onStepChange={setSetStep} showFooter={false} />;
                 })()}
               </div>
             </div>
