@@ -224,12 +224,13 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey={pageKey} title={title} subtitle={`${subtitle}${tools.length ? ` — ${tools.length} total` : ''}.`} />
-        <StorageModeBadge />
 
         {/* Repos gallery only: a display-only chat composer (the future "create a
-            repository from a description" interface). Sits between the header and
-            the filter row. Not wired up yet — presentation only. */}
+            repository from a description" interface). Sits directly BELOW the title
+            and ABOVE the DB-mode badge. Not wired up yet — presentation only. */}
         {kind === 'repository' && <RepoChatComposer />}
+
+        <StorageModeBadge />
 
         {/* Search + favorites/mine filters. The optional topSlot (e.g. the slide
             settings form) opens from the ⚙️ gear here as a popup, not inline. */}

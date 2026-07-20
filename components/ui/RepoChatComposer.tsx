@@ -27,6 +27,9 @@ export function RepoChatComposer() {
         <div style={{ minHeight: 40, fontSize: 15, opacity: 0.55, lineHeight: 1.35 }}>
           Describe the repository you want to build — its sections, cards, links and access settings…
         </div>
+        {/* A very faint dotted rule so the write area and the controls read as two
+            distinct zones. */}
+        <div style={{ borderTop: '1px dotted var(--ink,#2d2a26)', opacity: 0.18 }} />
         {/* Controls row: ＋ on the left, a hint, and the send arrow on the right. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button type="button" title="Add a setting or attachment" aria-label="Add"
