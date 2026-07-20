@@ -84,7 +84,7 @@ const TOOL_SHORT = (id: string) => COMP_BY_ID[id]?.short || id;
 const SUPER_GROUPS: Record<string, { label: string; hint: string; members: string[] }> = {
   text:     { label: '📝 Text',      hint: 'a reading paragraph or a short statement/task', members: ['reading', 'statement'] },
   visual:   { label: '🎨 Visual',    hint: 'pick image, table, formula or graph — whatever fits the subject', members: ['image', 'table', 'formula', 'graph'] },
-  question: { label: '❓ Question',   hint: 'multiple-choice, multi-select, true/false, fill-the-blank or typed', members: ['mcq', 'multiselect', 'truefalse', 'fill', 'typed'] },
+  question: { label: '❓ Question',   hint: 'DEFAULT to multiple choice; fall back to multi-select, true/false, fill-the-blank, typed, or 🤖 Ask-AI (lenient, 3 tries — passes if essentially right) when the answer is open-ended', members: ['mcq', 'multiselect', 'truefalse', 'fill', 'typed', 'askai'] },
   handson:  { label: '🛠 Hands-on',  hint: 'code box, typed answer, handwriting, annotation or ask-AI', members: ['codebox', 'typed', 'handwriting', 'annotation', 'askai'] },
   audio:    { label: '🔊 Audio',     hint: 'a listening clip', members: ['audio'] },
 };
@@ -101,35 +101,43 @@ type SlideTemplate = { id: string; name: string; tags: string[]; slots: string[]
 // ★ The curated template library. Every template opens with TEXT (reading or a
 // statement) and carries 5 hashtags so the AI can match it to a subject fast. Slots
 // use super-groups ('@visual', '@question', '@handson') wherever the choice is
-// interchangeable, so these ~20 patterns cover most lesson shapes.
+// interchangeable, so these patterns cover most lesson shapes. Hard-to-grade
+// exercises append 🤖 Ask-AI as a lenient verbal/typed fallback (3 tries).
 const TEMPLATE_LIBRARY: SlideTemplate[] = [
   // Universal
-  { id: 'read-see-check',   name: 'Read → See → Check',     tags: ['#general', '#intro', '#science', '#history', '#any'],        slots: ['reading', '@visual', '@question'] },
-  { id: 'deep-explain',     name: 'Deep explanation',       tags: ['#advanced', '#theory', '#science', '#history', '#reading'], slots: ['reading', '@visual', 'reading', '@question'] },
-  { id: 'statement-drill',  name: 'Statement → Practice',   tags: ['#practice', '#exercise', '#quick', '#assessment', '#any'],  slots: ['statement', '@question'] },
-  { id: 'quick-tf',         name: 'Quick true / false',     tags: ['#review', '#quick', '#warmup', '#assessment', '#any'],      slots: ['statement', 'truefalse'] },
-  { id: 'concept-multi',    name: 'Concept → Multi-select', tags: ['#review', '#concepts', '#recap', '#assessment', '#any'],    slots: ['reading', '@visual', 'multiselect'] },
+  { id: 'read-see-check',   name: 'Read → See → Check',     tags: ['#general', '#intro', '#science', '#history', '#any'],           slots: ['reading', '@visual', '@question'] },
+  { id: 'deep-explain',     name: 'Deep explanation',       tags: ['#advanced', '#theory', '#science', '#history', '#reading'],     slots: ['reading', '@visual', 'reading', '@question'] },
+  { id: 'scholar-explain',  name: 'Scholar explanation',    tags: ['#advanced', '#scholar', '#dense', '#theory', '#university'],    slots: ['statement', 'reading', 'reading', '@visual', 'reading', '@question', '@question'] },
+  { id: 'statement-drill',  name: 'Statement → Practice',   tags: ['#practice', '#exercise', '#quick', '#assessment', '#any'],      slots: ['statement', '@question'] },
+  { id: 'statement-visual', name: 'Statement → Visual → Check', tags: ['#practice', '#general', '#exercise', '#visual', '#any'],    slots: ['statement', '@visual', '@question'] },
+  { id: 'explain-visual',   name: 'Explain → Visual → Check', tags: ['#explain', '#general', '#science', '#history', '#any'],       slots: ['statement', 'reading', '@visual', '@question'] },
+  { id: 'quick-tf',         name: 'Quick true / false',     tags: ['#review', '#quick', '#warmup', '#assessment', '#any'],          slots: ['statement', 'truefalse'] },
+  { id: 'concept-multi',    name: 'Concept → Multi-select', tags: ['#review', '#concepts', '#recap', '#assessment', '#any'],        slots: ['reading', '@visual', 'multiselect'] },
   // Programming / CS
-  { id: 'code-walk',        name: 'Code walkthrough',       tags: ['#programming', '#cs', '#coding', '#software', '#logic'],    slots: ['reading', 'code', 'reading', '@question'] },
-  { id: 'code-challenge',   name: 'Coding challenge',       tags: ['#programming', '#cs', '#coding', '#handson', '#assessment'],slots: ['statement', 'codebox'] },
-  { id: 'debug-explain',    name: 'Debug & explain',        tags: ['#programming', '#debugging', '#cs', '#advanced', '#handson'],slots: ['statement', 'code', 'askai'] },
+  { id: 'code-walk',        name: 'Code walkthrough',       tags: ['#programming', '#cs', '#coding', '#software', '#logic'],        slots: ['reading', 'code', 'reading', '@question'] },
+  { id: 'code-challenge',   name: 'Coding challenge',       tags: ['#programming', '#cs', '#coding', '#handson', '#assessment'],    slots: ['statement', 'codebox', 'askai'] },
+  { id: 'debug-explain',    name: 'Debug & explain',        tags: ['#programming', '#debugging', '#cs', '#advanced', '#handson'],   slots: ['statement', 'code', '@question', 'askai'] },
   // Math / physics / data
-  { id: 'math-concept',     name: 'Math concept',           tags: ['#math', '#algebra', '#physics', '#engineering', '#formula'],slots: ['reading', 'formula', '@question'] },
-  { id: 'math-solve',       name: 'Solve the problem',      tags: ['#math', '#physics', '#calculation', '#problem', '#exercise'],slots: ['statement', 'formula', 'typed'] },
-  { id: 'data-graph',       name: 'Read the graph',         tags: ['#math', '#statistics', '#economics', '#science', '#data'],  slots: ['reading', 'graph', '@question'] },
+  { id: 'math-concept',     name: 'Math concept',           tags: ['#math', '#algebra', '#physics', '#engineering', '#formula'],    slots: ['reading', 'formula', '@question'] },
+  { id: 'math-solve',       name: 'Solve the problem',      tags: ['#math', '#physics', '#calculation', '#problem', '#exercise'],   slots: ['statement', 'formula', '@question'] },
+  { id: 'worked-solution',  name: 'Worked solution',        tags: ['#math', '#physics', '#worked', '#stepbystep', '#problem'],      slots: ['statement', 'formula', 'reading', 'typed', 'askai'] },
+  { id: 'scholar-stem',     name: 'Scholar STEM (dense)',   tags: ['#math', '#physics', '#advanced', '#dense', '#university'],      slots: ['statement', 'reading', 'reading', '@visual', 'reading', 'reading', '@question'] },
+  { id: 'data-graph',       name: 'Read the graph',         tags: ['#math', '#statistics', '#economics', '#science', '#data'],      slots: ['reading', 'graph', '@question'] },
+  { id: 'graph-analysis',   name: 'Graph analysis (deep)',  tags: ['#data', '#statistics', '#economics', '#analysis', '#science'],  slots: ['statement', 'reading', 'graph', 'reading', '@question'] },
   // History / humanities
-  { id: 'history-narrative',name: 'History narrative',      tags: ['#history', '#humanities', '#timeline', '#culture', '#reading'],slots: ['statement', 'reading', 'image', 'reading', '@question'] },
-  { id: 'source-analysis',  name: 'Source analysis (hard)', tags: ['#history', '#advanced', '#analysis', '#critical', '#humanities'],slots: ['reading', 'image', 'reading', 'fill'] },
+  { id: 'history-narrative',name: 'History narrative',      tags: ['#history', '#humanities', '#timeline', '#culture', '#reading'], slots: ['statement', 'reading', 'image', 'reading', '@question'] },
+  { id: 'source-analysis',  name: 'Source analysis (hard)', tags: ['#history', '#advanced', '#analysis', '#critical', '#humanities'],slots: ['statement', 'reading', 'image', 'reading', '@question', 'askai'] },
   // Language / ESL
-  { id: 'esl-reading',      name: 'ESL reading + audio',    tags: ['#esl', '#language', '#vocabulary', '#reading', '#beginner'],slots: ['statement', 'image', 'reading', 'audio', '@question'] },
-  { id: 'listening',        name: 'Listening comprehension',tags: ['#esl', '#language', '#listening', '#audio', '#comprehension'],slots: ['statement', 'audio', '@question'] },
-  { id: 'grammar-table',    name: 'Grammar with a table',   tags: ['#grammar', '#language', '#esl', '#writing', '#rules'],      slots: ['reading', 'table', '@question'] },
+  { id: 'simple-esl',       name: 'Simple ESL',             tags: ['#esl', '#beginner', '#simple', '#vocabulary', '#language'],     slots: ['reading', 'image', 'mcq'] },
+  { id: 'esl-reading',      name: 'ESL reading + audio',    tags: ['#esl', '#language', '#vocabulary', '#reading', '#beginner'],    slots: ['statement', 'image', 'reading', 'audio', '@question'] },
+  { id: 'listening',        name: 'Listening comprehension',tags: ['#esl', '#language', '#listening', '#audio', '#comprehension'],  slots: ['statement', 'audio', '@question'] },
+  { id: 'grammar-table',    name: 'Grammar with a table',   tags: ['#grammar', '#language', '#esl', '#writing', '#rules'],          slots: ['reading', 'table', '@question'] },
   { id: 'script-practice',  name: 'Character practice',     tags: ['#language', '#japanese', '#chinese', '#handwriting', '#characters'],slots: ['statement', 'image', 'handwriting'] },
-  { id: 'vocab-drill',      name: 'Vocabulary drill',       tags: ['#vocabulary', '#language', '#esl', '#memory', '#quick'],    slots: ['statement', 'image', 'audio', 'mcq'] },
+  { id: 'vocab-drill',      name: 'Vocabulary drill',       tags: ['#vocabulary', '#language', '#esl', '#memory', '#quick'],        slots: ['statement', 'image', 'audio', 'mcq'] },
   // Design / DIY / practical
-  { id: 'design-critique',  name: 'Design critique',        tags: ['#design', '#art', '#ux', '#creative', '#visual'],          slots: ['statement', 'image', 'typed'] },
-  { id: 'diy-howto',        name: 'DIY how-to',             tags: ['#diy', '#howto', '#practical', '#crafts', '#steps'],        slots: ['statement', 'image', 'reading', '@question'] },
-  { id: 'menu-item',        name: 'Menu / catalog item',    tags: ['#menu', '#culinary', '#business', '#catalog', '#description'],slots: ['statement', 'image', 'reading', '@question'] },
+  { id: 'design-critique',  name: 'Design critique',        tags: ['#design', '#art', '#ux', '#creative', '#visual'],              slots: ['statement', 'image', '@question', 'askai'] },
+  { id: 'diy-howto',        name: 'DIY how-to',             tags: ['#diy', '#howto', '#practical', '#crafts', '#steps'],            slots: ['statement', 'image', 'reading', '@question'] },
+  { id: 'menu-item',        name: 'Menu / catalog item',    tags: ['#menu', '#culinary', '#business', '#catalog', '#description'],  slots: ['statement', 'image', 'reading', '@question'] },
 ];
 
 // One repository card in the builder — a compact Name + Link row, a roomier
@@ -266,7 +274,7 @@ export function BuilderStudioView() {
     const toolNote = dTools.length ? `Build the slides using ONLY these components: ${dTools.map(TOOL_SHORT).join(', ')}.` : '';
     const superNote = `SUPER-COMPONENTS — when a template slot names a group, pick the ONE member that best fits the subject: ${Object.values(SUPER_GROUPS).map((g) => `${g.label} = ${g.hint}`).join('; ')}.`;
     const tplNote = dTemplates.length
-      ? `SLIDE TEMPLATES you MAY follow — match a template's #hashtags to the topic/level and adapt freely. RULES: every slide opens with text (a reading paragraph or a short statement/task); never use a code box outside programming; use audio for language/listening lessons; use a table to organize grammar/rules; use handwriting for character/sign practice; true/false and multi-select suit any subject. Templates: ${dTemplates.map((t) => `${t.name} [${t.tags.join(' ')}]: ${t.slots.map(SLOT_NOTE).join(' → ')}`).join(' | ')}`
+      ? `SLIDE TEMPLATES you MAY follow — match a template's #hashtags to the topic/level and adapt freely. RULES: every slide opens with text (a reading paragraph or a short statement/task); DEFAULT every check to multiple choice; use 🤖 Ask-AI as a lenient fallback for hard-to-grade or explain-style answers — the learner types OR says their answer with up to 3 tries and it PASSES if it is essentially correct even with minor errors; typed answers work as a fallback too; never use a code box outside programming; use audio for language/listening lessons; use a table to organize grammar/rules; use handwriting for character/sign practice; true/false and multi-select suit any subject; for dense/scholar topics stack more text and add extra questions to evaluate long passages. Templates: ${dTemplates.map((t) => `${t.name} [${t.tags.join(' ')}]: ${t.slots.map(SLOT_NOTE).join(' → ')}`).join(' | ')}`
       : '';
     setConfigNote([toolNote, superNote, tplNote].filter(Boolean).join('\n'));
     setSettingsOpen(false);
@@ -796,7 +804,7 @@ export function BuilderStudioView() {
                   return (
                     <SetupWizardCard
                       title={<span style={{ fontSize: 15 }}>⚙️ {isRepo ? '🗂️ Repository' : '📊 Presentation'} settings</span>}
-                      headerRight={<button className="btn small ghost" onClick={() => setSettingsOpen(false)}>✕ Close</button>}
+                      onClose={() => setSettingsOpen(false)}
                       steps={sSteps}
                       stepIndex={setStep}
                       onStepChange={setSetStep}
