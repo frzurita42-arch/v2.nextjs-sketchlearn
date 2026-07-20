@@ -7,29 +7,35 @@ import { emojiThumb, defaultEmojiFor } from '@/lib/emoji-thumb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { insertTool, getToolBySlug, listTools, deleteTool, getExampleOverrides } = require('@/src/db/platform');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { GALLERY_EXAMPLES, exampleBySlug, applyOverride, applyOverrides } = require('@/src/tools/examples');
+const { EXAMPLE_TOOLS, GALLERY_EXAMPLES, exampleBySlug, applyOverride, applyOverrides } = require('@/src/tools/examples');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { userState } = require('@/src/db/users');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Strip the heavy embedded media out of a tool definition for the LIST payload —
-// saved decks (slides full of AI images), repo-card images and data-URL links.
-// The gallery only needs the light fields; the full media comes back via ?slug=.
+// Strip the heavy embedded data out of a tool definition for the LIST payload —
+// saved decks, repo card trees, entry schemas, and data-URL links should only
+// come from the full slug fetch. The gallery only needs lightweight metadata.
 function slimForList(def: any): any {
   if (!def || typeof def !== 'object') return def;
   const d: any = { ...def };
-  if (d.lesson && typeof d.lesson === 'object') { const l = { ...d.lesson }; delete l.savedDeck; d.lesson = l; }
-  const stripCards = (cards: any[]): any[] => (Array.isArray(cards) ? cards : []).map((c: any) => {
-    const nc: any = { ...c };
-    if (typeof nc.image === 'string' && nc.image.startsWith('data:')) nc.image = '';
-    if (typeof nc.genImage === 'string' && nc.genImage.startsWith('data:')) nc.genImage = '';
-    if (Array.isArray(nc.links)) nc.links = nc.links.map((l: any) => (l && typeof l.url === 'string' && l.url.startsWith('data:') ? { ...l, url: '' } : l));
-    if (Array.isArray(nc.children)) nc.children = stripCards(nc.children);
-    return nc;
-  });
-  if (d.repo && Array.isArray(d.repo.cards)) d.repo = { ...d.repo, cards: stripCards(d.repo.cards) };
+  if (d.lesson && typeof d.lesson === 'object') {
+    const l = { ...d.lesson };
+    delete l.savedDeck;
+    delete l.pages;
+    d.lesson = l;
+  }
+  if (d.repo && typeof d.repo === 'object') {
+    const r = { ...d.repo };
+    delete r.cards;
+    d.repo = r;
+  }
+  if (d.app && typeof d.app === 'object') {
+    const a = { ...d.app };
+    delete a.entries;
+    d.app = a;
+  }
   return d;
 }
 
@@ -42,6 +48,10 @@ export async function GET(req: Request) {
   const { user } = await optionalAuth(req);
   const url = new URL(req.url);
   const slug = url.searchParams.get('slug');
+  const archetypeQ = (url.searchParams.get('archetype') || '').trim();
+  const includeFeatured = url.searchParams.get('includeFeatured') !== '0';
+  const singleSource = url.searchParams.get('singleSource') === '1';
+  const limitQ = Math.max(1, Math.min(200, parseInt(url.searchParams.get('limit') || '60', 10) || 60));
   if (slug) {
     const example = exampleBySlug(slug);
     if (example) {
@@ -59,7 +69,18 @@ export async function GET(req: Request) {
   }
   const viewerIsAdmin = user?.role === 'admin';
   const adminOwners = (userState.users || []).filter((u: any) => u.role === 'admin').map((u: any) => u.username);
-  const tools = await listTools({ includePrivateFor: user?.username || null, adminOwners, viewerIsAdmin, limit: 60 });
+  let tools: any[] = [];
+  try {
+    tools = await listTools({
+      includePrivateFor: user?.username || null,
+      adminOwners,
+      viewerIsAdmin,
+      limit: limitQ,
+      strictDb: singleSource,
+    });
+  } catch {
+    return NextResponse.json({ error: 'Could not load tools from the primary source.' }, { status: 503 });
+  }
   // Flag tools an admin has liked (for the "liked by admin" gallery filter) and
   // drop the raw liker list from the public payload. Also SLIM the definition:
   // the gallery only needs the top-level fields (title, description, thumbnail,
@@ -72,17 +93,33 @@ export async function GET(req: Request) {
     const likers: string[] = Array.isArray(t.likedBy) ? t.likedBy : [];
     const likedByAdmin = likers.some((u: string) => adminSet.has(u));
     const likedByOwner = likers.includes(t.owner);   // the creator (OP) favorited their own tool
-    const { likedBy, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
+    const { likedBy, definition, ...rest } = t;   // eslint-disable-line @typescript-eslint/no-unused-vars
     // Whether this tool has a saved presentation deck (its "original results"),
     // computed BEFORE slimForList strips it — lets the gallery show a 📖 review
     // button (e.g. for signed-out visitors, who can review but not play).
-    const hasSavedDeck = !!(rest.definition?.lesson?.savedDeck?.slides?.length);
-    return { ...rest, definition: slimForList(rest.definition), likedByAdmin, likedByOwner, hasSavedDeck };
+    const hasSavedDeck = !!(definition?.lesson?.savedDeck?.slides?.length);
+    return { ...rest, definition: slimForList(definition), likedByAdmin, likedByOwner, hasSavedDeck };
+  }).filter((t: any) => !archetypeQ || (t?.archetype || t?.definition?.archetype) === archetypeQ);
+
+  if (!includeFeatured || singleSource) {
+    return NextResponse.json({ tools: decorated }, { headers: { 'Cache-Control': 'no-cache' } });
+  }
+
+  // Include featured examples (with any admin overrides applied). For the Slides
+  // gallery (archetype=lesson), expose the full built-in lesson catalog instead
+  // of the tiny homepage subset.
+  const featuredSeed = archetypeQ === 'lesson' ? EXAMPLE_TOOLS : GALLERY_EXAMPLES;
+  const featured = applyOverrides(featuredSeed, await getExampleOverrides())
+    .filter((t: any) => !archetypeQ || (t?.archetype || t?.definition?.archetype) === archetypeQ)
+    .map((t: any) => ({ ...t, hasSavedDeck: !!(t.definition?.lesson?.savedDeck?.slides?.length), definition: slimForList(t.definition) }));
+  const seen = new Set<string>();
+  const merged = [...featured, ...decorated].filter((t: any) => {
+    const s = String(t?.slug || '');
+    if (!s || seen.has(s)) return false;
+    seen.add(s);
+    return true;
   });
-  // Prepend a couple of featured examples (with any admin overrides applied) so
-  // the gallery always has a working lesson to try.
-  const featured = applyOverrides(GALLERY_EXAMPLES, await getExampleOverrides()).map((t: any) => ({ ...t, hasSavedDeck: !!(t.definition?.lesson?.savedDeck?.slides?.length), definition: slimForList(t.definition) }));
-  return NextResponse.json({ tools: [...featured, ...decorated] }, { headers: { 'Cache-Control': 'no-cache' } });
+  return NextResponse.json({ tools: merged }, { headers: { 'Cache-Control': 'no-cache' } });
 }
 
 // POST /api/tools  { definition, visibility, aiGenerated? } -> publish a tool

@@ -13,6 +13,7 @@ import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
+import { StorageModeBadge } from '@/components/ui/StorageModeBadge';
 import { filterLabel } from '@/components/ui/GalleryChrome';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 
@@ -71,8 +72,9 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   const [tools, setTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [favs, setFavs] = useState<Record<string, boolean>>({});
-  // Favorites is the default view; an empty result shows the gallery skeleton.
-  const [filter, setFilter] = useState<'all' | 'fav' | 'mine'>('fav');
+  // Show everything by default so new repos are visible immediately; Favorites
+  // remains available as a narrower view.
+  const [filter, setFilter] = useState<'all' | 'fav' | 'mine'>('all');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [editTool, setEditTool] = useState<any>(null);
@@ -123,11 +125,43 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   useEffect(() => { setFavs(loadLikes()); }, [app.user?.username]);
   useEffect(() => {
     let alive = true;
-    API.get('/api/tools').then((r: any) => {
-      if (!alive) return;
-      const all = Array.isArray(r?.tools) ? r.tools : [];
-      setTools(all.filter((t: any) => isKind(t, kind)));
-    }).catch(() => { /* keep empty */ }).finally(() => { if (alive) setLoading(false); });
+    const load = async () => {
+      try {
+        if (kind === 'presentation') {
+          // Slides tab should always show the full lesson-tool inventory:
+          // built-in lesson examples plus user-created lessons when available.
+          const r = await API.get('/api/tools?archetype=lesson&limit=200');
+          if (!alive) return;
+          const all = Array.isArray(r?.tools) ? r.tools : [];
+          setTools(all.filter((t: any) => isKind(t, kind)));
+          return;
+        }
+
+        const r = await API.get('/api/tools');
+        if (!alive) return;
+        const all = Array.isArray(r?.tools) ? r.tools : [];
+        setTools(all.filter((t: any) => isKind(t, kind)));
+      } catch {
+        if (!alive) return;
+        if (kind === 'presentation') {
+          // Last-resort fallback: generic list then keep only lesson tools.
+          try {
+            const fallback = await API.get('/api/tools?limit=200');
+            if (!alive) return;
+            const all = Array.isArray(fallback?.tools) ? fallback.tools : [];
+            setTools(all.filter((t: any) => isKind(t, kind)));
+            return;
+          } catch {
+            setTools([]);
+            return;
+          }
+        }
+        setTools([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    load();
     return () => { alive = false; };
   }, [kind]);
 
@@ -164,6 +198,12 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
     app.nav('tool');
   };
 
+  const openBuilder = () => {
+    if (!app.user) { app.requireLogin(); return; }
+    appState.builderSeed = { artifact: kind } as any;
+    app.nav('toolbuilder');
+  };
+
   // A random suggestion for the empty-state skeleton (stable while the list is stable).
   const skelRec = useMemo(() => (tools.length ? tools[Math.floor(Math.random() * tools.length)] : null), [tools]);
 
@@ -183,6 +223,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey={pageKey} title={title} subtitle={`${subtitle}${tools.length ? ` — ${tools.length} total` : ''}.`} />
+        <StorageModeBadge />
 
         {/* Search + favorites/mine filters. The optional topSlot (e.g. the slide
             settings form) opens from the ⚙️ gear here as a popup, not inline. */}
@@ -219,7 +260,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
         ) : filtered.length === 0 ? (
           // Empty (e.g. no favorites yet) → the shared gallery skeleton: the pencil
           // "make/play one" card + a random suggestion + pager (like Settings › Galleries).
-          <GallerySkeleton cardSize={cardSize} imgMode={imgMode} recommended={skelRec} onBuild={() => app.nav('chat')} onOpen={openTool} />
+          <GallerySkeleton cardSize={cardSize} imgMode={imgMode} recommended={skelRec} onBuild={openBuilder} onOpen={openTool} />
         ) : (
           <>
             <div style={{ ...layout.container, alignItems: 'stretch' }}>

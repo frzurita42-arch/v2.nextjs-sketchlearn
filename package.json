@@ -8,6 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "db:pull-json": "node scripts/pseudo-db-sync.cjs pull",
+    "db:push-json": "node scripts/pseudo-db-sync.cjs push",
+    "db:push-json:replace": "node scripts/pseudo-db-sync.cjs push --replace",
+    "db:pull-json:watch": "node scripts/pseudo-db-recurring.cjs pull",
     "legacy": "node server.js",
     "scan:components": "node scripts/scan-component-keywords.cjs",
     "prebuild": "node scripts/scan-component-keywords.cjs"

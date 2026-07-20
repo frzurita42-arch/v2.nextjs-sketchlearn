@@ -10,12 +10,13 @@ export const ROWS_PER_PAGE = 4;
 const CELL_LIMIT = 100;
 export type Cell = string | number | null | undefined | { node: React.ReactNode };
 
-export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; compact?: boolean }) {
+export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, rowsPerPage }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; compact?: boolean; rowsPerPage?: number }) {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<{ title: string; text: string } | null>(null);
-  const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+  const pageSize = Math.max(1, Math.floor(rowsPerPage || ROWS_PER_PAGE));
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
   const p = Math.min(page, pages - 1);
-  const slice = rows.slice(p * ROWS_PER_PAGE, p * ROWS_PER_PAGE + ROWS_PER_PAGE);
+  const slice = rows.slice(p * pageSize, p * pageSize + pageSize);
   const canDelete = !!(onDelete && rowIds);
   const totalCols = headers.length + (canDelete ? 1 : 0);
   return (
@@ -23,7 +24,7 @@ export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact }: 
       <div className="table-wrap"><table className={compact ? 'sketch compact' : 'sketch'}><tbody>
         <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
         {slice.length ? slice.map((r, ri) => {
-          const abs = p * ROWS_PER_PAGE + ri;
+          const abs = p * pageSize + ri;
           const id = rowIds ? rowIds[abs] : '';
           return (
           <tr key={ri}>
@@ -46,7 +47,7 @@ export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact }: 
         <>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
             <button className="btn small ghost" disabled={p <= 0} onClick={() => setPage(p - 1)}>‹ Prev</button>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>Rows {p * ROWS_PER_PAGE + 1}–{Math.min(rows.length, (p + 1) * ROWS_PER_PAGE)} of {rows.length}</span>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Rows {p * pageSize + 1}–{Math.min(rows.length, (p + 1) * pageSize)} of {rows.length}</span>
             <button className="btn small ghost" disabled={p >= pages - 1} onClick={() => setPage(p + 1)}>Next ›</button>
           </div>
           <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, marginTop: 10 }} />

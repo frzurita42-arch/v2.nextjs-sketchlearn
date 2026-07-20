@@ -30,28 +30,28 @@ function Field({ f, value, onChange, onSuggest, suggesting }: {
 
   if (f.type === 'textarea') {
     return (
-      <label className="field" style={{ gridColumn: '1 / -1' }}><span>{f.label}{suggestBtn}</span>
+      <label className="field" style={{ width: '100%', maxWidth: 240, gridColumn: '1 / -1' }}><span>{f.label}{suggestBtn}</span>
         <textarea value={value ?? ''} placeholder={f.placeholder} onChange={e => onChange(e.target.value)} style={{ minHeight: 70 }} />
       </label>
     );
   }
   if (f.type === 'number') {
     return (
-      <label className="field"><span>{f.label}{suggestBtn}</span>
+      <label className="field" style={{ width: '100%', maxWidth: 240 }}><span>{f.label}{suggestBtn}</span>
         <input type="number" value={value ?? 0} placeholder={f.placeholder} onChange={e => onChange(e.target.value)} />
       </label>
     );
   }
   if (f.type === 'toggle') {
     return (
-      <label className="field"><span>{f.label}</span>
+      <label className="field" style={{ width: '100%', maxWidth: 240 }}><span>{f.label}</span>
         <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} style={{ width: 20, height: 20 }} />
       </label>
     );
   }
   if (f.type === 'date') {
     return (
-      <label className="field"><span>{f.label}</span>
+      <label className="field" style={{ width: '100%', maxWidth: 240 }}><span>{f.label}</span>
         <input type="date" value={value ?? ''} onChange={e => onChange(e.target.value)} />
       </label>
     );
@@ -59,7 +59,7 @@ function Field({ f, value, onChange, onSuggest, suggesting }: {
   if (f.type === 'image') return <ImageField label={f.label} value={value} onChange={onChange} />;
   if (selectish) {
     return (
-      <label className="field"><span>{f.label}
+      <label className="field" style={{ width: '100%', maxWidth: 240 }}><span>{f.label}
         <button type="button" title={custom ? 'Pick from list' : 'Type a custom value'} onClick={() => setCustom(c => !c)}
           style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{custom ? '▾' : '✎'}</button>
         {suggestBtn}
@@ -76,7 +76,7 @@ function Field({ f, value, onChange, onSuggest, suggesting }: {
   if (f.type === 'drawing') return <DrawField label={f.label} value={value} onChange={onChange} />;
   // text (default)
   return (
-    <label className="field"><span>{f.label}{suggestBtn}</span>
+    <label className="field" style={{ width: '100%', maxWidth: 240 }}><span>{f.label}{suggestBtn}</span>
       <input type="text" value={value ?? ''} placeholder={f.placeholder} onChange={e => onChange(e.target.value)} />
     </label>
   );

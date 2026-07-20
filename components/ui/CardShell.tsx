@@ -44,6 +44,8 @@ export interface CardShellProps {
   meta?: React.ReactNode;         // footer-left meta line
   del?: React.ReactNode;          // small plain delete icon (no button box)
   actions?: React.ReactNode;      // footer-right action buttons
+  body?: React.ReactNode;         // custom body content in the white card area
+  bodyStyle?: React.CSSProperties;
 }
 
 const clickable = { cursor: 'pointer' } as const;
@@ -118,7 +120,9 @@ export function CardShell(p: CardShellProps) {
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: fixed ? p.gridHeight : '100%' }}>
       {imageBox}
-      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
+      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0, ...p.bodyStyle }}>
+        {p.body ? p.body : (
+        <>
         {fixed
           // Fixed tiles: the title clamps to two lines and the edit icons + badge
           // sit in a fixed, non-shrinking slot on the SAME row (they never wrap to
@@ -156,6 +160,8 @@ export function CardShell(p: CardShellProps) {
           {p.meta}
           <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{p.actions}{p.del}</span>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

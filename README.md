@@ -31,6 +31,27 @@ For production on Vercel, set `DATABASE_URL` (or `POSTGRES_URL`).
 When present, the server stores users, game records, and home recommendation caches in Postgres.
 Without it, the app falls back to local JSON files in `data/`.
 
+## Local pseudo-DB workflow (JSON-first)
+
+Use JSON files as the primary local storage even if `DATABASE_URL` exists:
+
+1. Set `SKETCHLEARN_FORCE_FILE_DB=1` in your local env.
+2. Start the app normally (`npm start`).
+3. The app will read/write `data/*.json` as the runtime source of truth.
+
+Move data between Postgres and local JSON with:
+
+```bash
+npm run db:pull-json   # Postgres -> data/*.json
+npm run db:push-json   # data/*.json -> Postgres
+npm run db:push-json:replace   # FULL mirror: remove DB rows not present in JSON
+npm run db:pull-json:watch     # recurring pull (default every 120s)
+```
+
+This lets you iterate locally on JSON-backed data, then push that state to Postgres before production tests.
+
+Set `PSEUDO_DB_SYNC_MS` to change recurring sync interval (minimum 15000 ms).
+
 ## API keys by activity
 
 Set these in Vercel for **Production, Preview, and Development** so every activity works the same everywhere:

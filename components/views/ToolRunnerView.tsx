@@ -14,11 +14,14 @@ import { DiscussionSection } from '@/components/social/DiscussionSection';
 import { RichText } from '@/components/tools/RichText';
 import { LessonPlayer } from '@/components/tools/LessonPlayer';
 import { RepoView } from '@/components/tools/RepoView';
+import { SharePanel } from '@/components/tools/SharePanel';
+import { avatarFor } from '@/components/social/AuthorBar';
 import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 import { AuthorBar } from '@/components/social/AuthorBar';
 import { type FilterKey } from '@/components/ui/Collection';
 import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, delIcon } from '@/components/ui/CardShell';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { isRenderableImage } from '@/lib/img';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { useToolHeaderStyle } from '@/lib/tool-header-style';
@@ -217,6 +220,17 @@ export function ToolRunnerView() {
   const isLesson = def?.archetype === 'lesson';
   const isRepo = def?.archetype === 'repo';
   const toolHeader = useToolHeaderStyle(isLesson ? 'lesson' : 'tool');
+  useEffect(() => {
+    if (!tool?.slug) return;
+    let cancelled = false;
+    API.get(`/api/tools?slug=${encodeURIComponent(tool.slug)}`).then((r: any) => {
+      if (cancelled) return;
+      if (r?.tool) {
+        appState.activeTool = r.tool;
+      }
+    }).catch(() => { /* keep the current shell if the refresh fails */ });
+    return () => { cancelled = true; };
+  }, [tool?.slug]);
   const loadEntries = useMemo(() => async () => {
     if (!isApp || !tool?.slug) return;
     try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(tool.slug)}`); setEntries(asArray(r?.entries)); setIsOwner(!!r?.isOwner); } catch { /* ignore */ }
@@ -258,9 +272,11 @@ export function ToolRunnerView() {
   // Effective permissions honour the admin "View as" preview (self / user / OP /
   // admin) so the whole page re-renders as that role would see it.
   const perms = app.eff(tool.owner);
-  const canEdit = !(tool.tags || []).includes('example') && perms.canEdit;
+  const isExample = (tool.tags || []).includes('example');
+  const canEdit = perms.canEdit && (!isExample || perms.isAdmin);
   // Whether this tool exposes owner Settings (Studio repos/presentations don't).
-  const canSettings = !(tool.tags || []).includes('example') && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && perms.canEdit;
+  const canSettings = !isExample && !(tool.tags || []).includes('studio') && tool.archetype !== 'repo' && perms.canEdit;
+  const lessonAvatar = avatarFor(tool.owner);
 
   const saveTitle = async (t: string) => {
     setEditField(null);
@@ -328,13 +344,33 @@ export function ToolRunnerView() {
 
   return (
     <>
-      {!immersive && (
+      {!immersive && !isLesson && (
         <h1 className="view-title" style={{ fontSize: toolHeader.size, fontFamily: toolHeader.fontCss, lineHeight: 1.06, textAlign: 'left', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
           <span className={toolHeader.underline ? 'scribble-underline' : undefined} style={{ display: 'inline-block' }}>{tool.title}</span>
           {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
           {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
           {canSettings && <button title="Tool settings — API keys, AI edit, visibility, delete" onClick={() => setSettingsOpen(true)} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>}
         </h1>
+      )}
+      {!immersive && isLesson && (
+        <>
+          <PageHeaderBar pageKey="presrun" title={`🎬 ${tool.title}`} subtitle={String(tool.description || '').trim() || 'Playable runs and settings for this slide tool.'} />
+          <div style={{ maxWidth: 820, margin: '0 auto 10px' }}>
+            <div className="card author-bar" style={{ padding: '12px 16px' }}>
+              <div className="author-bar__id">
+                <span aria-hidden style={{ display: 'inline-flex', flex: '0 0 auto', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: lessonAvatar.color, border: '2px solid var(--ink)', fontSize: 20 }}>{lessonAvatar.emoji}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700 }}>@{tool.owner}</div>
+                  <div style={{ fontSize: 12, opacity: 0.65 }}>{tool.title} · slide tool</div>
+                </div>
+              </div>
+              <div className="author-bar__actions">
+                <SharePanel slug={tool.slug} title={tool.title} label="🔗 Share / QR" />
+              </div>
+            </div>
+            <div style={{ borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 0' }} />
+          </div>
+        </>
       )}
       {editField && (
         <AiEditPopup field={editField} slug={tool.slug} mode={editField === 'title' ? editMode : 'both'} initial={editField === 'title' ? tool.title : (descDraft || def.description || '')}
@@ -353,7 +389,7 @@ export function ToolRunnerView() {
         </div>
       )}
 
-      {!immersive && (<>
+      {!immersive && !isLesson && (<>
         {/* ┄ divider: title ┄ author/stats card ┄ */}
         <div style={dashRule} />
 
@@ -478,7 +514,7 @@ export function ToolRunnerView() {
         </div>
       )}
 
-      {!immersive && (<>
+      {!immersive && !isLesson && (<>
         {/* ┄ divider: activities/feed ┄ comments ┄ */}
         <div style={dashRule} />
 

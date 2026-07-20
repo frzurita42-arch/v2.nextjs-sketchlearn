@@ -7,6 +7,7 @@
 import { useState, type CSSProperties } from 'react';
 import { DonationMug } from '@/components/ui/DonationMug';
 import { useShelfTitle } from '@/components/tools/useShelfTitle';
+import { useDonationPromptStyle, type DonationPromptScope } from '@/lib/donation-prompt-style';
 
 // The platform's default Binance BTC deposit wallet, shown when a creator hasn't
 // set their own.
@@ -56,22 +57,25 @@ function EditableLine({ settingKey, fallback, textStyle }: { settingKey: string;
   );
 }
 
-export function DonationPrompt({ mugWidth = 220, mugHeight = 183, canCollapse, onCollapse, address = '', canManage, onSaveAddress }: {
+export function DonationPrompt({ mugWidth = 220, mugHeight = 183, canCollapse, onCollapse, address = '', canManage, onSaveAddress, scope = 'lesson' }: {
   mugWidth?: number; mugHeight?: number;
   canCollapse?: boolean;              // owner/admin: show the 👁 hide toggle
   onCollapse?: () => void;            // hide the whole donation prompt
   address?: string;                   // the tool's stored Bitcoin wallet
   canManage?: boolean;                // owner/admin: may edit the wallet address
   onSaveAddress?: (a: string) => void;
+  scope?: DonationPromptScope;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingAddr, setEditingAddr] = useState(false);
   const [addrDraft, setAddrDraft] = useState('');
+  const style = useDonationPromptStyle(scope);
   const shownAddr = address || DEFAULT_ADDRESS;   // fall back to the Binance default
   const show = () => { setCopied(false); setEditingAddr(false); setOpen(true); };
   const copy = async () => { try { await navigator.clipboard.writeText(shownAddr); setCopied(true); } catch { /* ignore */ } };
   const saveAddr = () => { onSaveAddress?.(addrDraft.trim()); setEditingAddr(false); };
+  if (style.hidden && !canCollapse) return null;
   return (
     <>
       <div style={{ justifySelf: 'center', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -79,7 +83,7 @@ export function DonationPrompt({ mugWidth = 220, mugHeight = 183, canCollapse, o
           <DonationMug width={mugWidth} height={mugHeight} />
         </button>
         <div style={{ textAlign: 'center' }}>
-          <EditableLine settingKey="donateNudge" fallback="Please donate for more similar content" textStyle={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem' }} />
+          <span style={{ fontFamily: 'var(--font-title)', fontSize: `${style.size}px` }}>{style.text}</span>
           {/* 👁 admin-only: hide the donation prompt (regular users then see the
               example centered). */}
           {canCollapse && <button title="Hide the donation prompt from other users" onClick={onCollapse}

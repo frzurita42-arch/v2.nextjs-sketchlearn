@@ -222,6 +222,10 @@ function applyOverride(tool, ov) {
   if (typeof ov.title === 'string' && ov.title) { t.title = ov.title; t.definition.title = ov.title; }
   if (typeof ov.description === 'string' && ov.description) { t.description = ov.description; t.definition.description = ov.description; }
   if (typeof ov.thumbnail === 'string') t.thumbnail = ov.thumbnail;
+  if (ov.repo && typeof ov.repo === 'object') {
+    const nextRepo = { ...(t.definition.repo || {}), ...(ov.repo || {}) };
+    t.definition.repo = nextRepo;
+  }
   return t;
 }
 

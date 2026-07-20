@@ -338,6 +338,7 @@ export default function AppRoot() {
   const SHELL: Record<string, { emoji: string; name: string }> = {
     slides: { emoji: '🎞️', name: 'Slides' },
     tools: { emoji: '📁', name: 'Repos' },
+    toolbuilder: { emoji: '🧩', name: 'Builder Studio' },
     moderators: { emoji: '🛡️', name: 'Moderators' },
     dashboard: { emoji: '🧑‍🏫', name: 'Dashboard' },
     sandbox: { emoji: '🧪', name: 'Sandbox' },
@@ -401,6 +402,14 @@ export default function AppRoot() {
                   ? <div style={{ height: '100%', overflowY: 'auto' }}>
                       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
                         {views.tool}
+                      </div>
+                    </div>
+                // Builder Studio uses the same shell working column so it matches
+                // Slides/Repos/Tool with the side nav + dashed vertical limits.
+                : lv === 'toolbuilder'
+                  ? <div style={{ height: '100%', overflowY: 'auto' }}>
+                      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+                        {views.toolbuilder}
                       </div>
                     </div>
                 : lv === 'appsettings' ? <AppSettingsView />

@@ -51,6 +51,13 @@ async function dbQuery(text, params = []) {
   return withDbTimeout(db.pool.query(text, params), 10000, 'DB query');
 }
 
+async function degradeDb(reason = 'Database unavailable') {
+  if (!db.pool) return;
+  try { await db.pool.end(); } catch { /* ignore */ }
+  db.pool = null;
+  console.error(`${reason}; downgraded to file storage for this run.`);
+}
+
 // Bound a DB operation so a slow/hung query rejects quickly and callers can fall back.
 function withDbTimeout(promise, ms = 8000, label = 'DB operation') {
   let timer;
@@ -60,4 +67,4 @@ function withDbTimeout(promise, ms = 8000, label = 'DB operation') {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-module.exports = { db, dbQuery, withDbTimeout };
+module.exports = { db, dbQuery, withDbTimeout, degradeDb };

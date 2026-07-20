@@ -20,16 +20,28 @@ function makeUser(username, password, role) {
 
 async function loadUsers() {
   if (!db.pool) {
-    return Array.isArray(userState.users) ? userState.users : [];
+    const fileUsers = readJSON('users.json', []);
+    const next = Array.isArray(fileUsers) ? fileUsers : [];
+    userState.users = next;
+    return next;
   }
-  const { rows } = await db.pool.query('SELECT username, salt, password_hash, role, created_at FROM users ORDER BY created_at ASC');
-  return rows.map(r => ({
-    username: r.username,
-    salt: r.salt,
-    passwordHash: r.password_hash,
-    role: r.role,
-    createdAt: new Date(r.created_at).toISOString()
-  }));
+  try {
+    const { rows } = await db.pool.query('SELECT username, salt, password_hash, role, created_at FROM users ORDER BY created_at ASC');
+    const next = rows.map(r => ({
+      username: r.username,
+      salt: r.salt,
+      passwordHash: r.password_hash,
+      role: r.role,
+      createdAt: new Date(r.created_at).toISOString()
+    }));
+    userState.users = next;
+    return next;
+  } catch (e) {
+    const fileUsers = readJSON('users.json', []);
+    const next = Array.isArray(fileUsers) ? fileUsers : [];
+    userState.users = next;
+    return next;
+  }
 }
 
 async function persistUsers(nextUsers) {

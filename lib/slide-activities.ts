@@ -46,11 +46,15 @@ export const STUDY_LENGTHS: { key: 'brief' | 'medium' | 'detailed'; label: strin
 // wired to use all the engaging activities and NO tooltips. `subject` overrides
 // the auto subject; `level` sets the default difficulty; `slides` the deck length;
 // `length` the per-slide text depth; `tone` the teaching voice.
-export function buildStudyToolDefinition(opts: { title: string; context?: string; subject?: string; slides?: number; level?: string; length?: 'brief' | 'medium' | 'detailed'; tone?: string }): any {
+export function buildStudyToolDefinition(opts: { title: string; context?: string; subject?: string; slides?: number; level?: string; length?: 'brief' | 'medium' | 'detailed'; tone?: string; topics?: string[] }): any {
   const base = (opts.title || 'Study').trim().slice(0, 60);
   const subject = (opts.subject || base).trim().slice(0, 60) || base;
   const context = (opts.context || '').trim().slice(0, 400);
   const tone = (opts.tone || '').trim().slice(0, 40);
+  const topics = (Array.isArray(opts.topics) ? opts.topics : [])
+    .map((t) => String(t || '').trim())
+    .filter(Boolean)
+    .slice(0, 16);
   const level = STUDY_LEVELS.includes(opts.level || '') ? opts.level : 'Beginner';
   const length = (['brief', 'medium', 'detailed'] as const).includes(opts.length as any) ? opts.length : 'medium';
   const slides = Math.max(3, Math.min(15, opts.slides || 8));
@@ -74,6 +78,7 @@ export function buildStudyToolDefinition(opts: { title: string; context?: string
       style: [
         `Teach one idea per slide at a ${level} level, then check it with a VARIED, engaging activity — rotate through: ${SLIDE_ACTIVITIES.map((a) => a.label).join(', ')}.`,
         tone ? `Tone: ${tone}.` : '',
+        topics.length ? `Topics to cover across the lesson: ${topics.join('; ')}.` : '',
         'Never rely on tooltips or hover-hints (some students can’t use them).',
         context ? `Base the content on this study path: ${context}` : '',
       ].filter(Boolean).join(' '),

@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { API } from '@/lib/api';
 import { downloadCsv } from '@/lib/util';
 import { PAGE_FIELDS, type PageTextField } from '@/lib/page-settings';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { OutlineBox } from '@/components/ui/OutlineBox';
 import { useShelfTitle } from '@/components/tools/useShelfTitle';
@@ -198,7 +198,7 @@ export function DashboardView() {
     if (!isMod) {
       return (
         <>
-          <PageHeader page="dashboard" />
+          <PageHeaderBar pageKey="dashboard" title="🧑‍🏫 Dashboard" subtitle="Your wallet and account analytics." />
           <SectionHeader title="🪙 My tokens" maxWidth={820} />
           <TokenWindow tokens={tokens} isAdmin={false} />
           {errBar}
@@ -216,7 +216,7 @@ export function DashboardView() {
     const mt = Math.min(modTab, modSections.length - 1);
     return (
       <>
-        <PageHeader page="dashboard" />
+        <PageHeaderBar pageKey="dashboard" title="🧑‍🏫 Dashboard" subtitle="Moderator view: tokens, work, plays, and generations." />
         <OutlineBox title="SECTIONS" maxWidth={900} style={{ margin: '8px auto 4px' }}>
           {modSections.map((s, i) => (
             <button key={s.key} className={`btn small ${i === mt ? 'blue' : 'ghost'}`} onClick={() => setModTab(i)}>
@@ -560,7 +560,7 @@ export function DashboardView() {
         </div>
       )}
       {/* Title + subtitle container (reusable, DB-driven header). */}
-      <PageHeader page="dashboard" />
+      <PageHeaderBar pageKey="dashboard" title="🧑‍🏫 Dashboard" subtitle="Operational tables, analytics, settings, and activity." />
       {dbOn === false && (
         <p style={{ textAlign: 'center', fontSize: 12, color: '#b23', margin: '8px 0', maxWidth: 720, marginInline: 'auto' }}>
           ⚠ Database not writable — the app is on temporary file storage, so edits (titles, page text, etc.) don’t stick and revert on reload.

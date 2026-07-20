@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
+import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import {
   STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, BUTTON_ACTIONS, parseTemplateSpec,
   studioItem, assembleDefinition, capAvailable,
@@ -80,7 +81,7 @@ function RepoCardNode({ card, onChange, onRemove, canRemove, depth }: {
 
 export function BuilderStudioView() {
   const app = useApp();
-  const [tab, setTab] = useState<'studio' | 'chat'>('studio');
+  const [tab] = useState<'studio' | 'chat'>('studio');
   const [caps, setCaps] = useState<any>(null);   // which integrations/keys are configured
   const [textProviders, setTextProviders] = useState<{ id: string; label: string }[]>([]);   // directly-selectable models
   useEffect(() => { API.get('/api/config').then((c) => { setCaps(c?.caps || {}); setTextProviders(Array.isArray(c?.textProviders) ? c.textProviders : []); }).catch(() => setCaps({})); }, []);
@@ -122,6 +123,7 @@ export function BuilderStudioView() {
   const [pages, setPages] = useState<StudioPage[]>(seed?.pages && seed.pages.length ? (seed.pages as StudioPage[]) : [newPage()]);
   const [addMenu, setAddMenu] = useState<number | null>(null);   // which slide's "＋ Add" menu is open
   useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
+  const [sourcePrompt, setSourcePrompt] = useState(seed?.sourcePrompt || seed?.context || '');
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>(seed?.cards && seed.cards.length ? (seed.cards as RepoCard[]) : [{ name: '', link: '', description: '', children: [] }]);
   // The user's HAND-AUTHORED cards, captured once, used as the seed for every AI
@@ -332,7 +334,7 @@ export function BuilderStudioView() {
 
   const config = (): StudioConfig => artifact === 'presentation'
     ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, tone, context, cards: repoCards, imageGen: false };
+    : { artifact, title, subject, tone, context, sourcePrompt, cards: repoCards, imageGen: false };
 
   // Publish the finished definition — either UPDATE the tool we're editing
   // (editSlug set, via the settings PUT) or CREATE a new one. Either way we stash
@@ -446,22 +448,20 @@ export function BuilderStudioView() {
     const val = kind === 'title' ? title : kind === 'subject' ? subject : tone;
     return <button type="button" className="btn small ghost" style={miniBtn} disabled={!val.trim() || !!rewording} title="Reword with AI — a similar but different phrasing" onClick={() => rewordField(kind)}>{rewording === kind ? '…' : '🎨'}</button>;
   };
+  const repoPrompt = (sourcePrompt || context || `A layered collection of links & resources: ${subject || title}`).trim();
 
   return (
     <>
-      <h1 className="view-title">{editSlug ? <>Edit <span className="scribble-underline">tool</span></> : <>Build a <span className="scribble-underline">tool</span></>}</h1>
-      <p className="view-sub">Compose it visually, or chat — the two combine.{' '}
-        <button className="btn small ghost" onClick={() => app.nav(editSlug ? 'tool' : 'tools')}>← Back</button></p>
+      <PageHeaderBar
+        pageKey="toolbuilder"
+        title={editSlug ? 'Edit tool' : 'Build a tool'}
+        subtitle="Compose it visually."
+      />
       {editSlug && (
         <p className="view-sub" style={{ marginTop: -12, fontSize: 13, opacity: 0.8 }}>
           ✏️ Editing an existing tool — the card settings below are loaded from it, and publishing <b>updates the same tool</b> (it won’t create a new one).
         </p>
       )}
-
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
-        <button className={`btn ${tab === 'studio' ? 'blue' : 'ghost'}`} onClick={() => setTab('studio')}>🧩 Studio</button>
-        <button className={`btn ${tab === 'chat' ? 'blue' : 'ghost'}`} onClick={() => setTab('chat')}>💬 Chat</button>
-      </div>
 
       {tab === 'studio' ? (
         <div style={{ maxWidth: 940, margin: '0 auto' }}>
@@ -599,6 +599,12 @@ export function BuilderStudioView() {
                description. Published, they show as cards on the page and viewers can
                add their own. */
             <>
+              <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6 }}>ORIGINAL REPO PROMPT</div>
+                <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 8 }}>This is the prompt or brief saved with the repo. Edit it to change the source that generated this collection.</div>
+                <textarea value={sourcePrompt} placeholder="Describe the repository, the topics it should cover, and the structure of the cards..." onChange={(e) => setSourcePrompt(e.target.value)} style={{ minHeight: 76, width: '100%' }} />
+                <div style={{ fontSize: 11, opacity: 0.68, marginTop: 6 }}>Saved prompt preview: {repoPrompt}</div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>CARDS ({repoCards.length}) — name · link · description, nest cards inside cards</div>
               </div>

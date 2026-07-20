@@ -209,6 +209,7 @@ export interface StudioConfig {
   cards?: RepoCard[];                // repository: the starter link/resource cards
   imageGen?: boolean;                // repository: "Suggest AI" per-card picture button
   context?: string;
+  sourcePrompt?: string;             // repository: the original prompt/brief that created it
   display?: 'cards' | 'list' | 'table';
 }
 
@@ -295,6 +296,7 @@ export function assembleDefinition(cfg: StudioConfig): any {
       // gallery-style filter toolbar over the cards.
       repo: {
         layout: 'post', display: 'bars', offlineExport: false,   // no offline-copy button
+        sourcePrompt: String(cfg.sourcePrompt || context || '').slice(0, 6000),
         imageGen: !!cfg.imageGen,   // "Suggest AI" per-card picture button
         cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },

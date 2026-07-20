@@ -6,6 +6,7 @@
  * the role is the badge, interests become the tags, and the footer carries the
  * profile actions (WhatsApp / Edit) plus optional AI-portrait / upload controls. */
 import { CardShell, overlayIcon, delIcon } from '@/components/ui/CardShell';
+import { cardImageProps } from '@/lib/card-size';
 import { isRenderableImage } from '@/lib/img';
 
 export interface ProfileCardProps {
@@ -61,14 +62,7 @@ export function ProfileCard(p: ProfileCardProps) {
   );
 
   // Same image-mode → CardShell mapping as ToolCard, so people tiles size uniformly.
-  const im = p.imageMode;
-  const imgProps: any =
-    im === 0 ? { hideImage: true, gridHeight: 300 }
-    : im === 1 ? { thumbHeight: 84, gridHeight: 320 }
-    : im === 3 ? { thumbHeight: 160, gridHeight: 392 }
-    : im === 4 ? { imageAspect: '16 / 9' }
-    : im === 5 ? { imageAspect: '9 / 16' }
-    : { thumbHeight: 110, gridHeight: 340 };   // 2 = medium (default)
+  const imgProps: any = cardImageProps(p.imageMode ?? 2);
 
   return (
     <CardShell

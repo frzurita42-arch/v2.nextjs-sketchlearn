@@ -26,10 +26,17 @@ export async function GET(req: Request) {
   // (and open the owner's saved results). A user (if any) unlocks their own
   // private submissions and the owner/admin view.
   const { user } = await optionalAuth(req);
-  const slug = new URL(req.url).searchParams.get('slug') || '';
+  const url = new URL(req.url);
+  const slug = url.searchParams.get('slug') || '';
+  const singleSource = url.searchParams.get('singleSource') === '1';
   const tool = await resolveTool(slug);
   if (!tool || !['app', 'lesson', 'repo'].includes(tool.archetype)) return NextResponse.json({ entries: [] });
-  const all = await listEntries(tool.id, { limit: 300 });
+  let all: any[] = [];
+  try {
+    all = await listEntries(tool.id, { limit: 300, strictDb: singleSource });
+  } catch {
+    return NextResponse.json({ error: 'Could not load entries from the primary source.' }, { status: 503 });
+  }
   const isOwner = !!user && (tool.owner === user.username || user.role === 'admin');
   // Repository contributions (e.g. payment proofs) are private-by-default: each
   // user sees only their own submissions; the owner/admin sees everyone's.

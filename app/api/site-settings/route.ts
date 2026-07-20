@@ -33,6 +33,11 @@ const TOOL_HEADER_SETTING_KEYS = [
   'sl_tool_header_size:lesson', 'sl_tool_header_font:lesson', 'sl_tool_header_under:lesson',
   'sl_tool_header_size:tool', 'sl_tool_header_font:tool', 'sl_tool_header_under:tool',
 ];
+const DONATION_PROMPT_SETTING_KEYS = [
+  'sl_donate_text', 'sl_donate_size', 'sl_donate_hidden',
+  'sl_donate_text:lesson', 'sl_donate_size:lesson', 'sl_donate_hidden:lesson',
+  'sl_donate_text:tool', 'sl_donate_size:tool', 'sl_donate_hidden:tool',
+];
 
 const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTitle', 'picksShelfTitle', 'galleryShelfTitle', 'historyShelfTitle', 'collectionShelfTitle',
   // Dashboard section titles (SectionHeader over the section-picker buttons and over the tables area).
@@ -69,6 +74,7 @@ const KEYS = ['galleryTitle', 'gallerySubtitle', 'galleryFilter', 'toolsShelfTit
   ...HEADER_SETTING_KEYS,
   ...BANNER_SETTING_KEYS,
   ...TOOL_HEADER_SETTING_KEYS,
+  ...DONATION_PROMPT_SETTING_KEYS,
 ];
 const BANNER_KEYS = new Set(['galleryBanner', 'toolsBanner', 'adminToolsBanner', 'historyBanner', 'collectionBanner']);
 

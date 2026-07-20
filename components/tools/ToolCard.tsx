@@ -8,6 +8,7 @@
  * their handlers are supplied. Delete is a small plain icon, not a boxed button. */
 import { useState } from 'react';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
+import { cardImageProps } from '@/lib/card-size';
 import { randomEmoji } from '@/lib/emoji-thumb';
 import { isRenderableImage } from '@/lib/img';
 
@@ -33,9 +34,11 @@ export interface ToolCardProps {
   isExample?: boolean;
   onRemove?: (t: any) => void;
   hideOpen?: boolean;   // omit the "Open →" button (image + title still open the tool)
+  openLabel?: string;   // override primary button text (default: Open →)
   imageMode?: number;   // grid picture: 0 none · 1 small · 2 medium · 3 large · 4 cover 16:9 · 5 cover 9:16
   onReplay?: (t: any) => void;    // ♻️ new generation
   onHistory?: (t: any) => void;   // 📖 OP history track (saved results)
+  onPlay?: (t: any) => void;      // ▶️ play (emoji-only action)
 }
 
 const kindOf = (t: any) => t.archetype === 'app' ? 'APP' : t.archetype === 'lesson' ? 'SLIDES' : t.archetype === 'repo' ? 'REPO' : 'GEN';
@@ -88,6 +91,7 @@ export function ToolCard(p: ToolCardProps) {
   const del = p.canRemove && p.onRemove
     ? <button style={delIcon} title={p.isExample ? 'Hide this example' : 'Delete'} onClick={() => p.onRemove!(t)}>🗑</button>
     : null;
+  const play = p.onPlay ? <button style={delIcon} title="Play" onClick={() => p.onPlay!(t)}>▶️</button> : null;
   const replay = p.onReplay ? <button style={delIcon} title="New generation" onClick={() => p.onReplay!(t)}>♻️</button> : null;
   const history = p.onHistory ? <button style={delIcon} title="Moderator history — the first lesson made with this tool" onClick={() => p.onHistory!(t)}>📖</button> : null;
 
@@ -105,14 +109,7 @@ export function ToolCard(p: ToolCardProps) {
   const [randEmoji] = useState(() => randomEmoji());
   const emoji = isRenderableImage(t.thumbnail) ? '' : randEmoji;
   // Map the picture mode (from the Image size control) to CardShell props.
-  const im = p.imageMode;
-  const imgProps: any =
-    im === 0 ? { hideImage: true, gridHeight: 300 }
-    : im === 1 ? { thumbHeight: 84, gridHeight: 320 }
-    : im === 3 ? { thumbHeight: 160, gridHeight: 392 }
-    : im === 4 ? { imageAspect: '16 / 9' }
-    : im === 5 ? { imageAspect: '9 / 16' }
-    : { thumbHeight: 110, gridHeight: 340 };   // 2 = medium (default)
+  const imgProps: any = cardImageProps(p.imageMode ?? 2);
   return (
     <CardShell
       view={view}
@@ -142,11 +139,11 @@ export function ToolCard(p: ToolCardProps) {
           </span>
         );
       })()}
-      del={<>{history}{replay}{del}</>}
+      del={<>{history}{play}{replay}{del}</>}
       actions={<>
         {p.onToggleFav && <button style={{ ...iconBtn, fontSize: 17, color: fav ? '#f5b301' : undefined, opacity: fav ? 1 : 0.55 }}
           title={fav ? 'Unfavorite' : 'Favorite'} aria-pressed={fav} onClick={stop(() => p.onToggleFav!(t))}>{fav ? '★' : '☆'}</button>}
-        {!p.hideOpen && <button className="btn small green" onClick={() => onOpen(t)}>Open →</button>}
+        {!p.hideOpen && <button className="btn small green" onClick={() => onOpen(t)}>{p.openLabel || 'Open →'}</button>}
       </>}
     />
   );

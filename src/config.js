@@ -109,6 +109,8 @@ const DEFAULT_HOME_TOPIC_POOL = [
 
 const dbEnabled = hasConfiguredKey(DATABASE_URL);
 const dbPooled = hasPooledConnectionString(DATABASE_URL);
+const forceFileDb = /^(1|true|yes)$/i.test(String(process.env.SKETCHLEARN_FORCE_FILE_DB || '').trim());
+const dbRuntimeEnabled = dbEnabled && !forceFileDb;
 
 // Optional: Google Gemini. One key powers BOTH the lesson text (replacing DeepSeek)
 // and real generated images (Gemini's native image models). Set GEMINI_API_KEY to use it.
@@ -254,8 +256,9 @@ module.exports = {
   DEEPSEEK_API_KEY,
   DEEPSEEK_URL,
   DATABASE_URL,
-  dbEnabled,
+  dbEnabled: dbRuntimeEnabled,
   dbPooled,
+  forceFileDb,
   SUGGESTED_STORE_FILE,
   HOME_TOPICS_STORE_FILE,
   GLOBAL_TREND_SEEDS,

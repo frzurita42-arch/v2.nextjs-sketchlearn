@@ -41,17 +41,17 @@ export interface AppState {
   // How to open the next tool: jump straight to its saved results, or replay a
   // specific rendition config. Consumed once by the LessonPlayer on mount.
   openIntent?: { action: 'results' | 'replay' | 'generate'; config?: any } | null;
-  // A one-shot "preset the create form" seed: a study-path prompt card hands the
-  // slide tool a topic (and optional slide count) to PREFILL — the user still
-  // presses Generate. Consumed once by the LessonPlayer create form on mount.
-  slideSeed?: { topic?: string; slides?: number } | null;
+  // A one-shot "preset the create form" seed: a study-path card can prefill
+  // topic/slides/custom instructions and optionally auto-start generation.
+  // Consumed once by the LessonPlayer create form on mount.
+  slideSeed?: { topic?: string; slides?: number; customInstructions?: string; autoGenerate?: boolean } | null;
   builderDraft?: any;
   // A one-shot seed for the tool builder: prefill the artifact type + subject/
   // title from a suggested topic. Consumed once by BuilderStudioView on mount.
   // `pages`/`cards` (+ tone) let a topic pick — or the "✏️ Edit tool" button —
   // hand the builder a ready-made plan to review and edit. When `editSlug` is set
   // the Studio UPDATES that existing tool on publish instead of creating a new one.
-  builderSeed?: { artifact?: 'presentation' | 'repository'; subject?: string; title?: string; context?: string; tone?: string; pages?: any[]; cards?: any[]; editSlug?: string } | null;
+  builderSeed?: { artifact?: 'presentation' | 'repository'; subject?: string; title?: string; context?: string; sourcePrompt?: string; tone?: string; pages?: any[]; cards?: any[]; editSlug?: string } | null;
   suggestedSettings: any;
   suggestedGuidance: string;
   concept: string | null;

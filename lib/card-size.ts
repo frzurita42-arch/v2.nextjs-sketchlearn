@@ -14,6 +14,16 @@ const LAYOUT_MAX = CARD_SIZE_LABELS.length - 1;
 export const CARD_IMG_LABELS = ['No image', 'Small', 'Medium', 'Large', 'Cover 16:9', 'Cover 9:16'];
 const IMG_MAX = CARD_IMG_LABELS.length - 1;
 
+// Shared image-mode -> CardShell props mapping used by every card surface.
+export function cardImageProps(im: number): Record<string, any> {
+  return im === 0 ? { hideImage: true, gridHeight: 300 }
+    : im === 1 ? { thumbHeight: 84, gridHeight: 320 }
+    : im === 3 ? { thumbHeight: 160, gridHeight: 392 }
+    : im === 4 ? { imageAspect: '16 / 9' }
+    : im === 5 ? { imageAspect: '9 / 16' }
+    : { thumbHeight: 110, gridHeight: 340 };
+}
+
 const GLOBAL = 'sl_card_size';
 const IMG_GLOBAL = 'sl_card_img';
 const pageKeyOf = (p: string) => `sl_card_size:${p}`;

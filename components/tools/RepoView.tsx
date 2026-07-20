@@ -48,7 +48,7 @@ type ViewCtx = {
   imageGen: boolean;                               // "Suggest AI": show the 🖼️ per-card picture button
   emojiApprove: boolean;                           // ✅ show the per-card emoji that cycles the assignment status (no upload)
   studyMode: boolean;                              // 🎬 study path: show the "generate slides" button on 🔵 prompt cards
-  openStudy: (promptText: string) => void;         // open the slide tool with a prompt preset as its topic
+  openStudy: (promptText: string, sourceCard?: RepoCard, opts?: { autoGenerate?: boolean }) => void; // open the slide tool with card + topic context
   authorizedUsers: string[];                       // usernames that bypass a card's paywall (plus owner/admin)
   applyRepo: (repo: RepoSpec) => void;             // reconcile a server-returned repo (normal-user attach)
   editField: (id: string, patch: Partial<RepoCard>) => void;        // ✎ edit title/subtitle in place
@@ -215,6 +215,47 @@ const promptTextOf = (c: RepoCard): string => {
   return '';
 };
 const isPromptCard = (c: RepoCard): boolean => !!promptTextOf(c);
+
+const normTopic = (s: string) => s.trim().replace(/^[-•*\d.)\s]+/, '').replace(/\s+/g, ' ');
+const splitTopics = (raw: string): string[] => {
+  const clean = String(raw || '').replace(/^\s*🔵\s*/, '').trim();
+  if (!clean) return [];
+  const parts = clean
+    .split(/\r?\n|[;,]|\s\|\s|\s+and\s+/i)
+    .map(normTopic)
+    .filter((t) => t.length >= 3)
+    .slice(0, 16);
+  if (parts.length >= 2) return parts;
+  return clean.length <= 180 ? [clean] : [];
+};
+
+const uniqTopics = (items: string[]): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const t of items) {
+    const v = normTopic(t);
+    if (!v) continue;
+    const k = v.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(v);
+  }
+  return out;
+};
+
+const flattenCards = (list: RepoCard[]): RepoCard[] => list.flatMap((c) => [c, ...(c.children?.length ? flattenCards(c.children) : [])]);
+
+const findPathToCard = (list: RepoCard[], id: string, path: RepoCard[] = []): RepoCard[] | null => {
+  for (const c of list) {
+    const next = [...path, c];
+    if (c.id === id) return next;
+    if (c.children?.length) {
+      const hit = findPathToCard(c.children, id, next);
+      if (hit) return hit;
+    }
+  }
+  return null;
+};
 
 // Number → keycap emoji(s): 0 → 0️⃣, 10 → 1️⃣0️⃣ (one keycap per digit).
 const toKeycaps = (n: number) => String(Math.max(0, Math.floor(n))).split('').map((d) => `${d}️⃣`).join('');
@@ -983,12 +1024,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
         onClick={eat(cycleChildSort)}>🔀</button>,
     );
   }
-  // 🎬 Study — on a 🔵 PROMPT card (repo study-mode on), a button that opens the
-  // slide tool with this card's prompt preset as the topic. Shown to EVERYONE so
-  // students can jump straight from the study path to generating that lesson.
-  if (ctx.studyMode && isPromptCard(card)) activeControls.push(
-    <button key="study" type="button" title="Generate a slide activity from this prompt — opens the slide tool with the topic preset (you press Generate)."
-      style={{ ...iconBtn, fontSize: 16 }} onClick={eat(() => ctx.openStudy(promptTextOf(card)))}>🎬</button>,
+  // 🎬 Study — on any content card in study mode, jump to a lesson run seeded from
+  // this card's prompt/text + unit topic coverage.
+  if (ctx.studyMode && card.kind !== 'section' && (isPromptCard(card) || !!String(card.text || '').trim() || !!String(card.title || '').trim())) activeControls.push(
+    <button key="study" type="button" title="Generate slides from this card: creates a study tool if needed, then opens a presentation seeded by this card's topics."
+      style={{ ...iconBtn, fontSize: 16 }} onClick={eat(() => ctx.openStudy(promptTextOf(card), card))}>🎬</button>,
   );
 
   // ── ⚙️ Card settings — ALL owner/moderator controls for this card, gathered in
@@ -1473,12 +1513,50 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     app.rerender();
   };
 
-  // Open the configured slide tool with a prompt PRESET as its topic (the user then
-  // presses Generate). Falls back to the tool builder when no tool is configured.
-  const openStudy = async (promptText: string) => {
-    const topic = String(promptText || '').trim();
-    appState.slideSeed = { topic };
-    const s = (studyToolSlug || '').trim();
+  const repoTopicCoverage = (focus?: RepoCard): string[] => {
+    const all = flattenCards(cards);
+    const preferred = all.filter((c) => {
+      const tt = `${c.title || ''} ${c.subtitle || ''}`.toLowerCase();
+      return isPromptCard(c) || /\b(topic|topics|cover|coverage|card\s*2|lesson\s*2)\b/.test(tt);
+    });
+    const src = preferred.length ? preferred : all;
+    const core = src.flatMap((c) => splitTopics(promptTextOf(c) || c.text || ''));
+    const aroundFocus = focus ? splitTopics(promptTextOf(focus) || focus.text || focus.title || '') : [];
+    return uniqTopics([...aroundFocus, ...core]).slice(0, 24);
+  };
+
+  const studySeedFromCard = (promptText: string, sourceCard?: RepoCard) => {
+    const repoTitle = String(def?.title || 'Study path').trim();
+    const path = sourceCard ? findPathToCard(cards, sourceCard.id) : null;
+    const unit = (path && path.length > 0 ? path[0] : undefined) || sourceCard;
+    const unitTitle = String(unit?.title || '').trim();
+    const cardTitle = String(sourceCard?.title || '').trim();
+    const cardPrompt = String(promptText || '').trim() || (sourceCard ? promptTextOf(sourceCard) : '');
+    const cardTopics = sourceCard ? splitTopics(cardPrompt || sourceCard.text || sourceCard.title || '') : [];
+    const unitTopics = unit ? uniqTopics(flattenCards([unit]).flatMap((c) => splitTopics(promptTextOf(c) || c.text || ''))).slice(0, 12) : [];
+    const topics = uniqTopics([...cardTopics, ...unitTopics, ...repoTopicCoverage(sourceCard)]).slice(0, 16);
+    const topic = cardPrompt || (topics.length ? topics.join(', ') : '') || cardTitle || unitTitle || repoTitle;
+    const customInstructions = [
+      `Use this repository as the source of truth: ${repoTitle}.`,
+      unitTitle ? `Unit to teach now: ${unitTitle}.` : '',
+      cardTitle ? `Source card: ${cardTitle}.` : '',
+      topics.length ? `Topics to cover in this lesson: ${topics.join('; ')}.` : '',
+      'Keep slide sequence cohesive: introduction, core ideas, then application/check questions tied to these topics.',
+    ].filter(Boolean).join(' ');
+    return { topic, topics, customInstructions };
+  };
+
+  // Open the configured slide tool with card-aware seed data. If no study tool is
+  // configured yet and the editor has permission, auto-create one from the repo.
+  const openStudy = async (promptText: string, sourceCard?: RepoCard, opts?: { autoGenerate?: boolean }) => {
+    const seed = studySeedFromCard(promptText, sourceCard);
+    const autoGenerate = opts?.autoGenerate !== false;
+    appState.slideSeed = { topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions, autoGenerate };
+    let s = (studyToolSlug || '').trim();
+    if (!s && canEdit) {
+      const made = await createStudyTool({ subject: seed.topic, topics: seed.topics, openAfterCreate: false });
+      if (made) s = made;
+    }
     if (s) {
       try {
         const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(s)}`);
@@ -1487,9 +1565,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
       alert(`Could not open the study tool "${s}". Pick it from the list in this repo's Study-path settings.`);
       return;
     }
-    if (canEdit) { alert('Set which slide tool the study button opens in this repo’s 🎬 Study-path settings.'); return; }
-    appState.builderSeed = { artifact: 'presentation', subject: topic } as any;
+    if (canEdit) { alert('Could not create or open the study tool from this repository. Check your permissions and try again.'); return; }
+    appState.builderSeed = { artifact: 'presentation', subject: seed.topic, context: seed.customInstructions } as any;
     app.nav('toolbuilder');
+  };
+
+  const openStudySetup = async () => {
+    await openStudy('', undefined, { autoGenerate: false });
   };
 
   const ctx: ViewCtx = { slug, me, isOwner, done, toggle, entriesByCard, onAdded: loadEntries, favs: myFavs, toggleFav, collapseCmd, levelIndex, assignShown, posterUpload, userUpload, aiShown, canEdit, isAdmin, preview, docUpload, showDates, imageGen, emojiApprove, studyMode, openStudy, authorizedUsers, applyRepo, editField, distortTitle, distortText, addSubcard, addAnswerChild, addAnswerSibling, addSibling, sortCards, moveCard, setIcon, numberCard, deleteCard };
@@ -1515,19 +1597,27 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // wired to the engaging activity catalogue (no tooltips), then point the study
   // buttons at it. The repo's prompt cards then feed topics into this fresh tool.
   const [creatingTool, setCreatingTool] = useState(false);
-  const createStudyTool = async () => {
+  const createStudyTool = async (opts?: { subject?: string; topics?: string[]; openAfterCreate?: boolean }): Promise<string | null> => {
     setCreatingTool(true);
+    let createdSlug: string | null = null;
     try {
-      const definition = buildStudyToolDefinition({ title: def?.title || 'Study', context: def?.description || '', subject: ccSubject, level: ccLevel, slides: ccSlides, length: ccLength, tone: ccTone });
+      const topicCoverage = uniqTopics([...(opts?.topics || []), ...repoTopicCoverage()]).slice(0, 16);
+      const subject = String(opts?.subject || ccSubject || def?.title || 'Study').trim();
+      const definition = buildStudyToolDefinition({ title: def?.title || 'Study', context: def?.description || '', subject, level: ccLevel, slides: ccSlides, length: ccLength, tone: ccTone, topics: topicCoverage });
       const r: any = await API.post('/api/tools', { definition, visibility: 'unlisted' });
       if (r?.slug) {
+        createdSlug = r.slug;
         await saveStudyTool(r.slug);
         setStudyToolList((l) => [{ slug: r.slug, title: definition.title }, ...l]);
-        // Open the fresh tool (returns to this repo on Back).
-        try { const rr: any = await API.get(`/api/tools?slug=${encodeURIComponent(r.slug)}`); if (rr?.tool) goToTool(rr.tool); } catch { /* stays configured */ }
+        // Open the fresh tool (returns to this repo on Back) unless the caller
+        // wants to continue a card-driven launch sequence itself.
+        if (opts?.openAfterCreate !== false) {
+          try { const rr: any = await API.get(`/api/tools?slug=${encodeURIComponent(r.slug)}`); if (rr?.tool) goToTool(rr.tool); } catch { /* stays configured */ }
+        }
       } else { alert(r?.error || 'Could not create the slide tool.'); }
     } catch (e: any) { alert(e?.message || 'Could not create the slide tool.'); }
     setCreatingTool(false);
+    return createdSlug;
   };
   // Ask the AI to build the tool: hand the tool builder this repo as context.
   const openAiBuilder = () => {
@@ -1606,9 +1696,45 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const shownCards = Math.min(totalCards, readChunks * READ_MORE_STEP);
   const prunedTop = takeTree(orderedTop, { n: readChunks * READ_MORE_STEP });
   const remainingCards = totalCards - shownCards;
+  const studyCardCount = flattenCards(cards).filter((c) => c.kind !== 'section' && (isPromptCard(c) || !!String(c.text || '').trim() || !!String(c.title || '').trim())).length;
+  const selectedStudyName = studyToolSlug.trim() ? ((studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug) : '';
 
   return (
     <div>
+      <div className="card alt" style={{ padding: '10px 12px', marginBottom: 10, borderStyle: 'dashed' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <b>🎬 Lesson Quick Start</b>
+          <span style={{ fontSize: 12, opacity: 0.7 }}>Cards ready for lessons: {studyCardCount}</span>
+        </div>
+        {canEdit ? (
+          <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button className={`btn small ${studyMode ? 'blue' : 'ghost'}`}
+                title={studyMode ? 'Study path is enabled' : 'Enable study-path buttons on repo cards'}
+                onClick={() => saveStudyMode(!studyMode)}>🎬 Study path: {studyMode ? 'On' : 'Off'}</button>
+              <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                <span>Slide tool</span>
+                <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={{ fontSize: 12 }}>
+                  <option value="">— pick a presentation —</option>
+                  {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
+                </select>
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button className="btn small green" disabled={creatingTool} onClick={() => { void createStudyTool(); }}>{creatingTool ? 'Creating…' : '✨ Create slide tool from this repo'}</button>
+              <button className="btn small blue" onClick={() => { void openStudySetup(); }}>🛠 Open tool setup (customize first)</button>
+              <button className="btn small ghost" title="Quick start from a specific card" onClick={() => { alert('Tip: click 🎬 on a specific card to launch that lesson from its topics.'); }}>⚡ Quick lesson from card</button>
+            </div>
+            <span style={{ fontSize: 11, opacity: 0.65 }}>Recommended flow: pick/create slide tool → Open tool setup to customize options → click Generate. For one-click lessons, click 🎬 on a specific card.</span>
+          </div>
+        ) : (
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+            {studyMode
+              ? `Study mode is enabled${selectedStudyName ? ` with ${selectedStudyName}` : ''}. Click 🎬 on a card to open the lesson flow.`
+              : 'Study mode is currently off for this repository.'}
+          </div>
+        )}
+      </div>
 
       {/* Body */}
       {editing ? (
@@ -1649,7 +1775,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
           belowToolbar={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%', position: 'sticky', top: 8, zIndex: 4, padding: '4px 0 10px', background: 'linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.92))' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.58, letterSpacing: 0.3, textTransform: 'uppercase' }}>🎛 Control center</div>
               {/* Row 1 — USER CONTROLS: the display & add buttons, grouped in the
                   same labelled dashed OutlineBox as the other filter sections. */}
               <OutlineBox title="USER CONTROLS" maxWidth={1000}>
@@ -1770,7 +1897,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                           <select value={ccTone} onChange={(e) => setCcTone(e.target.value)} style={{ fontSize: 12 }}><option value="">Default</option>{TONES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
                         </label>
                       </div>
-                      <button className="btn small green" style={{ alignSelf: 'center' }} disabled={creatingTool} onClick={createStudyTool}>{creatingTool ? 'Creating…' : '✨ Create the slide tool'}</button>
+                      <button className="btn small green" style={{ alignSelf: 'center' }} disabled={creatingTool} onClick={() => { void createStudyTool(); }}>{creatingTool ? 'Creating…' : '✨ Create the slide tool'}</button>
                       <span style={{ fontSize: 11, opacity: 0.6, textAlign: 'center' }}>No tooltips. Defaults for the new tool — each play can still tweak them.</span>
                     </>)}
 
@@ -1786,7 +1913,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   {ccMode === '' && studyToolSlug.trim() && (
                     <button className="btn small ghost" style={{ alignSelf: 'center' }} title="Clear the selected tool" onClick={() => saveStudyTool('')}>✕ Clear selection</button>
                   )}
-                  <span style={{ fontSize: 11, opacity: 0.55, textAlign: 'center' }}>Cards starting with 🔵 show a 🎬 button that opens this tool with the prompt preset.</span>
+                  <span style={{ fontSize: 11, opacity: 0.55, textAlign: 'center' }}>Content cards show a 🎬 button that opens this tool with unit/card topics pre-seeded and ready to generate.</span>
                 </div>
                 );
               })()}

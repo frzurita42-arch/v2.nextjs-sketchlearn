@@ -5,8 +5,11 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 
-export function SharePanel({ slug, title, query, label }: {
-  slug: string; title?: string;
+export function SharePanel({ slug, title, shareUrl, query, label }: {
+  slug?: string; title?: string;
+  // If provided, share this exact URL (e.g. a gallery page like /?view=presrun)
+  // instead of generating a tool URL from `slug`.
+  shareUrl?: string;
   // Extra query params to append to the share URL (e.g. { results: '1' } to open
   // straight on a lesson's results page). Also swaps the button label when set.
   query?: Record<string, string>; label?: string;
@@ -17,14 +20,19 @@ export function SharePanel({ slug, title, query, label }: {
 
   useEffect(() => {
     if (!open) return;
-    const u = new URL(`${window.location.origin}/`);
-    u.searchParams.set('tool', slug);
-    for (const [k, v] of Object.entries(query || {})) u.searchParams.set(k, v);
-    const s = u.toString();
+    let s = '';
+    if (shareUrl) {
+      s = new URL(shareUrl, window.location.origin).toString();
+    } else {
+      const u = new URL(`${window.location.origin}/`);
+      if (slug) u.searchParams.set('tool', slug);
+      for (const [k, v] of Object.entries(query || {})) u.searchParams.set(k, v);
+      s = u.toString();
+    }
     setUrl(s);
     QRCode.toDataURL(s, { width: 320, margin: 2, errorCorrectionLevel: 'M' }).then(setQr).catch(() => setQr(''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, slug, JSON.stringify(query || {})]);
+  }, [open, slug, shareUrl, JSON.stringify(query || {})]);
 
   const copy = () => navigator.clipboard?.writeText(url).then(
     () => { /* copied */ },
@@ -48,7 +56,7 @@ export function SharePanel({ slug, title, query, label }: {
             <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} style={{ width: '100%', fontSize: 12, textAlign: 'center', marginBottom: 8 }} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button className="btn small green" onClick={copy}>📋 Copy link</button>
-              {qr && <a className="btn small ghost" href={qr} download={`${slug}-qr.png`}>⬇ Download QR</a>}
+              {qr && <a className="btn small ghost" href={qr} download={`${slug || 'page'}-qr.png`}>⬇ Download QR</a>}
             </div>
           </div>
         </div>

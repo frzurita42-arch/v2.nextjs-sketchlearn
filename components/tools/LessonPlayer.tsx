@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
+import { useCardSize, useImgSize, cardImageProps, galleryLayout } from '@/lib/card-size';
 import { useApp } from '@/components/AppContext';
 
 // Reconstruct the Studio's editable page stack from a tool's saved lesson.pages,
@@ -40,6 +41,7 @@ function lessonToStudioPages(lesson: any): any[] {
 import { defaultsFor } from '@/lib/tool-schema';
 import { ToolFields } from '@/components/tools/ToolFields';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
+import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
 import { RichText } from '@/components/tools/RichText';
 import { DrawField } from '@/components/tools/MediaFields';
 import { AudioButton } from '@/components/ui/AudioButton';
@@ -55,10 +57,13 @@ import { estimateLessonTokens } from '@/lib/cost-estimate';
 import { LESSON_THEMES } from '@/lib/lesson-themes';
 import { TTS_VOICES } from '@/lib/tts';
 import { type FilterKey } from '@/components/ui/Collection';
-import { GallerySection } from '@/components/ui/GallerySection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 import { DonationPrompt } from '@/components/tools/DonationPrompt';
 import { SharePanel } from '@/components/tools/SharePanel';
+import { CardViewMenu } from '@/components/ui/CardViewMenu';
+import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
+import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
+import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -821,6 +826,15 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const levels: string[] = levelField?.options?.length ? levelField.options : TEXT_LEVELS;
 
   const app = useApp();
+  // Use the same global/per-page card settings source as Slides cards.
+  const setupCardSize = useCardSize('slides');
+  const setupImgMode = useImgSize('slides');
+  const galleryCardSize = useCardSize('presrun');
+  const galleryImgMode = useImgSize('presrun');
+  const galleryCfg = galleryLayout(galleryCardSize);
+  const [historyQ, setHistoryQ] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'fav'>('fav');
+  const [historyPage, setHistoryPage] = useState(1);
   // Only moderators and admins may PLAY / generate a presentation. A normal user
   // (or a guest / an admin previewing as a user) can only VIEW the saved history.
   const eff = app.eff();
@@ -861,6 +875,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [savedDeck, setSavedDeck] = useState<any>(lesson.savedDeck || null);
   const hasSaved = !!(savedDeck?.slides?.length);
   const [wizardKey, setWizardKey] = useState(0);   // bump to reset the settings wizard to step 1
+  const [wizardStep, setWizardStep] = useState(0);
+  useEffect(() => { setWizardStep(0); }, [wizardKey]);
   const [deckMsg, setDeckMsg] = useState('');
   const offlineOn = lesson.offlineExport !== false;   // owner/admin can turn it off
   const [zipBusy, setZipBusy] = useState(false);
@@ -917,6 +933,49 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const isGuest = !app.user;
   // A rotating recommendation for the empty-history state; the nonce reshuffles it.
   const [recNonce, setRecNonce] = useState(0);
+
+  const fmtDateTime = (v: any) => {
+    if (!v) return '—';
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString();
+  };
+  const supportTokens = (support: any) => {
+    const out: string[] = [];
+    if (support?.images) out.push('img');
+    if (support?.tables) out.push('table');
+    if (support?.formulas) out.push('formula');
+    if (support?.code) out.push('code');
+    if (support?.audio) out.push('audio');
+    if (support?.geogebra) out.push('graph');
+    return out;
+  };
+  const activityToken = (kind: string) => {
+    const k = String(kind || '').trim().toLowerCase();
+    if (k === 'mcq') return 'mcq4';
+    if (k === 'fill-blank') return 'fill-blank';
+    if (k === 'input') return 'write-answer';
+    if (k === 'writing') return 'handwriting';
+    if (k === 'annotation') return 'annotation';
+    if (k === 'code') return 'code-box';
+    return k || 'mcq4';
+  };
+  const slideComboHint = () => {
+    const pages = Array.isArray(lesson?.pages) ? lesson.pages : [];
+    const lessonSupport = lesson?.support || {};
+    const lessonActivities = Array.isArray(lesson?.activityTypes) ? lesson.activityTypes : [];
+    const slots = pages.length ? pages.slice(0, 12) : [{}];
+    return slots.map((p: any, i: number) => {
+      const readingOn = p?.reading !== false;
+      const paraCount = Math.max(1, Math.min(4, parseInt(p?.paragraphsPerSlide, 10) || parseInt(lesson?.paragraphsPerSlide, 10) || 1));
+      const seq: string[] = [];
+      if (readingOn) for (let j = 0; j < paraCount; j += 1) seq.push('text');
+      seq.push(...supportTokens({ ...lessonSupport, ...(p?.support || {}) }));
+      const acts = (Array.isArray(p?.activityTypes) && p.activityTypes.length ? p.activityTypes : lessonActivities).map(activityToken).filter(Boolean);
+      const evalPart = acts.length ? `[${acts.join(' | ')}]` : '[mcq4 | fill-blank | write-answer]';
+      return `${i + 1}: ${[...seq, evalPart].join(', ')}`;
+    }).join(' ; ');
+  };
 
   // --- Rendition cards: the same AI-changing distortion powers as a tool card. ---
   // Anyone may edit their OWN rendition; the owner/admin may edit any. `data` on
@@ -1302,9 +1361,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Consume a study-path "slide seed" once: a 🔵 prompt card (via the 🎬 button)
-  // handed us a topic to PREFILL the create form. We only prefill the topic (and
-  // optional slide count) — the user still presses Generate. We never auto-play.
+  // Consume a study-path "slide seed" once: a repo card can prefill the create
+  // form and optionally auto-start generation for one-click lesson launches.
   const seedDone = useRef(false);
   useEffect(() => {
     if (seedDone.current) return;
@@ -1312,10 +1370,24 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     if (!seed) return;
     seedDone.current = true; appState.slideSeed = null;
     const topic = String(seed.topic || '').trim();
-    if (!topic && !seed.slides) return;
-    setForm(s => ({ ...s, ...(topic ? { topic } : {}), ...(seed.slides ? { slides: seed.slides } : {}) }));
+    const customInstructions = String(seed.customInstructions || '').trim();
+    if (!topic && !seed.slides && !customInstructions) return;
+    let seededCfg: Cfg | null = null;
+    setForm(s => {
+      seededCfg = {
+        ...s,
+        ...(topic ? { topic } : {}),
+        ...(seed.slides ? { slides: seed.slides } : {}),
+        ...(customInstructions ? { custom: customInstructions } : {}),
+      };
+      return seededCfg;
+    });
     // Land on the create form (hub) so the preset topic is visible, and scroll to it.
     setPhase('hub'); try { window.scrollTo(0, 0); } catch { /* ignore */ }
+    if (seed.autoGenerate) {
+      const cfg = seededCfg;
+      if (cfg) setTimeout(() => { recordAndPlay(cfg); }, 0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1649,10 +1721,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         {suggestingField[id] ? '…' : '🎨'}
       </button>
     );
-    // Every rendition here is the same tool's topic, so there's no topic filter —
-    // the standard Collection owns search / favorites / by-admin / rows / sort /
-    // count / pagination.
     const feedItems = activities;
+    const visibleFeed = feedItems.filter((e: any) => {
+      if (historyFilter === 'fav' && !favs[e.id]) return false;
+      const term = historyQ.trim().toLowerCase();
+      if (!term) return true;
+      const hay = `${label(e.data || {})} ${e.username || ''} ${e.data?.topic || ''}`.toLowerCase();
+      return hay.includes(term);
+    });
+    const feedPages = Math.max(1, Math.ceil(visibleFeed.length / 6));
+    const shownFeed = visibleFeed.slice((historyPage - 1) * 6, historyPage * 6);
+    const skeletonRec = { slug, title: def?.title || 'Presentation', archetype: 'lesson', owner: 'sketchlearn', visibility: 'public', description: def?.description || 'Open this slide tool to play.', tags: def?.tags || [], aiGenerated: false, thumbnail: null, createdAt: new Date().toISOString() };
     // One rendition card — rendered through the SHARED CardShell so its container
     // (image space, title, subtitle, footer) is identical to the tools gallery
     // cards; only the buttons differ (Play + OP results instead of Open →). It
@@ -1742,21 +1821,21 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           actions={
             <>
               {app.user && <button style={iconBtn} title={favs[e.id] ? 'Unfavorite' : 'Favorite'} onClick={() => toggleFav(e.id)}>{favs[e.id] ? '★' : '☆'}</button>}
-              {/* 📖 review the owner's saved results — visible to EVERYONE (guests
-                  and normal users too) whenever a run has been saved. */}
               {(hasSaved || canEdit) && (
-                <button className="btn small" style={{ background: '#fbe08a', padding: '5px 9px' }} title={hasSaved ? "View the saved run (history)" : 'No results saved yet'}
+                <button className="btn small" style={{ background: '#fbe08a', padding: '5px 9px' }} title={hasSaved ? 'View the saved run (history)' : 'No results saved yet'}
                   onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } else alert('No results saved yet — a moderator plays a run and it saves automatically.'); }}>📖</button>
               )}
-              {/* ▶ Play is offered to everyone; the gate routes guests to sign in and
-                  normal users to the dashboard to buy credits. */}
               <button className="btn small green" title="Play a fresh replica (no answers)" onClick={() => gatedPlay(play)}>▶ Play</button>
             </>
           }
         />
       );
     };
-    const dashRule = { borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '14px 0' } as const;
+    const setupWidth = setupCardSize <= 0 ? 360 : setupCardSize === 1 ? 340 : setupCardSize === 2 ? 392 : setupCardSize === 3 ? 430 : setupCardSize === 4 ? 500 : 560;
+    const setupImageProps: any = cardImageProps(setupImgMode);
+    const setupGridHeight = typeof setupImageProps.gridHeight === 'number'
+      ? setupImageProps.gridHeight + 110
+      : 430;
     // View options: offer the saved original deck and/or a fresh AI replica.
     const showGenerate = viewMode !== 'history' || !hasSaved;
     return (
@@ -1809,121 +1888,202 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             via the "✏️ Edit layout & activities" button beside "New topics". */}
 
         {/* The create wizard and the donation mug share one compact row (wrap on narrow). */}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'nowrap', alignItems: 'flex-start', width: '100%' }}>
         {showGenerate && (
-        <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed', flex: '1 1 320px', minWidth: 280 }}>
-          {/* Compact header: the title, then the edit-layout ⚙️ and new-topics 🔄 as
-              inline icon chips (they used to be full buttons). */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-            <h4 style={{ margin: 0, cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={toggleSettings}
-              title={settingsOpen ? 'Collapse — show only the essentials' : 'Expand — show every setting'}>
-              <span style={{ opacity: 0.45, fontSize: 12 }}>{settingsOpen ? '▾' : '▸'}</span>
-              Create a {lesson.subject || 'lesson'} activity
-            </h4>
-            {/* Bare icons (no button box). ⚙️ opens the Studio to modify the proposed
-                lesson layouts set when the tool was created — shown to owners/admins
-                (incl. on example tools). 🔄 refreshes the suggested topics. */}
-            {(canEdit || eff.isAdmin) && <button onClick={openLayoutEditor} title="Modify the proposed lesson layouts (opens the Studio)"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
-            <button onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>{topicsBusy ? '…' : '🔄'}</button>
-          </div>
-          {/* A guided wizard: Basics → Level & length → Style → Play/Generate. Reuses
-              the same <ToolFields> + form state; the last step carries the actions. */}
+        <div style={{ flex: `0 1 ${setupWidth}px`, width: '100%', minWidth: 320, maxWidth: setupWidth, boxSizing: 'border-box' }}>
           {(() => {
             const fieldsFor = (ids: string[]) => formFields.filter((f: any) => ids.includes(f.id));
             const stepFields = (ids: string[], single?: boolean) => {
               const fs = fieldsFor(ids);
-              return fs.length ? <ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} single={single} /> : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>;
+              return fs.length
+                ? <div style={{ width: 240 }}><ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} single={single} /></div>
+                : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>;
             };
-            const styleStep = (
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {fieldsFor(['tone', 'category', 'custom']).length > 0 && <div style={{ flex: '1 1 100%' }}><ToolFields fields={fieldsFor(['tone', 'category', 'custom'])} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} /></div>}
-                <label className="field" style={{ maxWidth: 240 }}><span>🎭 Theme{suggestBtn('theme', 'Theme', [...LESSON_THEMES])}</span>
-                  <select value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
-                    {LESSON_THEMES.map((th) => <option key={th} value={th}>{th === 'Any' ? 'Any (AI picks)' : th}</option>)}
-                  </select>
-                </label>
-                <label className="field" style={{ maxWidth: 240 }}><span>📏 Text density{suggestBtn('density', 'Text density', PARA_DENSITIES)}</span>
-                  <select value={(form as any).density || ''} onChange={(e) => setForm(s => ({ ...s, density: e.target.value }))} title="How much text to show — independent of the level's vocabulary difficulty">
-                    <option value="">Auto (match the level)</option>
-                    {PARA_DENSITIES.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </label>
-                <label className="field" style={{ maxWidth: 240 }}><span>🖼 Image style
-                  <button type="button" title={customImg ? 'Pick from the list' : 'Type a custom style'}
-                    onClick={() => { const goingCustom = !customImg; setCustomImg(goingCustom); if (!goingCustom && !(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle)) setForm(s => ({ ...s, imageStyle: 'Any' })); }}
-                    style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{customImg ? '▾' : '✎'}</button>
-                  {suggestBtn('imageStyle', 'Image style', [...IMAGE_STYLES])}
-                </span>
-                  {customImg
-                    ? <input type="text" placeholder="Describe your image style…" value={(form as any).imageStyle || ''} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))} />
-                    : <select value={(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle) ? (form as any).imageStyle : 'Any'} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
-                        {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
-                      </select>}
-                </label>
-                <label className="field" style={{ maxWidth: 240 }}><span>🔌 Image API</span>
-                  <select value={(form as any).imageProvider || ''} onChange={(e) => setForm(s => ({ ...s, imageProvider: e.target.value }))} title="Which image generator to use — Pollinations is free & keyless">
-                    <option value="">Auto (best available)</option>
-                    {imageProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
-                </label>
-                <label className="field" style={{ maxWidth: 240 }}><span>🔤 Text API</span>
-                  <select value={(form as any).textProvider ?? 'gemini'} onChange={(e) => setForm(s => ({ ...s, textProvider: e.target.value }))} title="Which model writes the slide text & questions — Gemini is the default">
-                    <option value="gemini">Gemini (default)</option>
-                    <option value="">Auto (best available)</option>
-                    {textProviders.filter((p) => p.id !== 'gemini').map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
-                </label>
-                <label className="field" style={{ maxWidth: 240 }}><span>🎙 Voice</span>
-                  <select value={(form as any).voice || ''} onChange={(e) => setForm(s => ({ ...s, voice: e.target.value }))} title="Which voice reads the text aloud / pronounces words">
-                    <option value="">Default voice</option>
-                    {TTS_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                  </select>
-                </label>
-                {canPlay && (
-                  <label className="field" style={{ maxWidth: 240 }}><span>💡 Tooltips</span>
-                    <button type="button" className={`btn small ${(form as any).tooltips === false ? 'ghost' : 'blue'}`}
-                      onClick={() => setForm(s => ({ ...s, tooltips: (s as any).tooltips === false }))}>
-                      💡 Tooltips: {(form as any).tooltips === false ? 'Off' : 'On'}
-                    </button>
-                  </label>
-                )}
-              </div>
+            const goPrev = () => setWizardStep((s) => Math.max(0, s - 1));
+            const goNext = () => setWizardStep((s) => Math.min(7, s + 1));
+            const fieldShell: React.CSSProperties = { width: 240, margin: 0 };
+            const controlStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 14px', fontSize: '1.05rem', lineHeight: 1.2 };
+            const navSizeStyle: React.CSSProperties = {
+              width: 96,
+              height: 40,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            };
+            const fieldLabelStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', marginBottom: 4 };
+            const themeField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>🎭 Theme{suggestBtn('theme', 'Theme', [...LESSON_THEMES])}</span>
+                <select style={controlStyle} value={(form as any).theme || 'Any'} onChange={(e) => setForm(s => ({ ...s, theme: e.target.value }))}>
+                  {LESSON_THEMES.map((th) => <option key={th} value={th}>{th === 'Any' ? 'Any (AI picks)' : th}</option>)}
+                </select>
+              </label>
             );
-            const steps: WizardStep[] = [
-              { key: 'basics', title: 'Name & topic', render: () => stepFields(['title', 'topic']) },
-              { key: 'level', title: 'Level & length', render: () => stepFields(['level', 'difficulty', 'slides']) },
-              { key: 'style', title: 'Style (optional)', render: () => styleStep },
-            ];
+            const densityField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>📏 Text density{suggestBtn('density', 'Text density', PARA_DENSITIES)}</span>
+                <select style={controlStyle} value={(form as any).density || ''} onChange={(e) => setForm(s => ({ ...s, density: e.target.value }))} title="How much text to show — independent of the level's vocabulary difficulty">
+                  <option value="">Auto (match the level)</option>
+                  {PARA_DENSITIES.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </label>
+            );
+            const imageStyleField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>🖼 Image style
+                <button type="button" title={customImg ? 'Pick from the list' : 'Type a custom style'}
+                  onClick={() => { const goingCustom = !customImg; setCustomImg(goingCustom); if (!goingCustom && !(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle)) setForm(s => ({ ...s, imageStyle: 'Any' })); }}
+                  style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>{customImg ? '▾' : '✎'}</button>
+                {suggestBtn('imageStyle', 'Image style', [...IMAGE_STYLES])}
+              </span>
+                {customImg
+                  ? <input type="text" style={controlStyle} placeholder="Describe your image style…" value={(form as any).imageStyle || ''} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))} />
+                  : <select style={controlStyle} value={(IMAGE_STYLES as readonly string[]).includes((form as any).imageStyle) ? (form as any).imageStyle : 'Any'} onChange={(e) => setForm(s => ({ ...s, imageStyle: e.target.value }))}>
+                      {IMAGE_STYLES.map((st) => <option key={st} value={st}>{st === 'Any' ? 'Any (AI picks)' : st}</option>)}
+                    </select>}
+              </label>
+            );
+            const imageApiField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>🔌 Image API</span>
+                <select style={controlStyle} value={(form as any).imageProvider || ''} onChange={(e) => setForm(s => ({ ...s, imageProvider: e.target.value }))} title="Which image generator to use — Pollinations is free & keyless">
+                  <option value="">Auto (best available)</option>
+                  {imageProviders.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+              </label>
+            );
+            const textApiField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>🔤 Text API</span>
+                <select style={controlStyle} value={(form as any).textProvider ?? 'gemini'} onChange={(e) => setForm(s => ({ ...s, textProvider: e.target.value }))} title="Which model writes the slide text & questions — Gemini is the default">
+                  <option value="gemini">Gemini (default)</option>
+                  <option value="">Auto (best available)</option>
+                  {textProviders.filter((p) => p.id !== 'gemini').map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+              </label>
+            );
+            const voiceField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>🎙 Voice</span>
+                <select style={controlStyle} value={(form as any).voice || ''} onChange={(e) => setForm(s => ({ ...s, voice: e.target.value }))} title="Which voice reads the text aloud / pronounces words">
+                  <option value="">Default voice</option>
+                  {TTS_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                </select>
+              </label>
+            );
+            const tooltipsField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>💡 Tooltips</span>
+                <button type="button" className={`btn ${(form as any).tooltips === false ? 'ghost' : 'blue'}`} style={{ ...controlStyle, justifyContent: 'flex-start', textAlign: 'left', boxShadow: 'none' }}
+                  onClick={() => setForm(s => ({ ...s, tooltips: (s as any).tooltips === false }))}>
+                  💡 Tooltips: {(form as any).tooltips === false ? 'Off' : 'On'}
+                </button>
+              </label>
+            );
             const finalActions = (
-              <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', width: 96, minWidth: 96 }}>
                 {!app.user
-                  ? <button className="btn green" onClick={() => app.requireLogin()}>▶ Sign in to play this lesson</button>
+                  ? <button className="btn small green" style={navSizeStyle} onClick={() => app.requireLogin()}>▶ Sign in</button>
                   : canPlay
                   ? <>
-                      {hasSaved && <button className="btn green" title="Play the saved version" onClick={() => { recordAndPlay(savedDeck?.config || form, { replica: true }); setWizardKey((k) => k + 1); }}>▶ Play</button>}
-                      <button className="btn green" onClick={() => { createAndPlay(); setWizardKey((k) => k + 1); }}>✨ Generate &amp; play →</button>
+                      {hasSaved && <button className="btn small green" style={navSizeStyle} title="Play the saved version" onClick={() => { recordAndPlay(savedDeck?.config || form, { replica: true }); setWizardKey((k) => k + 1); }}>▶ Play</button>}
+                      <button className="btn small green" style={navSizeStyle} onClick={() => { createAndPlay(); setWizardKey((k) => k + 1); }}>✨ Generate</button>
                     </>
-                  : <button className="btn green" title="You need play credits — get some from the dashboard" onClick={() => app.nav('dashboard')}>🎟 Get credits to play →</button>}
+                  : <button className="btn small green" style={navSizeStyle} title="You need play credits — get some from the dashboard" onClick={() => app.nav('dashboard')}>🎟 Get credits</button>}
                 {canPlay && !eff.isAdmin && (
-                  <span title="Estimated credits for this generation (slides + images). Charged as it runs." style={{ fontSize: 12, opacity: 0.7 }}>
+                  <span title="Estimated credits for this generation (slides + images). Charged as it runs." style={{ fontSize: 12, opacity: 0.7, textAlign: 'center' }}>
                     ~{estimateLessonTokens({ slides: (form as any).slides, totalSlides: lesson.totalSlides, support: lesson.support }).toLocaleString()} credits{typeof balance === 'number' ? ` · you have ${balance.toLocaleString()}` : ''}
                   </span>
                 )}
-                {gateMsg && <span style={{ fontSize: 12, color: 'var(--danger,#e4572e)' }}>{gateMsg}</span>}
-              </>
+                {gateMsg && <span style={{ fontSize: 12, color: 'var(--danger,#e4572e)', textAlign: 'center' }}>{gateMsg}</span>}
+              </div>
             );
-            return <StepWizard steps={steps} finalActions={finalActions} resetKey={wizardKey} bodyMinHeight={150} onCancel={() => setForm(defaultsFor(def) as any)} />;
+            const steps: WizardStep[] = [
+              {
+                key: 'basics',
+                title: 'Name & topic',
+                render: () => <WizardGridTemplate top={stepFields(['title'], true)} bottom={stepFields(['topic'], true)} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
+              },
+              {
+                key: 'levels',
+                title: 'Level pair',
+                render: () => {
+                  const hasLevel = !!fieldsFor(['level']).length;
+                  const hasDifficulty = !!fieldsFor(['difficulty']).length;
+                  const top = hasLevel ? stepFields(['level'], true) : stepFields(['difficulty'], true);
+                  const bottom = hasLevel && hasDifficulty
+                    ? stepFields(['difficulty'], true)
+                    : (!hasLevel && hasDifficulty ? stepFields(['level'], true) : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>);
+                  return <WizardGridTemplate top={top} bottom={bottom} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />;
+                },
+              },
+              {
+                key: 'slides-tone',
+                title: 'Slides & tone',
+                render: () => <WizardGridTemplate top={stepFields(['slides'], true)} bottom={stepFields(['tone'], true)} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
+              },
+              {
+                key: 'cat-custom',
+                title: 'Category & custom',
+                render: () => <WizardGridTemplate top={stepFields(['category'], true)} bottom={stepFields(['custom'], true)} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
+              },
+              {
+                key: 'theme-density',
+                title: 'Theme & density',
+                render: () => <WizardGridTemplate top={themeField} bottom={densityField} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
+              },
+              {
+                key: 'image-pair',
+                title: 'Image style & API',
+                render: () => <WizardGridTemplate top={imageStyleField} bottom={imageApiField} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
+              },
+              {
+                key: 'text-voice',
+                title: 'Text API & voice',
+                render: () => <WizardGridTemplate top={textApiField} bottom={voiceField} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
+              },
+              {
+                key: 'tooltips',
+                title: 'Tooltips',
+                render: () => <WizardGridTemplate top={tooltipsField} onBack={goPrev} backDisabled={wizardStep === 0} rightTop={finalActions} />,
+              },
+            ];
+            return (
+              <CardShell
+                view="grid"
+                title=""
+                {...setupImageProps}
+                gridHeight={setupGridHeight}
+                bodyStyle={{ padding: '10px 12px 12px' }}
+                body={(
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                      <h4 style={{ margin: 0, cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={toggleSettings}
+                        title={settingsOpen ? 'Collapse — show only the essentials' : 'Expand — show every setting'}>
+                        <span style={{ opacity: 0.45, fontSize: 12 }}>{settingsOpen ? '▾' : '▸'}</span>
+                        Create a {lesson.subject || 'lesson'} activity
+                      </h4>
+                      {(canEdit || eff.isAdmin) && <button onClick={openLayoutEditor} title="Modify the proposed lesson layouts (opens the Studio)"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
+                      <button onClick={() => loadTopics(true)} disabled={topicsBusy} title="Fresh suggested topics"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>{topicsBusy ? '…' : '🔄'}</button>
+                    </div>
+                    <StepWizard
+                      steps={steps}
+                      finalActions={null}
+                      resetKey={wizardKey}
+                      bodyMinHeight={112}
+                      actionsJustify="flex-end"
+                      stepIndex={wizardStep}
+                      onStepChange={setWizardStep}
+                      showFooter={false}
+                    />
+                  </>
+                )}
+              />
+            );
           })()}
         </div>
         )}
 
-        {/* The AI-example card was removed — the wizard is the single create interface.
-            The donation mug is the compact right column of the same row. */}
+        {/* The create wizard and the donation mug now share the screen evenly. */}
         {!donateCollapsed && (
-          <div style={{ flex: '0 1 240px', minWidth: 200, display: 'flex', justifyContent: 'center' }}>
+          <div style={{ flex: '1 1 0', minWidth: 0, width: '50%', minHeight: setupGridHeight, display: 'flex', justifyContent: 'center', alignItems: 'center', boxSizing: 'border-box' }}>
             <DonationPrompt mugWidth={200} mugHeight={166}
+              scope="lesson"
               address={donation.address} canManage={canManageDonation} onSaveAddress={saveDonateAddress}
               canCollapse={canManageDonation} onCollapse={toggleDonate} />
           </div>
@@ -1936,49 +2096,64 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         )}
 
         {/* ┄ divider: create ┄ activities feed ┄ */}
-        <div style={dashRule} />
+        <div style={{ maxWidth: 820, margin: '10px auto', borderTop: '2px dashed var(--ink)', opacity: 0.45 }} />
 
-        {/* The History section uses the SAME shared Collection container as the
-            gallery: small space → title (+ buttons) → banner → filter → items.
-            Only the title and the banner/handlers differ. (No topic filter — every
-            rendition here is the same tool's topic.) */}
-        <GallerySection
-          titleKey="historyShelfTitle" titleFallback="📖 History"
-          bannerKey="historyBanner" bannerDefault="📖 History — every generation made with this tool. Play a fresh replica, open the OP results, favorite, or search / filter / sort. Refresh shuffles the order."
-          onRefresh={() => { loadActivities(); setRecNonce((n) => n + 1); }}
-          showCollapse
-          items={feedItems}
-          id={(e: any) => e.id}
-          searchText={(e: any) => `${label(e.data || {})} ${e.username || ''} ${e.data?.topic || ''}`}
-          time={(e: any) => new Date(e.createdAt || 0).getTime()}
-          favs={isGuest ? {} : favs}
-          likedByAdmin={(e: any) => !!e.byAdmin}
-          likedByOwner={(e: any) => !!e.byModerator}
-          ownerLabel="🧑‍🏫 Moderator" ownerTitle="Only runs a moderator saved"
-          perPage={6}
-          storageKey="sl_lessonfeed_view"
-          sortPrefKey="lessonfeed"
-          /* Default to ★ Favorites (guests always; the saved feed filter only
-             applies to signed-in users who can save it). */
-          defaultFilter={(isGuest ? 'fav' : (['all', 'fav', 'admin', 'owner'].includes(def?.feedFilter || '') ? def.feedFilter : 'fav')) as FilterKey}
-          canSaveFilter={canEdit}
-          onSaveFilter={(f) => { if (def) def.feedFilter = f; API.post('/api/tools/feed-filter', { slug, filter: f }).catch(() => { /* ignore */ }); }}
-          searchPlaceholder="🔍 name / @user"
-          emptyAll="No activities yet — generate the first one above."
-          emptyFiltered="No activities match these filters."
-          emptyState={
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'stretch', margin: '4px auto 6px' }}>
-              <div className="card" style={{ width: 260, minHeight: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 12, padding: 18 }}>
-                <span className="sl-pencil" style={{ fontSize: 40, color: 'var(--ink)' }} aria-hidden><span className="sl-pencil__line" /><span className="sl-pencil__tip">✏️</span></span>
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4 }}>{activities.length ? 'Nothing favorited yet — ★ a run to keep it here. Meanwhile, try one:' : (canPlay ? 'Generate a lesson above to start the history. Or try one from elsewhere:' : 'No runs on this lesson yet. Try one from elsewhere:')}</p>
-              </div>
-              {activities.length
-                ? <div style={{ width: 260 }}>{feedCard(activities[recNonce % activities.length], false)}</div>
-                : <ElsewhereRecCard excludeSlug={slug} nonce={recNonce} />}
+        <GalleryFilterRow q={historyQ} onQ={setHistoryQ} filter={historyFilter} onFilter={setHistoryFilter} right={<>
+          <button className="btn small ghost" title="Refresh saved runs" aria-label="Refresh saved runs" onClick={() => { loadActivities(); setRecNonce((n) => n + 1); }} style={{ fontSize: 16, padding: '0 9px' }}>🔄</button>
+          <CardViewMenu pageKey="presrun" />
+        </>} />
+
+        {visibleFeed.length === 0 ? (
+          <GallerySkeleton cardSize={galleryCardSize} imgMode={galleryImgMode} recommended={skeletonRec}
+            onBuild={() => setWizardStep(0)}
+            onOpen={() => { if (canPlay) createAndPlay(); else gatedPlay(() => createAndPlay()); }}
+          />
+        ) : (
+          <>
+            <div style={{ ...galleryCfg.container, alignItems: 'stretch' }}>
+              {shownFeed.map((e: any) => feedCard(e, galleryCfg.view === 'row'))}
             </div>
-          }
-          renderGrid={(e: any) => feedCard(e, false)}
-          renderRow={(e: any) => feedCard(e, true)}
+            {feedPages > 1 && <GalleryPager page={historyPage} pages={feedPages} onPrev={() => setHistoryPage((p) => Math.max(1, p - 1))} onNext={() => setHistoryPage((p) => Math.min(feedPages, p + 1))} />}
+          </>
+        )}
+
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
+        <h3 style={{ margin: '0 0 10px' }}>🎮 Lessons made with this slide tool</h3>
+        <PagedTable
+          headers={['#', 'Lesson', 'Topic', 'Slides', 'Level', 'Created', 'Last accessed', 'Play']}
+          rows={activities.map((e: any, idx: number) => {
+            const d = e?.data || {};
+            return [
+              idx + 1,
+              String(d?.title || label(d || {}) || 'Saved run').trim() || 'Saved run',
+              String(d?.topic || lesson.subject || '').trim() || '—',
+              Number(d?.slides || lesson.totalSlides || (Array.isArray(lesson.pages) ? lesson.pages.length : 0)) || '—',
+              String(d?.level || d?.difficulty || lesson.level || '').trim() || 'Auto',
+              fmtDateTime(e?.createdAt),
+              fmtDateTime(e?.updatedAt || e?.createdAt),
+              { node: <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn small ghost" title="Owner history" onClick={() => { if (hasSaved) { setPhase('history'); window.scrollTo(0, 0); } }} style={{ padding: '0 8px' }}>📖</button>
+                <button className="btn small ghost" title="Play this saved run" onClick={() => recordAndPlay(d || {}, { replica: true })} style={{ padding: '0 8px' }}>▶️</button>
+              </span> },
+            ] as Cell[];
+          })}
+          empty="No lessons have been made with this slide tool yet."
+          rowsPerPage={6}
+        />
+
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
+        <h3 style={{ margin: '0 0 10px' }}>🛠 Slide tool info</h3>
+        <PagedTable
+          headers={['Slide tool', 'Prompt', 'Layout hint', 'Created', 'Last accessed']}
+          rows={[[
+            def?.title || 'Untitled slide tool',
+            String(def?.description || lesson?.style || '').trim() || '—',
+            slideComboHint(),
+            fmtDateTime((def as any)?.createdAt || null),
+            fmtDateTime(activities[0]?.updatedAt || activities[0]?.createdAt || null),
+          ]]}
+          empty="No slide tool information is available."
+          rowsPerPage={6}
         />
       </div>
     );
@@ -2101,13 +2276,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   return (
     <div>
       <style>{'@keyframes sl-spin{to{transform:rotate(360deg)}}'}</style>
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+      {/* Top run metadata: subject/topic + current level on one centered row. */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13, opacity: 0.7, textAlign: 'center' }}>{label(cfg)}</span>
-      </div>
-      {/* Always show the current slide's LEVEL, just under the back button and above
-          the progress bar (reflects a per-slide ⚙ level change too). */}
-      <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, opacity: 0.75, marginBottom: 6 }}>
-        🎚️ Level: {slideLevel[cur] || cfg.level || cfg.difficulty || levels[0]}
+        <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.75, textAlign: 'center' }}>
+          🎚️ Level: {slideLevel[cur] || cfg.level || cfg.difficulty || levels[0]}
+        </span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 13, opacity: 0.7 }}>Slide {cur + 1} / {tot}{qList.length > 1 ? ` · ${answeredCount}/${qList.length} answered` : ''}</span>

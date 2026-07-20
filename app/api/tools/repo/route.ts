@@ -3,7 +3,9 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-guard';
 import { validateToolDefinition } from '@/lib/tool-schema';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getToolBySlug, updateTool } = require('@/src/db/platform');
+const { getToolBySlug, updateTool, setExampleOverride } = require('@/src/db/platform');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { exampleBySlug } = require('@/src/tools/examples');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,9 +21,10 @@ export async function POST(req: Request) {
   const slug = String(b.slug || '');
   if (!slug || !b.repo) return NextResponse.json({ error: 'slug and repo are required' }, { status: 400 });
 
-  const tool = await getToolBySlug(slug);
+  const ex = exampleBySlug(slug);
+  const tool = ex || await getToolBySlug(slug);
   if (!tool) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if ((tool.tags || []).includes('example')) return NextResponse.json({ error: 'Example tools cannot be edited.' }, { status: 400 });
+  const isExample = !!ex || (tool.tags || []).includes('example');
   if (!(a.user.role === 'admin' || tool.owner === a.user.username)) {
     return NextResponse.json({ error: 'Only the owner or an admin can edit this repository.' }, { status: 403 });
   }
@@ -34,6 +37,10 @@ export async function POST(req: Request) {
   const { ok, errors, def } = validateToolDefinition(nextDef);
   if (!ok || !def) return NextResponse.json({ error: 'Invalid repository', details: errors }, { status: 400 });
 
-  await updateTool(slug, { definition: def });
+  if (isExample) {
+    await setExampleOverride(slug, { repo: def.repo });
+  } else {
+    await updateTool(slug, { definition: def });
+  }
   return NextResponse.json({ ok: true, repo: def.repo });
 }

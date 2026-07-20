@@ -2,7 +2,7 @@
  * the generic per-tool entry store, and comments. Each mirrors games.js — Postgres
  * when a pool exists, JSON-file fallback otherwise, so nothing is lost when the DB
  * is slow or unset. Key values are never handled here; this is pure persistence. */
-const { db, dbQuery, withDbTimeout } = require('./pool');
+const { db, dbQuery, withDbTimeout, degradeDb } = require('./pool');
 const { readJSON, writeJSON } = require('./persistence');
 
 // JSONB columns should come back parsed, but some drivers/paths hand back a raw
@@ -252,7 +252,7 @@ async function setToolLikeDelta(slug, delta, username = null) {
 // Gallery listing. A viewer sees: public tools, their OWN tools (any visibility),
 // and tools authored by an ADMIN. An admin viewer sees everything. Others' private
 // AND unlisted tools never appear here.
-async function listTools({ viewer = null, includePrivateFor = null, adminOwners = [], viewerIsAdmin = false, limit = 50 } = {}) {
+async function listTools({ viewer = null, includePrivateFor = null, adminOwners = [], viewerIsAdmin = false, limit = 50, strictDb = false, timeoutMs = 1500 } = {}) {
   const lim = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
   const me = includePrivateFor || viewer;
   const admins = Array.isArray(adminOwners) ? adminOwners : [];
@@ -269,9 +269,11 @@ async function listTools({ viewer = null, includePrivateFor = null, adminOwners 
        WHERE $1 OR visibility = 'public' OR ($2::text IS NOT NULL AND owner = $2) OR owner = ANY($3::text[])
        ORDER BY updated_at DESC LIMIT $4`,
       [!!viewerIsAdmin, me, admins, lim]
-    ), 8000, 'List tools');
+    ), timeoutMs, 'List tools');
     return rows.map(mapToolRow);
   } catch (e) {
+    if (strictDb) throw e;
+    await degradeDb(`DB list tools failed: ${e.message}`);
     console.error('DB list tools failed; falling back to file:', e.message);
     return readJSON('tools.json', [])
       .filter(fileFilter)
@@ -314,7 +316,7 @@ async function insertEntry(record) {
   }
 }
 
-async function listEntries(toolId, { limit = 200 } = {}) {
+async function listEntries(toolId, { limit = 200, strictDb = false, timeoutMs = 1500 } = {}) {
   const lim = Math.max(1, Math.min(1000, parseInt(limit, 10) || 200));
   if (!db.pool) {
     return readJSON('entries.json', [])
@@ -325,9 +327,11 @@ async function listEntries(toolId, { limit = 200 } = {}) {
     const { rows } = await withDbTimeout(dbQuery(
       'SELECT * FROM entries WHERE tool_id = $1 ORDER BY created_at DESC LIMIT $2',
       [toolId, lim]
-    ), 8000, 'List entries');
+    ), timeoutMs, 'List entries');
     return rows.map(mapEntryRow);
   } catch (e) {
+    if (strictDb) throw e;
+    await degradeDb(`DB list entries failed: ${e.message}`);
     console.error('DB list entries failed; falling back to file:', e.message);
     return readJSON('entries.json', []).filter(e => e.toolId === toolId).slice(-lim);
   }
@@ -335,16 +339,18 @@ async function listEntries(toolId, { limit = 200 } = {}) {
 
 // Recent entries across ALL tools ("posts from the tools" — the generated
 // renditions people made). Newest first.
-async function listRecentEntries({ limit = 30 } = {}) {
+async function listRecentEntries({ limit = 30, strictDb = false, timeoutMs = 1500 } = {}) {
   const lim = Math.max(1, Math.min(200, parseInt(limit, 10) || 30));
   if (!db.pool) {
     return readJSON('entries.json', [])
       .slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, lim);
   }
   try {
-    const { rows } = await withDbTimeout(dbQuery('SELECT * FROM entries ORDER BY created_at DESC LIMIT $1', [lim]), 8000, 'Recent entries');
+    const { rows } = await withDbTimeout(dbQuery('SELECT * FROM entries ORDER BY created_at DESC LIMIT $1', [lim]), timeoutMs, 'Recent entries');
     return rows.map(mapEntryRow);
   } catch (e) {
+    if (strictDb) throw e;
+    await degradeDb(`DB recent entries failed: ${e.message}`);
     console.error('DB recent entries failed; falling back to file:', e.message);
     return readJSON('entries.json', []).slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, lim);
   }
