@@ -264,6 +264,7 @@ export function BuilderStudioView() {
   // Studio so the user reviews/edits the preset slides before generating.
   const [pages, setPages] = useState<StudioPage[]>(seed?.pages && seed.pages.length ? (seed.pages as StudioPage[]) : [newPage()]);
   const [addMenu, setAddMenu] = useState<number | null>(null);   // which slide's "＋ Add" menu is open
+  const [editSlideIdx, setEditSlideIdx] = useState<number | null>(null);   // which slide is expanded into its components
   useEffect(() => { appState.builderSeed = null; }, []);   // consume the seed once
   const [sourcePrompt, setSourcePrompt] = useState(seed?.sourcePrompt || seed?.context || '');
   // The ⚙️ settings popup edits a DRAFT (per artifact), applied only when the user
@@ -897,11 +898,13 @@ export function BuilderStudioView() {
                 {pages.map((pg, i) => {
                   const stack = stackOf(pg);
                   const rc = readingCount(pg);
+                  const editing = editSlideIdx === i;
                   return (
                   <div key={i} className="card" style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <strong>📄 Slide {i + 1}</strong>
                       <span style={{ display: 'inline-flex', gap: 4 }}>
+                        <button className={`btn small ${editing ? 'green' : 'ghost'}`} title={editing ? 'Done — collapse back to the whole template' : 'Break this slide into its components to edit'} onClick={() => { setEditSlideIdx(editing ? null : i); setAddMenu(null); }} style={{ padding: '0 10px' }}>{editing ? '✓ Done' : '✏️ Edit'}</button>
                         <button className="btn small ghost" title="Move slide up" disabled={i === 0} onClick={() => movePage(i, -1)} style={{ padding: '0 8px' }}>↑</button>
                         <button className="btn small ghost" title="Move slide down" disabled={i === pages.length - 1} onClick={() => movePage(i, 1)} style={{ padding: '0 8px' }}>↓</button>
                         <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)} style={{ padding: '0 8px' }}>🗑</button>
@@ -918,20 +921,23 @@ export function BuilderStudioView() {
                       </select>
                     </div>
 
-                    {/* Plan strip — the exact order the machine will assemble this slide. */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginBottom: 8, padding: '6px 8px', borderRadius: 8, background: 'rgba(45,42,38,0.05)' }}>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.55, marginRight: 2 }}>🛠 Machine will build:</span>
+                    {/* The WHOLE template — the full component sequence for this slide, shown
+                        as one card. Click it (or ✏️ Edit) to break it into editable components. */}
+                    <div onClick={() => !editing && setEditSlideIdx(i)} title={editing ? undefined : 'Click to edit this slide’s components'}
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginBottom: editing ? 10 : 0, padding: '8px 10px', borderRadius: 8, background: 'rgba(45,42,38,0.05)', cursor: editing ? 'default' : 'pointer' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginRight: 2 }}>🧩 Template:</span>
                       {stack.length === 0
-                        ? <span style={{ fontSize: 11, opacity: 0.5 }}>empty — add components or apply a template</span>
+                        ? <span style={{ fontSize: 11.5, opacity: 0.5 }}>empty — apply a template above or ✏️ Edit to add components</span>
                         : stack.map((c, k) => (
-                            <span key={c.uid || c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 10.5, border: '1.5px solid var(--ink)', borderRadius: 6, padding: '1px 6px', background: 'var(--paper,#fbf7ee)' }}>{planChip(c.id)}</span>
+                            <span key={c.uid || c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                              <span style={{ fontSize: 11, border: '1.5px solid var(--ink)', borderRadius: 6, padding: '2px 7px', background: 'var(--paper,#fbf7ee)' }}>{planChip(c.id)}</span>
                               {k < stack.length - 1 && <span style={{ opacity: 0.4 }}>→</span>}
                             </span>
                           ))}
                     </div>
 
-                    {/* The slide's element stack (reading paragraphs / support / evaluation). */}
+                    {/* EDIT mode — the whole template broken down into its editable components. */}
+                    {editing && (<>
                     <div style={{ display: 'grid', gap: 8 }}>
                       {stack.map((c) => {
                         const uid = c.uid || c.id; const m = elMeta(c.id);
@@ -990,6 +996,7 @@ export function BuilderStudioView() {
                     <textarea value={slideNote(pg)} onChange={(e) => setSlideNote(i, e.target.value)}
                       placeholder="e.g. Welcome slide: greet ESL learners and introduce fashion design."
                       style={{ width: '100%', fontSize: 12, minHeight: 40, padding: '6px 8px', borderRadius: 8, border: '1.5px solid var(--ink)' }} maxLength={2000} />
+                    </>)}
                   </div>
                   );
                 })}
