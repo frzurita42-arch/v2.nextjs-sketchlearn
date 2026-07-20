@@ -98,6 +98,9 @@ export function BuilderStudioView() {
   // (run Suggest-with-AI once) so the owner reviews & confirms rather than starting
   // from an empty repo. Captured before the seed is consumed/cleared.
   const [autoSuggestSeed] = useState<boolean>(!!seed?.autoSuggest);
+  // Lesson Path: also pre-build the presentation (editable slides) alongside the
+  // repo, so a learning path arrives with BOTH ready to review.
+  const [lessonPathSeed] = useState<boolean>(!!seed?.lessonPath);
   const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
   const [title, setTitle] = useState(seed?.title || '');
   const [subject, setSubject] = useState(seed?.subject || '');
@@ -237,7 +240,10 @@ export function BuilderStudioView() {
     if (!autoSuggestSeed || didAutoSuggest.current) return;
     if (artifact !== 'repository' || !context.trim()) return;
     didAutoSuggest.current = true;
-    void suggestWithAI();
+    (async () => {
+      await suggestWithAI();                      // pre-build the repo cards
+      if (lessonPathSeed) await suggestPresentation();   // + the presentation slides
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSuggestSeed, artifact, context]);
   const [visibility, setVisibility] = useState('unlisted');
@@ -490,6 +496,13 @@ export function BuilderStudioView() {
                 </button>
               ))}
             </div>
+            {/* Lesson Path: both artifacts were pre-built — nudge the owner to review
+                each with the toggle above, then publish. */}
+            {lessonPathSeed && (
+              <div style={{ marginTop: 10, fontSize: 12, background: 'rgba(127,176,105,0.14)', border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 8, padding: '8px 10px' }}>
+                🎬 <b>Learning path pre-built.</b> Both the <b>🗂️ Repository</b> cards and the <b>📊 Presentation</b> slides were drafted from your prompt — use the toggle above to review and edit each, then publish. {suggesting && <em>Still drafting…</em>}
+              </div>
+            )}
           </div>
 
           {/* Global settings — the SAME Title / Subject-topic / Tone layout for

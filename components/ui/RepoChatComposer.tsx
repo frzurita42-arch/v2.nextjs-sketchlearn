@@ -56,7 +56,9 @@ export function RepoChatComposer() {
       artifact: 'repository',
       sourcePrompt: seedText,
       context: `${prompt}${unitHint}${lessonPath ? ' Structure it as a learning path.' : ''}`,
+      subject: prompt.slice(0, 120),
       autoSuggest: true,
+      lessonPath,   // when true, also pre-build the presentation (editable slides)
     };
     app.nav('toolbuilder');
   };
