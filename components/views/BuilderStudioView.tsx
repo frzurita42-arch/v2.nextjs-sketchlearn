@@ -11,8 +11,9 @@ import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
-import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
+import { type WizardStep } from '@/components/ui/StepWizard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
+import { SetupWizardCard, SETUP_CARD_WIDTH } from '@/components/ui/SetupWizardCard';
 import {
   STUDIO_CATEGORIES, ANNOTATION_SIZES, LAYOUT_TEMPLATES, BUTTON_ACTIONS, parseTemplateSpec,
   studioItem, assembleDefinition, capAvailable,
@@ -585,13 +586,10 @@ export function BuilderStudioView() {
               popup opened from the artifact selector — per artifact. */}
           {settingsOpen && (
             <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '4vh 12px' }}>
-              <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: '16px 18px', margin: '4vh 0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <b style={{ fontSize: 16 }}>⚙️ {isRepo ? '🗂️ Repository' : '📊 Presentation'} settings</b>
-                  <button className="btn small ghost" onClick={() => setSettingsOpen(false)}>✕ Close</button>
-                </div>
-                {/* Paginated — one setting per page (same wizard card as the create
-                    flow); changes apply only when you press Update on the last page. */}
+              <div onClick={(e) => e.stopPropagation()} style={{ width: SETUP_CARD_WIDTH, maxWidth: '100%', margin: '4vh 0' }}>
+                {/* Paginated — one setting per page in the SAME fixed-dimension card
+                    (photo spot + buttons + inputs) as the create wizard; changes apply
+                    only when you press Update on the last page. */}
                 {(() => {
                   const fieldWrap: React.CSSProperties = { width: '100%', margin: 0 };
                   // Same input sizing/padding as the slide-tool wizard fields.
@@ -685,7 +683,15 @@ export function BuilderStudioView() {
                     { key: 'templates', title: 'Slide templates', render: () => <WizardGridTemplate tall top={templatesField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'prompt', title: 'Original prompt', render: () => <WizardGridTemplate tall top={promptField} onBack={goB} backDisabled={setStep === 0} rightTop={updateBtn} /> },
                   ];
-                  return <StepWizard steps={sSteps} finalActions={null} bodyMinHeight={210} stepIndex={setStep} onStepChange={setSetStep} showFooter={false} />;
+                  return (
+                    <SetupWizardCard
+                      title={<span style={{ fontSize: 15 }}>⚙️ {isRepo ? '🗂️ Repository' : '📊 Presentation'} settings</span>}
+                      headerRight={<button className="btn small ghost" onClick={() => setSettingsOpen(false)}>✕ Close</button>}
+                      steps={sSteps}
+                      stepIndex={setStep}
+                      onStepChange={setSetStep}
+                    />
+                  );
                 })()}
               </div>
             </div>
