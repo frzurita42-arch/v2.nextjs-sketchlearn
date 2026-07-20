@@ -137,8 +137,29 @@ const TEMPLATE_LIBRARY: SlideTemplate[] = [
   // Design / DIY / practical
   { id: 'design-critique',  name: 'Design critique',        tags: ['#design', '#art', '#ux', '#creative', '#visual'],              slots: ['statement', 'image', '@question', 'askai'] },
   { id: 'diy-howto',        name: 'DIY how-to',             tags: ['#diy', '#howto', '#practical', '#crafts', '#steps'],            slots: ['statement', 'image', 'reading', '@question'] },
-  { id: 'menu-item',        name: 'Menu / catalog item',    tags: ['#menu', '#culinary', '#business', '#catalog', '#description'],  slots: ['statement', 'image', 'reading', '@question'] },
+  { id: 'menu-item',        name: 'Menu / catalog item',    tags: ['#menu', '#culinary', '#business', '#catalog', '#description'],  slots: ['statement', 'image', 'reading', 'action'] },
 ];
+
+// Map a template slot (a component id OR a '@super-group') to the concrete Studio
+// catalog id the per-slide editor materializes. Super-groups pick a sensible default
+// (Question → multiple choice) that the creator can then swap; the slot's intent is
+// carried into the component's instruction so the machine still knows the options.
+const TPL_TO_CATALOG: Record<string, string> = {
+  reading: 'reading', statement: 'reading', image: 'image', table: 'table', formula: 'latex',
+  code: 'codeblock', audio: 'audio', graph: 'geogebra', mcq: 'mcq4', multiselect: 'mcq4',
+  truefalse: 'mcq2', fill: 'fill-blank', typed: 'input', askai: 'input', codebox: 'code',
+  handwriting: 'writing', annotation: 'annotation', action: 'button',
+  '@text': 'reading', '@visual': 'image', '@question': 'mcq4', '@handson': 'code', '@audio': 'audio',
+};
+// Compact label for the per-slide "how it will be built" plan strip.
+const CATALOG_SHORT: Record<string, string> = {
+  reading: '📖 Text', image: '🖼 Image', table: '▦ Table', latex: '∑ Formula', codeblock: '{ } Code',
+  audio: '🔊 Audio', geogebra: '📈 Graph', mcq4: '☑️ Multiple choice', mcq2: '⚖️ 2-option', 'fill-blank': '␣ Fill blank',
+  input: '⌨️ Typed', code: '{_} Code box', writing: '✍️ Handwriting', annotation: '📝 Annotate', button: '🔳 Button', note: '💬 Note',
+};
+const planChip = (id: string) => CATALOG_SHORT[id] || (studioItem(id) ? `${studioItem(id)!.emoji} ${studioItem(id)!.name}` : id);
+// Preset labels for the menu / navigation "action buttons".
+const ACTION_PRESETS = ['Next', 'Back', 'Order', 'Skip', 'Continue', 'Add to cart'];
 
 // One repository card in the builder — a compact Name + Link row, a roomier
 // Description, and any nested child cards (the same shape, one layer inward).
@@ -450,10 +471,35 @@ export function BuilderStudioView() {
   const elMeta = (id: string): { emoji: string; name: string; ph: string } => {
     const it = studioItem(id);
     const ph = id === 'reading' ? 'How should the AI write this paragraph? (optional)'
+      : id === 'button' ? 'Button label (e.g. Next, Back, Order, Skip)'
       : SUP_IDS.includes(id) ? 'What should this show? (optional)'
       : EVAL_IDS.includes(id) ? 'What should this question test? (optional)'
       : 'Instruction for the AI (optional)';
     return { emoji: it?.emoji || '•', name: it?.name || id, ph };
+  };
+  // Materialize a template into a slide's stack: map each slot to a concrete
+  // component and carry the slot's intent (short statement, lenient check, the
+  // super-group's options) into that component's instruction so nothing is lost.
+  const applyTemplate = (i: number, tplId: string) => {
+    const tpl = TEMPLATE_LIBRARY.find((t) => t.id === tplId); if (!tpl) return;
+    const comps: StudioComponent[] = tpl.slots.map((slot) => {
+      const id = TPL_TO_CATALOG[slot] || 'reading';
+      const it = studioItem(id);
+      const opt = it?.sizes ? ANNOTATION_SIZES[1] : it?.button ? 'action' : undefined;
+      let instr = '';
+      if (slot === 'statement') instr = 'Short statement or task (1–2 sentences) — not a long paragraph.';
+      else if (slot === 'action') instr = 'Next';
+      else if (slot === 'multiselect') instr = 'Allow more than one correct option.';
+      else if (slot === 'askai') instr = 'Lenient AI check: accept an answer that is essentially correct, up to 3 tries.';
+      else if (slot.startsWith('@')) { const g = SUPER_GROUPS[slot.slice(1)]; if (g) instr = `The machine may use any of: ${g.members.map(TOOL_SHORT).join(' / ')} — swap below to pin one.`; }
+      return { id, uid: mkUid(), instr, opt };
+    });
+    writeStack(i, comps);
+  };
+  // Add one menu / navigation action button (its label doubles as its instruction).
+  const addButtonPreset = (i: number, label: string) => {
+    writeStack(i, [...stackOf(pages[i]), { id: 'button', uid: mkUid(), instr: label, opt: 'action' }]);
+    setAddMenu(null);
   };
 
   // ---- Presentation "Suggest / Edit with AI" (mirrors the repository flow) ----
@@ -817,11 +863,13 @@ export function BuilderStudioView() {
 
           {artifact === 'presentation' ? (
             <>
-              {/* SLIDES — each slide is a STACK of elements you add with ＋: reading
-                  paragraphs (each with its own writing instruction), support/visuals,
-                  and evaluations. Every slide keeps at least one reading paragraph. */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — stack reading paragraphs, support and evaluations with ＋</div>
+              {/* SLIDES — each slide is an ORDERED sequence of components the lesson
+                  machine fills from the prompt. Start a slide from a subject-matched
+                  template, read the plan strip to see how it will be built, then
+                  customize: swap components, reorder, or add menu action buttons. */}
+              <div style={{ margin: '0 2px 6px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>SLIDES ({pages.length}) — how the lesson machine will build each slide</div>
+                <div style={{ fontSize: 11, opacity: 0.6, marginTop: 3 }}>Every slide is a sequence of components filled from your prompt. Start from a template (matched to your subject by #hashtags), then customize. Text always comes first.</div>
               </div>
               <div style={{ display: 'grid', gap: 12 }}>
                 {pages.map((pg, i) => {
@@ -836,6 +884,29 @@ export function BuilderStudioView() {
                         <button className="btn small ghost" title="Move slide down" disabled={i === pages.length - 1} onClick={() => movePage(i, 1)} style={{ padding: '0 8px' }}>↓</button>
                         <button className="btn small ghost" disabled={pages.length <= 1} title="Remove slide" onClick={() => removePage(i)} style={{ padding: '0 8px' }}>🗑</button>
                       </span>
+                    </div>
+
+                    {/* Built from — apply a subject-matched template to lay out this slide. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, opacity: 0.6 }}>Built from</span>
+                      <select value="" onChange={(e) => { if (e.target.value) { applyTemplate(i, e.target.value); e.currentTarget.value = ''; } }}
+                        style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, border: '1.5px solid var(--ink)', maxWidth: 280 }}>
+                        <option value="">✦ Apply a template…</option>
+                        {TEMPLATE_LIBRARY.map((t) => <option key={t.id} value={t.id}>{t.name} — {t.tags.slice(0, 3).join(' ')}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Plan strip — the exact order the machine will assemble this slide. */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginBottom: 8, padding: '6px 8px', borderRadius: 8, background: 'rgba(45,42,38,0.05)' }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.55, marginRight: 2 }}>🛠 Machine will build:</span>
+                      {stack.length === 0
+                        ? <span style={{ fontSize: 11, opacity: 0.5 }}>empty — add components or apply a template</span>
+                        : stack.map((c, k) => (
+                            <span key={c.uid || c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 10.5, border: '1.5px solid var(--ink)', borderRadius: 6, padding: '1px 6px', background: 'var(--paper,#fbf7ee)' }}>{planChip(c.id)}</span>
+                              {k < stack.length - 1 && <span style={{ opacity: 0.4 }}>→</span>}
+                            </span>
+                          ))}
                     </div>
 
                     {/* The slide's element stack (reading paragraphs / support / evaluation). */}
@@ -877,12 +948,19 @@ export function BuilderStudioView() {
                             {SUPPORT_CHIPS.map((s) => <span key={s.id} onClick={() => addEl(i, s.id)} style={chipSt(false)}>{s.label}</span>)}
                           </div>
                           <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>Evaluation (question)</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
                             {EVAL_CHIPS.map((s) => <span key={s.id} onClick={() => addEl(i, s.id)} style={chipSt(false)}>{s.label}</span>)}
+                          </div>
+                          {/* Menu / navigation buttons — e.g. Next · Back · Order · Skip
+                              (great for menus and choose-your-path slides, not a graded quiz). */}
+                          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>Menu / action buttons</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                            {ACTION_PRESETS.map((label) => <span key={label} onClick={() => addButtonPreset(i, label)} style={chipSt(false)}>🔳 {label}</span>)}
+                            <span onClick={() => addButtonPreset(i, '')} style={chipSt(false)}>🔳 Custom button…</span>
                           </div>
                         </div>
                       ) : (
-                        <button className="btn small" onClick={() => setAddMenu(i)}>＋ Add reading · support · evaluation</button>
+                        <button className="btn small" onClick={() => setAddMenu(i)}>＋ Add reading · support · evaluation · buttons</button>
                       )}
                     </div>
 
