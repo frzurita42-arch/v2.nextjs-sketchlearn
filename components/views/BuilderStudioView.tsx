@@ -47,25 +47,90 @@ const blankRepoCard = (): RepoCard => ({ name: '', link: '', description: '', ch
 // The slide-component toolbox — grouped exactly like the "Add to slide" menu, used
 // in the presentation config popup so the author picks which components the AI may
 // use, and which slide templates it should follow.
-const SLIDE_TOOL_SECTIONS: { title: string; items: { id: string; label: string }[] }[] = [
-  { title: 'Text', items: [{ id: 'reading', label: '📖 Reading paragraph' }] },
+// Every component the AI can drop on a slide. `label` is the menu wording, `short`
+// is the compact chip used in template diagrams. Text has TWO flavours now: a long
+// reading paragraph AND a short "statement / task" (a prompt that explains or asks
+// the learner to complete something) — the AI may stack more text under either.
+const SLIDE_TOOL_SECTIONS: { title: string; items: { id: string; label: string; short: string }[] }[] = [
+  { title: 'Text', items: [
+    { id: 'reading', label: '📖 Reading paragraph', short: '📖 Text' },
+    { id: 'statement', label: '💬 Statement / task', short: '💬 Statement' },
+  ] },
   { title: 'Support / visuals', items: [
-    { id: 'image', label: '🖼 Image' }, { id: 'table', label: '▦ Table' }, { id: 'formula', label: '∑ Formula' },
-    { id: 'code', label: '{ } Code' }, { id: 'audio', label: '🔊 Audio' }, { id: 'graph', label: '📈 Graph' },
+    { id: 'image', label: '🖼 Image', short: '🖼 Image' }, { id: 'table', label: '▦ Table', short: '▦ Table' },
+    { id: 'formula', label: '∑ Formula', short: '∑ Formula' }, { id: 'code', label: '{ } Code', short: '{ } Code' },
+    { id: 'audio', label: '🔊 Audio', short: '🔊 Audio' }, { id: 'graph', label: '📈 Graph', short: '📈 Graph' },
   ] },
   { title: 'Evaluation (question)', items: [
-    { id: 'mcq', label: 'Multiple choice' }, { id: 'truefalse', label: 'True / false' }, { id: 'fill', label: 'Fill the blank' },
-    { id: 'typed', label: 'Typed answer' }, { id: 'handwriting', label: 'Handwriting' }, { id: 'annotation', label: 'Annotation pad' }, { id: 'codebox', label: 'Code box' },
+    { id: 'mcq', label: '☑️ Multiple choice', short: '☑️ Multiple choice' },
+    { id: 'multiselect', label: '✅ Multiple selection', short: '✅ Multi-select' },
+    { id: 'truefalse', label: '⚖️ True / false', short: '⚖️ True/false' },
+    { id: 'fill', label: '␣ Fill the blank', short: '␣ Fill blank' },
+    { id: 'typed', label: '⌨️ Typed answer', short: '⌨️ Typed' },
+    { id: 'askai', label: '🤖 Ask-AI (3 tries)', short: '🤖 Ask-AI' },
+    { id: 'codebox', label: '{_} Code box (input)', short: '{_} Code box' },
+    { id: 'handwriting', label: '✍️ Handwriting', short: '✍️ Handwriting' },
+    { id: 'annotation', label: '📝 Annotation pad', short: '📝 Annotate' },
   ] },
 ];
-const SLIDE_TEMPLATES: { id: string; label: string; seq: string[] }[] = [
-  { id: 'read-look-check', label: 'Read → Look → Check', seq: ['📖 Text', '🖼 Image', '☑️ Multiple choice'] },
-  { id: 'explain-recap-quiz', label: 'Explain → Illustrate → Recap → Quiz', seq: ['📖 Text', '📖 Text', '🖼 Image', '📖 Text', '☑️ Multiple choice'] },
-  { id: 'concept-formula-solve', label: 'Concept → Formula → Compute → Solve', seq: ['📖 Text', '∑ Formula', '{ } Code', '📖 Text', '⌨️ Typed answer'] },
-  { id: 'demo-graph-practice', label: 'Demo → Graph → Practice', seq: ['📖 Text', '📈 Graph', '☑️ Multiple choice'] },
-  { id: 'code-run-quiz', label: 'Code → Explain → Quiz', seq: ['{ } Code', '📖 Text', '☑️ Multiple choice'] },
+const SLIDE_TOOL_ITEMS = SLIDE_TOOL_SECTIONS.flatMap((s) => s.items);
+const COMP_BY_ID: Record<string, { id: string; label: string; short: string }> = Object.fromEntries(SLIDE_TOOL_ITEMS.map((i) => [i.id, i]));
+const TOOL_SHORT = (id: string) => COMP_BY_ID[id]?.short || id;
+
+// ★ SUPER-COMPONENTS: interchangeable groups. A template slot can name a group
+// ('@visual') instead of a single component; the AI then picks the ONE member that
+// best fits the subject (a graph, table, formula or image for "@visual"). This lets
+// a handful of templates cover a huge combination space instead of enumerating each.
+const SUPER_GROUPS: Record<string, { label: string; hint: string; members: string[] }> = {
+  text:     { label: '📝 Text',      hint: 'a reading paragraph or a short statement/task', members: ['reading', 'statement'] },
+  visual:   { label: '🎨 Visual',    hint: 'pick image, table, formula or graph — whatever fits the subject', members: ['image', 'table', 'formula', 'graph'] },
+  question: { label: '❓ Question',   hint: 'multiple-choice, multi-select, true/false, fill-the-blank or typed', members: ['mcq', 'multiselect', 'truefalse', 'fill', 'typed'] },
+  handson:  { label: '🛠 Hands-on',  hint: 'code box, typed answer, handwriting, annotation or ask-AI', members: ['codebox', 'typed', 'handwriting', 'annotation', 'askai'] },
+  audio:    { label: '🔊 Audio',     hint: 'a listening clip', members: ['audio'] },
+};
+const isGroupSlot = (slot: string) => slot.startsWith('@');
+const groupOf = (slot: string) => SUPER_GROUPS[slot.slice(1)];
+// Chip label for a template slot (component short label, or the super-group label).
+const SLOT_LABEL = (slot: string) => (isGroupSlot(slot) ? groupOf(slot)?.label || slot : TOOL_SHORT(slot));
+// The "pick one of…" member list shown under a super-group slot.
+const SLOT_MEMBERS = (slot: string) => (isGroupSlot(slot) ? (groupOf(slot)?.members || []).map(TOOL_SHORT).join(' / ') : '');
+// Plain-text description of a slot for the AI prompt.
+const SLOT_NOTE = (slot: string) => (isGroupSlot(slot) ? `${groupOf(slot)?.label}{${(groupOf(slot)?.members || []).map(TOOL_SHORT).join('/')}}` : TOOL_SHORT(slot));
+
+type SlideTemplate = { id: string; name: string; tags: string[]; slots: string[] };
+// ★ The curated template library. Every template opens with TEXT (reading or a
+// statement) and carries 5 hashtags so the AI can match it to a subject fast. Slots
+// use super-groups ('@visual', '@question', '@handson') wherever the choice is
+// interchangeable, so these ~20 patterns cover most lesson shapes.
+const TEMPLATE_LIBRARY: SlideTemplate[] = [
+  // Universal
+  { id: 'read-see-check',   name: 'Read → See → Check',     tags: ['#general', '#intro', '#science', '#history', '#any'],        slots: ['reading', '@visual', '@question'] },
+  { id: 'deep-explain',     name: 'Deep explanation',       tags: ['#advanced', '#theory', '#science', '#history', '#reading'], slots: ['reading', '@visual', 'reading', '@question'] },
+  { id: 'statement-drill',  name: 'Statement → Practice',   tags: ['#practice', '#exercise', '#quick', '#assessment', '#any'],  slots: ['statement', '@question'] },
+  { id: 'quick-tf',         name: 'Quick true / false',     tags: ['#review', '#quick', '#warmup', '#assessment', '#any'],      slots: ['statement', 'truefalse'] },
+  { id: 'concept-multi',    name: 'Concept → Multi-select', tags: ['#review', '#concepts', '#recap', '#assessment', '#any'],    slots: ['reading', '@visual', 'multiselect'] },
+  // Programming / CS
+  { id: 'code-walk',        name: 'Code walkthrough',       tags: ['#programming', '#cs', '#coding', '#software', '#logic'],    slots: ['reading', 'code', 'reading', '@question'] },
+  { id: 'code-challenge',   name: 'Coding challenge',       tags: ['#programming', '#cs', '#coding', '#handson', '#assessment'],slots: ['statement', 'codebox'] },
+  { id: 'debug-explain',    name: 'Debug & explain',        tags: ['#programming', '#debugging', '#cs', '#advanced', '#handson'],slots: ['statement', 'code', 'askai'] },
+  // Math / physics / data
+  { id: 'math-concept',     name: 'Math concept',           tags: ['#math', '#algebra', '#physics', '#engineering', '#formula'],slots: ['reading', 'formula', '@question'] },
+  { id: 'math-solve',       name: 'Solve the problem',      tags: ['#math', '#physics', '#calculation', '#problem', '#exercise'],slots: ['statement', 'formula', 'typed'] },
+  { id: 'data-graph',       name: 'Read the graph',         tags: ['#math', '#statistics', '#economics', '#science', '#data'],  slots: ['reading', 'graph', '@question'] },
+  // History / humanities
+  { id: 'history-narrative',name: 'History narrative',      tags: ['#history', '#humanities', '#timeline', '#culture', '#reading'],slots: ['statement', 'reading', 'image', 'reading', '@question'] },
+  { id: 'source-analysis',  name: 'Source analysis (hard)', tags: ['#history', '#advanced', '#analysis', '#critical', '#humanities'],slots: ['reading', 'image', 'reading', 'fill'] },
+  // Language / ESL
+  { id: 'esl-reading',      name: 'ESL reading + audio',    tags: ['#esl', '#language', '#vocabulary', '#reading', '#beginner'],slots: ['statement', 'image', 'reading', 'audio', '@question'] },
+  { id: 'listening',        name: 'Listening comprehension',tags: ['#esl', '#language', '#listening', '#audio', '#comprehension'],slots: ['statement', 'audio', '@question'] },
+  { id: 'grammar-table',    name: 'Grammar with a table',   tags: ['#grammar', '#language', '#esl', '#writing', '#rules'],      slots: ['reading', 'table', '@question'] },
+  { id: 'script-practice',  name: 'Character practice',     tags: ['#language', '#japanese', '#chinese', '#handwriting', '#characters'],slots: ['statement', 'image', 'handwriting'] },
+  { id: 'vocab-drill',      name: 'Vocabulary drill',       tags: ['#vocabulary', '#language', '#esl', '#memory', '#quick'],    slots: ['statement', 'image', 'audio', 'mcq'] },
+  // Design / DIY / practical
+  { id: 'design-critique',  name: 'Design critique',        tags: ['#design', '#art', '#ux', '#creative', '#visual'],          slots: ['statement', 'image', 'typed'] },
+  { id: 'diy-howto',        name: 'DIY how-to',             tags: ['#diy', '#howto', '#practical', '#crafts', '#steps'],        slots: ['statement', 'image', 'reading', '@question'] },
+  { id: 'menu-item',        name: 'Menu / catalog item',    tags: ['#menu', '#culinary', '#business', '#catalog', '#description'],slots: ['statement', 'image', 'reading', '@question'] },
 ];
-const TEMPLATE_LABEL: Record<string, string> = Object.fromEntries(SLIDE_TEMPLATES.map((t) => [t.id, t.label]));
 
 // One repository card in the builder — a compact Name + Link row, a roomier
 // Description, and any nested child cards (the same shape, one layer inward).
@@ -181,12 +246,14 @@ export function BuilderStudioView() {
   const [dTone, setDTone] = useState('Friendly');
   const [dToneCustom, setDToneCustom] = useState(false);
   const [dPrompt, setDPrompt] = useState('');
-  // Which slide components the AI may use, which templates it should follow, and the
-  // template-carousel index. These persist across opens (they're a config, not a
-  // one-shot draft). On Update they become a config note fed to the slide designer.
+  // Which slide components the AI may use and which template sequences it may follow.
+  // Each template is an ordered list of component labels. These persist across opens
+  // (they're a config, not a one-shot draft). On Update they become a config note fed
+  // to the slide designer. `tplSeq` is the sequence currently being assembled from the
+  // dropdown (Text first) before it's saved into the list.
   const [dTools, setDTools] = useState<string[]>([]);
-  const [dTemplates, setDTemplates] = useState<string[]>([]);
-  const [tplIndex, setTplIndex] = useState(0);
+  const [dTemplates, setDTemplates] = useState<SlideTemplate[]>(TEMPLATE_LIBRARY);
+  const [tplSeq, setTplSeq] = useState<string[]>(['reading']); // slot tokens (Text first)
   const [configNote, setConfigNote] = useState('');
   const openSettings = () => {
     setDTitle(title); setDSubject(subject); setDTone(tone); setDToneCustom(toneCustom); setDPrompt(sourcePrompt);
@@ -194,9 +261,14 @@ export function BuilderStudioView() {
   };
   const applySettings = () => {
     setTitle(dTitle); setSubject(dSubject); setTone(dTone); setToneCustom(dToneCustom); setSourcePrompt(dPrompt);
-    const toolNote = dTools.length ? `Build the slides using ONLY these components: ${dTools.join(', ')}.` : '';
-    const tplNote = dTemplates.length ? `Prefer these slide templates (component order to follow): ${dTemplates.map((id) => TEMPLATE_LABEL[id] || id).join(' | ')}.` : '';
-    setConfigNote([toolNote, tplNote].filter(Boolean).join(' '));
+    // Teach the generator HOW we compose presentations: text-first, super-components,
+    // and the template library keyed by hashtags so it can match a pattern to the topic.
+    const toolNote = dTools.length ? `Build the slides using ONLY these components: ${dTools.map(TOOL_SHORT).join(', ')}.` : '';
+    const superNote = `SUPER-COMPONENTS — when a template slot names a group, pick the ONE member that best fits the subject: ${Object.values(SUPER_GROUPS).map((g) => `${g.label} = ${g.hint}`).join('; ')}.`;
+    const tplNote = dTemplates.length
+      ? `SLIDE TEMPLATES you MAY follow — match a template's #hashtags to the topic/level and adapt freely. RULES: every slide opens with text (a reading paragraph or a short statement/task); never use a code box outside programming; use audio for language/listening lessons; use a table to organize grammar/rules; use handwriting for character/sign practice; true/false and multi-select suit any subject. Templates: ${dTemplates.map((t) => `${t.name} [${t.tags.join(' ')}]: ${t.slots.map(SLOT_NOTE).join(' → ')}`).join(' | ')}`
+      : '';
+    setConfigNote([toolNote, superNote, tplNote].filter(Boolean).join('\n'));
     setSettingsOpen(false);
   };
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
@@ -260,7 +332,7 @@ export function BuilderStudioView() {
         // ONE next card, based on the chat + title/description + all current cards.
         const r: any = await API.post('/api/tools/repo/ai', {
           op: 'suggest', next: true, title, subject, goal: context, withLinks, provider,
-          docs: docsPayload(), cards: cardsToAi(repoCards), messages,
+          docs: docsPayload(), cards: cardsToAi(repoCards), messages, lessonPath: lessonPathSeed,
         }, { retries: 1 });
         const mapped = mapAiCards(r?.cards || []);
         if (mapped.length) setRepoCards((cs) => [...cs, ...mapped.slice(0, 1)]);
@@ -272,7 +344,7 @@ export function BuilderStudioView() {
         seedCardsRef.current = seed;
         const r: any = await API.post('/api/tools/repo/ai', {
           op: 'suggest', title, subject, goal: context, withLinks, provider,
-          docs: docsPayload(), cards: cardsToAi(seed), messages,
+          docs: docsPayload(), cards: cardsToAi(seed), messages, lessonPath: lessonPathSeed,
         }, { retries: 1 });
         const mapped = mapAiCards(r?.cards || []);
         if (mapped.length) setRepoCards(mapped);
@@ -291,7 +363,7 @@ export function BuilderStudioView() {
     try {
       const r: any = await API.post('/api/tools/repo/ai', {
         op: 'suggest', title, subject, goal: context, withLinks, provider,
-        docs: docsPayload(), cards: cardsToAi(repoCards), messages,
+        docs: docsPayload(), cards: cardsToAi(repoCards), messages, lessonPath: lessonPathSeed,
       }, { retries: 1 });
       const mapped = mapAiCards(r?.cards || []);
       const finalCards = mapped.length ? mapped : repoCards;
@@ -629,7 +701,7 @@ export function BuilderStudioView() {
                   const toolsField = (
                     <div style={{ width: '100%' }}>
                       <span style={{ display: 'block', marginBottom: 6, fontWeight: 700 }}>🧰 Components the AI may use{dTools.length ? ` (${dTools.length})` : ''}</span>
-                      <div style={{ maxHeight: 172, overflowY: 'auto', display: 'grid', gap: 8, paddingRight: 4 }}>
+                      <div style={{ display: 'grid', gap: 8 }}>
                         {SLIDE_TOOL_SECTIONS.map((sec) => (
                           <div key={sec.title}>
                             <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px' }}>{sec.title}</div>
@@ -644,31 +716,69 @@ export function BuilderStudioView() {
                       </div>
                     </div>
                   );
-                  // Templates mini-slideshow: flip through the possible slide layouts;
-                  // "Use this template" adds it to the set the AI is told to follow.
-                  const t = SLIDE_TEMPLATES[Math.min(tplIndex, SLIDE_TEMPLATES.length - 1)];
-                  const tOn = dTemplates.includes(t.id);
+                  // A template slot chip. Super-component slots (dashed) show the members
+                  // the AI may pick from; single-component slots are a solid chip.
+                  const slotChip = (slot: string) => {
+                    const grp = isGroupSlot(slot);
+                    return (
+                      <span title={grp ? `Pick one: ${SLOT_MEMBERS(slot)}` : undefined}
+                        style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.15, textAlign: 'center',
+                          fontSize: 11, border: grp ? '1.5px dashed var(--ink,#2d2a26)' : '1.5px solid var(--ink,#2d2a26)',
+                          borderRadius: 6, padding: '2px 6px', background: grp ? 'rgba(45,42,38,0.06)' : 'transparent' }}>
+                        <span style={{ fontWeight: grp ? 700 : 400 }}>{SLOT_LABEL(slot)}</span>
+                        {grp && <span style={{ fontSize: 8.5, opacity: 0.6, whiteSpace: 'nowrap' }}>{SLOT_MEMBERS(slot)}</span>}
+                      </span>
+                    );
+                  };
+                  const arrow = (last: boolean) => (!last ? <span style={{ opacity: 0.5 }}>→</span> : null);
+                  const seqDiagram = (slots: string[]) => (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                      {slots.map((s, i) => <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{slotChip(s)}{arrow(i === slots.length - 1)}</span>)}
+                    </div>
+                  );
                   const templatesField = (
                     <div style={{ width: '100%' }}>
-                      <span style={{ display: 'block', marginBottom: 6, fontWeight: 700 }}>🧩 Slide templates the AI can follow{dTemplates.length ? ` (${dTemplates.length})` : ''}</span>
-                      <div style={{ border: '2px solid var(--ink,#2d2a26)', borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                          <button type="button" className="btn small ghost" style={{ minWidth: 40 }} onClick={() => setTplIndex((i) => Math.max(0, i - 1))} disabled={tplIndex === 0}>◀</button>
-                          <div style={{ fontSize: 13, fontWeight: 700, textAlign: 'center', flex: 1 }}>{t.label}</div>
-                          <button type="button" className="btn small ghost" style={{ minWidth: 40 }} onClick={() => setTplIndex((i) => Math.min(SLIDE_TEMPLATES.length - 1, i + 1))} disabled={tplIndex >= SLIDE_TEMPLATES.length - 1}>▶</button>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', justifyContent: 'center', minHeight: 40 }}>
-                          {t.seq.map((c, i) => (
-                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 11, border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, padding: '1px 6px' }}>{c}</span>
-                              {i < t.seq.length - 1 && <span style={{ opacity: 0.5 }}>→</span>}
-                            </span>
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                          <button type="button" className={`btn small ${tOn ? 'green' : 'ghost'}`} onClick={() => setDTemplates((cur) => tOn ? cur.filter((x) => x !== t.id) : [...cur, t.id])}>{tOn ? '✓ Selected' : 'Use this template'}</button>
-                          <span style={{ fontSize: 11, opacity: 0.6 }}>{tplIndex + 1} / {SLIDE_TEMPLATES.length}</span>
-                        </div>
+                      <span style={{ display: 'block', marginBottom: 3, fontWeight: 700 }}>🧩 Slide templates the AI can follow{dTemplates.length ? ` (${dTemplates.length})` : ''}</span>
+                      <div style={{ fontSize: 10.5, opacity: 0.62, marginBottom: 6 }}>Dashed slots are super-components — the AI picks the member that best fits the subject. The #hashtags tell it when each template is a good fit.</div>
+                      {/* Build your own: pick components OR super-components; they chain in order (Text first). */}
+                      <select value="" onChange={(e) => { if (e.target.value) { setTplSeq((s) => [...s, e.target.value]); e.target.value = ''; } }} style={{ ...ctl, marginBottom: 6 }}>
+                        <option value="">＋ Add a step to a new template…</option>
+                        <optgroup label="Super-components (AI picks one)">
+                          {Object.keys(SUPER_GROUPS).map((k) => <option key={k} value={`@${k}`}>{SUPER_GROUPS[k].label} — {SUPER_GROUPS[k].members.map(TOOL_SHORT).join(' / ')}</option>)}
+                        </optgroup>
+                        {SLIDE_TOOL_SECTIONS.map((sec) => (
+                          <optgroup key={sec.title} label={sec.title}>
+                            {sec.items.map((it) => <option key={it.id} value={it.id}>{it.label}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center', minHeight: 32 }}>
+                        {tplSeq.length === 0
+                          ? <span style={{ fontSize: 11, opacity: 0.5 }}>Pick steps above — they chain in order. Start with text.</span>
+                          : tplSeq.map((s, i) => (
+                              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                {slotChip(s)}
+                                <button type="button" onClick={() => setTplSeq((cur) => cur.filter((_, j) => j !== i))} title="Remove" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, opacity: 0.6, padding: 0 }}>✕</button>
+                                {arrow(i === tplSeq.length - 1)}
+                              </span>
+                            ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, margin: '6px 0 10px' }}>
+                        <button type="button" className="btn small green" disabled={tplSeq.length === 0} onClick={() => { const n = dTemplates.filter((t) => t.id.startsWith('custom-')).length + 1; setDTemplates((cur) => [...cur, { id: `custom-${Date.now()}`, name: `Custom ${n}`, tags: [], slots: tplSeq }]); setTplSeq(['reading']); }}>＋ Add template</button>
+                        {tplSeq.length > 0 && <button type="button" className="btn small ghost" onClick={() => setTplSeq([])}>Clear</button>}
+                      </div>
+                      {/* The library — every pattern handed to the AI. Delete any with ✕. */}
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {dTemplates.map((t) => (
+                          <div key={t.id} style={{ border: '2px solid var(--ink,#2d2a26)', borderRadius: 8, padding: '6px 8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, flex: 1, minWidth: 0 }}>{t.name}</span>
+                              <button type="button" className="btn small ghost" style={{ minWidth: 28, padding: '0 6px' }} title="Delete template" onClick={() => setDTemplates((cur) => cur.filter((x) => x.id !== t.id))}>✕</button>
+                            </div>
+                            {t.tags.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 4 }}>{t.tags.map((tag) => <span key={tag} style={{ fontSize: 9.5, opacity: 0.72, border: '1px solid var(--ink,#2d2a26)', borderRadius: 20, padding: '0 6px' }}>{tag}</span>)}</div>}
+                            {seqDiagram(t.slots)}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   );

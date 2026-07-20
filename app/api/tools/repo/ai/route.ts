@@ -116,6 +116,7 @@ export async function POST(req: Request) {
     const goal = String(b.goal || b.context || '').slice(0, 4000);
     const existing = Array.isArray(b.cards) ? b.cards.slice(0, 40) : [];
     const withLinks = !!b.withLinks;   // "link suggestion" toggle: add a reference link per card
+    const lessonPath = !!b.lessonPath; // "Lesson Path": nest an objective + a slide-build prompt under every unit
     // "Next card" mode: return a SINGLE new top-level card that follows the ones
     // already on the page (rather than a whole fresh batch of pathways).
     const nextOne = !!b.next;
@@ -164,6 +165,9 @@ export async function POST(req: Request) {
       // The DEEPEST cards feed a separate presentation/lesson generator, so they
       // must stand on their own — a bare heading is not enough for it to work from.
       '4b. EVERY LEAF card (a card with no children — the deepest node on each branch) MUST carry BOTH a clear, specific standalone "title" AND a "text" of 1–3 sentences that concretely states what that topic is and names the actual concepts/skills/examples it covers. Write it so a lesson generator that sees ONLY that one card\'s title + text could build a complete, accurate lesson about it — no vague one-word descriptions, no "see above", no relying on the parent card for meaning.',
+      lessonPath
+        ? '4c. LESSON-PATH MODE IS ON — this repository IS a learning path, so build every unit so a playable presentation can be generated from it. Under EACH unit/topic card, create AT LEAST TWO nested layers: (a) a nested "Objective" child card — its title is the skill/objective, its text explains in 1–2 sentences what the learner should understand or be able to DO after this unit; then (b) nested UNDER that Objective card, a single LEAF card that is the SLIDE-BUILD PROMPT. Write that leaf card\'s "text" AS A DIRECTIVE TO THE PRESENTATION GENERATOR (e.g. "Build a lesson that evaluates …; have the learner practise …; check that they can …"), naming the concrete tasks, questions and skills that must be practised or evaluated to master this topic. NEVER leave a unit as a single bare card — the Objective card and its nested slide-build-prompt leaf are REQUIRED (a minimum of two nested levels per unit) so the presentation tool knows exactly what to make.'
+        : '',
       '5. Base the plan on the attached document / goal — do not invent unrelated content. Ignore document front-matter (course code, bibliography).',
       withLinks
         ? '6. LINK SUGGESTIONS ARE ON: for EVERY card add a "link" — a single, relevant reference URL — plus a short "linkLabel" (max 15 chars, e.g. "Wikipedia", "MDN", "Recipe", "Image"). PREFER a well-known, popular NICHE authority for the topic when one clearly fits — it is more useful than a generic encyclopedia entry (e.g. MDN for web dev, Investopedia for finance, Khan Academy or a standard textbook site for a school subject, IMDb for films, AllRecipes/Serious Eats for dishes, PubMed/Mayo Clinic for health, official docs for a tool). Otherwise use a real Wikipedia article (https://en.wikipedia.org/wiki/Topic — or the document\'s language, e.g. https://es.wikipedia.org/wiki/…) or an official website; for a visual/product use a Wikimedia/Wikipedia page or a Google image search URL (https://www.google.com/search?tbm=isch&q=...+url-encoded). Only include a link you are reasonably confident resolves at a real, popular site; if unsure for a card, omit its link. Never fabricate a deep/direct file URL that likely 404s.'
@@ -171,7 +175,7 @@ export async function POST(req: Request) {
       `Each card is: { "kind": "card", "title": string, "text": string${withLinks ? ', "link"?: string, "linkLabel"?: string' : ''}, "children"?: [ ...cards ] }.`,
       'Return STRICT JSON: { "cards": [ ...the full ordered plan, at most 20 top-level... ] }.',
       SAFETY_GUARDRAILS,
-    ].join('\n');
+    ].filter(Boolean).join('\n');
     const userText = [
       `Tool title: ${title || '(untitled)'}`,
       subject ? `Topic / subject: ${subject}` : '',
