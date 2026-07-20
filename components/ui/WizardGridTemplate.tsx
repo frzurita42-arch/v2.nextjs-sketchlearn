@@ -29,12 +29,17 @@ export function WizardGridTemplate({
   tall?: boolean;   // one tall content area (multi-select / templates / long prompt) with Next above Back on the right
 }) {
   if (tall) {
+    // FIXED total height (186 = two 88px rows + 10 gap), so every tall page is the
+    // exact same size as the two-field pages and the Next/Back buttons never move.
+    // Content over that height scrolls INSIDE instead of growing the card.
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'stretch' }}>
-        <div style={{ minHeight: 186, display: 'flex' }}>{top}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 186 }}>
-          {rightTop ?? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button>}
-          <button className="btn small ghost" style={navBtnStyle} disabled={!!backDisabled} onClick={onBack}>← Back</button>
+        <div style={{ height: 186, overflowY: 'auto', display: 'flex', minWidth: 0 }}>{top}</div>
+        {/* Same two-slot button column as the non-tall pages: Next in the top slot,
+            Back in the bottom slot — identical positions across all steps. */}
+        <div style={{ display: 'grid', gridTemplateRows: '88px 88px', gap: 10 }}>
+          <div style={slotStyle}>{rightTop ?? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button>}</div>
+          <div style={slotStyle}><button className="btn small ghost" style={navBtnStyle} disabled={!!backDisabled} onClick={onBack}>← Back</button></div>
         </div>
       </div>
     );
