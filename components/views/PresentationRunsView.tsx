@@ -119,6 +119,9 @@ export function PresentationRunsView() {
     slides: 5, tone: 'Friendly lecture', category: 'General', custom: '',
     theme: 'Any', density: 'Auto (match the level)', imageStyle: 'Any',
     imageProvider: '', textProvider: 'gemini', voice: '', tooltips: true,
+    // New content-defining settings: the subject domain, which slide tool types to
+    // use, a chosen slide template (ordered components), and a free prompt.
+    domain: 'General', toolTypes: ['text', 'mcq'], template: '', prompt: '',
   });
   const cardSize = useCardSize('presrun');
   const imgMode = useImgSize('presrun');
@@ -525,20 +528,103 @@ export function PresentationRunsView() {
       </button>
     </label>
   );
+  // ── New content-defining settings ──────────────────────────────────────
+  const DOMAINS = ['General', 'Programming', 'Mathematics', 'Science', 'Arts', 'Writing', 'Language', 'History', 'Business', 'Music', 'Health'];
+  const TOOL_TYPES: { id: string; label: string }[] = [
+    { id: 'text', label: '📝 Text' },
+    { id: 'mcq', label: '☑️ Multiple choice' },
+    { id: 'input', label: '⌨️ Input answer' },
+    { id: 'code', label: '💻 Code snippet' },
+    { id: 'math', label: '➗ Math / LaTeX' },
+    { id: 'wolfram', label: '🧮 WolframAlpha' },
+    { id: 'geogebra', label: '📐 GeoGebra' },
+    { id: 'image', label: '🖼 Image' },
+    { id: 'chart', label: '📊 Chart' },
+  ];
+  const TEMPLATES: { id: string; label: string; seq: string[] }[] = [
+    { id: 'read-look-check', label: 'Read → Look → Check', seq: ['📝 Text', '🖼 Image', '☑️ Multiple choice'] },
+    { id: 'explain-recap-quiz', label: 'Explain → Illustrate → Recap → Quiz', seq: ['📝 Text', '📝 Text', '🖼 Image', '📝 Text', '☑️ Multiple choice'] },
+    { id: 'concept-formula-solve', label: 'Concept → Formula → Compute → Solve', seq: ['📝 Text', '➗ Math', '🧮 WolframAlpha', '📝 Text', '⌨️ Input answer'] },
+    { id: 'demo-graph-practice', label: 'Demo → Graph → Practice', seq: ['📝 Text', '📐 GeoGebra', '☑️ Multiple choice'] },
+    { id: 'code-run-quiz', label: 'Code → Explain → Quiz', seq: ['💻 Code snippet', '📝 Text', '☑️ Multiple choice'] },
+  ];
+  const chip = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+    padding: '4px 10px', borderRadius: 999, border: '2px solid var(--ink,#2d2a26)',
+    background: active ? 'var(--green,#7fb069)' : 'transparent', color: active ? '#fff' : 'var(--ink,#2d2a26)',
+  });
+  const domainField = (
+    <label className="field" style={fieldShell}><span style={{ display: 'block', marginBottom: 4 }}>🧭 Subject domain</span>
+      <select style={controlStyle} value={String((form as any).domain || 'General')} onChange={(e) => setForm((s) => ({ ...s, domain: e.target.value }))}>
+        {DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
+      </select>
+    </label>
+  );
+  const toolTypesField = (
+    <div style={{ width: '100%' }}>
+      <span style={{ display: 'block', marginBottom: 8, fontWeight: 700 }}>🧰 Tool types the slides may use</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignContent: 'flex-start', maxHeight: 150, overflowY: 'auto' }}>
+        {TOOL_TYPES.map((t) => {
+          const on = Array.isArray((form as any).toolTypes) && (form as any).toolTypes.includes(t.id);
+          return <button key={t.id} type="button" style={chip(on)}
+            onClick={() => setForm((s) => { const cur: string[] = Array.isArray((s as any).toolTypes) ? (s as any).toolTypes : []; return { ...s, toolTypes: on ? cur.filter((x) => x !== t.id) : [...cur, t.id] }; })}>{t.label}</button>;
+        })}
+      </div>
+    </div>
+  );
+  const templatesField = (
+    <div style={{ width: '100%' }}>
+      <span style={{ display: 'block', marginBottom: 8, fontWeight: 700 }}>🧩 Slide template (component order)</span>
+      <div style={{ display: 'grid', gap: 6, maxHeight: 150, overflowY: 'auto', paddingRight: 4 }}>
+        {TEMPLATES.map((t) => {
+          const on = (form as any).template === t.id;
+          return (
+            <button key={t.id} type="button" onClick={() => setForm((s) => ({ ...s, template: on ? '' : t.id }))}
+              style={{ textAlign: 'left', cursor: 'pointer', padding: '7px 10px', borderRadius: 10, border: `2px solid ${on ? 'var(--green,#7fb069)' : 'var(--ink,#2d2a26)'}`, background: on ? 'rgba(127,176,105,0.14)' : 'transparent' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{t.label}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                {t.seq.map((c, i) => (
+                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 11, border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, padding: '1px 6px' }}>{c}</span>
+                    {i < t.seq.length - 1 && <span style={{ opacity: 0.5 }}>→</span>}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+  const promptField = (
+    <label className="field" style={{ width: '100%', margin: 0 }}><span style={{ display: 'block', marginBottom: 4 }}>💬 Prompt (what to build)</span>
+      <textarea value={String((form as any).prompt || '')} onChange={(e) => setForm((s) => ({ ...s, prompt: e.target.value }))}
+        placeholder="Describe exactly what the AI should build — the goal, the angle, constraints, examples, anything specific…"
+        style={{ width: '100%', minHeight: 150, boxSizing: 'border-box', padding: '10px 14px', fontSize: '1rem', lineHeight: 1.35, resize: 'vertical' }} />
+    </label>
+  );
+  // Step navigation clamped to the full step list (kept in sync with `steps` below).
+  const STEP_MAX = 11;
+  const goNext = () => setWizardStep((s) => Math.min(STEP_MAX, s + 1));
+  const goBack = () => setWizardStep((s) => Math.max(0, s - 1));
   const finalActions = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', width: 96, minWidth: 96 }}>
       <button className="btn small green" style={navSizeStyle} onClick={() => { setSettingsOpen(true); setWizardKey((k) => k + 1); }}>✨ Generate</button>
     </div>
   );
   const steps: WizardStep[] = [
-    { key: 'basics', title: 'Name & topic', render: () => <WizardGridTemplate top={titleFilterField} bottom={stepFields(['topic'])} onNext={() => setWizardStep((s) => Math.min(7, s + 1))} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} /> },
-    { key: 'levels', title: 'Level pair', render: () => <WizardGridTemplate top={stepFields(['level'])} bottom={stepFields(['difficulty'])} onNext={() => setWizardStep((s) => Math.min(7, s + 1))} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} /> },
-    { key: 'slides-tone', title: 'Slides & tone', render: () => <WizardGridTemplate top={stepFields(['slides'])} bottom={stepFields(['tone'])} onNext={() => setWizardStep((s) => Math.min(7, s + 1))} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} /> },
-    { key: 'cat-custom', title: 'Category & custom', render: () => <WizardGridTemplate top={stepFields(['category'])} bottom={stepFields(['custom'])} onNext={() => setWizardStep((s) => Math.min(7, s + 1))} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} /> },
-    { key: 'theme-density', title: 'Theme & density', render: () => <WizardGridTemplate top={themeField} bottom={densityField} onNext={() => setWizardStep((s) => Math.min(7, s + 1))} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} /> },
-    { key: 'image-pair', title: 'Image style & API', render: () => <WizardGridTemplate top={imageStyleField} bottom={imageApiField} onNext={() => setWizardStep((s) => Math.min(7, s + 1))} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} /> },
-    { key: 'text-voice', title: 'Text API & voice', render: () => <WizardGridTemplate top={textApiField} bottom={voiceField} onNext={() => setWizardStep((s) => Math.min(7, s + 1))} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} /> },
-    { key: 'tooltips', title: 'Tooltips', render: () => <WizardGridTemplate top={tooltipsField} onBack={() => setWizardStep((s) => Math.max(0, s - 1))} backDisabled={wizardStep === 0} rightTop={finalActions} /> },
+    { key: 'basics', title: 'Name & topic', render: () => <WizardGridTemplate top={titleFilterField} bottom={stepFields(['topic'])} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'domain', title: 'Subject domain', render: () => <WizardGridTemplate top={domainField} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'levels', title: 'Level pair', render: () => <WizardGridTemplate top={stepFields(['level'])} bottom={stepFields(['difficulty'])} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'slides-tone', title: 'Slides & tone', render: () => <WizardGridTemplate top={stepFields(['slides'])} bottom={stepFields(['tone'])} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'tool-types', title: 'Tool types', render: () => <WizardGridTemplate tall top={toolTypesField} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'templates', title: 'Slide template', render: () => <WizardGridTemplate tall top={templatesField} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'cat-custom', title: 'Category & custom', render: () => <WizardGridTemplate top={stepFields(['category'])} bottom={stepFields(['custom'])} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'theme-density', title: 'Theme & density', render: () => <WizardGridTemplate top={themeField} bottom={densityField} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'image-pair', title: 'Image style & API', render: () => <WizardGridTemplate top={imageStyleField} bottom={imageApiField} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'text-voice', title: 'Text API & voice', render: () => <WizardGridTemplate top={textApiField} bottom={voiceField} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'prompt', title: 'Prompt', render: () => <WizardGridTemplate tall top={promptField} onNext={goNext} onBack={goBack} backDisabled={wizardStep === 0} /> },
+    { key: 'tooltips', title: 'Tooltips', render: () => <WizardGridTemplate top={tooltipsField} onBack={goBack} backDisabled={wizardStep === 0} rightTop={finalActions} /> },
   ];
 
   const runCard = (e: any) => {
