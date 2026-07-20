@@ -102,11 +102,25 @@ export function BuilderStudioView() {
   // repo, so a learning path arrives with BOTH ready to review.
   const [lessonPathSeed] = useState<boolean>(!!seed?.lessonPath);
   const [artifact, setArtifact] = useState<ArtifactKind>(seed?.artifact || 'repository');
-  const [title, setTitle] = useState(seed?.title || '');
-  const [subject, setSubject] = useState(seed?.subject || '');
-  // Tone: a dropdown of presets PLUS a free custom text field (both write `tone`),
-  // with a 🎲 to roll a random preset and a 🎨 to reword it.
-  const [tone, setTone] = useState(seed?.tone || 'Friendly');
+  // Title / Subject / Tone are kept SEPARATELY per artifact so a learning path can
+  // give its Repository and its Presentation their own overall settings. The active
+  // `title`/`subject`/`tone` (and setters) resolve to whichever artifact is selected,
+  // so all downstream code keeps using them unchanged.
+  const [repoTitle, setRepoTitle] = useState(seed?.title || '');
+  const [presTitle, setPresTitle] = useState(seed?.title || '');
+  const [repoSubject, setRepoSubject] = useState(seed?.subject || '');
+  const [presSubject, setPresSubject] = useState(seed?.subject || '');
+  const [repoTone, setRepoTone] = useState(seed?.tone || 'Friendly');
+  const [presTone, setPresTone] = useState(seed?.tone || 'Friendly');
+  const isRepo = artifact === 'repository';
+  const title = isRepo ? repoTitle : presTitle;
+  const setTitle = isRepo ? setRepoTitle : setPresTitle;
+  const subject = isRepo ? repoSubject : presSubject;
+  const setSubject = isRepo ? setRepoSubject : setPresSubject;
+  const tone = isRepo ? repoTone : presTone;
+  const setTone = isRepo ? setRepoTone : setPresTone;
+  // The ⚙️ "overall settings" popup (per-artifact: shows whichever artifact is active).
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Tone is ONE field: a dropdown by default, flipped to a free-text box by the ✎
   // pencil (and back by ▾). It starts in custom mode only if the seeded tone isn't
   // one of the presets, so a hand-typed tone stays editable.
@@ -241,8 +255,8 @@ export function BuilderStudioView() {
     if (artifact !== 'repository' || !context.trim()) return;
     didAutoSuggest.current = true;
     (async () => {
-      await suggestWithAI();                      // pre-build the repo cards
-      if (lessonPathSeed) await suggestPresentation();   // + the presentation slides
+      await suggestWithAI();                          // pre-build the repo cards
+      if (lessonPathSeed) await suggestPresentation(true);   // + the presentation slides
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSuggestSeed, artifact, context]);
@@ -329,13 +343,17 @@ export function BuilderStudioView() {
   // Once the AI has proposed slides, the button flips to "Edit with AI": the next
   // request MODIFIES the existing slides (and can add more) instead of a fresh deck.
   const [presSuggested, setPresSuggested] = useState(false);
-  const suggestPresentation = async () => {
+  // Targets the PRESENTATION bucket explicitly (not the active accessor), so it fills
+  // the presentation's own title/subject even while the Repository view is active
+  // during a Lesson-Path dual pre-build. `alsoSeedRepoTitle` copies the AI title to a
+  // still-blank repo title so both artifacts arrive named.
+  const suggestPresentation = async (alsoSeedRepoTitle = false) => {
     if (suggesting || busy) return;
     setSuggesting(true); setErr('');
     try {
       const editing = presSuggested && !nextCard;
       const r: any = await API.post('/api/tools/studio-design', {
-        subject: subject || title, title, tone, provider, context, docs: docsPayload(),
+        subject: presSubject || presTitle, title: presTitle, tone: presTone, provider, context, docs: docsPayload(),
         mode: nextCard ? 'next' : editing ? 'edit' : 'suggest',
         existing: (nextCard || editing) ? pagesToDesign(pages) : undefined,
       }, { retries: 1 });
@@ -344,8 +362,8 @@ export function BuilderStudioView() {
         if (nextCard) setPages((ps) => [...ps, ...mapped]);   // append the new slide(s)
         else setPages(mapped);                                 // fresh or fully-edited deck
         // Fill the title/subject the AI proposed when the author left them blank.
-        if (!title.trim() && r?.title) setTitle(String(r.title));
-        if (!subject.trim() && r?.subject) setSubject(String(r.subject));
+        if (!presTitle.trim() && r?.title) { setPresTitle(String(r.title)); if (alsoSeedRepoTitle && !repoTitle.trim()) setRepoTitle(String(r.title)); }
+        if (!presSubject.trim() && r?.subject) setPresSubject(String(r.subject));
         setPresSuggested(true);
       } else setErr('The AI did not return slides — add a subject or some detail, then try again.');
     } catch (e: any) { setErr(e?.message || 'Could not build a suggestion.'); }
@@ -487,7 +505,11 @@ export function BuilderStudioView() {
         <div style={{ maxWidth: 940, margin: '0 auto' }}>
           {/* Artifact type */}
           <div className="card" style={{ padding: '12px 14px', marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 8 }}>WHAT ARE YOU MAKING?</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>WHAT ARE YOU MAKING?</div>
+              <button type="button" title={`${isRepo ? 'Repository' : 'Presentation'} settings — title, subject, tone, prompt`} aria-label="Overall settings"
+                onClick={() => setSettingsOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>⚙️</button>
+            </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {([['presentation', '📊 Presentation', 'A playable slide deck — one slide per page you design'], ['repository', '🗂️ Repository', 'A collection / gallery of posted items (no slides)']] as const).map(([k, name, d]) => (
                 <button key={k} className={`btn ${artifact === k ? 'green' : 'ghost'}`} style={{ flex: '1 1 220px', textAlign: 'left', padding: '10px 12px' }} onClick={() => setArtifact(k)}>
@@ -505,37 +527,51 @@ export function BuilderStudioView() {
             )}
           </div>
 
-          {/* Global settings — the SAME Title / Subject-topic / Tone layout for
-              both presentations and repositories. The 🎨 palette rewords a field
-              (a similar-but-different phrasing) and the AI fills them in when it
-              suggests slides. */}
-          <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 8 }}>OVERALL</div>
-            <div style={gridCol}>
-              <div className="field">
-                <span style={labelRow}>Title {paletteBtn('title')}</span>
-                <input type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} />
-              </div>
-              <div className="field">
-                <span style={labelRow}>Subject / topic {paletteBtn('subject')}</span>
-                <input type="text" value={subject} placeholder={artifact === 'presentation' ? 'e.g. Trigonometry' : 'e.g. Small Payment System'} onChange={(e) => setSubject(e.target.value)} />
-              </div>
-              <div className="field">
-                <span style={labelRow}>Tone
-                  <button type="button" className="btn small ghost" style={miniBtn}
-                    title={toneCustom ? 'Pick from the list' : 'Type a custom tone'}
-                    onClick={() => setToneCustom((c) => { const next = !c; if (!next && !TONES.includes(tone)) setTone(TONES[0]); return next; })}>{toneCustom ? '▾' : '✎'}</button>
-                  <button type="button" className="btn small ghost" style={miniBtn} title="Roll a random tone" onClick={randomTone}>🎲</button>
-                  {paletteBtn('tone')}
-                </span>
-                {toneCustom
-                  ? <input type="text" value={tone} placeholder="Type a custom tone…" onChange={(e) => setTone(e.target.value)} />
-                  : <select value={TONES.includes(tone) ? tone : TONES[0]} onChange={(e) => setTone(e.target.value)}>
-                      {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+          {/* The OVERALL settings (title / subject / tone / prompt) now live in the ⚙️
+              popup opened from the artifact selector — per artifact. */}
+          {settingsOpen && (
+            <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '4vh 12px' }}>
+              <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: '16px 18px', margin: '4vh 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <b style={{ fontSize: 16 }}>⚙️ {isRepo ? '🗂️ Repository' : '📊 Presentation'} settings</b>
+                  <button className="btn small ghost" onClick={() => setSettingsOpen(false)}>✕ Close</button>
+                </div>
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div className="field">
+                    <span style={labelRow}>Title {paletteBtn('title')}</span>
+                    <input type="text" value={title} placeholder="Name your tool" onChange={(e) => setTitle(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <span style={labelRow}>Subject / topic {paletteBtn('subject')}</span>
+                    <input type="text" value={subject} placeholder={isRepo ? 'e.g. Small Payment System' : 'e.g. Trigonometry'} onChange={(e) => setSubject(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <span style={labelRow}>Tone
+                      <button type="button" className="btn small ghost" style={miniBtn}
+                        title={toneCustom ? 'Pick from the list' : 'Type a custom tone'}
+                        onClick={() => setToneCustom((c) => { const next = !c; if (!next && !TONES.includes(tone)) setTone(TONES[0]); return next; })}>{toneCustom ? '▾' : '✎'}</button>
+                      <button type="button" className="btn small ghost" style={miniBtn} title="Roll a random tone" onClick={randomTone}>🎲</button>
+                      {paletteBtn('tone')}
+                    </span>
+                    {toneCustom
+                      ? <input type="text" value={tone} placeholder="Type a custom tone…" onChange={(e) => setTone(e.target.value)} />
+                      : <select value={TONES.includes(tone) ? tone : TONES[0]} onChange={(e) => setTone(e.target.value)}>
+                          {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>}
+                  </div>
+                  {/* The original prompt / brief that generated this artifact. */}
+                  <div className="field">
+                    <span style={labelRow}>Original prompt</span>
+                    <textarea value={sourcePrompt} placeholder={isRepo ? 'Describe the repository, the topics it should cover, and the structure of the cards…' : 'Describe the lesson / deck this presentation should teach…'} onChange={(e) => setSourcePrompt(e.target.value)} style={{ minHeight: 84, width: '100%' }} />
+                    <div style={{ fontSize: 11, opacity: 0.68, marginTop: 4 }}>Saved prompt preview: {repoPrompt}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+                  <button className="btn green" onClick={() => setSettingsOpen(false)}>✓ Done</button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {artifact === 'presentation' ? (
             <>
@@ -626,12 +662,6 @@ export function BuilderStudioView() {
                description. Published, they show as cards on the page and viewers can
                add their own. */
             <>
-              <div className="card alt" style={{ padding: '12px 14px', marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6, marginBottom: 6 }}>ORIGINAL REPO PROMPT</div>
-                <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 8 }}>This is the prompt or brief saved with the repo. Edit it to change the source that generated this collection.</div>
-                <textarea value={sourcePrompt} placeholder="Describe the repository, the topics it should cover, and the structure of the cards..." onChange={(e) => setSourcePrompt(e.target.value)} style={{ minHeight: 76, width: '100%' }} />
-                <div style={{ fontSize: 11, opacity: 0.68, marginTop: 6 }}>Saved prompt preview: {repoPrompt}</div>
-              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 2px 8px' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.6 }}>CARDS ({repoCards.length}) — name · link · description, nest cards inside cards</div>
               </div>
@@ -693,7 +723,7 @@ export function BuilderStudioView() {
                 ➕ Next {artifact === 'presentation' ? 'slide' : 'card'}: {nextCard ? 'On' : 'Off'}
               </button>
               {artifact === 'presentation' ? (
-                <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={suggestPresentation}
+                <button type="button" className="btn small blue" disabled={busy || suggesting} onClick={() => suggestPresentation()}
                   title={nextCard ? 'Add ONE next slide after the current deck.'
                     : presSuggested ? 'Edit the slides above with AI — describe your change in the box (e.g. “add multiple-choice questions about bananas on a harder level”) and it rewrites/adds slides.'
                     : 'Let the AI propose a full slide deck into the editor above — then edit it and Generate.'}>
