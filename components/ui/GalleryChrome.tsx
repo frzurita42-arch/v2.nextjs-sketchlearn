@@ -30,16 +30,18 @@ export function GalleryFilterRow({
     <>
     {label && <span style={filterLabel}>{label}</span>}
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-      {/* The shared "card-like" paper input (global input[type=text] styling). */}
-      <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder}
-        style={{ flex: '1 1 220px', minWidth: 0 }} />
-      {showChips && (
-        <>
-          <button className={`btn small ${filter === 'all' ? 'green' : 'ghost'}`} onClick={() => setFilter('all')}>All</button>
-          <button className={`btn small ${filter === 'fav' ? 'green' : 'ghost'}`} onClick={() => setFilter('fav')}>★ Favorites</button>
-        </>
-      )}
-      {right}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', flex: '1 1 300px', minWidth: 0 }}>
+        {/* The shared "card-like" paper input (global input[type=text] styling). */}
+        <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder}
+          style={{ flex: '1 1 240px', minWidth: 0 }} />
+        {showChips && (
+          <div style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className={`btn small ${filter === 'all' ? 'green' : 'ghost'}`} onClick={() => setFilter('all')} style={{ paddingInline: 12, borderRadius: 999 }}>All</button>
+            <button className={`btn small ${filter === 'fav' ? 'green' : 'ghost'}`} onClick={() => setFilter('fav')} style={{ paddingInline: 12, borderRadius: 999 }}>★ Favorites</button>
+          </div>
+        )}
+      </div>
+      {right && <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginLeft: 'auto' }}>{right}</div>}
     </div>
     </>
   );

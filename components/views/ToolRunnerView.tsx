@@ -345,12 +345,20 @@ export function ToolRunnerView() {
   return (
     <>
       {!immersive && !isLesson && (
-        <h1 className="view-title" style={{ fontSize: toolHeader.size, fontFamily: toolHeader.fontCss, lineHeight: 1.06, textAlign: 'left', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-          <span className={toolHeader.underline ? 'scribble-underline' : undefined} style={{ display: 'inline-block' }}>{tool.title}</span>
-          {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
-          {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
-          {canSettings && <button title="Tool settings — API keys, AI edit, visibility, delete" onClick={() => setSettingsOpen(true)} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>}
-        </h1>
+        isRepo ? (
+          <PageHeaderBar
+            pageKey="tools"
+            title={tool.title}
+            subtitle={String(tool.description || '').trim() || 'A repository of nested cards.'}
+          />
+        ) : (
+          <h1 className="view-title" style={{ fontSize: toolHeader.size, fontFamily: toolHeader.fontCss, lineHeight: 1.06, textAlign: 'left', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+            <span className={toolHeader.underline ? 'scribble-underline' : undefined} style={{ display: 'inline-block' }}>{tool.title}</span>
+            {canEdit && <button title="Edit the title yourself" onClick={() => { setEditMode('manual'); setEditField('title'); }} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✎</button>}
+            {canEdit && <button title="Suggest a title with AI (from the page content)" onClick={() => { setEditMode('ai'); setEditField('title'); }} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>🎨</button>}
+            {canSettings && <button title="Tool settings — API keys, AI edit, visibility, delete" onClick={() => setSettingsOpen(true)} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>}
+          </h1>
+        )
       )}
       {!immersive && isLesson && (
         <>

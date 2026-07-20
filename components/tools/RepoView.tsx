@@ -13,7 +13,7 @@
  * typing OR regenerating it with AI, add/remove links, upload/AI an icon, and an
  * AI chat that lays out the whole tree. Saving persists for everyone; the
  * completion ✓ toggles are per-user (kept in localStorage). */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { API } from '@/lib/api';
 import { appState, TONES } from '@/lib/app-state';
 import { buildStudyToolDefinition, SLIDE_ACTIVITIES, STUDY_LEVELS, STUDY_LENGTHS } from '@/lib/slide-activities';
@@ -1255,6 +1255,227 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested }: { card: R
   );
 }
 
+type RepoCommandCenterProps = {
+  controlsOpen: boolean;
+  toggleControls: () => void;
+  cards: RepoCard[];
+  collapseCmd: { on: boolean; n: number };
+  collapseAll: (on: boolean) => void;
+  sortMode: 'manual' | 'asc' | 'desc' | 'random';
+  sortLabel: Record<'manual' | 'asc' | 'desc' | 'random', string>;
+  cycleSort: () => void;
+  canEdit: boolean;
+  addTopCardSaved: () => void;
+  assignShown: boolean;
+  saveAssign: (on: boolean) => void;
+  emojiApprove: boolean;
+  saveEmojiApprove: (on: boolean) => void;
+  studyMode: boolean;
+  saveStudyMode: (on: boolean) => void;
+  posterUpload: boolean;
+  userUpload: boolean;
+  saveUploads: (poster: boolean, user: boolean) => void;
+  aiShown: boolean;
+  setAiShown: (updater: (v: boolean) => boolean) => void;
+  imageGen: boolean;
+  saveImageGen: (on: boolean) => void;
+  docUpload: boolean;
+  saveDocUpload: (on: boolean) => void;
+  showDates: boolean;
+  saveShowDates: (on: boolean) => void;
+  studyToolSlug: string;
+  studyToolList: { slug: string; title: string }[];
+  saveStudyTool: (slug: string) => void;
+  ccMode: '' | 'existing' | 'create' | 'ai';
+  setCcMode: (mode: '' | 'existing' | 'create' | 'ai') => void;
+  ccSubject: string;
+  setCcSubject: (value: string) => void;
+  ccLevel: string;
+  setCcLevel: (value: string) => void;
+  ccSlides: number;
+  setCcSlides: (value: number) => void;
+  ccLength: string;
+  setCcLength: Dispatch<SetStateAction<'brief' | 'medium' | 'detailed'>>;
+  ccTone: string;
+  setCcTone: (value: string) => void;
+  creatingTool: boolean;
+  createStudyTool: () => void;
+  openStudy: (promptText: string) => void;
+  openStudySetup: () => void;
+  openAiBuilder: () => void;
+  authorizedUsers: string[];
+  knownUsers: string[];
+  authInput: string;
+  setAuthInput: (value: string) => void;
+  saveAuthorized: (next: string[]) => void;
+  repoTitle?: string;
+};
+
+function RepoCommandCenter({
+  controlsOpen, toggleControls, cards, collapseCmd, collapseAll, sortMode, sortLabel, cycleSort, canEdit, addTopCardSaved,
+  assignShown, saveAssign, emojiApprove, saveEmojiApprove, studyMode, saveStudyMode, posterUpload, userUpload, saveUploads,
+  aiShown, setAiShown, imageGen, saveImageGen, docUpload, saveDocUpload, showDates, saveShowDates, studyToolSlug, studyToolList,
+  saveStudyTool, ccMode, setCcMode, ccSubject, setCcSubject, ccLevel, setCcLevel, ccSlides, setCcSlides, ccLength, setCcLength,
+  ccTone, setCcTone, creatingTool, createStudyTool, openStudy, openStudySetup, openAiBuilder, authorizedUsers, knownUsers,
+  authInput, setAuthInput, saveAuthorized, repoTitle,
+}: RepoCommandCenterProps) {
+  const selectedStudyName = studyToolSlug.trim() ? ((studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug) : '';
+  const fieldRow = { display: 'flex', gap: 8, flexWrap: 'wrap' as const, justifyContent: 'center' };
+  const fld = { fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 } as const;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%', position: 'sticky', top: 8, zIndex: 4, padding: '4px 0 10px', background: 'transparent' }}>
+      <div style={{ display: 'flex', width: '100%', maxWidth: 1000, justifyContent: 'flex-start', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.58, letterSpacing: 0.3, textTransform: 'uppercase' }}>🎛 Command controllers</div>
+        <button type="button" onClick={toggleControls} title={controlsOpen ? 'Collapse the repo controls' : 'Open the repo controls'} aria-pressed={controlsOpen}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 18, lineHeight: 1, color: controlsOpen ? '#1f1f1f' : '#a7a7a7' }}>
+          {'👁︎'}
+        </button>
+      </div>
+
+      {controlsOpen && (
+        <>
+          <OutlineBox title="USER CONTROLS" maxWidth={1000}>
+            {cards.some((c) => (c.children || []).length > 0) && (
+              <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'} onClick={() => collapseAll(!collapseCmd.on)}>
+                {collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}
+              </button>
+            )}
+            <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`} title="Sort the cards — click to cycle: Manual (as arranged) → ↑ Oldest first → ↓ Newest first → 🔀 Random" onClick={cycleSort}>
+              {sortLabel[sortMode]}
+            </button>
+            {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
+          </OutlineBox>
+
+          {canEdit && (
+            <OutlineBox title="OWNER CONTROLS" maxWidth={1000}>
+              <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`} title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'} onClick={() => saveAssign(!assignShown)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
+              <button className={`btn small ${emojiApprove ? 'blue' : 'ghost'}`} title={emojiApprove ? 'Turn off the one-tap emoji status control on cards.' : 'Show a per-card emoji that cycles the assignment status (Set status → Assigned → Pending → Approved → Rejected) with a tap — no document upload needed. A card left on “Set status” shows nothing to viewers.'} onClick={() => saveEmojiApprove(!emojiApprove)}>✅ Emoji approval: {emojiApprove ? 'On' : 'Off'}</button>
+              <button className={`btn small ${studyMode ? 'blue' : 'ghost'}`} title={studyMode ? 'Turn off the study-path buttons.' : 'Mark this repo as a STUDY PATH: cards whose description starts with 🔵 are treated as slide-generation prompts and get a 🎬 button that opens the slide tool with the prompt preset. Leave off for a plain menu / collection.'} onClick={() => saveStudyMode(!studyMode)}>🎬 Study path: {studyMode ? 'On' : 'Off'}</button>
+              <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`} title="Enable the Moderator 📎 link on every card. When off, the clip only stays on cards that already have a link (viewers can still open those)." onClick={() => saveUploads(!posterUpload, userUpload)}>📎 Moderator upload: {posterUpload ? 'On' : 'Off'}</button>
+              <button className={`btn small ${userUpload ? 'blue' : 'ghost'}`} title="Let users add their own 📁 link on every card. When off, the folder only stays on cards where a user already has one (they can still open/manage theirs)." onClick={() => saveUploads(posterUpload, !userUpload)}>📁 User upload: {userUpload ? 'On' : 'Off'}</button>
+              <button className={`btn small ${aiShown ? 'blue' : 'ghost'}`} title={aiShown ? 'Turn off the AI question feature' : 'Turn on the AI question feature — each card gets a 🤖 prompt, and adding a card inside (➕) generates an AI answer from the card, page, prompt and attachments'} onClick={() => setAiShown((v) => !v)}>🤖 AI question: {aiShown ? 'On' : 'Off'}</button>
+              <button className={`btn small ${imageGen ? 'blue' : 'ghost'}`} title={imageGen ? 'Turn off card pictures' : 'Turn on card pictures — each card gets a 🖼️ button (beside the clip/folder) to generate an AI picture of the item; a saved picture stays viewable to everyone even after you turn this off'} onClick={() => saveImageGen(!imageGen)}>🖼️ Card picture: {imageGen ? 'On' : 'Off'}</button>
+              <button className={`btn small ${docUpload ? 'blue' : 'ghost'}`} title={docUpload ? 'Turn off file uploads — the attach editor becomes link-only' : 'Turn on file uploads — the "📎 Attach a document" button in the attach editor is enabled so users can upload a file, not just paste a link'} onClick={() => saveDocUpload(!docUpload)}>📄 File upload: {docUpload ? 'On' : 'Off'}</button>
+              <button className={`btn small ${showDates ? 'blue' : 'ghost'}`} title={showDates ? 'Hide each card’s created date & time' : 'Show each card’s created date & time'} onClick={() => saveShowDates(!showDates)}>{showDates ? '👁 Dates: On' : '🙈 Dates: Off'}</button>
+            </OutlineBox>
+          )}
+
+          {canEdit && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', width: '100%', maxWidth: 1000, marginInline: 'auto', alignItems: 'stretch', justifyContent: 'center' }}>
+              {studyMode && (() => {
+                const selName = selectedStudyName;
+                const Opt = ({ icon, title, sub, onClick, disabled }: { icon: string; title: string; sub: string; onClick: () => void; disabled?: boolean }) => (
+                  <button type="button" disabled={disabled} onClick={onClick}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--ink)', background: 'rgba(0,0,0,0.02)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1 }}>
+                    <span style={{ fontSize: 20, flex: '0 0 auto' }}>{icon}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{title}</span>
+                      <span style={{ display: 'block', fontSize: 11, opacity: 0.6 }}>{sub}</span>
+                    </span>
+                  </button>
+                );
+                const Back = () => <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setCcMode('')}>← Back</button>;
+                return (
+                  <div style={{ flex: '1 1 340px', minWidth: 0, maxWidth: 520, minHeight: 250, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', border: '1.5px dashed var(--ink)', borderRadius: 12 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, textAlign: 'center' }}>🎬 STUDY-PATH COMMAND CENTER</span>
+                    <div style={{ fontSize: 12, fontWeight: 700, textAlign: 'center' }}>
+                      Slide tool: {selName ? <span style={{ color: 'var(--accent, #2d6cdf)' }}>{selName}</span> : <span style={{ opacity: 0.6, fontWeight: 400 }}>{repoTitle || 'none picked yet'}</span>}
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center' }}>
+                      {ccMode === '' && (<>
+                        <div style={{ fontSize: 12, fontWeight: 700, textAlign: 'center', opacity: 0.7 }}>What do you want to do?</div>
+                        {selName && <Opt icon="🎬" title="Open the slide tool" sub={`Go to ${selName} now`} onClick={() => openStudy('')} />}
+                        <Opt icon="🔍" title="Use an existing slide tool" sub="Pick one of your presentations" onClick={() => setCcMode('existing')} />
+                        <Opt icon="✨" title="Create one from this repo" sub={`Build a generator with ${SLIDE_ACTIVITIES.length} activities`} onClick={() => setCcMode('create')} />
+                        <Opt icon="🤖" title="Ask AI to build it" sub="Describe it and let the AI assemble it" onClick={() => setCcMode('ai')} />
+                      </>)}
+
+                      {ccMode === 'existing' && (<>
+                        <Back />
+                        <label style={{ ...fld, width: '100%', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+                          <span style={{ fontWeight: 700 }}>🔍 Pick a presentation</span>
+                          <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={{ fontSize: 12, width: '100%' }}>
+                            <option value="">— pick a presentation —</option>
+                            {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
+                          </select>
+                        </label>
+                        {studyToolList.length === 0 && <span style={{ fontSize: 11, opacity: 0.6, textAlign: 'center' }}>No presentations yet — go back and create one.</span>}
+                        {studyToolSlug.trim() && <button className="btn small blue" style={{ alignSelf: 'center' }} onClick={() => openStudy('')}>🎬 Open it</button>}
+                      </>)}
+
+                      {ccMode === 'create' && (<>
+                        <Back />
+                        <label style={{ ...fld, flexDirection: 'column', alignItems: 'stretch', gap: 3 }}><span style={{ fontWeight: 700 }}>🎯 Subject / focus</span>
+                          <input value={ccSubject} onChange={(e) => setCcSubject(e.target.value)} placeholder={repoTitle || 'e.g. Cybersecurity foundations'} style={{ fontSize: 12, width: '100%' }} />
+                        </label>
+                        <div style={fieldRow}>
+                          <label style={fld}>🎚️ Difficulty
+                            <select value={ccLevel} onChange={(e) => setCcLevel(e.target.value)} style={{ fontSize: 12 }}>{STUDY_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+                          </label>
+                          <label style={fld}>📄 Slides
+                            <input type="number" min={3} max={15} value={ccSlides} onChange={(e) => setCcSlides(Math.max(3, Math.min(15, parseInt(e.target.value, 10) || 8)))} style={{ fontSize: 12, width: 52 }} />
+                          </label>
+                        </div>
+                        <div style={fieldRow}>
+                          <label style={fld}>📏 Length
+                            <select value={ccLength} onChange={(e) => setCcLength(e.target.value as 'brief' | 'medium' | 'detailed')} style={{ fontSize: 12 }}>{STUDY_LENGTHS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select>
+                          </label>
+                          <label style={fld}>🎭 Tone
+                            <select value={ccTone} onChange={(e) => setCcTone(e.target.value)} style={{ fontSize: 12 }}><option value="">Default</option>{TONES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+                          </label>
+                        </div>
+                        <button className="btn small green" style={{ alignSelf: 'center' }} disabled={creatingTool} onClick={createStudyTool}>{creatingTool ? 'Creating…' : '✨ Create the slide tool'}</button>
+                        <span style={{ fontSize: 11, opacity: 0.6, textAlign: 'center' }}>No tooltips. Defaults for the new tool — each play can still tweak them.</span>
+                      </>)}
+
+                      {ccMode === 'ai' && (<>
+                        <Back />
+                        <div style={{ textAlign: 'center' }}>
+                          <button className="btn small blue" onClick={openAiBuilder}>🤖 Build the tool with AI</button>
+                          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 6 }}>Opens the tool builder with this repo as context — describe the activities you want and the AI assembles the tool.</div>
+                        </div>
+                      </>)}
+                    </div>
+
+                    {ccMode === '' && studyToolSlug.trim() && (
+                      <button className="btn small ghost" style={{ alignSelf: 'center' }} title="Clear the selected tool" onClick={() => saveStudyTool('')}>✕ Clear selection</button>
+                    )}
+                    <span style={{ fontSize: 11, opacity: 0.55, textAlign: 'center' }}>Content cards show a 🎬 button that opens this tool with unit/card topics pre-seeded and ready to generate.</span>
+                  </div>
+                );
+              })()}
+
+              <div style={{ flex: '1 1 340px', minWidth: 0, maxWidth: 520, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', alignContent: 'flex-start', justifyContent: 'center', padding: '10px 12px', border: '1.5px dashed var(--ink)', borderRadius: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center' }}>👥 AUTHORIZED USERS</span>
+                <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall button.">Bypass the 🔒 paywall:</span>
+                {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
+                {authorizedUsers.map((u) => (
+                  <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
+                    @{u}
+                    <button className="btn small ghost" style={{ padding: '0 5px' }} title="Remove" onClick={() => saveAuthorized(authorizedUsers.filter((x) => x !== u))}>✕</button>
+                  </span>
+                ))}
+                {knownUsers.filter((u) => !authorizedUsers.includes(u)).length > 0 && (
+                  <select value="" onChange={(e) => { const v = e.target.value; if (v) saveAuthorized([...authorizedUsers, v]); e.currentTarget.selectedIndex = 0; }} style={{ fontSize: 12 }} title="Pick a user to authorize">
+                    <option value="">＋ Add a user…</option>
+                    {knownUsers.filter((u) => !authorizedUsers.includes(u)).map((u) => <option key={u} value={u}>@{u}</option>)}
+                  </select>
+                )}
+                <input value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username" list="repo-known-users"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
+                  style={{ fontSize: 12, width: 130 }} />
+                <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
+                <button className="btn small blue" onClick={() => { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); }}>Add</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string; canEdit: boolean; owner?: string }) {
   const repo: RepoSpec = def?.repo || { cards: [] };
   const [cards, setCards] = useState<RepoCard[]>(() => repo.cards || []);
@@ -1362,6 +1583,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const [saved, setSaved] = useState('');
   const [aiInstr, setAiInstr] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(() => {
+    try { return localStorage.getItem('sl_repo_controls_open') !== '0'; } catch { return true; }
+  });
   const dirty = useRef(false);
   const { done, toggle } = useDone(slug);
   const context = useMemo(() => `${def?.title || ''} — ${def?.description || ''}`.slice(0, 400), [def]);
@@ -1593,6 +1817,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // Persist the 🎬 Study-path switch + which slide tool it opens.
   const saveStudyMode = async (next: boolean) => { setStudyMode(next); try { await postRepo({ studyMode: next }); } catch { /* keep the optimistic toggle */ } };
   const saveStudyTool = async (next: string) => { setStudyToolSlug(next); try { await postRepo({ studyToolSlug: next }); } catch { /* keep the optimistic value */ } };
+  const toggleControls = () => {
+    setControlsOpen((v) => {
+      const next = !v;
+      try { localStorage.setItem('sl_repo_controls_open', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
   // Create a brand-new slide-generator tool from THIS repo (title + description),
   // wired to the engaging activity catalogue (no tooltips), then point the study
   // buttons at it. The repo's prompt cards then feed topics into this fresh tool.
@@ -1774,179 +2005,63 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
              below the cards paginates instead (6 cards per click, nested count) */
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
-          belowToolbar={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%', position: 'sticky', top: 8, zIndex: 4, padding: '4px 0 10px', background: 'linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.92))' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.58, letterSpacing: 0.3, textTransform: 'uppercase' }}>🎛 Control center</div>
-              {/* Row 1 — USER CONTROLS: the display & add buttons, grouped in the
-                  same labelled dashed OutlineBox as the other filter sections. */}
-              <OutlineBox title="USER CONTROLS" maxWidth={1000}>
-                {cards.some((c) => (c.children || []).length > 0) && (
-                  <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'}
-                    onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
-                )}
-                <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`}
-                  title="Sort the cards — click to cycle: Manual (as arranged) → ↑ Oldest first → ↓ Newest first → 🔀 Random"
-                  onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
-                {canEdit && <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>}
-              </OutlineBox>
-
-              {/* Row 2 — owner feature toggles, grouped in the labelled dashed
-                  OutlineBox (the reusable panel the gallery filters also use). */}
-              {canEdit && (
-                <OutlineBox title="OWNER CONTROLS" maxWidth={1000}>
-                  <button className={`btn small ${assignShown ? 'blue' : 'ghost'}`}
-                    title={assignShown ? 'Turn off the status cycle button. Cards that already have a status keep showing it (read-only); un-assigned cards drop the control.' : 'Show the status cycle button on every card so you can set each card’s status'}
-                    onClick={() => saveAssign(!assignShown)}>🏷️ Assignment: {assignShown ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${emojiApprove ? 'blue' : 'ghost'}`}
-                    title={emojiApprove ? 'Turn off the one-tap emoji status control on cards.' : 'Show a per-card emoji that cycles the assignment status (Set status → Assigned → Pending → Approved → Rejected) with a tap — no document upload needed. A card left on “Set status” shows nothing to viewers.'}
-                    onClick={() => saveEmojiApprove(!emojiApprove)}>✅ Emoji approval: {emojiApprove ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${studyMode ? 'blue' : 'ghost'}`}
-                    title={studyMode ? 'Turn off the study-path buttons.' : 'Mark this repo as a STUDY PATH: cards whose description starts with 🔵 are treated as slide-generation prompts and get a 🎬 button that opens the slide tool with the prompt preset. Leave off for a plain menu / collection.'}
-                    onClick={() => saveStudyMode(!studyMode)}>🎬 Study path: {studyMode ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${posterUpload ? 'blue' : 'ghost'}`}
-                    title="Enable the Moderator 📎 link on every card. When off, the clip only stays on cards that already have a link (viewers can still open those)."
-                    onClick={() => saveUploads(!posterUpload, userUpload)}>📎 Moderator upload: {posterUpload ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${userUpload ? 'blue' : 'ghost'}`}
-                    title="Let users add their own 📁 link on every card. When off, the folder only stays on cards where a user already has one (they can still open/manage theirs)."
-                    onClick={() => saveUploads(posterUpload, !userUpload)}>📁 User upload: {userUpload ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${aiShown ? 'blue' : 'ghost'}`}
-                    title={aiShown ? 'Turn off the AI question feature' : 'Turn on the AI question feature — each card gets a 🤖 prompt, and adding a card inside (➕) generates an AI answer from the card, page, prompt and attachments'}
-                    onClick={() => setAiShown((v) => !v)}>🤖 AI question: {aiShown ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${imageGen ? 'blue' : 'ghost'}`}
-                    title={imageGen ? 'Turn off card pictures' : 'Turn on card pictures — each card gets a 🖼️ button (beside the clip/folder) to generate an AI picture of the item; a saved picture stays viewable to everyone even after you turn this off'}
-                    onClick={() => saveImageGen(!imageGen)}>🖼️ Card picture: {imageGen ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${docUpload ? 'blue' : 'ghost'}`}
-                    title={docUpload ? 'Turn off file uploads — the attach editor becomes link-only' : 'Turn on file uploads — the "📎 Attach a document" button in the attach editor is enabled so users can upload a file, not just paste a link'}
-                    onClick={() => saveDocUpload(!docUpload)}>📄 File upload: {docUpload ? 'On' : 'Off'}</button>
-                  <button className={`btn small ${showDates ? 'blue' : 'ghost'}`}
-                    title={showDates ? 'Hide each card’s created date & time' : 'Show each card’s created date & time'}
-                    onClick={() => saveShowDates(!showDates)}>{showDates ? '👁 Dates: On' : '🙈 Dates: Off'}</button>
-                </OutlineBox>
-              )}
-
-              {/* Two-column row: the Study-path command center and Authorized users,
-                  each in its own dashed container; the columns wrap (stack) on
-                  narrow / mobile screens. */}
-              {canEdit && (
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', width: '100%', maxWidth: 1000, marginInline: 'auto', alignItems: 'stretch', justifyContent: 'center' }}>
-
-              {/* 🎬 Study-path command center — a fixed-size, mobile-friendly WIZARD. */}
-              {studyMode && (() => {
-                const selName = studyToolSlug.trim() ? ((studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug) : '';
-                const fieldRow = { display: 'flex', gap: 8, flexWrap: 'wrap' as const, justifyContent: 'center' };
-                const fld = { fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 } as const;
-                // A full-width option button for the chooser step.
-                const Opt = ({ icon, title, sub, onClick, disabled }: { icon: string; title: string; sub: string; onClick: () => void; disabled?: boolean }) => (
-                  <button type="button" disabled={disabled} onClick={onClick}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--ink)', background: 'rgba(0,0,0,0.02)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1 }}>
-                    <span style={{ fontSize: 20, flex: '0 0 auto' }}>{icon}</span>
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{title}</span>
-                      <span style={{ display: 'block', fontSize: 11, opacity: 0.6 }}>{sub}</span>
-                    </span>
-                  </button>
-                );
-                const Back = () => <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setCcMode('')}>← Back</button>;
-                return (
-                <div style={{ flex: '1 1 340px', minWidth: 0, maxWidth: 520, minHeight: 250, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', border: '1.5px dashed var(--ink)', borderRadius: 12 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, textAlign: 'center' }}>🎬 STUDY-PATH COMMAND CENTER</span>
-                  <div style={{ fontSize: 12, fontWeight: 700, textAlign: 'center' }}>
-                    Slide tool: {selName ? <span style={{ color: 'var(--accent, #2d6cdf)' }}>{selName}</span> : <span style={{ opacity: 0.6, fontWeight: 400 }}>none picked yet</span>}
-                  </div>
-
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center' }}>
-                    {ccMode === '' && (<>
-                      <div style={{ fontSize: 12, fontWeight: 700, textAlign: 'center', opacity: 0.7 }}>What do you want to do?</div>
-                      {selName && <Opt icon="🎬" title="Open the slide tool" sub={`Go to ${selName} now`} onClick={() => openStudy('')} />}
-                      <Opt icon="🔍" title="Use an existing slide tool" sub="Pick one of your presentations" onClick={() => setCcMode('existing')} />
-                      <Opt icon="✨" title="Create one from this repo" sub={`Build a generator with ${SLIDE_ACTIVITIES.length} activities`} onClick={() => setCcMode('create')} />
-                      <Opt icon="🤖" title="Ask AI to build it" sub="Describe it and let the AI assemble it" onClick={() => setCcMode('ai')} />
-                    </>)}
-
-                    {ccMode === 'existing' && (<>
-                      <Back />
-                      <label style={{ ...fld, width: '100%', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
-                        <span style={{ fontWeight: 700 }}>🔍 Pick a presentation</span>
-                        <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={{ fontSize: 12, width: '100%' }}>
-                          <option value="">— pick a presentation —</option>
-                          {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
-                        </select>
-                      </label>
-                      {studyToolList.length === 0 && <span style={{ fontSize: 11, opacity: 0.6, textAlign: 'center' }}>No presentations yet — go back and create one.</span>}
-                      {studyToolSlug.trim() && <button className="btn small blue" style={{ alignSelf: 'center' }} onClick={() => openStudy('')}>🎬 Open it</button>}
-                    </>)}
-
-                    {ccMode === 'create' && (<>
-                      <Back />
-                      <label style={{ ...fld, flexDirection: 'column', alignItems: 'stretch', gap: 3 }}><span style={{ fontWeight: 700 }}>🎯 Subject / focus</span>
-                        <input value={ccSubject} onChange={(e) => setCcSubject(e.target.value)} placeholder={def?.title || 'e.g. Cybersecurity foundations'} style={{ fontSize: 12, width: '100%' }} />
-                      </label>
-                      <div style={fieldRow}>
-                        <label style={fld}>🎚️ Difficulty
-                          <select value={ccLevel} onChange={(e) => setCcLevel(e.target.value)} style={{ fontSize: 12 }}>{STUDY_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
-                        </label>
-                        <label style={fld}>📄 Slides
-                          <input type="number" min={3} max={15} value={ccSlides} onChange={(e) => setCcSlides(Math.max(3, Math.min(15, parseInt(e.target.value, 10) || 8)))} style={{ fontSize: 12, width: 52 }} />
-                        </label>
-                      </div>
-                      <div style={fieldRow}>
-                        <label style={fld}>📏 Length
-                          <select value={ccLength} onChange={(e) => setCcLength(e.target.value as any)} style={{ fontSize: 12 }}>{STUDY_LENGTHS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select>
-                        </label>
-                        <label style={fld}>🎭 Tone
-                          <select value={ccTone} onChange={(e) => setCcTone(e.target.value)} style={{ fontSize: 12 }}><option value="">Default</option>{TONES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-                        </label>
-                      </div>
-                      <button className="btn small green" style={{ alignSelf: 'center' }} disabled={creatingTool} onClick={() => { void createStudyTool(); }}>{creatingTool ? 'Creating…' : '✨ Create the slide tool'}</button>
-                      <span style={{ fontSize: 11, opacity: 0.6, textAlign: 'center' }}>No tooltips. Defaults for the new tool — each play can still tweak them.</span>
-                    </>)}
-
-                    {ccMode === 'ai' && (<>
-                      <Back />
-                      <div style={{ textAlign: 'center' }}>
-                        <button className="btn small blue" onClick={openAiBuilder}>🤖 Build the tool with AI</button>
-                        <div style={{ fontSize: 11, opacity: 0.6, marginTop: 6 }}>Opens the tool builder with this repo as context — describe the activities you want and the AI assembles the tool.</div>
-                      </div>
-                    </>)}
-                  </div>
-
-                  {ccMode === '' && studyToolSlug.trim() && (
-                    <button className="btn small ghost" style={{ alignSelf: 'center' }} title="Clear the selected tool" onClick={() => saveStudyTool('')}>✕ Clear selection</button>
-                  )}
-                  <span style={{ fontSize: 11, opacity: 0.55, textAlign: 'center' }}>Content cards show a 🎬 button that opens this tool with unit/card topics pre-seeded and ready to generate.</span>
-                </div>
-                );
-              })()}
-
-              {/* 👥 Authorized users — its own container, sharing the two-column row.
-                  Who can open PAYWALLED (🔒) cards without the lock. */}
-              <div style={{ flex: '1 1 340px', minWidth: 0, maxWidth: 520, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', alignContent: 'flex-start', justifyContent: 'center', padding: '10px 12px', border: '1.5px dashed var(--ink)', borderRadius: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.55, width: '100%', textAlign: 'center' }}>👥 AUTHORIZED USERS</span>
-                  <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall button.">Bypass the 🔒 paywall:</span>
-                  {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
-                  {authorizedUsers.map((u) => (
-                    <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
-                      @{u}
-                      <button className="btn small ghost" style={{ padding: '0 5px' }} title="Remove" onClick={() => saveAuthorized(authorizedUsers.filter((x) => x !== u))}>✕</button>
-                    </span>
-                  ))}
-                  {knownUsers.filter((u) => !authorizedUsers.includes(u)).length > 0 && (
-                    <select value="" onChange={(e) => { const v = e.target.value; if (v) saveAuthorized([...authorizedUsers, v]); e.currentTarget.selectedIndex = 0; }} style={{ fontSize: 12 }} title="Pick a user to authorize">
-                      <option value="">＋ Add a user…</option>
-                      {knownUsers.filter((u) => !authorizedUsers.includes(u)).map((u) => <option key={u} value={u}>@{u}</option>)}
-                    </select>
-                  )}
-                  <input value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username" list="repo-known-users"
-                    onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
-                    style={{ fontSize: 12, width: 130 }} />
-                  <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
-                  <button className="btn small blue" onClick={() => { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); }}>Add</button>
-                </div>
-
-              </div>
-              )}
-            </div>
-          }
+          belowToolbar={(
+            <RepoCommandCenter
+              controlsOpen={controlsOpen}
+              toggleControls={toggleControls}
+              cards={cards}
+              collapseCmd={collapseCmd}
+              collapseAll={collapseAll}
+              sortMode={sortMode}
+              sortLabel={SORT_LABEL}
+              cycleSort={cycleSort}
+              canEdit={canEdit}
+              addTopCardSaved={addTopCardSaved}
+              assignShown={assignShown}
+              saveAssign={saveAssign}
+              emojiApprove={emojiApprove}
+              saveEmojiApprove={saveEmojiApprove}
+              studyMode={studyMode}
+              saveStudyMode={saveStudyMode}
+              posterUpload={posterUpload}
+              userUpload={userUpload}
+              saveUploads={saveUploads}
+              aiShown={aiShown}
+              setAiShown={setAiShown}
+              imageGen={imageGen}
+              saveImageGen={saveImageGen}
+              docUpload={docUpload}
+              saveDocUpload={saveDocUpload}
+              showDates={showDates}
+              saveShowDates={saveShowDates}
+              studyToolSlug={studyToolSlug}
+              studyToolList={studyToolList}
+              saveStudyTool={saveStudyTool}
+              ccMode={ccMode}
+              setCcMode={setCcMode}
+              ccSubject={ccSubject}
+              setCcSubject={setCcSubject}
+              ccLevel={ccLevel}
+              setCcLevel={setCcLevel}
+              ccSlides={ccSlides}
+              setCcSlides={setCcSlides}
+              ccLength={ccLength}
+              setCcLength={setCcLength}
+              ccTone={ccTone}
+              setCcTone={setCcTone}
+              creatingTool={creatingTool}
+              createStudyTool={() => { void createStudyTool(); }}
+              openStudy={openStudy}
+              openStudySetup={openStudySetup}
+              openAiBuilder={openAiBuilder}
+              authorizedUsers={authorizedUsers}
+              knownUsers={knownUsers}
+              authInput={authInput}
+              setAuthInput={setAuthInput}
+              saveAuthorized={saveAuthorized}
+              repoTitle={def?.title}
+            />
+          )}
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}
