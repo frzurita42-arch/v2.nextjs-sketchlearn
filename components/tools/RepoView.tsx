@@ -1794,13 +1794,15 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
             {(() => {
               const Row = SettingRow;   // stable module-level component — no remount on toggle
               // Shared field wrappers so every repo-settings control looks exactly
-              // like a slide-tool field: a title label above a fixed-width control,
-              // laid out in the same 2-column grid at the same positions.
+              // like a slide-tool field: a title label above a fixed-width control.
               const fieldWrap: React.CSSProperties = { width: '100%', margin: 0 };
               const fieldLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', marginBottom: 4 };
-              const twoColGrid: React.CSSProperties = { width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, alignContent: 'start' };
+              // Single-column stacks — the two groups sit side by side (see below),
+              // so within each group the fields stack vertically to stay compact.
+              const stackGrid: React.CSSProperties = { display: 'grid', gap: 12, alignContent: 'start' };
+              const colHead: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', opacity: 0.55, margin: '0 0 8px' };
               const cardsContent = (
-                <div style={twoColGrid}>
+                <div style={stackGrid}>
                   <label className="field" style={fieldWrap}>
                     <span style={fieldLabel}>🔀 Card order</span>
                     <button className={`btn ${sortMode === 'manual' ? 'ghost' : 'blue'}`} style={FIELD_CONTROL_STYLE} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
@@ -1827,9 +1829,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 </div>
               );
               const accessContent = (
-                // Same field layout & control size as the slide-tool settings wizard:
-                // a 2-column grid whose inputs share FIELD_CONTROL_STYLE.
-                <div style={twoColGrid}>
+                <div style={stackGrid}>
                   <label className="field" style={fieldWrap}>
                     <span style={fieldLabel}>🎬 Study-path slide tool</span>
                     <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={FIELD_CONTROL_STYLE}>
@@ -1844,7 +1844,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                       style={FIELD_CONTROL_STYLE} />
                     <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
                   </label>
-                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', minHeight: 24 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', minHeight: 24 }}>
                     {authorizedUsers.length === 0
                       ? <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>
                       : authorizedUsers.map((u) => (
@@ -1856,12 +1856,20 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   </div>
                 </div>
               );
-              const goN = () => setControlsStep((s) => Math.min(2, s + 1));
+              // Compact combined page: Cards & order (left) beside Access & study
+              // tool (right) — two settings sections in the space of one, matching the
+              // side-by-side layout. On a narrow card they stack (auto-fit).
+              const cardsAccessContent = (
+                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 20, alignItems: 'start' }}>
+                  <div><div style={colHead}>🗂️ Cards &amp; order</div>{cardsContent}</div>
+                  <div><div style={colHead}>🔑 Access &amp; study tool</div>{accessContent}</div>
+                </div>
+              );
+              const goN = () => setControlsStep((s) => Math.min(1, s + 1));
               const goB = () => setControlsStep((s) => Math.max(0, s - 1));
               const steps: WizardStep[] = [
-                { key: 'cards', title: 'Cards & order', render: () => <WizardGridTemplate rowButtons top={cardsContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'main', title: 'Cards, order & access', render: () => <WizardGridTemplate rowButtons top={cardsAccessContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
-                { key: 'access', title: 'Access & study tool', render: () => <WizardGridTemplate rowButtons top={accessContent} onBack={goB} backDisabled={controlsStep === 0} /> },
               ];
               return (
                 <SetupWizardCard title={<span style={{ fontSize: 15 }}>⚙️ 🗂️ Repo settings</span>}
