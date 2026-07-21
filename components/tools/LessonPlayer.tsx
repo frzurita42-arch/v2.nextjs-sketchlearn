@@ -58,7 +58,7 @@ import { LESSON_THEMES } from '@/lib/lesson-themes';
 import { TTS_VOICES } from '@/lib/tts';
 import { type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { DonationPrompt } from '@/components/tools/DonationPrompt';
+import { CardSizePanel } from '@/components/ui/CardSizePanel';
 import { SharePanel } from '@/components/tools/SharePanel';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
@@ -2079,21 +2079,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         </div>
         )}
 
-        {/* The create wizard and the donation mug now share the screen evenly. */}
-        {!donateCollapsed && (
-          <div style={{ flex: '1 1 0', minWidth: 0, width: '50%', minHeight: setupGridHeight, display: 'flex', justifyContent: 'center', alignItems: 'center', boxSizing: 'border-box' }}>
-            <DonationPrompt mugWidth={200} mugHeight={166}
-              scope="lesson"
-              address={donation.address} canManage={canManageDonation} onSaveAddress={saveDonateAddress}
-              canCollapse={canManageDonation} onCollapse={toggleDonate} />
-          </div>
-        )}
+        {/* The create wizard shares the row with the Cards size panel (which replaced
+            the donation mug) so you can tune the card layout right here. */}
+        <div style={{ flex: '1 1 0', minWidth: 260, minHeight: setupGridHeight, display: 'flex', alignItems: 'flex-start', boxSizing: 'border-box' }}>
+          <CardSizePanel />
         </div>
-        {donateCollapsed && canManageDonation && (
-          <div style={{ textAlign: 'center', marginTop: 8 }}>
-            <button className="btn small ghost" onClick={toggleDonate} title="Show the donation prompt to everyone">{'👁︎'} Donation hidden — click to show</button>
-          </div>
-        )}
+        </div>
 
         {/* ┄ divider: create ┄ activities feed ┄ */}
         <div style={{ maxWidth: 820, margin: '10px auto', borderTop: '2px dashed var(--ink)', opacity: 0.45 }} />

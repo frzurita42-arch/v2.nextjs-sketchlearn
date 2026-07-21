@@ -14,7 +14,7 @@ import { useCardSize, useImgSize, galleryLayout, cardImageProps } from '@/lib/ca
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { ToolFields } from '@/components/tools/ToolFields';
-import { DonationPrompt } from '@/components/tools/DonationPrompt';
+import { CardSizePanel } from '@/components/ui/CardSizePanel';
 import { SetupWizardCard, SETUP_CARD_WIDTH, SETUP_CARD_GRID_HEIGHT } from '@/components/ui/SetupWizardCard';
 import { SharePanel } from '@/components/tools/SharePanel';
 import { avatarFor } from '@/components/social/AuthorBar';
@@ -745,8 +745,8 @@ export function PresentationRunsView() {
               onStepChange={setWizardStep}
             />
           </div>
-          <div style={{ flex: '1 1 0', minWidth: 0, width: '50%', minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', justifyContent: 'center', alignItems: 'center', boxSizing: 'border-box' }}>
-            <DonationPrompt mugWidth={200} mugHeight={166} scope="lesson" />
+          <div style={{ flex: '1 1 0', minWidth: 260, minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', alignItems: 'flex-start', boxSizing: 'border-box' }}>
+            <CardSizePanel />
           </div>
         </div>
 

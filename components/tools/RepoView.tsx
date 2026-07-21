@@ -29,7 +29,7 @@ import { CardShell, iconBtn, overlayIcon } from '@/components/ui/CardShell';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { SetupWizardCard, SETUP_CARD_WIDTH, SETUP_CARD_GRID_HEIGHT } from '@/components/ui/SetupWizardCard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
-import { DonationPrompt } from '@/components/tools/DonationPrompt';
+import { CardSizePanel } from '@/components/ui/CardSizePanel';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -1866,8 +1866,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               );
             })()}
           </div>
-          <div style={{ flex: '1 1 0', minWidth: 0, minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <DonationPrompt mugWidth={200} mugHeight={166} scope="lesson" />
+          <div style={{ flex: '1 1 0', minWidth: 260, minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', alignItems: 'flex-start' }}>
+            <CardSizePanel />
           </div>
         </div>
       ) : (
