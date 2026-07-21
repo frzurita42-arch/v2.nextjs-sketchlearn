@@ -21,7 +21,11 @@ export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, ti
   const totalCols = headers.length + (canDelete ? 1 : 0);
   return (
     <>
-      <div className="table-wrap"><table className={`sketch${compact ? ' compact' : ''}${tight ? ' tight' : ''}`}><tbody>
+      {/* Every table renders with the same fixed-height "tight" rows so heights are
+          standard across the app: one clipped line per cell, with the 👁 reveal
+          kept outside the clip for long values. (The `tight` prop is kept for
+          back-compat but is now always on.) */}
+      <div className="table-wrap"><table className={`sketch tight${compact ? ' compact' : ''}`}><tbody>
         <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
         {slice.length ? slice.map((r, ri) => {
           const abs = p * pageSize + ri;
@@ -32,9 +36,7 @@ export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, ti
               if (c && typeof c === 'object' && 'node' in c) return <td key={ci}>{c.node}</td>;
               const s = String(c ?? '');
               const long = s.length > CELL_LIMIT;
-              // Tight rows: one line per cell (fixed height) that ellipsises, with
-              // the 👁 reveal kept OUTSIDE the clipped text so it stays clickable.
-              if (tight) return (
+              return (
                 <td key={ci}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s || '—'}</span>
@@ -42,12 +44,6 @@ export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, ti
                   </div>
                 </td>
               );
-              if (long) return (
-                <td key={ci}>{s.slice(0, CELL_LIMIT)}…{' '}
-                  <button type="button" title="Show the full text" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
-                </td>
-              );
-              return <td key={ci}>{s || '—'}</td>;
             })}
             {canDelete && <td><button type="button" title="Delete this row (hides it from the dashboard)" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => { if (id && confirm('Delete this row?')) onDelete!(id); }}>🗑</button></td>}
           </tr>

@@ -594,8 +594,11 @@ table.sketch.compact td { font-size: .85rem; }
    (the component ellipsises text + keeps a 👁 to reveal the full value), so a
    long value can't grow the row. Used by the list tables under the gallery /
    run pages. */
-table.sketch.tight td { height: 34px; padding: 4px 10px; font-size: .85rem; white-space: nowrap; vertical-align: middle; }
-table.sketch.tight th { padding: 6px 10px; white-space: nowrap; font-size: 1rem; }
+/* One standard row height for every table. 42px comfortably fits a `.btn small`
+   action button, so rows that hold buttons are the SAME height as text-only rows
+   (which stay a single clipped line). */
+table.sketch.tight td { height: 42px; padding: 2px 10px; font-size: .85rem; white-space: nowrap; vertical-align: middle; }
+table.sketch.tight th { height: 42px; padding: 2px 10px; white-space: nowrap; font-size: 1rem; vertical-align: middle; }
 
 /* ---------- chat ---------- */
 .chat-shell { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 380px; }
