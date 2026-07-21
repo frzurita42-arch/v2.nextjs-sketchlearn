@@ -122,39 +122,6 @@ function WritingPencil({ size, block }: { size?: number; block?: boolean }) {
   );
 }
 
-// The slide-generation progress bar. It SLOWLY fills up like a loader but eases to
-// a stop just short of the target slide's checkpoint (it never "completes" on its
-// own — the bar disappears the instant the real slide arrives). Checkpoint ticks
-// mark every slide so you can see which slide it's loading to and how many remain.
-function GenProgress({ target, total }: { target: number; total: number }) {
-  const floor = ((target - 1) / total) * 100;      // previous checkpoint
-  const ceil = ((target - 0.07) / total) * 100;    // just before the target checkpoint
-  const [pct, setPct] = useState(floor);
-  useEffect(() => {
-    setPct(floor);
-    // On the next frame, transition (CSS, ease-out) from floor toward ceil — fast
-    // at first, then slower, so it feels like loading without ever finishing.
-    const id = requestAnimationFrame(() => setPct(ceil));
-    return () => cancelAnimationFrame(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, total]);
-  const left = Math.max(0, total - target);
-  return (
-    <div style={{ maxWidth: 640, margin: '10px auto', textAlign: 'center' }}>
-      <div style={{ position: 'relative', height: 14, background: 'rgba(0,0,0,0.08)', borderRadius: 999, overflow: 'hidden', border: '1.5px solid var(--ink)' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent,#5c80bc)', transition: 'width 9s cubic-bezier(0.06, 0.85, 0.15, 1)' }} />
-        {Array.from({ length: Math.max(0, total - 1) }, (_, i) => (
-          <span key={i} aria-hidden style={{ position: 'absolute', top: 0, bottom: 0, left: `${((i + 1) / total) * 100}%`, width: 2, background: 'var(--ink)', opacity: 0.45 }} />
-        ))}
-      </div>
-      <div style={{ opacity: 0.75, marginTop: 10, fontSize: 13 }}>
-        <div style={{ lineHeight: 1 }}><WritingPencil size={40} block /></div>
-        <p style={{ margin: '8px 0 0' }}>Writing slide {target} of {total}{left > 0 ? ` · ${left} slide${left === 1 ? '' : 's'} left until the end` : ' · last slide'}</p>
-      </div>
-    </div>
-  );
-}
-
 // An interactive GeoGebra graph. Loads GeoGebra's deployggb.js once, then injects
 // an applet and runs the AI-provided commands (functions, points, circles…).
 function GeoGebra({ commands, caption }: { commands: string[]; caption?: string }) {
@@ -2284,15 +2251,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           half-drawn, and the view keeps the same height (the layout doesn't
           collapse to reveal the comments). */}
       {!curReady && !err && (
-        <div className="card" style={{ padding: '16px 18px', maxWidth: 640, margin: '0 auto', minHeight: 'min(72vh, 560px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <GenProgress target={cur + 1} total={tot} />
-          <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
-            <div className="sl-skeleton" style={{ height: 20, width: '55%', margin: '0 auto 8px', borderRadius: 6 }} />
-            <div className="sl-skeleton" style={{ height: 12, borderRadius: 6 }} />
-            <div className="sl-skeleton" style={{ height: 12, width: '92%', borderRadius: 6 }} />
-            <div className="sl-skeleton" style={{ height: 12, width: '80%', borderRadius: 6 }} />
-            <div className="sl-skeleton" style={{ height: 170, borderRadius: 10, marginTop: 10 }} />
-          </div>
+        <div className="card" style={{ padding: '16px 18px', maxWidth: 640, margin: '0 auto', minHeight: 'min(72vh, 560px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Just the writing pencil, centred and large — no progress bar, no
+              caption, no skeleton lines. */}
+          <div style={{ lineHeight: 1 }}><WritingPencil size={88} block /></div>
         </div>
       )}
       {err && !curSlide && <p style={{ color: 'var(--danger,#e4572e)' }}>{err} <button className="btn small" onClick={() => fetchInto(cur, cfg)}>Retry</button></p>}
