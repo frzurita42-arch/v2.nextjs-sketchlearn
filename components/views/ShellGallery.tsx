@@ -77,7 +77,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   // remains available as a narrower view.
   const [filter, setFilter] = useState<'all' | 'fav' | 'mine'>('all');
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState<'az' | 'za'>('az');   // name ascending / descending
+  const [sort, setSort] = useState<'newest' | 'oldest'>('newest');   // date created: newest / oldest first
   const [page, setPage] = useState(1);
   const [editTool, setEditTool] = useState<any>(null);
   const [thumbing, setThumbing] = useState<Record<string, boolean>>({});
@@ -187,8 +187,8 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
       }
       return true;
     });
-    const dir = sort === 'az' ? 1 : -1;
-    return list.sort((a, b) => dir * String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' }));
+    const ts = (t: any) => { const d = new Date(t?.createdAt || 0).getTime(); return isNaN(d) ? 0 : d; };
+    return list.sort((a, b) => (sort === 'newest' ? ts(b) - ts(a) : ts(a) - ts(b)));
   }, [tools, filter, favs, q, app.user?.username, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / GALLERY_PER_PAGE));
@@ -244,11 +244,11 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
           {filters.map((f) => (
             <button key={f.key} className={`btn small ${filter === f.key ? 'green' : 'ghost'}`} onClick={() => setFilter(f.key)}>{f.label}</button>
           ))}
-          {/* Sort order by name — ascending / descending, on the same filter row. */}
-          <select value={sort} onChange={(e) => setSort(e.target.value as 'az' | 'za')} title="Sort by name" aria-label="Sort by name"
+          {/* Sort by date created — newest (descending) / oldest (ascending). */}
+          <select value={sort} onChange={(e) => setSort(e.target.value as 'newest' | 'oldest')} title="Sort by date created" aria-label="Sort by date created"
             style={{ fontSize: 13, padding: '4px 6px', width: 'auto', flex: '0 0 auto', minWidth: 0 }}>
-            <option value="az">↑ A–Z</option>
-            <option value="za">↓ Z–A</option>
+            <option value="newest">🕒 Newest</option>
+            <option value="oldest">🕒 Oldest</option>
           </select>
           {topSlot && (
             <button className="btn small ghost" title={topSlotLabel || 'Settings'} aria-label={topSlotLabel || 'Settings'}
