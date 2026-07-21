@@ -10,6 +10,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { API } from '@/lib/api';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { OutlineBox } from '@/components/ui/OutlineBox';
+import { filterLabel } from '@/components/ui/GalleryChrome';
+import { filterSelect } from '@/components/ui/CardViewMenu';
+import { galleryLayout, CARD_SIZE_LABELS, CARD_IMG_LABELS } from '@/lib/card-size';
 
 // The mutually-exclusive status filter: everything, only-my-favorites,
 // only-liked-by-admin, or only-favorited-by-the-owner (OP).
@@ -22,6 +25,7 @@ export interface CollectionViewApi {
   view: 'grid' | 'row';
   setView: (v: 'grid' | 'row') => void;    // no-op while the display is locked
   locked: boolean;
+  imgSize?: number;    // card IMAGE size (0=No image … 5=Cover) when a size menu is shown
 }
 
 export interface CollectionProps<T> {
@@ -55,6 +59,17 @@ export interface CollectionProps<T> {
   canLockView?: boolean;
   onViewLockChange?: (locked: boolean, view: 'grid' | 'row') => void;
   gridMinPx?: number;                      // grid card min width (default 240)
+  // A "bare" gallery-style filter row: NO dashed OutlineBox and NO "FILTERS &
+  // DISPLAY" caption — just the plain "Filters" row used by the top-level Repos /
+  // Slides galleries. Pairs with hideCount + sizePageKey to make a section match
+  // the gallery look exactly.
+  bareFilter?: boolean;
+  hideCount?: boolean;                     // hide the "N items" line under the filter
+  // When set, the section shows the gallery's LAYOUT + IMAGE size dropdowns
+  // (List…Full / No image…Cover), persisted under this key, DEFAULTING to
+  // List + Small. They drive the card layout and the image size (handed to the
+  // card via viewApi.imgSize) and REPLACE the plain ▦/☰ toggle.
+  sizePageKey?: string;
   extra?: ReactNode;                       // section-specific control (e.g. a category select)
   belowToolbar?: ReactNode;                // content on its own row directly BELOW the filter toolbar
   showRefresh?: boolean;                   // show the header 🔄 shuffle button (default true)
@@ -103,6 +118,7 @@ export function Collection<T>({
   favs, likedByAdmin, likedByOwner, ownerLabel = '💛 Moderators', ownerTitle = 'Only tools moderators favorited', perPage, storageKey, sortPrefKey,
   defaultFilter = 'all', canSaveFilter, onSaveFilter, defaultView = 'grid',
   viewLocked, canLockView, onViewLockChange, gridMinPx = 240,
+  bareFilter, hideCount, sizePageKey,
   extra, belowToolbar, showRefresh = true, bottomRule, loading = false, emptyAll = 'Nothing here yet.', emptyFiltered = 'Nothing matches these filters.', emptyState,
   searchPlaceholder = '🔍 name / @user', maxWidth = 900, title,
   canEditTitle, onRenameTitle, onRemixTitle, remixingTitle, onRefresh, refreshing,
@@ -137,7 +153,28 @@ export function Collection<T>({
   }, [storageKey, locked]);
   const setViewP = (v: 'grid' | 'row') => { if (locked) return; setView(v); if (storageKey) { try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } } };
   const toggleLock = () => { const next = !locked; setLocked(next); onViewLockChange?.(next, view); };
-  const viewApi: CollectionViewApi = { view, setView: setViewP, locked };
+
+  // ── Layout + image size (only when sizePageKey is given) ──
+  // Persisted per section under sizePageKey; DEFAULTS to List layout + Small image
+  // so the section reads like the top-level gallery on first load.
+  const sized = !!sizePageKey;
+  const [layoutSize, setLayoutSize] = useState(0);   // 0 = List
+  const [imgSizeV, setImgSizeV] = useState(1);       // 1 = Small
+  useEffect(() => {
+    if (!sizePageKey) return;
+    try {
+      const l = localStorage.getItem(`${sizePageKey}:layout`);
+      const im = localStorage.getItem(`${sizePageKey}:img`);
+      if (l !== null) setLayoutSize(Math.max(0, Math.min(5, parseInt(l, 10) || 0)));
+      if (im !== null) setImgSizeV(Math.max(0, Math.min(5, parseInt(im, 10) || 0)));
+    } catch { /* ignore */ }
+  }, [sizePageKey]);
+  const setLayoutSizeP = (v: number) => { setLayoutSize(v); if (sizePageKey) { try { localStorage.setItem(`${sizePageKey}:layout`, String(v)); } catch { /* ignore */ } } };
+  const setImgSizeP = (v: number) => { setImgSizeV(v); if (sizePageKey) { try { localStorage.setItem(`${sizePageKey}:img`, String(v)); } catch { /* ignore */ } } };
+  // When sized, the layout dropdown decides grid vs. rows (List → rows); otherwise
+  // the plain ▦/☰ toggle governs it.
+  const effView: 'grid' | 'row' = sized ? galleryLayout(layoutSize).view : view;
+  const viewApi: CollectionViewApi = { view: effView, setView: setViewP, locked, imgSize: sized ? imgSizeV : undefined };
 
   // Per-user saved sort order (DB) for pages that opt in with sortPrefKey.
   useEffect(() => {
@@ -230,56 +267,83 @@ export function Collection<T>({
       <section aria-label="Filters and display controls">
       {/* Toolbar — grouped in the labelled dashed OutlineBox (same look as the
           repo OWNER CONTROLS): search + status filters + sort + display toggle. */}
-      <OutlineBox title="FILTERS &amp; DISPLAY" maxWidth={maxWidth} style={{ marginBottom: 8 }}>
-        <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
-          style={{ flex: '0 1 150px', maxWidth: 150, minWidth: 100 }} />
-        {extra}
-        {(favs || likedByAdmin || likedByOwner) && <button className={`btn small ${activeFilter === 'all' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('all')} title="Show everything">All</button>}
-        {favs && <button className={`btn small ${activeFilter === 'fav' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('fav')} title="Only your favorites">★ Favorites</button>}
-        {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Admin</button>}
-        {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title={ownerTitle}>{ownerLabel}</button>}
-        {time && <button className="btn small" onClick={cycleSort} title="Sort: newest ↔ oldest">{sortMode === 'newest' ? '↓ Newest' : '↑ Oldest'}</button>}
-        {/* Grid / rows toggle — both available. When the display is locked the
-            toggle is disabled (viewers stay on the owner's chosen view). */}
-        <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
-          <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Grid'} onClick={() => setViewP('grid')}>▦</button>
-          <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Rows'} onClick={() => setViewP('row')}>☰</button>
-        </div>
-        {/* 🔒 lock — enable/disable switching the display. Owner/admin only. Just
-            the icon, no button box. */}
-        {(canLockView || locked) && (
-          <button disabled={!canLockView}
-            title={locked ? (canLockView ? 'Display locked — click to let viewers switch' : 'The display was locked by the owner') : 'Lock the display so viewers can’t switch (owner/admin)'}
-            onClick={toggleLock}
-            style={{ background: 'none', border: 'none', cursor: canLockView ? 'pointer' : 'default', padding: '0 2px', fontSize: 15, lineHeight: 1, opacity: canLockView ? 1 : 0.55 }}>{locked ? '🔒' : '🔓'}</button>
-        )}
-      </OutlineBox>
+      {(() => {
+        const controls = (<>
+          <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
+            style={{ flex: '0 1 150px', maxWidth: 150, minWidth: 100 }} />
+          {extra}
+          {(favs || likedByAdmin || likedByOwner) && <button className={`btn small ${activeFilter === 'all' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('all')} title="Show everything">All</button>}
+          {favs && <button className={`btn small ${activeFilter === 'fav' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('fav')} title="Only your favorites">★ Favorites</button>}
+          {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Admin</button>}
+          {likedByOwner && <button className={`btn small ${activeFilter === 'owner' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('owner')} title={ownerTitle}>{ownerLabel}</button>}
+          {time && <button className="btn small" onClick={cycleSort} title="Sort: newest ↔ oldest">{sortMode === 'newest' ? '↓ Newest' : '↑ Oldest'}</button>}
+          {sized ? (
+            /* Layout + image size dropdowns (List…Full / No image…Cover) — the same
+               View menu the top-level gallery uses; they replace the ▦/☰ toggle. */
+            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flex: '0 0 auto' }}>
+              <select title="View — card layout & size" aria-label="Card layout" value={layoutSize} onChange={(e) => setLayoutSizeP(parseInt(e.target.value, 10))} style={filterSelect}>
+                {CARD_SIZE_LABELS.map((l, i) => <option key={l} value={i}>▦ {l}</option>)}
+              </select>
+              <select title="Image — how the picture is shown" aria-label="Card image" value={imgSizeV} onChange={(e) => setImgSizeP(parseInt(e.target.value, 10))} style={filterSelect}>
+                {CARD_IMG_LABELS.map((l, i) => <option key={l} value={i}>🖼 {l}</option>)}
+              </select>
+            </span>
+          ) : (<>
+            {/* Grid / rows toggle — both available. When the display is locked the
+                toggle is disabled (viewers stay on the owner's chosen view). */}
+            <div style={{ display: 'inline-flex', border: '1.5px solid var(--ink)', borderRadius: 6, overflow: 'hidden' }}>
+              <button className={`btn small ${view === 'grid' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Grid'} onClick={() => setViewP('grid')}>▦</button>
+              <button className={`btn small ${view === 'row' ? 'blue' : 'ghost'}`} style={{ borderRadius: 0, border: 'none' }} disabled={locked} title={locked ? 'Display locked' : 'Rows'} onClick={() => setViewP('row')}>☰</button>
+            </div>
+            {/* 🔒 lock — enable/disable switching the display. Owner/admin only. */}
+            {(canLockView || locked) && (
+              <button disabled={!canLockView}
+                title={locked ? (canLockView ? 'Display locked — click to let viewers switch' : 'The display was locked by the owner') : 'Lock the display so viewers can’t switch (owner/admin)'}
+                onClick={toggleLock}
+                style={{ background: 'none', border: 'none', cursor: canLockView ? 'pointer' : 'default', padding: '0 2px', fontSize: 15, lineHeight: 1, opacity: canLockView ? 1 : 0.55 }}>{locked ? '🔒' : '🔓'}</button>
+            )}
+          </>)}
+        </>);
+        // Bare (gallery) look: plain "Filters" caption + row, no dashed OutlineBox.
+        return bareFilter ? (
+          <div style={{ ...wrap, marginBottom: 8 }}>
+            <span style={filterLabel}>Filters</span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>{controls}</div>
+          </div>
+        ) : (
+          <OutlineBox title="FILTERS &amp; DISPLAY" maxWidth={maxWidth} style={{ marginBottom: 8 }}>{controls}</OutlineBox>
+        );
+      })()}
       {/* An optional row directly below the filter toolbar (e.g. Build a tool +
           category chips), before the item count. */}
       {belowToolbar && <div style={{ ...wrap, marginBottom: 8 }}>{belowToolbar}</div>}
+      {!hideCount && (
       <div style={{ ...wrap, fontSize: 13, opacity: 0.6, marginBottom: 10, textAlign: 'center' }}>
         {filtered.length} item{filtered.length === 1 ? '' : 's'}
         {canSaveFilter && (favs || likedByAdmin || likedByOwner) && <span style={{ marginLeft: 6, fontStyle: 'italic' }}>· your filter is saved as this page&apos;s default</span>}
       </div>
+      )}
       </section>
       {/* Closing dashed rule — end of the filters container, right before the
           cards. When a pager is configured it already frames itself in dashes and
-          serves as the divider instead. */}
-      <div style={sectionRule} />
+          serves as the divider instead. The bare (gallery) look drops it. */}
+      {!bareFilter && <div style={sectionRule} />}
 
       {/* ═══ Container 3: the cards / nested items ═══ */}
       <section aria-label="Cards">
       {loading && items.length === 0 ? (
         // Skeleton cards while the data loads — the title, banner and toolbar above
         // are already on screen, so only this area shows a loading shimmer.
-        <div style={view === 'grid'
+        <div style={sized
+          ? { ...wrap, ...galleryLayout(layoutSize).container, alignItems: 'start' }
+          : effView === 'grid'
           ? { ...wrap, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinPx}px, 1fr))`, gap: 14, alignItems: 'start' }
           : { ...wrap, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
-          {Array.from({ length: view === 'grid' ? 6 : 3 }).map((_, i) => (
+          {Array.from({ length: effView === 'grid' ? 6 : 3 }).map((_, i) => (
             // Each loading card shows the "writing pencil" animation (the same one
             // the slide generator uses) so it's clear the card's content is on its way.
-            <div key={i} className="card sl-skeleton" aria-hidden style={{ height: view === 'grid' ? 300 : 74, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span className="sl-pencil" style={{ fontSize: view === 'grid' ? 34 : 22, opacity: 0.8, position: 'relative', zIndex: 1 }}>
+            <div key={i} className="card sl-skeleton" aria-hidden style={{ height: effView === 'grid' ? 300 : 74, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span className="sl-pencil" style={{ fontSize: effView === 'grid' ? 34 : 22, opacity: 0.8, position: 'relative', zIndex: 1 }}>
                 <span className="sl-pencil__line" />
                 <span className="sl-pencil__tip">✏️</span>
               </span>
@@ -291,13 +355,15 @@ export function Collection<T>({
       ) : shown.length === 0 ? (
         emptyState ?? <p style={{ textAlign: 'center', opacity: 0.7 }}>{emptyFiltered}</p>
       ) : (
-        <div style={view === 'grid'
+        <div style={sized
+          ? { ...wrap, ...galleryLayout(layoutSize).container, alignItems: 'start' }
           // alignItems:start keeps each card at its own content height — without it
           // CSS grid stretches every card in a row to the tallest one, so a few
           // cards look "longer" than a full grid of them.
+          : effView === 'grid'
           ? { ...wrap, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${gridMinPx}px, 1fr))`, gap: 14, alignItems: 'start' }
           : { ...wrap, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10, alignItems: 'start' }}>
-          {shown.map((t) => <div key={id(t)} style={{ minWidth: 0 }}>{view === 'grid' ? renderGrid(t, viewApi) : renderRow(t, viewApi)}</div>)}
+          {shown.map((t) => <div key={id(t)} style={{ minWidth: 0 }}>{effView === 'grid' ? renderGrid(t, viewApi) : renderRow(t, viewApi)}</div>)}
         </div>
       )}
 
