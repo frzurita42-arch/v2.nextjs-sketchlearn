@@ -1958,6 +1958,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 </button>
               </label>
             );
+            // Annotation activities (hand-drawn "mark up a paper pad" drills) are OFF
+            // by default, so the AI never picks that template. The author can opt in.
+            const annotationField = (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>🖊️ Annotation slides</span>
+                <select style={controlStyle} value={(form as any).annotations === 'on' ? 'on' : ''} onChange={(e) => setForm(s => ({ ...s, annotations: e.target.value }))}
+                  title="Include hand-drawn “annotate on a paper pad” activities. Off by default — the AI won’t use annotation templates unless you turn this on.">
+                  <option value="">Off — no annotation activities</option>
+                  <option value="on">On — allow annotation activities</option>
+                </select>
+              </label>
+            );
             const finalActions = (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', width: 96, minWidth: 96 }}>
                 {!app.user
@@ -1984,7 +1995,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             // narrow one shows fewer per page and simply adds pages.
             const cells: React.ReactNode[] = [
               ...formFields.map((f: any) => stepFields([f.id], true)),
-              themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField,
+              themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField, annotationField,
             ].filter((c) => c != null);
             const perPage = wizardW >= 620 ? 4 : wizardW >= 330 ? 2 : 1;
             const gridCols = perPage >= 2 ? 2 : 1;

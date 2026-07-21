@@ -190,9 +190,16 @@ export async function POST(req: Request) {
     geogebra: pickBool(b.values?.sup_geogebra, baseSup.geogebra),
   };
   // This slide's activity set: the designed page wins, else the lesson-wide set.
-  const activityTypes: string[] = (Array.isArray(pageSpec?.activityTypes) && pageSpec.activityTypes.length)
+  let activityTypes: string[] = (Array.isArray(pageSpec?.activityTypes) && pageSpec.activityTypes.length)
     ? pageSpec.activityTypes
     : ((Array.isArray(lesson.activityTypes) && lesson.activityTypes.length) ? lesson.activityTypes : ['mcq', 'fill-blank', 'input']);
+  // Annotation ("draw / mark up a paper pad") activities are OFF unless the author
+  // turned them on for this generation — so the AI won't pick that template.
+  const allowAnnotation = b.values?.annotations === 'on' || b.values?.annotations === true;
+  if (!allowAnnotation) {
+    const kept = activityTypes.filter((t) => t !== 'annotation');
+    activityTypes = kept.length ? kept : ['mcq', 'fill-blank', 'input'];
+  }
   // Quantitative subjects (math + physics/chemistry/etc.) get LaTeX formulas,
   // diagrams and step-by-step working — not plain-ASCII math.
   const mathish = kind === 'math' || /\b(physics|chemistry|chemical|biolog|trigonometry|geometry|calculus|algebra|equation|mechanics|thermodynamic|kinematic|electromag|stoichiom|\bmole\b|reaction|force|velocity|acceleration|vector|momentum|circuit|optics|astronom|statistic|probability)\b/.test(`${subject} ${topic}`.toLowerCase());
@@ -205,7 +212,7 @@ export async function POST(req: Request) {
   // legitimately have NO questions (e.g. reading + media only). Only when there
   // is no designed page do we fall back to one random question for the slide.
   const qKinds: string[] = pageSpec
-    ? (Array.isArray(pageSpec.activityTypes) ? pageSpec.activityTypes.slice(0, 12) : [])
+    ? (Array.isArray(pageSpec.activityTypes) ? pageSpec.activityTypes.slice(0, 12).filter((k: string) => allowAnnotation || k !== 'annotation') : [])
     : [rand(activityTypes)];
   const wolfram = wolframAvailable();
   // Every ENABLED support category becomes its own component on the slide. Each
