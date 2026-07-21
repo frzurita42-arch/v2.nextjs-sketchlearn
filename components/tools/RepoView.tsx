@@ -29,6 +29,7 @@ import { CardShell, iconBtn, overlayIcon } from '@/components/ui/CardShell';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { SetupWizardCard } from '@/components/ui/SetupWizardCard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
+import { FIELD_CONTROL_STYLE } from '@/components/tools/ToolFields';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -1570,8 +1571,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // exclusive — the 🔢 button clears the image, an upload clears the emoji).
   const setIcon = (id: string, patch: Partial<RepoCard>) => saveCards(mapTree(cards, id, (c) => ({ ...c, ...patch })));
   const numberCard = (id: string) => { const n = cardNumber(cards, id); if (n == null) return; setIcon(id, { icon: toKeycaps(n), image: undefined }); };
-  // Add a brand-new TOP-LEVEL card straight from the collection page (owner/admin).
-  const addTopCardSaved = () => saveCards([...cards, { ...blankCard('card'), text: 'New subtitle' }]);
   const deleteCard = (id: string) => { if (!confirm('Delete this card and everything inside it?')) return; saveCards(removeFromTree(cards, id)); };
   const distortTitle = async (card: RepoCard) => {
     try {
@@ -1796,7 +1795,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               const Row = SettingRow;   // stable module-level component — no remount on toggle
               const cardsContent = (
                 <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, alignContent: 'start' }}>
-                  <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>
                   <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
                   {cards.some((c) => (c.children || []).length > 0) && (
                     <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'} onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
@@ -1817,38 +1815,32 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 </div>
               );
               const accessContent = (
-                <div style={{ width: '100%', display: 'grid', gap: 10, alignContent: 'start' }}>
-                  <label style={{ display: 'grid', gap: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>🎬 Study-path slide tool</span>
-                    <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={{ fontSize: 12 }}>
+                // Same field layout & control size as the slide-tool settings wizard:
+                // a 2-column grid whose inputs share FIELD_CONTROL_STYLE.
+                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, alignContent: 'start' }}>
+                  <label className="field" style={{ width: '100%', margin: 0 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>🎬 Study-path slide tool</span>
+                    <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={FIELD_CONTROL_STYLE}>
                       <option value="">— none picked —</option>
                       {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
                     </select>
                   </label>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
-                      {authorizedUsers.map((u) => (
-                        <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
-                          @{u}
-                          <button className="btn small ghost" style={{ padding: '0 5px' }} title="Remove" onClick={() => saveAuthorized(authorizedUsers.filter((x) => x !== u))}>✕</button>
-                        </span>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {knownUsers.filter((u) => !authorizedUsers.includes(u)).length > 0 && (
-                        <select value="" onChange={(e) => { const v = e.target.value; if (v) saveAuthorized([...authorizedUsers, v]); e.currentTarget.selectedIndex = 0; }} style={{ fontSize: 12 }} title="Pick a user to authorize">
-                          <option value="">＋ Add a user…</option>
-                          {knownUsers.filter((u) => !authorizedUsers.includes(u)).map((u) => <option key={u} value={u}>@{u}</option>)}
-                        </select>
-                      )}
-                      <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username" list="repo-known-users"
-                        onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
-                        style={{ fontSize: 12, width: 130 }} />
-                      <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
-                      <button className="btn small blue" onClick={() => { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); }}>Add</button>
-                    </div>
+                  <label className="field" style={{ width: '100%', margin: 0 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
+                    <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username + Enter" list="repo-known-users"
+                      onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
+                      style={FIELD_CONTROL_STYLE} />
+                    <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
+                  </label>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', minHeight: 24 }}>
+                    {authorizedUsers.length === 0
+                      ? <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>
+                      : authorizedUsers.map((u) => (
+                          <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
+                            @{u}
+                            <button className="btn small ghost" style={{ padding: '0 5px' }} title="Remove" onClick={() => saveAuthorized(authorizedUsers.filter((x) => x !== u))}>✕</button>
+                          </span>
+                        ))}
                   </div>
                 </div>
               );

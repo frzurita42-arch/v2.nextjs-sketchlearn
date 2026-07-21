@@ -39,7 +39,7 @@ function lessonToStudioPages(lesson: any): any[] {
   return Array.from({ length: count }, () => lessonPageToStudio(base));
 }
 import { defaultsFor, MAX_SLIDES } from '@/lib/tool-schema';
-import { ToolFields } from '@/components/tools/ToolFields';
+import { ToolFields, FIELD_CONTROL_STYLE } from '@/components/tools/ToolFields';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
 import { RichText } from '@/components/tools/RichText';
@@ -1920,7 +1920,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             };
             const goPrev = () => setWizardStep((s) => Math.max(0, s - 1));
             const fieldShell: React.CSSProperties = { width: '100%', margin: 0 };
-            const controlStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 14px', fontSize: '1.05rem', lineHeight: 1.2 };
+            const controlStyle: React.CSSProperties = FIELD_CONTROL_STYLE;
             const navSizeStyle: React.CSSProperties = {
               width: 96,
               height: 40,

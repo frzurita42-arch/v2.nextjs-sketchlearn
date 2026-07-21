@@ -37,7 +37,7 @@ export function WizardGridTemplate({
     // (slide wizard) and the repo Access page.
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'stretch' }}>
-        <div style={{ minHeight: 156, minWidth: 0 }}>{top}</div>
+        <div style={{ minHeight: 200, minWidth: 0 }}>{top}</div>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'stretch' }}>
           <div>{rightTop ?? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button>}</div>
           <button className="btn small ghost" style={navBtnStyle} disabled={!!backDisabled} onClick={onBack}>← Back</button>

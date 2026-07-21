@@ -16,7 +16,11 @@ const SUGGESTABLE = new Set(['text', 'textarea', 'number', 'select', 'select-or-
 // When `fill` is on, fields drop the 240px cap and every control gets the exact
 // same width/height/padding as the manually-built settings fields (theme, voice,
 // …) so a wizard grid mixing schema fields and manual fields lines up perfectly.
-const FILL_CONTROL: CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 14px', fontSize: '1.05rem', lineHeight: 1.2 };
+// Exported so the repo-settings page and the slide tool's own manual fields share
+// the identical control size (a touch narrower than the full cell). Keep this the
+// single source of truth for every settings-wizard input.
+export const FIELD_CONTROL_STYLE: CSSProperties = { width: '100%', maxWidth: 300, boxSizing: 'border-box', padding: '10px 14px', fontSize: '1.05rem', lineHeight: 1.2 };
+const FILL_CONTROL = FIELD_CONTROL_STYLE;
 
 function Field({ f, value, onChange, onSuggest, suggesting, fill }: {
   f: ToolField; value: any; onChange: (v: any) => void; onSuggest?: () => void; suggesting?: boolean; fill?: boolean;
