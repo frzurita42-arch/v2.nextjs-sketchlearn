@@ -16,22 +16,37 @@ const textAI = () => openrouterEnabled || geminiEnabled || deepseekEnabled || mo
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Lesson Path guarantee: the AI is unreliable about deep nesting, so after it plans
-// the tree we ENFORCE the rule server-side — every leaf that isn't already a 🔵
-// prompt card gets a nested 🔵 slide-build prompt child, so the last nested card in
-// each unit always carries the prompt fed to the slide tool. (🔵 is the marker the
-// repo's Study-path button looks for.)
+// the tree we ENFORCE exactly ONE 🔵 slide-build prompt at the end of each branch.
+// If a leaf ALREADY is the AI's slide-build prompt we only MARK it with 🔵 (so the
+// repo's Study-path button finds it) — we do NOT add a second prompt card. Only a
+// genuine content leaf (no prompt) gets a new 🔵 prompt child.
 const isPromptText = (t: any) => /^\s*🔵/.test(String(t || ''));
+// Recognise a card that the AI already wrote AS the slide-build prompt (by its 🔵
+// marker, its title, or prompt-directive wording) so we never duplicate it.
+const looksLikePrompt = (c: any) => {
+  const title = String(c?.title || '');
+  const text = String(c?.text || '');
+  return isPromptText(text)
+    || /slide[-\s]?build\s*prompt|^\s*▶|\bprompt\b/i.test(title)
+    || /build a lesson (presentation|that)|slide[-\s]?generat|generate (a |the )?(lesson|presentation|slide)/i.test(text);
+};
 function ensurePromptLeaves(nodes: any[]): any[] {
   if (!Array.isArray(nodes)) return nodes;
   return nodes.map((c) => {
     if (!c || typeof c !== 'object') return c;
     const kids = Array.isArray(c.children) ? c.children : [];
     if (kids.length) return { ...c, children: ensurePromptLeaves(kids) };
-    if (isPromptText(c.text)) return c;                       // already a prompt leaf
+    // Leaf is ALREADY the slide-build prompt → keep the single card, just ensure the
+    // 🔵 marker is present. Never add a second prompt underneath it.
+    if (looksLikePrompt(c)) {
+      const text = String(c.text || '');
+      return isPromptText(text) ? c : { ...c, text: `🔵 ${text}`.trim().slice(0, 1200) };
+    }
+    // Genuine content leaf with no prompt → add the ONE 🔵 slide-build prompt child.
     const title = String(c.title || 'this topic').slice(0, 120);
     const text = String(c.text || '').replace(/\s+/g, ' ').trim().slice(0, 300);
     const promptText = `🔵 Build a lesson presentation for “${title}”. ${text} State the lesson objectives, the topics to cover, and the exercises/activities to practise with the available components so the learner masters it.`.slice(0, 600);
-    return { ...c, children: [{ kind: 'card', title: '▶ Slide-build prompt', text: promptText }] };
+    return { ...c, children: [{ kind: 'card', title: 'Slide-build prompt', text: promptText }] };
   });
 }
 
@@ -187,7 +202,7 @@ export async function POST(req: Request) {
       // must stand on their own — a bare heading is not enough for it to work from.
       '4b. EVERY LEAF card (a card with no children — the deepest node on each branch) MUST carry BOTH a clear, specific standalone "title" AND a "text" of 1–3 sentences that concretely states what that topic is and names the actual concepts/skills/examples it covers. Write it so a lesson generator that sees ONLY that one card\'s title + text could build a complete, accurate lesson about it — no vague one-word descriptions, no "see above", no relying on the parent card for meaning.',
       lessonPath
-        ? '4c. LESSON-PATH MODE IS ON — this repository IS a learning path, so build every unit so a playable presentation can be generated from it. Under EACH unit/topic card, create AT LEAST TWO nested layers: (a) a nested "Objective" child card — its title is the skill/objective, its text explains in 1–2 sentences what the learner should understand or be able to DO after this unit; then (b) nested UNDER that Objective card, a single LEAF card that is the SLIDE-BUILD PROMPT. Write that leaf card\'s "text" AS A DIRECTIVE TO THE PRESENTATION GENERATOR (e.g. "Build a lesson that evaluates …; have the learner practise …; check that they can …"), naming the concrete tasks, questions and skills that must be practised or evaluated to master this topic. NEVER leave a unit as a single bare card — the Objective card and its nested slide-build-prompt leaf are REQUIRED (a minimum of two nested levels per unit) so the presentation tool knows exactly what to make.'
+        ? '4c. LESSON-PATH MODE IS ON — this repository IS a learning path, so build every unit so a playable presentation can be generated from it. Under EACH unit/topic card, create AT LEAST TWO nested layers: (a) a nested "Objective" child card — its title is the skill/objective, its text explains in 1–2 sentences what the learner should understand or be able to DO after this unit; then (b) nested UNDER that Objective card, EXACTLY ONE LEAF card that is the SLIDE-BUILD PROMPT. Its "text" MUST BEGIN with the emoji "🔵 " and then read AS A DIRECTIVE TO THE PRESENTATION GENERATOR (e.g. "🔵 Build a lesson that evaluates …; have the learner practise …; check that they can …"), naming the concrete tasks, questions and skills to master this topic. Produce ONE — and only one — slide-build-prompt card per objective; do NOT nest another prompt inside the prompt, and do NOT repeat it. The Objective card plus its single 🔵 prompt leaf are REQUIRED (two nested levels per unit) so the presentation tool knows exactly what to make.'
         : '',
       '5. Base the plan on the attached document / goal — do not invent unrelated content. Ignore document front-matter (course code, bibliography).',
       withLinks
