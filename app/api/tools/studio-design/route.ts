@@ -1,7 +1,7 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
 import { geminiEnabled, openrouterEnabled, deepseekEnabled, moonshotEnabled } from '@/src/config';
-import { generateStructured } from '@/src/ai/providers';
+import { generateStructured, geminiDoc } from '@/src/ai/providers';
 import { requireAuth } from '@/lib/auth-guard';
 import { recordTextUsage } from '@/lib/usage-log';
 import { MAX_SLIDES } from '@/lib/tool-schema';
@@ -63,8 +63,16 @@ export async function POST(req: Request) {
     length: ['brief', 'medium', 'detailed'].includes(pg?.length) ? pg.length : 'medium',
     paragraphs: Math.max(1, Math.min(4, parseInt(pg?.paragraphs, 10) || 1)),
   })).filter((pg: any) => pg.components.length);
-  // Fold any attached TEXT documents into the context the designer considers.
-  const docText = (Array.isArray(b.docs) ? b.docs : []).map((d: any) => String(d?.text || '')).filter(Boolean).join('\n\n').slice(0, 6000);
+  // Fold attached documents into the context the designer considers: TEXT docs go
+  // inline; PDF/binary docs are sent to Gemini natively (so a physics PDF actually
+  // shapes the slides instead of the AI guessing from the subject alone).
+  const docItems: any[] = Array.isArray(b.docs) ? b.docs.slice(0, 6) : [];
+  const docText = docItems.map((d: any) => String(d?.text || '')).filter(Boolean).join('\n\n').slice(0, 6000);
+  const binDocs: { mimeType: string; data: string }[] = [];
+  for (const d of docItems) {
+    const mm = String(d?.dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+    if (mm && /pdf|msword|officedocument|text|rtf/i.test(mm[1])) binDocs.push({ mimeType: mm[1], data: mm[2] });
+  }
   const fullContext = [context, docText && `Reference document(s):\n${docText}`].filter(Boolean).join('\n\n').slice(0, 8000);
   // If the author explicitly asks for images/visuals, put an image on (nearly)
   // every slide so the request is honoured.
@@ -72,7 +80,7 @@ export async function POST(req: Request) {
   const imageRule = wantsImages ? ' THE AUTHOR WANTS IMAGES: include an "image" component on EVERY slide (or all but the pure-quiz recap).' : '';
   // A subject is enough, but so is a goal/context or an attached document or an
   // existing deck to edit — the AI infers the subject from whatever is provided.
-  if (!subject && !fullContext && !existing.length) return NextResponse.json({ error: 'Add a subject, a goal, or a document first.' }, { status: 200 });
+  if (!subject && !fullContext && !existing.length && !binDocs.length) return NextResponse.json({ error: 'Add a subject, a goal, or a document first.' }, { status: 200 });
 
   // A sensible fallback plan so a lesson is always produced even with no AI: a
   // short teach→practice→check arc. (Subject-agnostic; the generator fills content.)
@@ -109,7 +117,7 @@ export async function POST(req: Request) {
     '2. EVERY slide carries substance to read/see AND most slides include an activity so progress is measured. VARY activity types across the lesson. Keep each slide focused: about 2–5 components.',
     '3. ANALYZE THE TOOLBOX AND HONOR THE REQUEST: read the author\'s goal and pick the components that literally deliver what they asked for — "reading"/"text" → reading; "tooltip"/"hint"/"explain"/"definition" → deco-hint (a tappable hint) and/or note (a hidden teaching instruction); "image"/"picture"/"show me" → image; "draw"/"sketch"/"annotate"/"work it out by hand" → annotation (or writing for a single character); "AI evaluation"/"grade"/"check my answer"/"assess" → an AI-graded activity (input, code, or annotation); "quiz"/"multiple choice" → mcq4/mcq2; "fill in the blank" → fill-blank. If they name several (e.g. text + image + tooltip + AI evaluation), make sure EACH appears on the relevant slide(s). You have all these buttons — use the ones that match.',
     '4. ONE reading + ONE well-chosen activity is the base unit. NEVER put two of the SAME activity type on a single slide for the same text (e.g. two mcq4 about one passage is pointless). If a slide should test more than once, either use two DIFFERENT activity types, or give the second activity its OWN reading/note above it — a slide can legitimately carry two teach→check pairs stacked so the learner scrolls down to the next one, rather than turning the page. Order components top-to-bottom the way a learner should meet them (read/see first, then do).',
-    '5. ADAPT the mix to the subject KIND: Physics / chemistry / engineering / quantitative math → reading + latex (formulas) + geogebra (graphs) + image (diagrams) + table, assessed with mcq / fill-blank / typed (input); Humanities / arts / social science / theory → reading + image + table (timelines) + mcq / fill-blank / input / deco-hint, few or no formulas; Language → reading + audio + translate + fill-blank + input, and a two-column table for grammar. Pick activities that genuinely fit the subject.',
+    '5. ADAPT the mix to the subject KIND: Physics / chemistry / engineering / quantitative math → reading + latex (formulas) + wolfram (worked, step-by-step equation solving) + geogebra (interactive graphs/plots) + image (labelled diagrams, free-body sketches) + table (data/constants), assessed with mcq / fill-blank / typed (numeric answers); use latex+wolfram+geogebra generously — a physics lesson should be rich in formulas, worked examples and graphs, NOT code. Humanities / arts / social science / theory → reading + image + table (timelines) + mcq / fill-blank / input / deco-hint, few or no formulas. Language → reading + audio + translate + fill-blank + input, and a two-column table for grammar. Pick activities that genuinely fit the subject.',
     '5b. STRICT COMPONENT GATING — do NOT misuse specialised components: use `code` / `codeblock` ONLY for PROGRAMMING / computer-science / software subjects — NEVER for physics, chemistry, pure math, humanities, language or any non-coding topic. Use `annotation` ONLY when the answer truly requires DRAWING / sketching / diagramming / labelling / working a derivation out BY HAND — never as a generic written answer (use `input` for a typed answer). Use `writing` only for practising a single handwritten character/symbol. When unsure, prefer reading + image + mcq/fill/typed. A theoretical, text-based subject should have NO code and NO annotation.',
     '6. The author will be able to EDIT every slide, its components and its order afterwards, so propose a confident best-effort design — don\'t leave slides empty "for them to fill in".',
   ].join('\n');
@@ -140,17 +148,23 @@ export async function POST(req: Request) {
   } else {
     system = ['You are a curriculum designer for SketchLearn. Design a COMPLETE multi-slide presentation that TEACHES a subject and continuously EVALUATES comprehension.', palette, designRules, templateRule, shape].join('\n');
     user = [`Subject / topic: ${subject}`, title && title !== subject ? `Lesson title: ${title}` : '', difficulty ? `Level: ${difficulty}` : '', tone ? `Tone: ${tone}` : '',
+      binDocs.length ? 'A reference document is ATTACHED — READ it, infer the REAL subject/topic from it (do not rely on the goal text, which may be a generic instruction), and build the lesson STRICTLY on the document\'s actual content and its subject kind.' : '',
       fullContext ? `Extra context / goal:\n${fullContext}` : '', 'Design the full slide-by-slide presentation now.'].filter(Boolean).join('\n');
   }
+  // Only Gemini can read a binary PDF; use it when a binary doc is attached (unless
+  // the author forced a different model, then it works on the text/goal only).
+  const useGeminiDoc = binDocs.length > 0 && geminiEnabled && (provider === 'auto' || provider === 'gemini');
   // An explicit "N slides" request caps the deck at exactly N (except in "next"
   // mode, which always adds a single slide). We keep the minimum at 1 so a short
   // count returns the AI's N slides rather than falling back to the generic deck.
   if (wantCount && mode !== 'next') { minPages = 1; maxPages = wantCount; }
 
   try {
-    const r: any = await generateStructured(
-      [{ role: 'system', content: system }, { role: 'user', content: user }],
-      { temperature: mode === 'edit' ? 0.4 : 0.5, maxTokens: 3000, provider });
+    const r: any = useGeminiDoc
+      ? await geminiDoc(system, user, binDocs, { maxTokens: 3500, temperature: mode === 'edit' ? 0.4 : 0.5 })
+      : await generateStructured(
+          [{ role: 'system', content: system }, { role: 'user', content: user }],
+          { temperature: mode === 'edit' ? 0.4 : 0.5, maxTokens: 3000, provider });
     await recordTextUsage({ username: a.user.username, kind: 'studio-design', provider: provider === 'auto' ? 'auto' : provider, input: system + user, output: JSON.stringify(r || {}), subject: subject || title });
     const raw: any[] = Array.isArray(r?.pages) ? r.pages : (Array.isArray(r) ? r : []);
     const pages = raw.map((pg: any) => {
