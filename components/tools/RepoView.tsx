@@ -1161,7 +1161,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
       onOpen={open}
       leading={isGrid ? undefined : collapseBtn}
       iconNode={iconNode}
-      meta={card.createdAt && ctx.showDates ? <span style={{ fontSize: 10.5, opacity: 0.55 }}>🕒 {new Date(card.createdAt).toLocaleString()}</span> : undefined}
+      meta={ctx.showDates && (card.createdAt || card.lastEdited) ? (
+        <span style={{ fontSize: 10.5, opacity: 0.55, display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+          {card.createdAt && <span>🕒 created {new Date(card.createdAt).toLocaleString()}</span>}
+          {card.lastEdited && card.lastEdited !== card.createdAt && <span>✏️ edited {new Date(card.lastEdited).toLocaleString()}</span>}
+        </span>
+      ) : undefined}
       overlay={isGrid ? undefined : imgOverlay} placeholder={isGrid ? undefined : imgPlaceholder}
       afterTitle={isGrid ? undefined : afterTitle} afterSubtitle={isGrid ? undefined : afterSubtitle}
       actions={isGrid ? (assignControl ? <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>{assignControl}</span> : null) : actions} del={isGrid ? undefined : del} />

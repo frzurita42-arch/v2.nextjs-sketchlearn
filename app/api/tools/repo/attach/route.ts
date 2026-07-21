@@ -88,6 +88,9 @@ export async function POST(req: Request) {
       }
       const next: any = { ...c, links };
       if (mode !== (c as any).mode) { if (mode) next.mode = mode; else delete next.mode; }
+      // An attach / remove is an edit of this card — stamp the last-edited time so
+      // "Show dates" reflects the upload.
+      next.lastEdited = new Date().toISOString();
       return next;
     }
     if (c.children?.length) return { ...c, children: visit(c.children) };

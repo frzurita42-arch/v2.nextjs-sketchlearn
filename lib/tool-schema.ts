@@ -303,7 +303,9 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
   if (c.userOff) card.userOff = true;
   if (c.paywall) card.paywall = true;
   if (c.aiPrompt) card.aiPrompt = String(c.aiPrompt).slice(0, 2000);
-  if (c.createdAt) card.createdAt = String(c.createdAt).slice(0, 40);
+  // Every card carries a creation date — backfill it when missing (e.g. cards the
+  // AI generated, which don't set one) so "Show dates" always has something real.
+  card.createdAt = c.createdAt ? String(c.createdAt).slice(0, 40) : new Date().toISOString();
   if (c.lastEdited) card.lastEdited = String(c.lastEdited).slice(0, 40);
   if (children.length) card.children = children;
   // A card with no content at all is dropped.
