@@ -813,6 +813,28 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
     } catch { alert('Could not attach the file.'); }
     setAttachBusy(false);
   };
+  // 📄 "File upload in editor" (docUpload): a DIRECT moderator file upload straight
+  // from the card — no editor. It writes into the card's Moderator (blue) slot and
+  // REPLACES any file already there, so the card carries a single moderator file
+  // that every viewer can then download from the green "file available" light.
+  const docFileUpload = () => {
+    const inp = document.createElement('input'); inp.type = 'file';
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      if (f.size > 25_000_000) { alert('Please pick a file under 25 MB.'); return; }
+      setAttachBusy(true);
+      try {
+        let url = '';
+        try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
+        if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
+        if (posterLinkIdx >= 0) await attachServer({ action: 'remove', index: posterLinkIdx });
+        await attachServer({ action: 'add', color: 'blue', link: { label: f.name, url } });
+      } catch { alert('Could not upload the file.'); }
+      setAttachBusy(false);
+    };
+    inp.click();
+  };
+  const removeDocFile = () => { if (posterLinkIdx >= 0) attachServer({ action: 'remove', index: posterLinkIdx }); };
 
   // ---- picture controls (same feature as the tool gallery): AI-generate,
   // custom prompt / distort with a palette, or upload — right in the card's image.
@@ -993,6 +1015,20 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
   if (canUser || myUserLinkIdx >= 0) {
     if (canUser) activeControls.push(<button key="folder" type="button" title={myUserLinkIdx >= 0 ? 'Edit or delete your link' : 'Add your own link'} style={attachIcon(myUserLinkIdx >= 0)} onClick={eat(folderAction)}>📁</button>);
     else if (myUserLinkIdx >= 0) activeControls.push(dlAnchor('folder', links[myUserLinkIdx].url, '📁', 'Open the link'));
+  }
+  // 📄 "File upload in editor" (docUpload): a direct file-upload icon shown ONLY to
+  // the moderator/admin. Uploading (or replacing) puts a file on the card that
+  // every viewer can download from the green light at the card's foot. A second
+  // 🗑 appears once a file is present so the moderator can clear it.
+  if (ctx.canEdit && ctx.docUpload && !card.posterOff) {
+    activeControls.push(
+      <button key="docup" type="button" disabled={attachBusy}
+        title={posterLinkIdx >= 0 ? 'Replace the uploaded file' : 'Upload a file for this card — everyone can download it'}
+        style={attachIcon(posterLinkIdx >= 0)} onClick={eat(docFileUpload)}>{attachBusy ? '⏳' : '📄'}</button>
+    );
+    if (posterLinkIdx >= 0) activeControls.push(
+      <button key="docdel" type="button" title="Remove the uploaded file" style={iconBtn} onClick={eat(removeDocFile)}>🗑</button>
+    );
   }
   // 🤖 AI-question editing moved to the ⚙️ popup; these save/clear handlers back it.
   const saveAi = () => { ctx.editField(card.id, { aiPrompt: aiDraft.trim() || undefined }); setAiOpen(false); };
@@ -1248,9 +1284,22 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
     );
   })() : null;
 
+  // 🟢 The green "file available" light at the foot of the card — shown to EVERYONE
+  // (users included) whenever the "File upload in editor" feature is on and the
+  // moderator has uploaded a file. It's a download link, so any viewer can open it.
+  // Moderators/admins upload/replace it with the 📄 icon above; users only see this.
+  const docLight = (ctx.docUpload && posterLinkIdx >= 0) ? (
+    <a href={links[posterLinkIdx].url} target="_blank" rel="noopener noreferrer" download onClick={stop}
+      title={`Download ${links[posterLinkIdx].label || 'the attached file'}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 6, padding: '3px 10px', borderRadius: 999, border: '1.5px solid #2e9e57', background: 'rgba(46,158,87,0.12)', color: '#1f7a3d', fontSize: 11.5, fontWeight: 700, textDecoration: 'none' }}>
+      <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#2e9e57', boxShadow: '0 0 5px #2e9e57', flex: '0 0 auto' }} />
+      📄 {links[posterLinkIdx].label || 'File available'}
+    </a>
+  ) : null;
+
   // A disabled card is greyed + unclickable for viewers; a hidden card (owner/
   // admin preview) is just greyed.
-  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{attachForm}{aiForm}{imgPopup}{settingsPopup}</div>;
+  const body = <div style={blocked ? { opacity: 0.5, pointerEvents: 'none' as const } : (dimmed ? { opacity: 0.5 } : undefined)}>{shell}{docLight}{attachForm}{aiForm}{imgPopup}{settingsPopup}</div>;
 
   // GRID view: a card is shown ALONE — no nested cards beneath it (clicking a
   // card with children flips to the rows view to reveal the tree). ROWS view
