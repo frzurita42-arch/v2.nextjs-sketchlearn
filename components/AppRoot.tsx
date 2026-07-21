@@ -37,17 +37,18 @@ import { ToolRunnerView } from '@/components/views/ToolRunnerView';
 import { BuilderStudioView } from '@/components/views/BuilderStudioView';
 import { ToolSettingsView } from '@/components/views/ToolSettingsView';
 import { ModeratorsView } from '@/components/views/ModeratorsView';
+import { AboutView } from '@/components/views/AboutView';
 
 // Views that can be restored from the URL on refresh (they fetch their own data
 // or, for 'tool', reload from the ?tool=<slug>). Transient flow views (path,
 // settings, activity, language, toolsettings) depend on in-memory state, so a
 // refresh on those returns home instead of showing a broken screen.
-const RESTORABLE: ViewName[] = ['chat', 'dashboard', 'tools', 'slides', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun', 'appsettings', 'users', 'comments'];
+const RESTORABLE: ViewName[] = ['chat', 'dashboard', 'tools', 'slides', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun', 'appsettings', 'users', 'comments', 'about'];
 // The only pages reachable now. The legacy built-in activities (Learning Path
 // home, Cybersecurity Academy, Structured Explanations, Suggested Topic, Time
 // Travel, the Feed, My stats…) are retired: any attempt to open them — a nav
 // call, a stale ?view= URL, an old in-app link — is redirected to Slides.
-const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun', 'appsettings', 'users', 'comments'];
+const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 'toolbuilder', 'toolsettings', 'moderators', 'sandbox', 'empty', 'presrun', 'appsettings', 'users', 'comments', 'about'];
 // The HOME page — where the app lands by default and where retired/unknown views
 // redirect. Coach chat is the front page.
 const HOME: ViewName = 'chat';
@@ -340,6 +341,7 @@ export default function AppRoot() {
     appsettings: <AppSettingsView />,
     users: <UsersView />,
     comments: <CommentsView />,
+    about: <AboutView />,
   };
 
   // The Coach chat + the main nav pages (Slides / Repos / Moderators / Dashboard)
@@ -360,6 +362,7 @@ export default function AppRoot() {
     appsettings: { emoji: '⚙️', name: 'Settings' },
     users: { emoji: '👥', name: 'Users' },
     comments: { emoji: '💬', name: 'Comments' },
+    about: { emoji: 'ℹ️', name: 'About us' },
     tool: { emoji: '▶️', name: 'Playing' },
   };
   const isShell = isChat || lv in SHELL;
@@ -432,6 +435,13 @@ export default function AppRoot() {
                 // Moderators & Users self-manage their shell column; Dashboard scrolls in a wrapper.
                 : lv === 'moderators' ? views.moderators
                 : lv === 'users' ? views.users
+                // About us scrolls inside the shell working column (dashed guide lines).
+                : lv === 'about'
+                  ? <div style={{ height: '100%', overflowY: 'auto' }}>
+                      <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+                        {views.about}
+                      </div>
+                    </div>
                 : lv === 'dashboard'
                   ? <div style={{ height: '100%', overflowY: 'auto' }}>
                       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
