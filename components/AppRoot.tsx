@@ -51,6 +51,9 @@ const LIVE_VIEWS: ViewName[] = ['slides', 'tools', 'chat', 'dashboard', 'tool', 
 // The HOME page — where the app lands by default and where retired/unknown views
 // redirect. Coach chat is the front page.
 const HOME: ViewName = 'chat';
+// Management / internal pages only an admin may open. Non-admins are redirected
+// HOME (the nav links to these are hidden for them too).
+const ADMIN_ONLY: ViewName[] = ['moderators', 'users', 'sandbox', 'empty', 'comments', 'appsettings', 'dashboard'];
 const liveView = (v: ViewName): ViewName => (LIVE_VIEWS.includes(v) ? v : HOME);
 
 type NavEntry = { view: ViewName; tool: string | null; key?: string };
@@ -159,8 +162,10 @@ export default function AppRoot() {
   };
 
   const nav = useCallback((nextRaw: ViewName) => {
-    // Retired pages redirect to Slides (the home page).
-    const next = liveView(nextRaw);
+    // Retired pages redirect to Slides (the home page). Admin-only management pages
+    // are also redirected HOME for non-admins.
+    let next = liveView(nextRaw);
+    if (ADMIN_ONLY.includes(next) && userRef.current?.role !== 'admin') next = HOME;
     if (appState.game && !appState.game.finished && next !== 'activity' &&
         !window.confirm('Leave the current activity? Your progress will be lost.')) return;
     const cur = viewRef.current;
@@ -191,6 +196,14 @@ export default function AppRoot() {
       window.history.pushState(state, '', urlFor(next));
     } catch { /* ignore */ }
   }, [setView]);
+
+  // Guard: a non-admin who lands on an admin-only page (a stale ?view= URL, a
+  // restored view) is sent HOME. Real role is used so an admin previewing "View
+  // as user" isn't kicked off the page. Placed with the other top-level hooks so
+  // it runs on every render (no conditional-hook error).
+  useEffect(() => {
+    if (ADMIN_ONLY.includes(liveView(view)) && user?.role !== 'admin') nav(HOME);
+  }, [view, user, nav]);
 
   // Browser Back/Forward: restore the view the history entry points at. Also pop
   // our in-app stack so the two stay roughly in sync.

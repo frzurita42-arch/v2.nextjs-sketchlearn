@@ -1977,8 +1977,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           flattened into one row each, keyed by the unit it belongs to, capturing
           each card's saved info: title, description, study-path link, paywall,
           attachments, status and dates. The repo-wide study tool + paywall-bypass
-          users are summarised in the caption above it. */}
-      {!editing && cards.length > 0 && (() => {
+          users are summarised in the caption above it. Admin-only. */}
+      {!editing && cards.length > 0 && isAdmin && (() => {
         const fmt = (v?: string) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString(); };
         const rows: Cell[][] = [];
         const walk = (list: RepoCard[], unit: string, depth: number) => {

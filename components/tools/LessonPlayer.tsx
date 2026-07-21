@@ -2090,6 +2090,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           </>
         )}
 
+        {/* The data tables at the foot of the page are an admin-only view. */}
+        {eff.isAdmin && (<>
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
         <h3 style={{ margin: '0 0 10px' }}>🎮 Lessons made with this slide tool</h3>
         <PagedTable
@@ -2130,6 +2132,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           rowsPerPage={6}
           tight
         />
+        </>)}
       </div>
     );
   }

@@ -787,6 +787,8 @@ export function PresentationRunsView() {
           </>
         )}
 
+        {/* The data tables at the foot of the page are an admin-only view. */}
+        {app.eff().isAdmin && (<>
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', margin: '0 0 10px' }}>
           <h3 style={{ margin: 0 }}>🎮 Playable slides</h3>
@@ -843,6 +845,7 @@ export function PresentationRunsView() {
             />
           </>
         )}
+        </>)}
       </div>
 
       {settingsOpen && (

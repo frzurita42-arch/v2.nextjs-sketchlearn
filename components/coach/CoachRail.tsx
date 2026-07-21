@@ -86,7 +86,9 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
           the right, so you can see which group you're inside. Clicking any link
           navigates to that group's top-level gallery. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'presrun', label: '🎬 Presentation runs' }, { v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => {
+        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'presrun', label: '🎬 Presentation runs' },
+          // Admin-only pages (management / internal): only an admin sees these links.
+          ...(app.eff().isAdmin ? [{ v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, { v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => {
           const isActive = activeGroup === n.v;
           return (
             <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}

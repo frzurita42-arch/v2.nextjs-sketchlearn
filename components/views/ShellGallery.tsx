@@ -314,15 +314,17 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
               </div>
             )}
 
-            <hr style={{ border: 'none', borderTop: '2px dashed var(--line,#d9cfc0)', margin: '26px 0 18px' }} />
-
-            <h3 style={{ margin: '0 0 10px' }}>All {kind === 'presentation' ? 'slides' : 'repos'} — table</h3>
-            <PagedTable
-              headers={['Title', 'Owner', unitLabel, 'Visibility', 'AI', 'Likes', 'Created', 'Slug']}
-              rows={rows}
-              empty="Nothing to show."
-              tight
-            />
+            {/* The data table at the foot of the page is an admin-only view. */}
+            {app.eff().isAdmin && (<>
+              <hr style={{ border: 'none', borderTop: '2px dashed var(--line,#d9cfc0)', margin: '26px 0 18px' }} />
+              <h3 style={{ margin: '0 0 10px' }}>All {kind === 'presentation' ? 'slides' : 'repos'} — table</h3>
+              <PagedTable
+                headers={['Title', 'Owner', unitLabel, 'Visibility', 'AI', 'Likes', 'Created', 'Slug']}
+                rows={rows}
+                empty="Nothing to show."
+                tight
+              />
+            </>)}
           </>
         )}
       </div>
