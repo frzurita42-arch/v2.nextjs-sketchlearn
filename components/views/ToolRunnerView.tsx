@@ -535,11 +535,12 @@ export function ToolRunnerView() {
         </div>
       )}
 
-      {!immersive && !isLesson && (<>
+      {!immersive && !isLesson && !isRepo && (<>
         {/* ┄ divider: activities/feed ┄ comments ┄ */}
         <div style={dashRule} />
 
-        {/* Platform-provided discussion (title + comments) on every tool. */}
+        {/* Platform-provided discussion (title + comments). Repos omit it — their
+            page ends at the card collection. */}
         <DiscussionSection titleKey="toolDiscussionTitle" collapseKey="toolDiscussionCollapsed"
           targetType="tool" targetId={tool.slug} />
 

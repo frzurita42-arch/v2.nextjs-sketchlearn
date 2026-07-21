@@ -271,7 +271,9 @@ export function Collection<T>({
         const controls = (<>
           <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder}
             style={{ flex: '0 1 150px', maxWidth: 150, minWidth: 100 }} />
-          {extra}
+          {/* In the bare (gallery) look the `extra` control (the ⚙️ gear) moves to
+              the far right end of the row; otherwise it sits next to the search. */}
+          {!bareFilter && extra}
           {(favs || likedByAdmin || likedByOwner) && <button className={`btn small ${activeFilter === 'all' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('all')} title="Show everything">All</button>}
           {favs && <button className={`btn small ${activeFilter === 'fav' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('fav')} title="Only your favorites">★ Favorites</button>}
           {likedByAdmin && <button className={`btn small ${activeFilter === 'admin' ? 'blue' : 'ghost'}`} onClick={() => pickFilter('admin')} title="Only tools an admin liked">🛡️ Admin</button>}
@@ -303,6 +305,8 @@ export function Collection<T>({
                 style={{ background: 'none', border: 'none', cursor: canLockView ? 'pointer' : 'default', padding: '0 2px', fontSize: 15, lineHeight: 1, opacity: canLockView ? 1 : 0.55 }}>{locked ? '🔒' : '🔓'}</button>
             )}
           </>)}
+          {/* Bare look only: the gear pinned to the far right end of the row. */}
+          {bareFilter && extra && <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}>{extra}</span>}
         </>);
         // Bare (gallery) look: plain "Filters" caption + row, no dashed OutlineBox.
         return bareFilter ? (
@@ -326,8 +330,8 @@ export function Collection<T>({
       </section>
       {/* Closing dashed rule — end of the filters container, right before the
           cards. When a pager is configured it already frames itself in dashes and
-          serves as the divider instead. The bare (gallery) look drops it. */}
-      {!bareFilter && <div style={sectionRule} />}
+          serves as the divider instead. */}
+      <div style={sectionRule} />
 
       {/* ═══ Container 3: the cards / nested items ═══ */}
       <section aria-label="Cards">

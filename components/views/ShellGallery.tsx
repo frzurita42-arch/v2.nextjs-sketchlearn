@@ -250,16 +250,17 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
             <option value="newest">🕒 Newest</option>
             <option value="oldest">🕒 Oldest</option>
           </select>
+          {pageKey && <CardViewMenu pageKey={pageKey} />}
+          {/* Settings gear pinned to the far right end of the row. */}
           {topSlot ? (
             <button className="btn small ghost" title={topSlotLabel || 'Settings'} aria-label={topSlotLabel || 'Settings'}
-              onClick={() => setSettingsOpen(true)} style={{ fontSize: 16, padding: '0 9px' }}>⚙️</button>
+              onClick={() => setSettingsOpen(true)} style={{ fontSize: 16, padding: '0 9px', marginLeft: 'auto' }}>⚙️</button>
           ) : kind === 'repository' ? (
             // A settings gear for visual parity with a repo's own filter row — but
             // the gallery has no page-level settings, so it's inactive (icon only).
             <button className="btn small ghost" disabled title="Settings live on each repository’s own page" aria-label="Settings (unavailable here)"
-              style={{ fontSize: 16, padding: '0 9px', opacity: 0.5, cursor: 'default' }}>⚙️</button>
+              style={{ fontSize: 16, padding: '0 9px', marginLeft: 'auto', opacity: 0.5, cursor: 'default' }}>⚙️</button>
           ) : null}
-          {pageKey && <CardViewMenu pageKey={pageKey} />}
         </div>
 
         {topSlot && settingsOpen && (
