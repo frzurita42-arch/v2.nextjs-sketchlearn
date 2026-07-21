@@ -213,6 +213,15 @@ export interface StudioConfig {
   context?: string;
   sourcePrompt?: string;             // repository: the original prompt/brief that created it
   display?: 'cards' | 'list' | 'table';
+  // repository OWNER CONTROLS — pre-set in the builder gear, persisted onto the repo.
+  assignShow?: boolean;              // 🏷️ assignment status cycle on every card
+  emojiApprove?: boolean;            // ✅ one-tap status-cycle emoji per card
+  studyMode?: boolean;              // 🎬 study path — 🔵 prompt cards get a generate-lesson button
+  clipForAll?: boolean;             // 📎 moderator upload (attach to any card)
+  folderForAll?: boolean;           // 📁 user upload (per-user file per card)
+  docUpload?: boolean;              // 📄 file upload in editor (documents or links)
+  showDates?: boolean;              // 🕒 show each card's created date/time
+  authorizedUsers?: string[];       // 👥 usernames that bypass the 🔒 paywall
 }
 
 // Compile a page's components into { activityTypes, support, language, styleLines }.
@@ -300,6 +309,11 @@ export function assembleDefinition(cfg: StudioConfig): any {
         layout: 'post', display: 'bars', offlineExport: false,   // no offline-copy button
         sourcePrompt: String(cfg.sourcePrompt || context || '').slice(0, 6000),
         imageGen: !!cfg.imageGen,   // "Suggest AI" per-card picture button
+        // OWNER CONTROLS carried from the builder gear (default off, showDates on).
+        assignShow: !!cfg.assignShow, emojiApprove: !!cfg.emojiApprove, studyMode: !!cfg.studyMode,
+        clipForAll: !!cfg.clipForAll, folderForAll: !!cfg.folderForAll, docUpload: !!cfg.docUpload,
+        showDates: cfg.showDates !== false,
+        authorizedUsers: Array.isArray(cfg.authorizedUsers) ? cfg.authorizedUsers : [],
         cards: cards.length ? cards : [{ id: 'c0', kind: 'card', title: title || 'Card 1', links: [] }],
       },
       studioConfig,

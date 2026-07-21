@@ -169,6 +169,21 @@ const REPO_NEST_PROMPT_DEFAULT = 'Structure every unit so a lesson can be genera
 // Extra guidance the repo applies when it is a menu / services catalogue.
 const REPO_MENU_PROMPT_DEFAULT = 'This is a MENU / services display. For each item, adapt its lesson to present: the origins of the food / service, its ingredients or tools, alternatives or case studies, an ingredient breakdown or nutritional profile, the skills involved, and future perspectives — plus anything else useful for that item.';
 
+// Repository OWNER CONTROLS (the toggle buttons from the repo page, now also in the
+// builder gear). Each maps to a persisted RepoSpec flag on publish.
+type OwnerControls = { assign: boolean; emoji: boolean; study: boolean; modUpload: boolean; userUpload: boolean; fileUpload: boolean; cardPic: boolean; dates: boolean };
+const OWNER_DEFAULTS: OwnerControls = { assign: false, emoji: false, study: false, modUpload: false, userUpload: false, fileUpload: false, cardPic: false, dates: true };
+const OWNER_ROWS: { key: keyof OwnerControls; icon: string; label: string; hint: string }[] = [
+  { key: 'assign', icon: '🏷️', label: 'Assignment', hint: 'Show a status cycle on every card' },
+  { key: 'emoji', icon: '✅', label: 'Emoji approval', hint: 'One-tap status emoji per card' },
+  { key: 'study', icon: '🎬', label: 'Study path', hint: '🔵 prompt cards get a generate-lesson button' },
+  { key: 'modUpload', icon: '📎', label: 'Moderator upload', hint: 'Owner / moderator attach a file to any card' },
+  { key: 'userUpload', icon: '📁', label: 'User upload', hint: 'Users attach their own file per card' },
+  { key: 'fileUpload', icon: '📄', label: 'File upload', hint: 'Enable document / file uploads (else links only)' },
+  { key: 'cardPic', icon: '🖼️', label: 'Card picture', hint: 'Generate an AI picture per card' },
+  { key: 'dates', icon: '🕒', label: 'Dates', hint: 'Show each card’s created date / time' },
+];
+
 // Monochrome (black-and-white) line icons — they inherit the ink colour via
 // currentColor, so they render as clean b&w glyphs, not coloured emoji.
 const IconPencil = ({ size = 14 }: { size?: number }) => (
@@ -319,9 +334,16 @@ export function BuilderStudioView() {
   const [dNestPrompt, setDNestPrompt] = useState(REPO_NEST_PROMPT_DEFAULT);
   const [dMenuMode, setDMenuMode] = useState(false);
   const [dMenuPrompt, setDMenuPrompt] = useState(REPO_MENU_PROMPT_DEFAULT);
+  // Owner controls + authorized users (persist onto the published repo).
+  const [owner, setOwner] = useState<OwnerControls>(OWNER_DEFAULTS);
+  const [authUsers, setAuthUsers] = useState<string[]>([]);
+  const [dOwner, setDOwner] = useState<OwnerControls>(OWNER_DEFAULTS);
+  const [dAuthUsers, setDAuthUsers] = useState<string[]>([]);
+  const [dAuthInput, setDAuthInput] = useState('');
   const openSettings = () => {
     setDTitle(title); setDSubject(subject); setDTone(tone); setDToneCustom(toneCustom); setDPrompt(sourcePrompt);
     setDSlidePrompt(repoSlidePrompt); setDNestPrompt(repoNestPrompt); setDMenuMode(repoMenuMode); setDMenuPrompt(repoMenuPrompt);
+    setDOwner(owner); setDAuthUsers(authUsers); setDAuthInput('');
     setSetStep(0); setSettingsOpen(true);
   };
   const applySettings = () => {
@@ -336,6 +358,7 @@ export function BuilderStudioView() {
     setConfigNote([toolNote, superNote, tplNote].filter(Boolean).join('\n'));
     // Repository-only: commit the three prompt sections that shape repo generation.
     setRepoSlidePrompt(dSlidePrompt); setRepoNestPrompt(dNestPrompt); setRepoMenuMode(dMenuMode); setRepoMenuPrompt(dMenuPrompt);
+    setOwner(dOwner); setAuthUsers(dAuthUsers);
     setSettingsOpen(false);
   };
   // The template library handed to the slide designer on every generation (not just
@@ -600,9 +623,7 @@ export function BuilderStudioView() {
     setSuggesting(false);
   };
 
-  const config = (): StudioConfig => artifact === 'presentation'
-    ? { artifact, title, subject, tone, context, pages }
-    : { artifact, title, subject, tone, context, sourcePrompt, cards: repoCards, imageGen: false };
+  const config = (): StudioConfig => (artifact === 'presentation' ? presConfig() : repoConfig());
 
   // Publish the finished definition — either UPDATE the tool we're editing
   // (editSlug set, via the settings PUT) or CREATE a new one. Either way we stash
@@ -644,7 +665,9 @@ export function BuilderStudioView() {
   // Explicit per-artifact configs, so the bottom bar can publish the presentation,
   // the repository, or BOTH regardless of which tab is currently active.
   const presConfig = (): StudioConfig => ({ artifact: 'presentation', title: presTitle || repoTitle, subject: presSubject || repoSubject, tone: presTone, context, pages });
-  const repoConfig = (): StudioConfig => ({ artifact: 'repository', title: repoTitle || presTitle, subject: repoSubject || presSubject, tone: repoTone, context, sourcePrompt, cards: repoCards, imageGen: false });
+  const repoConfig = (): StudioConfig => ({ artifact: 'repository', title: repoTitle || presTitle, subject: repoSubject || presSubject, tone: repoTone, context, sourcePrompt, cards: repoCards,
+    imageGen: owner.cardPic, assignShow: owner.assign, emojiApprove: owner.emoji, studyMode: owner.study,
+    clipForAll: owner.modUpload, folderForAll: owner.userUpload, docUpload: owner.fileUpload, showDates: owner.dates, authorizedUsers: authUsers });
   // Publish the SLIDES as a playable presentation (runs studio-build for polish).
   const generatePresentation = async () => {
     if (busy || suggesting) return; setBusy(true); setErr('');
@@ -942,8 +965,43 @@ export function BuilderStudioView() {
                       <textarea value={dMenuPrompt} disabled={!dMenuMode} onChange={(e) => setDMenuPrompt(e.target.value)} placeholder="Adaptation for a menu / services repository…" style={{ ...ctl, minHeight: 128, resize: 'vertical', opacity: dMenuMode ? 1 : 0.55 }} maxLength={4000} />
                     </div>
                   );
+                  // Owner controls — the repo-page toggle buttons, pre-set here (persist on publish).
+                  const ownerControlsField = (
+                    <div style={{ width: '100%' }}>
+                      <span style={{ display: 'block', marginBottom: 6, fontWeight: 700 }}>🛠 Owner controls</span>
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {OWNER_ROWS.map((r) => (
+                          <button key={r.key} type="button" onClick={() => setDOwner((o) => ({ ...o, [r.key]: !o[r.key] }))}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', padding: '6px 8px', borderRadius: 8, cursor: 'pointer', border: '1.5px solid var(--ink,#2d2a26)', background: dOwner[r.key] ? 'var(--yellow,#fdf0a6)' : 'transparent' }}>
+                            <span style={{ fontSize: 14 }}>{r.icon}</span>
+                            <span style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>{r.label}</span><span style={{ display: 'block', fontSize: 10, opacity: 0.6 }}>{r.hint}</span></span>
+                            <span style={{ fontSize: 11, fontWeight: 700 }}>{dOwner[r.key] ? 'On' : 'Off'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                  const addAuth = () => { const v = dAuthInput.trim(); if (v && !dAuthUsers.includes(v)) setDAuthUsers((c) => [...c, v]); setDAuthInput(''); };
+                  const authUsersField = (
+                    <div style={{ width: '100%' }}>
+                      <span style={{ display: 'block', marginBottom: 4, fontWeight: 700 }}>👥 Authorized users</span>
+                      <span style={{ fontSize: 10.5, opacity: 0.6, marginBottom: 6, display: 'block' }}>These users (plus you) bypass the 🔒 paywall on any card you lock.</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, minHeight: 26, marginBottom: 6 }}>
+                        {dAuthUsers.length === 0
+                          ? <span style={{ fontSize: 11, opacity: 0.5 }}>none yet — 🔒 cards stay locked for everyone but you</span>
+                          : dAuthUsers.map((u) => (
+                              <span key={u} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 20, padding: '1px 8px' }}>@{u}
+                                <button type="button" onClick={() => setDAuthUsers((cur) => cur.filter((x) => x !== u))} title="Remove" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, opacity: 0.6, padding: 0 }}>✕</button>
+                              </span>))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input value={dAuthInput} onChange={(e) => setDAuthInput(e.target.value)} placeholder="type a username" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAuth(); } }} style={{ ...ctl, flex: 1 }} />
+                        <button type="button" className="btn small blue" onClick={addAuth}>Add</button>
+                      </div>
+                    </div>
+                  );
                   const updateBtn = <button className="btn small green" style={{ width: 96, height: 40, whiteSpace: 'nowrap' }} onClick={applySettings}>✓ Update</button>;
-                  const LAST = isRepo ? 5 : 4;
+                  const LAST = isRepo ? 7 : 4;
                   const goN = () => setSetStep((s) => Math.min(LAST, s + 1));
                   const goB = () => setSetStep((s) => Math.max(0, s - 1));
                   const presSteps: WizardStep[] = [
@@ -962,6 +1020,8 @@ export function BuilderStudioView() {
                     { key: 'slideprompt', title: 'Slide-generator prompt', render: () => <WizardGridTemplate tall top={slidePromptField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'nesting', title: 'Lesson nesting', render: () => <WizardGridTemplate tall top={nestPromptField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'menu', title: 'Menu / services', render: () => <WizardGridTemplate tall top={menuField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'owner', title: 'Owner controls', render: () => <WizardGridTemplate tall top={ownerControlsField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'authusers', title: 'Authorized users', render: () => <WizardGridTemplate tall top={authUsersField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'prompt', title: 'Original prompt', render: () => <WizardGridTemplate tall top={promptField} onBack={goB} backDisabled={setStep === 0} rightTop={updateBtn} /> },
                   ];
                   const sSteps: WizardStep[] = isRepo ? repoSteps : presSteps;
