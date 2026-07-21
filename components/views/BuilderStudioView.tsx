@@ -161,6 +161,14 @@ const planChip = (id: string) => CATALOG_SHORT[id] || (studioItem(id) ? `${studi
 // Preset labels for the menu / navigation "action buttons".
 const ACTION_PRESETS = ['Next', 'Back', 'Order', 'Skip', 'Continue', 'Add to cart'];
 
+// ---- Default repository prompt sections (editable in the repo gear) ----
+// The instruction the repo hands to the slide-generator for each lesson.
+const REPO_SLIDE_PROMPT_DEFAULT = 'For each lesson, write a prompt for the slide-generator tool that states: (1) the lesson OBJECTIVES, (2) the TOPICS to cover, and (3) the EXERCISES / ACTIVITIES to carry out with the available components so the learner grasps the idea deeply. Match the activities to the subject and level — e.g. worked math exercises to understand a limit or a derivative; philosophy discussion / analysis activities; anatomy images of organs with explanatory text; data-analysis activities using graphs and tables (charts can be generated too); menu items shown one per slide. Either keep the SAME template on every slide, or let the AI design a custom template per slide — whichever fits the content best.';
+// How the card tree must nest so each lesson carries its slide-build prompt.
+const REPO_NEST_PROMPT_DEFAULT = 'Structure every unit so a lesson can be generated from it. The first card is the UNIT. The nested card inside it is the first LESSON / ITEM of that unit. Nested under that lesson is the PROMPT card for the slide-generating tool (the activity prompt that builds that lesson\'s presentation). If a lesson breaks into sub-lessons or subtopics, add a nested card for each subtopic and nest its slide-build prompt under it.';
+// Extra guidance the repo applies when it is a menu / services catalogue.
+const REPO_MENU_PROMPT_DEFAULT = 'This is a MENU / services display. For each item, adapt its lesson to present: the origins of the food / service, its ingredients or tools, alternatives or case studies, an ingredient breakdown or nutritional profile, the skills involved, and future perspectives — plus anything else useful for that item.';
+
 // Monochrome (black-and-white) line icons — they inherit the ink colour via
 // currentColor, so they render as clean b&w glyphs, not coloured emoji.
 const IconPencil = ({ size = 14 }: { size?: number }) => (
@@ -299,8 +307,21 @@ export function BuilderStudioView() {
   const [dTemplates, setDTemplates] = useState<SlideTemplate[]>(TEMPLATE_LIBRARY);
   const [tplSeq, setTplSeq] = useState<string[]>(['reading']); // slot tokens (Text first)
   const [configNote, setConfigNote] = useState('');
+  // ---- Repository-only settings (the gear shows these when Repository is selected) ----
+  // Three editable prompt sections that shape how the repo is generated: the
+  // slide-generator instruction, the unit→lesson→prompt nesting, and a menu/services
+  // adaptation. Committed on Update; drafted while the popup is open.
+  const [repoSlidePrompt, setRepoSlidePrompt] = useState(REPO_SLIDE_PROMPT_DEFAULT);
+  const [repoNestPrompt, setRepoNestPrompt] = useState(REPO_NEST_PROMPT_DEFAULT);
+  const [repoMenuMode, setRepoMenuMode] = useState(false);
+  const [repoMenuPrompt, setRepoMenuPrompt] = useState(REPO_MENU_PROMPT_DEFAULT);
+  const [dSlidePrompt, setDSlidePrompt] = useState(REPO_SLIDE_PROMPT_DEFAULT);
+  const [dNestPrompt, setDNestPrompt] = useState(REPO_NEST_PROMPT_DEFAULT);
+  const [dMenuMode, setDMenuMode] = useState(false);
+  const [dMenuPrompt, setDMenuPrompt] = useState(REPO_MENU_PROMPT_DEFAULT);
   const openSettings = () => {
     setDTitle(title); setDSubject(subject); setDTone(tone); setDToneCustom(toneCustom); setDPrompt(sourcePrompt);
+    setDSlidePrompt(repoSlidePrompt); setDNestPrompt(repoNestPrompt); setDMenuMode(repoMenuMode); setDMenuPrompt(repoMenuPrompt);
     setSetStep(0); setSettingsOpen(true);
   };
   const applySettings = () => {
@@ -313,6 +334,8 @@ export function BuilderStudioView() {
       ? `SLIDE TEMPLATES you MAY follow — match a template's #hashtags to the topic/level and adapt freely. RULES: every slide opens with text (a reading paragraph or a short statement/task); DEFAULT every check to multiple choice; use 🤖 Ask-AI as a lenient fallback for hard-to-grade or explain-style answers — the learner types OR says their answer with up to 3 tries and it PASSES if it is essentially correct even with minor errors; typed answers work as a fallback too; never use a code box outside programming; use audio for language/listening lessons; use a table to organize grammar/rules; use handwriting for character/sign practice; true/false and multi-select suit any subject; for dense/scholar topics stack more text and add extra questions to evaluate long passages. Templates: ${dTemplates.map((t) => `${t.name} [${t.tags.join(' ')}]: ${t.slots.map(SLOT_NOTE).join(' → ')}`).join(' | ')}`
       : '';
     setConfigNote([toolNote, superNote, tplNote].filter(Boolean).join('\n'));
+    // Repository-only: commit the three prompt sections that shape repo generation.
+    setRepoSlidePrompt(dSlidePrompt); setRepoNestPrompt(dNestPrompt); setRepoMenuMode(dMenuMode); setRepoMenuPrompt(dMenuPrompt);
     setSettingsOpen(false);
   };
   // The template library handed to the slide designer on every generation (not just
@@ -321,6 +344,12 @@ export function BuilderStudioView() {
   const templateGuideText = () => (dTemplates.length
     ? dTemplates.map((t) => `${t.name} [${t.tags.join(' ')}]: ${t.slots.map(SLOT_NOTE).join(' → ')}`).join(' | ')
     : '');
+  // The repository's three prompt sections, folded into one guide for the repo planner.
+  const repoGuide = () => [
+    repoSlidePrompt && `SLIDE-GENERATOR PROMPT (write each lesson's slide-build prompt this way): ${repoSlidePrompt}`,
+    repoNestPrompt && `CARD NESTING (structure the tree so each lesson carries its slide-build prompt): ${repoNestPrompt}`,
+    repoMenuMode && repoMenuPrompt && `MENU / SERVICES MODE: ${repoMenuPrompt}`,
+  ].filter(Boolean).join('\n');
   // Repository: a TREE of link/resource cards the owner designs (each may nest).
   const [repoCards, setRepoCards] = useState<RepoCard[]>(seed?.cards && seed.cards.length ? (seed.cards as RepoCard[]) : [{ name: '', link: '', description: '', children: [] }]);
   // The user's HAND-AUTHORED cards, captured once, used as the seed for every AI
@@ -382,7 +411,7 @@ export function BuilderStudioView() {
         // ONE next card, based on the chat + title/description + all current cards.
         const r: any = await API.post('/api/tools/repo/ai', {
           op: 'suggest', next: true, title, subject, goal: context, withLinks, provider,
-          docs: docsPayload(), cards: cardsToAi(repoCards), messages, lessonPath: lessonPathSeed,
+          docs: docsPayload(), cards: cardsToAi(repoCards), messages, lessonPath: lessonPathSeed, repoGuide: repoGuide(),
         }, { retries: 1 });
         const mapped = mapAiCards(r?.cards || []);
         if (mapped.length) setRepoCards((cs) => [...cs, ...mapped.slice(0, 1)]);
@@ -394,7 +423,7 @@ export function BuilderStudioView() {
         seedCardsRef.current = seed;
         const r: any = await API.post('/api/tools/repo/ai', {
           op: 'suggest', title, subject, goal: context, withLinks, provider,
-          docs: docsPayload(), cards: cardsToAi(seed), messages, lessonPath: lessonPathSeed,
+          docs: docsPayload(), cards: cardsToAi(seed), messages, lessonPath: lessonPathSeed, repoGuide: repoGuide(),
         }, { retries: 1 });
         const mapped = mapAiCards(r?.cards || []);
         if (mapped.length) setRepoCards(mapped);
@@ -890,17 +919,52 @@ export function BuilderStudioView() {
                       </div>
                     </div>
                   );
+                  // Repository-only prompt fields (the gear shows these when Repository is selected).
+                  const slidePromptField = (
+                    <label className="field" style={fieldWrap}><span style={labelRow}>🎬 Slide-generator prompt</span>
+                      <span style={{ fontSize: 10.5, opacity: 0.6, marginBottom: 4, display: 'block' }}>How each lesson’s prompt for the slide tool is written — objectives, topics, and exercises with the components.</span>
+                      <textarea value={dSlidePrompt} onChange={(e) => setDSlidePrompt(e.target.value)} style={{ ...ctl, minHeight: 150, resize: 'vertical' }} maxLength={4000} />
+                    </label>
+                  );
+                  const nestPromptField = (
+                    <label className="field" style={fieldWrap}><span style={labelRow}>🧱 Lesson nesting</span>
+                      <span style={{ fontSize: 10.5, opacity: 0.6, marginBottom: 4, display: 'block' }}>Unit → lesson → slide-build prompt (add a subtopic layer when a lesson splits).</span>
+                      <textarea value={dNestPrompt} onChange={(e) => setDNestPrompt(e.target.value)} style={{ ...ctl, minHeight: 150, resize: 'vertical' }} maxLength={4000} />
+                    </label>
+                  );
+                  const menuField = (
+                    <div style={{ width: '100%' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700 }}>🍽 Menu / services mode</span>
+                        <button type="button" className={`btn small ${dMenuMode ? 'green' : 'ghost'}`} onClick={() => setDMenuMode((v) => !v)}>{dMenuMode ? 'On' : 'Off'}</button>
+                      </div>
+                      <span style={{ fontSize: 10.5, opacity: 0.6, marginBottom: 4, display: 'block' }}>When on, each item’s lesson covers origins, ingredients/tools, alternatives, nutrition, skills, future perspectives…</span>
+                      <textarea value={dMenuPrompt} disabled={!dMenuMode} onChange={(e) => setDMenuPrompt(e.target.value)} placeholder="Adaptation for a menu / services repository…" style={{ ...ctl, minHeight: 128, resize: 'vertical', opacity: dMenuMode ? 1 : 0.55 }} maxLength={4000} />
+                    </div>
+                  );
                   const updateBtn = <button className="btn small green" style={{ width: 96, height: 40, whiteSpace: 'nowrap' }} onClick={applySettings}>✓ Update</button>;
-                  const LAST = 4;
+                  const LAST = isRepo ? 5 : 4;
                   const goN = () => setSetStep((s) => Math.min(LAST, s + 1));
                   const goB = () => setSetStep((s) => Math.max(0, s - 1));
-                  const sSteps: WizardStep[] = [
+                  const presSteps: WizardStep[] = [
                     { key: 'basics', title: 'Title & subject', render: () => <WizardGridTemplate top={titleField} bottom={subjectField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'tone', title: 'Tone', render: () => <WizardGridTemplate top={toneField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'tools', title: 'Slide components', render: () => <WizardGridTemplate tall top={toolsField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'templates', title: 'Slide templates', render: () => <WizardGridTemplate tall top={templatesField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
                     { key: 'prompt', title: 'Original prompt', render: () => <WizardGridTemplate tall top={promptField} onBack={goB} backDisabled={setStep === 0} rightTop={updateBtn} /> },
                   ];
+                  // Repository settings are DIFFERENT from the presentation's: instead of slide
+                  // components/templates, the repo configures the three prompt sections that
+                  // shape how it generates each unit's cards and slide-build prompts.
+                  const repoSteps: WizardStep[] = [
+                    { key: 'basics', title: 'Title & subject', render: () => <WizardGridTemplate top={titleField} bottom={subjectField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'tone', title: 'Tone', render: () => <WizardGridTemplate top={toneField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'slideprompt', title: 'Slide-generator prompt', render: () => <WizardGridTemplate tall top={slidePromptField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'nesting', title: 'Lesson nesting', render: () => <WizardGridTemplate tall top={nestPromptField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'menu', title: 'Menu / services', render: () => <WizardGridTemplate tall top={menuField} onNext={goN} onBack={goB} backDisabled={setStep === 0} /> },
+                    { key: 'prompt', title: 'Original prompt', render: () => <WizardGridTemplate tall top={promptField} onBack={goB} backDisabled={setStep === 0} rightTop={updateBtn} /> },
+                  ];
+                  const sSteps: WizardStep[] = isRepo ? repoSteps : presSteps;
                   return (
                     <SetupWizardCard
                       title={<span style={{ fontSize: 15 }}>⚙️ {isRepo ? '🗂️ Repository' : '📊 Presentation'} settings</span>}

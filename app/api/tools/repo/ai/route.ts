@@ -117,6 +117,7 @@ export async function POST(req: Request) {
     const existing = Array.isArray(b.cards) ? b.cards.slice(0, 40) : [];
     const withLinks = !!b.withLinks;   // "link suggestion" toggle: add a reference link per card
     const lessonPath = !!b.lessonPath; // "Lesson Path": nest an objective + a slide-build prompt under every unit
+    const repoGuide = String(b.repoGuide || '').slice(0, 4000); // the repo gear's prompt sections (slide-gen / nesting / menu)
     // "Next card" mode: return a SINGLE new top-level card that follows the ones
     // already on the page (rather than a whole fresh batch of pathways).
     const nextOne = !!b.next;
@@ -173,6 +174,7 @@ export async function POST(req: Request) {
         ? '6. LINK SUGGESTIONS ARE ON: for EVERY card add a "link" — a single, relevant reference URL — plus a short "linkLabel" (max 15 chars, e.g. "Wikipedia", "MDN", "Recipe", "Image"). PREFER a well-known, popular NICHE authority for the topic when one clearly fits — it is more useful than a generic encyclopedia entry (e.g. MDN for web dev, Investopedia for finance, Khan Academy or a standard textbook site for a school subject, IMDb for films, AllRecipes/Serious Eats for dishes, PubMed/Mayo Clinic for health, official docs for a tool). Otherwise use a real Wikipedia article (https://en.wikipedia.org/wiki/Topic — or the document\'s language, e.g. https://es.wikipedia.org/wiki/…) or an official website; for a visual/product use a Wikimedia/Wikipedia page or a Google image search URL (https://www.google.com/search?tbm=isch&q=...+url-encoded). Only include a link you are reasonably confident resolves at a real, popular site; if unsure for a card, omit its link. Never fabricate a deep/direct file URL that likely 404s.'
         : '6. Do NOT add links, code or images.',
       `Each card is: { "kind": "card", "title": string, "text": string${withLinks ? ', "link"?: string, "linkLabel"?: string' : ''}, "children"?: [ ...cards ] }.`,
+      repoGuide ? `AUTHOR'S REPOSITORY GUIDE — follow these instructions when shaping the plan and writing the leaf slide-build prompt cards:\n${repoGuide}` : '',
       'Return STRICT JSON: { "cards": [ ...the full ordered plan, at most 20 top-level... ] }.',
       SAFETY_GUARDRAILS,
     ].filter(Boolean).join('\n');
