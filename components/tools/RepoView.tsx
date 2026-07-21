@@ -1364,11 +1364,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     return arr.sort((a, b) => (sortMode === 'asc' ? key(a) - key(b) : key(b) - key(a)));
   }, [sortMode, sortNonce]);
   const SORT_LABEL: Record<typeof sortMode, string> = { manual: '↕ Order: Manual', asc: '↑ Order: Oldest', desc: '↓ Order: Newest', random: '🔀 Order: Random' };
-  // 📖 Read-more pagination: the repo renders READ_MORE_STEP cards at a time,
-  // counting EVERY card in display (depth-first) order — nested cards included.
-  // Each "Read more" click reveals the next chunk until the whole tree is shown.
-  const READ_MORE_STEP = 6;
-  const [readChunks, setReadChunks] = useState(1);
+  // 📖 Read-more pagination BY UNIT: a "unit" is one top-level card WITH all of
+  // its nested cards. The repo shows the first unit fully; each "Read more" reveals
+  // the next whole unit, and "Read less" folds the last unit back — down to one.
+  const [readUnits, setReadUnits] = useState(1);
   // Default per-level numbering (recomputed whenever the card tree changes).
   const levelIndex = useMemo(() => buildLevelIndex(cards), [cards]);
   const [editing, setEditing] = useState(false);
@@ -1689,27 +1688,15 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     setAiBusy(false);
   };
 
-  // Read-more bookkeeping: count all visible cards (nested included) in display
-  // order, then trim the tree to the revealed budget — a card past the limit is
-  // dropped even mid-subtree, so exactly N×6 cards show at a time.
-  const countTree = (list: RepoCard[]): number =>
-    list.reduce((s, c) => s + 1 + countTree((c.children || []).filter((k) => canEdit || !k.hidden)), 0);
-  const takeTree = (list: RepoCard[], budget: { n: number }): RepoCard[] => {
-    const out: RepoCard[] = [];
-    for (const c of list) {
-      if (budget.n <= 0) break;
-      budget.n -= 1;
-      const kids = (c.children || []).filter((k) => canEdit || !k.hidden);
-      out.push(kids.length ? { ...c, children: takeTree(kids, budget) } : c);
-    }
-    return out;
-  };
+  // Read-more bookkeeping BY UNIT: reveal whole top-level units at a time. Each
+  // shown unit keeps ALL of its nested cards (no mid-subtree trimming); only the
+  // COUNT of top-level units grows/shrinks.
   const visibleTop = cards.filter((c) => canEdit || !c.hidden);
   const orderedTop = isCollection ? sortCards(visibleTop) : visibleTop;
-  const totalCards = countTree(orderedTop);
-  const shownCards = Math.min(totalCards, readChunks * READ_MORE_STEP);
-  const prunedTop = takeTree(orderedTop, { n: readChunks * READ_MORE_STEP });
-  const remainingCards = totalCards - shownCards;
+  const totalUnits = orderedTop.length;
+  const shownUnits = Math.min(totalUnits, Math.max(1, readUnits));
+  const prunedTop = orderedTop.slice(0, shownUnits);
+  const remainingUnits = totalUnits - shownUnits;
   const studyCardCount = flattenCards(cards).filter((c) => c.kind !== 'section' && (isPromptCard(c) || !!String(c.text || '').trim() || !!String(c.title || '').trim())).length;
   const selectedStudyName = studyToolSlug.trim() ? ((studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug) : '';
 
@@ -1972,21 +1959,21 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
       )}
 
       {/* Read more / Read less — plain letters at the foot of the card section,
-          right above the closing dashed rule. "Read more" reveals the next 6
-          cards (nested cards count toward the 6); "Read less" folds the last 6
-          back up, disabled once only the first 6 remain. */}
-      {!editing && totalCards > READ_MORE_STEP && (() => {
+          right above the closing dashed rule. "Read more" reveals the NEXT whole
+          unit (a top-level card + all its nested cards); "Read less" folds the
+          last unit back up, disabled once only the first unit remains. */}
+      {!editing && totalUnits > 1 && (() => {
         const link = { background: 'none', border: 'none', fontFamily: 'inherit', fontSize: 16, color: 'var(--ink)', textUnderlineOffset: 3, padding: 0 } as const;
-        const canLess = shownCards > READ_MORE_STEP;
+        const canLess = shownUnits > 1;
         return (
           <div style={{ display: 'flex', gap: 22, justifyContent: 'center', marginTop: 12, marginBottom: 2 }}>
-            <button disabled={remainingCards === 0} onClick={() => setReadChunks((n) => n + 1)}
-              title={remainingCards === 0 ? 'All cards are shown' : `Show the next ${Math.min(READ_MORE_STEP, remainingCards)} cards (${shownCards} of ${totalCards} shown)`}
-              style={{ ...link, cursor: remainingCards === 0 ? 'default' : 'pointer', opacity: remainingCards === 0 ? 0.35 : 0.75, textDecoration: remainingCards === 0 ? 'none' : 'underline' }}>
+            <button disabled={remainingUnits === 0} onClick={() => setReadUnits((n) => n + 1)}
+              title={remainingUnits === 0 ? 'All units are shown' : `Show the next unit (${shownUnits} of ${totalUnits} units shown)`}
+              style={{ ...link, cursor: remainingUnits === 0 ? 'default' : 'pointer', opacity: remainingUnits === 0 ? 0.35 : 0.75, textDecoration: remainingUnits === 0 ? 'none' : 'underline' }}>
               Read more ↓
             </button>
-            <button disabled={!canLess} onClick={() => setReadChunks((n) => Math.max(1, n - 1))}
-              title={canLess ? `Fold the last ${READ_MORE_STEP} cards back up` : `The first ${READ_MORE_STEP} cards always stay shown`}
+            <button disabled={!canLess} onClick={() => setReadUnits((n) => Math.max(1, n - 1))}
+              title={canLess ? 'Fold the last unit back up' : 'The first unit always stays shown'}
               style={{ ...link, cursor: canLess ? 'pointer' : 'default', opacity: canLess ? 0.75 : 0.35, textDecoration: canLess ? 'underline' : 'none' }}>
               Read less ↑
             </button>
