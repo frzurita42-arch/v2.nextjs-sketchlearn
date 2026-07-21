@@ -590,6 +590,12 @@ table.sketch tr:nth-child(even) td { background: #fffbe8; }
    headers otherwise read oversized. Brings the font in line with denser tables. */
 table.sketch.compact th { font-size: .98rem; }
 table.sketch.compact td { font-size: .85rem; }
+/* Tight variant: short, FIXED-height rows. Every cell is a single clipped line
+   (the component ellipsises text + keeps a 👁 to reveal the full value), so a
+   long value can't grow the row. Used by the list tables under the gallery /
+   run pages. */
+table.sketch.tight td { height: 34px; padding: 4px 10px; font-size: .85rem; white-space: nowrap; vertical-align: middle; }
+table.sketch.tight th { padding: 6px 10px; white-space: nowrap; font-size: 1rem; }
 
 /* ---------- chat ---------- */
 .chat-shell { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 380px; }

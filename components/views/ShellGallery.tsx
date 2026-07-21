@@ -315,6 +315,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
               headers={['Title', 'Owner', unitLabel, 'Visibility', 'AI', 'Likes', 'Created', 'Slug']}
               rows={rows}
               empty="Nothing to show."
+              tight
             />
           </>
         )}

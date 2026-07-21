@@ -10,7 +10,7 @@ export const ROWS_PER_PAGE = 4;
 const CELL_LIMIT = 100;
 export type Cell = string | number | null | undefined | { node: React.ReactNode };
 
-export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, rowsPerPage }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; compact?: boolean; rowsPerPage?: number }) {
+export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, tight, rowsPerPage }: { headers: string[]; rows: Cell[][]; empty: string; rowIds?: string[]; onDelete?: (id: string) => void; compact?: boolean; tight?: boolean; rowsPerPage?: number }) {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<{ title: string; text: string } | null>(null);
   const pageSize = Math.max(1, Math.floor(rowsPerPage || ROWS_PER_PAGE));
@@ -21,7 +21,7 @@ export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, ro
   const totalCols = headers.length + (canDelete ? 1 : 0);
   return (
     <>
-      <div className="table-wrap"><table className={compact ? 'sketch compact' : 'sketch'}><tbody>
+      <div className="table-wrap"><table className={`sketch${compact ? ' compact' : ''}${tight ? ' tight' : ''}`}><tbody>
         <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}{canDelete && <th aria-label="delete" style={{ width: 28 }}></th>}</tr>
         {slice.length ? slice.map((r, ri) => {
           const abs = p * pageSize + ri;
@@ -31,7 +31,18 @@ export function PagedTable({ headers, rows, empty, rowIds, onDelete, compact, ro
             {r.map((c, ci) => {
               if (c && typeof c === 'object' && 'node' in c) return <td key={ci}>{c.node}</td>;
               const s = String(c ?? '');
-              if (s.length > CELL_LIMIT) return (
+              const long = s.length > CELL_LIMIT;
+              // Tight rows: one line per cell (fixed height) that ellipsises, with
+              // the 👁 reveal kept OUTSIDE the clipped text so it stays clickable.
+              if (tight) return (
+                <td key={ci}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s || '—'}</span>
+                    {long && <button type="button" title="Show the full text" style={{ flex: '0 0 auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>}
+                  </div>
+                </td>
+              );
+              if (long) return (
                 <td key={ci}>{s.slice(0, CELL_LIMIT)}…{' '}
                   <button type="button" title="Show the full text" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }} onClick={() => setView({ title: headers[ci] || '', text: s })}>👁</button>
                 </td>

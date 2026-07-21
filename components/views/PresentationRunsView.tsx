@@ -406,7 +406,7 @@ export function PresentationRunsView() {
       o.title,
       topic,
       slides,
-      { node: <span title={comboHint} style={{ display: 'block', whiteSpace: 'pre-wrap' }}>{comboHint}</span> },
+      comboHint,
       createdAt,
       lastAccessedAt,
       lastAccessedBy,
@@ -809,6 +809,7 @@ export function PresentationRunsView() {
           rows={tableRows}
           empty="No playable slides match these filters."
           rowsPerPage={6}
+          tight
         />
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
@@ -818,6 +819,7 @@ export function PresentationRunsView() {
           rows={slideToolsRows}
           empty="No slide tools are available."
           rowsPerPage={6}
+          tight
         />
 
         {titleFilterSlug && (
@@ -829,6 +831,7 @@ export function PresentationRunsView() {
               rows={runRows}
               empty="No sub generations were found for this title yet."
               rowsPerPage={6}
+              tight
             />
           </>
         )}

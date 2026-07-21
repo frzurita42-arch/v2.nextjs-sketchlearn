@@ -2112,6 +2112,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           })}
           empty="No lessons have been made with this slide tool yet."
           rowsPerPage={6}
+          tight
         />
 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
@@ -2127,6 +2128,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           ]]}
           empty="No slide tool information is available."
           rowsPerPage={6}
+          tight
         />
       </div>
     );
