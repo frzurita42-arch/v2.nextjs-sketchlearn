@@ -58,7 +58,6 @@ import { LESSON_THEMES } from '@/lib/lesson-themes';
 import { TTS_VOICES } from '@/lib/tts';
 import { type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
-import { CardSizePanel } from '@/components/ui/CardSizePanel';
 import { SharePanel } from '@/components/tools/SharePanel';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
@@ -1887,10 +1886,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             builder used to create slide tools), pre-loaded with this tool's layout,
             via the "✏️ Edit layout & activities" button beside "New topics". */}
 
-        {/* The create wizard and the donation mug share one compact row (wrap on narrow). */}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'nowrap', alignItems: 'flex-start', width: '100%' }}>
+        {/* The create wizard spans the full page width. */}
+        <div style={{ width: '100%' }}>
         {showGenerate && (
-        <div style={{ flex: `0 1 ${setupWidth}px`, width: '100%', minWidth: 320, maxWidth: setupWidth, boxSizing: 'border-box' }}>
+        <div style={{ width: '100%', boxSizing: 'border-box' }}>
           {(() => {
             const fieldsFor = (ids: string[]) => formFields.filter((f: any) => ids.includes(f.id));
             const stepFields = (ids: string[], single?: boolean) => {
@@ -2079,11 +2078,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         </div>
         )}
 
-        {/* The create wizard shares the row with the Cards size panel (which replaced
-            the donation mug) so you can tune the card layout right here. */}
-        <div style={{ flex: '1 1 0', minWidth: 260, minHeight: setupGridHeight, display: 'flex', alignItems: 'flex-start', boxSizing: 'border-box' }}>
-          <CardSizePanel />
-        </div>
         </div>
 
         {/* ┄ divider: create ┄ activities feed ┄ */}

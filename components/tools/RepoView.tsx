@@ -27,9 +27,8 @@ import { cardImageProps } from '@/lib/card-size';
 import { OutlineBox } from '@/components/ui/OutlineBox';
 import { CardShell, iconBtn, overlayIcon } from '@/components/ui/CardShell';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
-import { SetupWizardCard, SETUP_CARD_WIDTH, SETUP_CARD_GRID_HEIGHT } from '@/components/ui/SetupWizardCard';
+import { SetupWizardCard } from '@/components/ui/SetupWizardCard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
-import { CardSizePanel } from '@/components/ui/CardSizePanel';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -1789,10 +1788,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           act) replaces the old wall of buttons. Owner/admin only; viewers get a
           one-line hint. */}
       {canEdit ? (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start', margin: '0 0 12px' }}>
+        <div style={{ margin: '0 0 12px' }}>
           {/* The repo-settings card, shown INLINE here (it used to open from a ⚙️
-              gear popup in the filter row). Same fixed-dimension SetupWizardCard. */}
-          <div style={{ flex: `0 1 ${SETUP_CARD_WIDTH}px`, width: '100%', minWidth: 300, maxWidth: SETUP_CARD_WIDTH, boxSizing: 'border-box' }}>
+              gear popup). Full-width so it spans the whole page. */}
+          <div style={{ width: '100%', boxSizing: 'border-box' }}>
             {(() => {
               const Row = SettingRow;   // stable module-level component — no remount on toggle
               const cardsContent = (
@@ -1865,9 +1864,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   steps={steps} stepIndex={controlsStep} onStepChange={setControlsStep} />
               );
             })()}
-          </div>
-          <div style={{ flex: '1 1 0', minWidth: 260, minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', alignItems: 'flex-start' }}>
-            <CardSizePanel />
           </div>
         </div>
       ) : (

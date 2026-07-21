@@ -14,8 +14,7 @@ import { useCardSize, useImgSize, galleryLayout, cardImageProps } from '@/lib/ca
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { ToolFields } from '@/components/tools/ToolFields';
-import { CardSizePanel } from '@/components/ui/CardSizePanel';
-import { SetupWizardCard, SETUP_CARD_WIDTH, SETUP_CARD_GRID_HEIGHT } from '@/components/ui/SetupWizardCard';
+import { SetupWizardCard } from '@/components/ui/SetupWizardCard';
 import { SharePanel } from '@/components/tools/SharePanel';
 import { avatarFor } from '@/components/social/AuthorBar';
 import { CardShell } from '@/components/ui/CardShell';
@@ -732,10 +731,9 @@ export function PresentationRunsView() {
           <div style={{ borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 0' }} />
         </div>
 
-        {/* Exact setup layout family used on real lesson pages: setup card + mug.
-            The card is the shared, fixed-dimension SetupWizardCard. */}
-        <div style={{ maxWidth: 820, margin: '14px auto 12px', display: 'flex', gap: 12, flexWrap: 'nowrap', alignItems: 'flex-start', width: '100%' }}>
-          <div style={{ flex: `0 1 ${SETUP_CARD_WIDTH}px`, width: '100%', minWidth: 320, maxWidth: SETUP_CARD_WIDTH, boxSizing: 'border-box' }}>
+        {/* The create card spans the full page width. */}
+        <div style={{ maxWidth: 820, margin: '14px auto 12px', width: '100%' }}>
+          <div style={{ width: '100%', boxSizing: 'border-box' }}>
             <SetupWizardCard
               title={createTitleNode}
               headerRight={<button onClick={() => setSettingsOpen(true)} title="Open full builder settings" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
@@ -744,9 +742,6 @@ export function PresentationRunsView() {
               stepIndex={wizardStep}
               onStepChange={setWizardStep}
             />
-          </div>
-          <div style={{ flex: '1 1 0', minWidth: 260, minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', alignItems: 'flex-start', boxSizing: 'border-box' }}>
-            <CardSizePanel />
           </div>
         </div>
 
