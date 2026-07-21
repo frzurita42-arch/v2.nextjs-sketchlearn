@@ -3,22 +3,16 @@
  * Repos gallery, in SketchLearn's hand-made style (dashed-ink border, paper fill,
  * sketch font).
  *
- * What works now (the rest — actually generating the cards, and turning every last
- * nested card into a slide-generation prompt when Lesson Path is on — is the next
- * step):
  *   • ＋  attaches files (shown as chips; captured locally, not uploaded yet).
  *   • The prompt is a real text box.
- *   • Below the box: a toggleable "🎬 Lesson Path" pill and a "🔢 Units" pill that
- *     cycles Custom → AI decides → 2 → 5 → 8 → 10 → 12.
- *   • ↑  (or ⌘/Ctrl+Enter) opens the editable repo builder preset with the typed
- *     prompt (and a note of the chosen Lesson Path / Units / attachments), i.e. the
- *     same "preview editable repo" you use to make a repo by hand. */
+ *   • Below the box: a single toggleable "🎬 Lesson Path" pill (OFF by default).
+ *     The AI decides the number of units from the prompt — there is no Units control.
+ *   • ↑  (or ⌘/Ctrl+Enter) opens the repo builder with the typed prompt. Lesson Path
+ *     OFF → an EMPTY builder (you generate the repo yourself). Lesson Path ON →
+ *     pre-builds the repo AND its presentation for you to review and confirm. */
 import { useRef, useState } from 'react';
 import { useApp } from '@/components/AppContext';
 import { appState } from '@/lib/app-state';
-
-// The Units cycle: Custom (specified in the chat) → AI decides → fixed counts.
-const UNIT_STEPS = ['Custom', 'AI decides', '2', '5', '8', '10', '12'] as const;
 
 const circleBtn: React.CSSProperties = {
   width: 34, height: 34, borderRadius: '50%', border: '2.5px solid var(--ink,#2d2a26)',
@@ -30,10 +24,8 @@ export function RepoChatComposer() {
   const app = useApp();
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
-  const [lessonPath, setLessonPath] = useState(true);
-  const [unitStep, setUnitStep] = useState(0);            // index into UNIT_STEPS
+  const [lessonPath, setLessonPath] = useState(false);   // default OFF
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const units = UNIT_STEPS[unitStep];
 
   const onFiles = (files: FileList | null) => {
     if (!files || !files.length) return;
@@ -46,18 +38,17 @@ export function RepoChatComposer() {
     const prompt = text.trim();
     if (!prompt) return;
     if (!app.user) { app.requireLogin(); return; }
-    const unitHint = units === 'Custom' ? '' : units === 'AI decides' ? ' Choose a sensible number of units yourself.' : ` Produce exactly ${units} top-level units.`;
-    const note = `\n\n[Repo settings] Type: ${lessonPath ? 'Learning Path' : 'Normal Repo'} · Units: ${units}${attachments.length ? ` · Attachments: ${attachments.join(', ')}` : ''}`;
+    const note = `\n\n[Repo settings] Type: ${lessonPath ? 'Learning Path' : 'Normal Repo'}${attachments.length ? ` · Attachments: ${attachments.join(', ')}` : ''}`;
     const seedText = prompt + note;
-    // `context` is the builder's GOAL box (what Suggest-with-AI reads); `autoSuggest`
-    // tells the builder to pre-build the cards on arrival so the owner reviews and
-    // confirms rather than starting from an empty plan.
+    // The AI decides the number of units from the prompt itself (no Units control).
+    // Lesson Path OFF → open an EMPTY builder with the prompt in the goal box (no
+    // auto-generation). Lesson Path ON → pre-build the repo AND the presentation.
     (appState as any).builderSeed = {
       artifact: 'repository',
       sourcePrompt: seedText,
-      context: `${prompt}${unitHint}${lessonPath ? ' Structure it as a learning path.' : ''}`,
+      context: `${prompt}${lessonPath ? ' Structure it as a learning path.' : ''}`,
       subject: prompt.slice(0, 120),
-      autoSuggest: true,
+      autoSuggest: lessonPath,
       lessonPath,   // when true, also pre-build the presentation (editable slides)
     };
     app.nav('toolbuilder');
@@ -119,17 +110,12 @@ export function RepoChatComposer() {
       </div>
 
       {/* Option row BELOW the chat, indented a tab from the left — the Lesson Path
-          toggle and the Units cycle, in the page's sketch tone. */}
+          toggle (off by default; the AI decides the number of units from the prompt). */}
       <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingLeft: 22, flexWrap: 'wrap' }}>
         <button type="button" aria-pressed={lessonPath} onClick={() => setLessonPath((v) => !v)}
-          title={lessonPath ? 'Lesson Path is on — 🔵 prompt cards generate lessons and the last card carries the slide prompt' : 'Lesson Path is off — build a plain collection repo'}
+          title={lessonPath ? 'Lesson Path is on — pre-builds the repo AND its presentation; 🔵 prompt cards generate lessons' : 'Lesson Path is off — opens an empty builder with your prompt; generate the repo yourself'}
           style={pill(lessonPath)}>
           🎬 Lesson Path
-        </button>
-        <button type="button" onClick={() => setUnitStep((i) => (i + 1) % UNIT_STEPS.length)}
-          title="How many units/cards to generate — click to cycle: Custom (say it in the chat) → AI decides → 2 → 5 → 8 → 10 → 12"
-          style={pill(unitStep >= 2 /* a fixed count is chosen */)}>
-          🔢 Units: {units}
         </button>
       </div>
     </div>
