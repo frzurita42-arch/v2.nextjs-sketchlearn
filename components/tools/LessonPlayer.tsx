@@ -1669,10 +1669,19 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       return f;
     };
     const hasTone = settings.some((f: any) => f.id === 'tone');
+    const hasTopic = settings.some((f: any) => f.id === 'topic');
+    const hasLevel = settings.some((f: any) => f.id === 'level' || f.id === 'difficulty');
+    const hasSlides = settings.some((f: any) => f.id === 'slides');
     const formFields = [
       // A name for THIS presentation run (shown as its card title). Always visible.
       { id: 'title', label: '📝 Title', type: 'text', placeholder: 'Name this presentation… (optional)' },
       ...settings.map(normField),
+      // Core-input fallbacks: some AI-generated tools ship a SPARSE settings schema
+      // (no topic / level / slides), which left those wizard steps empty. Offer the
+      // standard fields so the create card always lets you set them.
+      ...(hasTopic ? [] : [normField({ id: 'topic', label: '🎯 Topic', type: 'text', placeholder: 'What should this cover?' })]),
+      ...(hasLevel ? [] : [{ id: 'level', label: '🎚️ Level', type: 'select-or-custom', options: TEXT_LEVELS }]),
+      ...(hasSlides ? [] : [{ id: 'slides', label: '📄 Slides', type: 'select-or-custom', options: SLIDE_COUNTS }]),
       // If the tool schema didn't define a tone, offer a global one (AI-picks default).
       ...(hasTone ? [] : [{ id: 'tone', label: 'Tone', type: 'select-or-custom', options: TONE_OPTIONS }]),
       { id: 'category', label: 'Category', type: 'select-or-custom', options: ['Any (AI picks)', ...GEN_CATEGORIES] },
