@@ -370,6 +370,7 @@ export function ToolRunnerView() {
             pageKey="tools"
             title={tool.title}
             subtitle={String(tool.description || '').trim() || 'A repository of nested cards.'}
+            rule="dashed"
           />
         </>
       )}

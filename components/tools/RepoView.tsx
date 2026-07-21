@@ -1952,18 +1952,23 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         const link = { background: 'none', border: 'none', fontFamily: 'inherit', fontSize: 16, color: 'var(--ink)', textUnderlineOffset: 3, padding: 0 } as const;
         const canLess = shownUnits > 1;
         return (
-          <div style={{ display: 'flex', gap: 22, justifyContent: 'center', marginTop: 12, marginBottom: 2 }}>
-            <button disabled={remainingUnits === 0} onClick={() => setReadUnits((n) => n + 1)}
-              title={remainingUnits === 0 ? 'All units are shown' : `Show the next unit (${shownUnits} of ${totalUnits} units shown)`}
-              style={{ ...link, cursor: remainingUnits === 0 ? 'default' : 'pointer', opacity: remainingUnits === 0 ? 0.35 : 0.75, textDecoration: remainingUnits === 0 ? 'none' : 'underline' }}>
-              Read more ↓
-            </button>
-            <button disabled={!canLess} onClick={() => setReadUnits((n) => Math.max(1, n - 1))}
-              title={canLess ? 'Fold the last unit back up' : 'The first unit always stays shown'}
-              style={{ ...link, cursor: canLess ? 'pointer' : 'default', opacity: canLess ? 0.75 : 0.35, textDecoration: canLess ? 'underline' : 'none' }}>
-              Read less ↑
-            </button>
-          </div>
+          <>
+            <div style={{ display: 'flex', gap: 22, justifyContent: 'center', marginTop: 12, marginBottom: 2 }}>
+              <button disabled={remainingUnits === 0} onClick={() => setReadUnits((n) => n + 1)}
+                title={remainingUnits === 0 ? 'All units are shown' : `Show the next unit (${shownUnits} of ${totalUnits} units shown)`}
+                style={{ ...link, cursor: remainingUnits === 0 ? 'default' : 'pointer', opacity: remainingUnits === 0 ? 0.35 : 0.75, textDecoration: remainingUnits === 0 ? 'none' : 'underline' }}>
+                Read more ↓
+              </button>
+              <button disabled={!canLess} onClick={() => setReadUnits((n) => Math.max(1, n - 1))}
+                title={canLess ? 'Fold the last unit back up' : 'The first unit always stays shown'}
+                style={{ ...link, cursor: canLess ? 'pointer' : 'default', opacity: canLess ? 0.75 : 0.35, textDecoration: canLess ? 'underline' : 'none' }}>
+                Read less ↑
+              </button>
+            </div>
+            {/* Closing dashed rule at the foot of the card section, below the
+                Read more / Read less controls. */}
+            <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '12px 0 0' }} />
+          </>
         );
       })()}
     </div>

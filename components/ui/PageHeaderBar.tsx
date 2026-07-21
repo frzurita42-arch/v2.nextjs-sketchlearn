@@ -17,8 +17,11 @@ import { TITLE_MIN, TITLE_MAX, useHeaderSize, setPageTitleSize, setPageSubSize, 
 
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: 0, display: 'block' };
 const sectionRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '14px 0 0' };
+// A dashed dark rule matching the repo settings-card closing line, so the two
+// separators on a repo page look the same. Opted into via `rule="dashed"`.
+const dashedRule: React.CSSProperties = { border: 'none', borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '14px 0 0' };
 
-export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode; global?: boolean }) {
+export function PageHeaderBar({ pageKey, title, subtitle, global = false, rule = 'dotted' }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode; global?: boolean; rule?: 'dotted' | 'dashed' }) {
   const app = useApp();
   const perms = app.eff();
   // Admins get the encapsulated box + the ⚙️ size tool; everyone else sees title + line.
@@ -75,9 +78,10 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
           </div>
         )}
       </div>
-      {/* The horizontal dotted separator between the title and whatever follows
-          (filters / chat box), shown for everyone now that the box is gone. */}
-      <hr style={sectionRule} />
+      {/* The horizontal separator between the title and whatever follows (filters /
+          chat box), shown for everyone now that the box is gone. Dotted by default;
+          the repo page opts into the dashed dark rule to match its settings line. */}
+      <hr style={rule === 'dashed' ? dashedRule : sectionRule} />
       {/* The instruction banner, if one is set for this page (configured on Settings). */}
       {!global && <InstructionBanner pageKey={pageKey} />}
       {global && popup && <PerPagePopup onClose={() => setPopup(false)} />}
