@@ -271,9 +271,18 @@ function inferKind(subject: string, language: boolean): string {
   return 'general';
 }
 
+// Derive a SHORT, one-line title from a long subject/prompt (first sentence, first
+// few words) so a whole prompt never becomes the tool's title.
+function shortTitleFrom(s: string): string {
+  const firstLine = String(s || '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s|[\n·]/)[0].trim();
+  const words = firstLine.split(' ').filter(Boolean).slice(0, 7).join(' ');
+  return words.slice(0, 50).trim();
+}
 // Turn a Studio config into a ToolDefinition-shaped object (validate before use).
 export function assembleDefinition(cfg: StudioConfig): any {
-  const title = String(cfg.title || cfg.subject || 'My tool').slice(0, 70);
+  // Prefer an explicit (AI-chosen) title; otherwise derive a short one from the
+  // subject instead of dumping the whole prompt in.
+  const title = (String(cfg.title || '').trim() || shortTitleFrom(cfg.subject || '') || 'My tool').slice(0, 70);
   const context = String(cfg.context || '').trim();
   // Keep the raw editable studio config on the definition so the "✏️ Edit tool"
   // button can reload the exact card/slide plan later (lossless round-trip).

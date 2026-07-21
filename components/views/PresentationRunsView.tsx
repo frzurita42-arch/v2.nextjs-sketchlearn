@@ -95,6 +95,8 @@ function SlideSettings({ onClose }: { onClose: () => void }) {
 export function PresentationRunsView() {
   const app = useApp();
   const [tools, setTools] = useState<any[]>([]);
+  const [editingTitle, setEditingTitle] = useState(false);   // inline rename of the create-card tool title
+  const [titleDraft, setTitleDraft] = useState('');
   const [allRuns, setAllRuns] = useState<any[]>([]);
   const [toolMeta, setToolMeta] = useState<Record<string, any>>({});
   const [toolRuns, setToolRuns] = useState<any[]>([]);
@@ -442,6 +444,35 @@ export function PresentationRunsView() {
   const shareUrl = selectedTool ? `/?view=tool&tool=${encodeURIComponent(String(selectedTool.slug || ''))}` : '/?view=presrun';
   const bannerSubtitle = selectedTool ? `${selectedTool.title || 'Slide tool'} · saved run gallery` : 'Presentation runs · public gallery';
   const createLabel = selectedTool ? `Create a ${selectedTool.title || 'slide'} activity` : 'Create a presentation activity';
+  // The create-card title stays on ONE line (a long title truncates); the owner can
+  // rename the slide tool inline via a black-and-white pencil at the end of the row.
+  const isToolOwner = !!app.user && !!selectedTool && (String(selectedTool.owner || '') === app.user.username || app.user.role === 'admin');
+  const saveTitle = async () => {
+    const t = titleDraft.trim().slice(0, 70);
+    setEditingTitle(false);
+    if (!selectedTool || !t || t === selectedTool.title) return;
+    const def = { ...(selectedTool.definition || {}), title: t };
+    setTools((cur) => cur.map((x) => (x.slug === selectedTool.slug ? { ...x, title: t, definition: def } : x)));   // optimistic
+    try { await API.put('/api/tools/settings', { slug: selectedTool.slug, definition: def }); } catch { /* keep optimistic */ }
+  };
+  const createTitleNode = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
+      {editingTitle && selectedTool ? (
+        <input value={titleDraft} autoFocus onChange={(e) => setTitleDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }} onBlur={saveTitle}
+          maxLength={70} style={{ fontSize: 15, fontWeight: 700, padding: '2px 6px', border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, minWidth: 0, width: 230 }} />
+      ) : (
+        <span title={createLabel} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, maxWidth: 300 }}>{createLabel}</span>
+      )}
+      {isToolOwner && !editingTitle && (
+        <button type="button" title="Rename this slide tool" aria-label="Rename this slide tool"
+          onClick={() => { setTitleDraft(String(selectedTool!.title || '')); setEditingTitle(true); }}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, padding: 0, borderRadius: 5, cursor: 'pointer', border: '1.5px solid var(--ink,#2d2a26)', background: 'transparent', color: 'var(--ink,#2d2a26)', flex: '0 0 auto' }}>
+          <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+        </button>
+      )}
+    </span>
+  );
   const setupWidth = setupCardSize <= 0 ? 360 : setupCardSize === 1 ? 340 : setupCardSize === 2 ? 392 : setupCardSize === 3 ? 430 : setupCardSize === 4 ? 500 : 560;
   const setupImageProps: any = cardImageProps(setupImgMode);
   const setupGridHeight = typeof setupImageProps.gridHeight === 'number' ? setupImageProps.gridHeight + 110 : 430;
@@ -686,7 +717,7 @@ export function PresentationRunsView() {
         <div style={{ maxWidth: 820, margin: '14px auto 12px', display: 'flex', gap: 12, flexWrap: 'nowrap', alignItems: 'flex-start', width: '100%' }}>
           <div style={{ flex: `0 1 ${SETUP_CARD_WIDTH}px`, width: '100%', minWidth: 320, maxWidth: SETUP_CARD_WIDTH, boxSizing: 'border-box' }}>
             <SetupWizardCard
-              title={createLabel}
+              title={createTitleNode}
               headerRight={<button onClick={() => setSettingsOpen(true)} title="Open full builder settings" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
               steps={steps}
               resetKey={wizardKey}

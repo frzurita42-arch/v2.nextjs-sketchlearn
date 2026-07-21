@@ -15,6 +15,26 @@ export const maxDuration = 60;
 const textAI = () => openrouterEnabled || geminiEnabled || deepseekEnabled || moonshotEnabled;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Lesson Path guarantee: the AI is unreliable about deep nesting, so after it plans
+// the tree we ENFORCE the rule server-side — every leaf that isn't already a 🔵
+// prompt card gets a nested 🔵 slide-build prompt child, so the last nested card in
+// each unit always carries the prompt fed to the slide tool. (🔵 is the marker the
+// repo's Study-path button looks for.)
+const isPromptText = (t: any) => /^\s*🔵/.test(String(t || ''));
+function ensurePromptLeaves(nodes: any[]): any[] {
+  if (!Array.isArray(nodes)) return nodes;
+  return nodes.map((c) => {
+    if (!c || typeof c !== 'object') return c;
+    const kids = Array.isArray(c.children) ? c.children : [];
+    if (kids.length) return { ...c, children: ensurePromptLeaves(kids) };
+    if (isPromptText(c.text)) return c;                       // already a prompt leaf
+    const title = String(c.title || 'this topic').slice(0, 120);
+    const text = String(c.text || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    const promptText = `🔵 Build a lesson presentation for “${title}”. ${text} State the lesson objectives, the topics to cover, and the exercises/activities to practise with the available components so the learner masters it.`.slice(0, 600);
+    return { ...c, children: [{ kind: 'card', title: '▶ Slide-build prompt', text: promptText }] };
+  });
+}
+
 // POST { slug, op, ... } -> owner/admin AI helpers for a repository.
 //   op 'field'   { field, current, instruction, context } -> { text }
 //   op 'layout'  { instruction, cards, layout } -> { cards }   (AI arranges the tree)
@@ -238,10 +258,11 @@ export async function POST(req: Request) {
           kind: 'card', title: `Unit ${i + 1}`,
           text: `Part ${i + 1} of ${n} for “${topic}”. (Demo plan — no AI connected.) Replace this with the concepts, links and notes for this unit, then publish.`,
         }));
-        return NextResponse.json({ cards: demo, fallback: true }, { status: 200 });
+        return NextResponse.json({ cards: lessonPath ? ensurePromptLeaves(demo) : demo, fallback: true }, { status: 200 });
       }
       if (!out) return NextResponse.json({ error: 'The AI could not build a plan. Add a bit more detail and try again.' }, { status: 200 });
-      return NextResponse.json({ cards: out.slice(0, nextOne ? 1 : 20) });
+      const sliced = out.slice(0, nextOne ? 1 : 20);
+      return NextResponse.json({ cards: lessonPath ? ensurePromptLeaves(sliced) : sliced });
     } catch (e: any) {
       // Surface the real reason (truncated JSON, timeout, quota…) so it's fixable.
       console.error('repo suggest failed:', e?.message || e);
