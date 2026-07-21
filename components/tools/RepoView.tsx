@@ -1795,7 +1795,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
             {(() => {
               const Row = SettingRow;   // stable module-level component — no remount on toggle
               const cardsContent = (
-                <div style={{ width: '100%', display: 'grid', gap: 8, alignContent: 'start' }}>
+                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, alignContent: 'start' }}>
                   <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>
                   <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
                   {cards.some((c) => (c.children || []).length > 0) && (
@@ -1804,7 +1804,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 </div>
               );
               const featuresContent = (
-                <div style={{ width: '100%', display: 'grid', gap: 8, alignContent: 'start' }}>
+                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, alignContent: 'start' }}>
                   <Row icon="🏷️" label="Assignment status" hint="Show a status cycle on every card" on={assignShown} onClick={() => saveAssign(!assignShown)} />
                   <Row icon="✅" label="Emoji approval" hint="One-tap status emoji per card" on={emojiApprove} onClick={() => saveEmojiApprove(!emojiApprove)} />
                   <Row icon="🎬" label="Study path" hint="🔵 cards get a lesson-generate button" on={studyMode} onClick={() => saveStudyMode(!studyMode)} />
