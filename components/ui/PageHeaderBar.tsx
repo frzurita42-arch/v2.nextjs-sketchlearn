@@ -17,10 +17,6 @@ import { TITLE_MIN, TITLE_MAX, useHeaderSize, setPageTitleSize, setPageSubSize, 
 
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: 0, display: 'block' };
 const sectionRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '14px 0 0' };
-// On the Settings page the title column is ENCAPSULATED in a dotted box; the title,
-// subtitle and the horizontal dotted line all live inside it.
-const titleBox: React.CSSProperties = { border: '2px dashed var(--line,#d9cfc0)', borderRadius: 12, padding: '10px 16px', background: 'rgba(0,0,0,0.015)' };
-const innerRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 0' };
 
 export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode; global?: boolean }) {
   const app = useApp();
@@ -50,12 +46,11 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
-        {/* Admin: the title + subtitle ENCAPSULATED in a dotted box that also contains
-            the horizontal dotted line. Non-admin: plain title + subtitle, with the
-            separator at the very bottom (below the whole header row). */}
-        <div style={{ ...titleWrapStyle, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(showControls ? titleBox : { padding: '2px 2px 4px' }) }}>
+        {/* Plain title + subtitle (no encapsulating box) — the horizontal dotted
+            separator sits at the very bottom, below the whole header row, for
+            everyone. The admin still gets the ⚙️ size gear next to the title. */}
+        <div style={{ ...titleWrapStyle, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '2px 2px 4px' }}>
           <PageHeading pageKey={pageKey} title={title} subtitle={subtitle} extraTools={gear} />
-          {showControls && <hr style={innerRule} />}
         </div>
         {/* The header-size control card — only when the ⚙️ gear is toggled on. */}
         {showControls && open && (
@@ -80,10 +75,9 @@ export function PageHeaderBar({ pageKey, title, subtitle, global = false }: { pa
           </div>
         )}
       </div>
-      {/* Only the PLAIN (non-encapsulated) header needs a bottom separator. When the
-          title is encapsulated (admin), the dotted box + its inner line already do it,
-          so no extra rule below. */}
-      {!showControls && <hr style={sectionRule} />}
+      {/* The horizontal dotted separator between the title and whatever follows
+          (filters / chat box), shown for everyone now that the box is gone. */}
+      <hr style={sectionRule} />
       {/* The instruction banner, if one is set for this page (configured on Settings). */}
       {!global && <InstructionBanner pageKey={pageKey} />}
       {global && popup && <PerPagePopup onClose={() => setPopup(false)} />}

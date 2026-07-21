@@ -364,8 +364,8 @@ export function ToolRunnerView() {
             shareSlug={tool.slug}
             shareTitle={tool.title}
             showShare={tool.visibility !== 'private'}
+            hideRule
           />
-          <div style={dashRule} />
           <PageHeaderBar
             pageKey="tools"
             title={tool.title}

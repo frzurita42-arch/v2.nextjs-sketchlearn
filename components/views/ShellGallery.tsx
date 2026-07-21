@@ -19,6 +19,8 @@ import { filterLabel } from '@/components/ui/GalleryChrome';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 
 const GALLERY_PER_PAGE = 6;
+// Dotted section separator used between the repo gallery's stacked sections.
+const dottedRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '14px 0' };
 
 // Edit a card's title + description (type, or ✦ write each with AI). Ported from
 // ToolsView so the cards here have the same editor.
@@ -232,8 +234,12 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
             repository from a description" interface). Sits directly BELOW the title
             and ABOVE the DB-mode badge. Not wired up yet — presentation only. */}
         {kind === 'repository' && <RepoChatComposer />}
+        {/* Dotted separators between the repo gallery's sections: chat/Lesson-Path ┄
+            DB mode ┄ filters ┄ gallery. */}
+        {kind === 'repository' && <hr style={dottedRule} />}
 
         <StorageModeBadge />
+        {kind === 'repository' && <hr style={dottedRule} />}
 
         {/* Search + favorites/mine filters. The optional topSlot (e.g. the slide
             settings form) opens from the ⚙️ gear here as a popup, not inline. */}
@@ -262,6 +268,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
               style={{ fontSize: 16, padding: '0 9px', marginLeft: 'auto', opacity: 0.5, cursor: 'default' }}>⚙️</button>
           ) : null}
         </div>
+        {kind === 'repository' && <hr style={dottedRule} />}
 
         {topSlot && settingsOpen && (
           <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 150, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>

@@ -22,7 +22,7 @@ export function avatarFor(name: string) {
 }
 
 export function AuthorBar({
-  owner, meta, liked, likes, onToggleLike, shareSlug, shareTitle, showShare, actions,
+  owner, meta, liked, likes, onToggleLike, shareSlug, shareTitle, showShare, actions, hideRule,
 }: {
   owner: string;
   meta: string;
@@ -33,6 +33,7 @@ export function AuthorBar({
   shareTitle: string;
   showShare: boolean;
   actions?: React.ReactNode;   // optional owner controls (e.g. ⚙️ Settings)
+  hideRule?: boolean;          // skip the closing dashed rule (e.g. repo pages)
 }) {
   const av = avatarFor(owner);
   return (
@@ -52,7 +53,7 @@ export function AuthorBar({
         </div>
       </div>
       {/* Closing dashed rule — marks the end of the author/share container. */}
-      <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '10px 0 0' }} />
+      {!hideRule && <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '10px 0 0' }} />}
     </div>
   );
 }

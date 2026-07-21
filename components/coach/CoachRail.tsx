@@ -26,6 +26,12 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
 }) {
   const app = useApp();
   const username = app.user?.username || null;
+  // Which top-level nav group the current page belongs to. An open tool (view
+  // 'tool') maps back to its gallery group: a repo → Repos ('tools'), any other
+  // tool (a slide/lesson) → Slides ('slides'). Everything else is its own group.
+  const activeGroup: string = app.view === 'tool'
+    ? ((appState.activeTool?.definition?.archetype || appState.activeTool?.archetype) === 'repo' ? 'tools' : 'slides')
+    : app.view;
   // Collapse state is shared via appState so it survives page switches.
   const open = appState.railOpen !== false;
   const setOpen = (v: boolean) => { appState.railOpen = v; app.rerender(); };
@@ -74,13 +80,22 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
       <button className="btn small ghost" onClick={doNew}
         style={{ width: '100%', marginBottom: 8, ...(app.view === 'chat' ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>🆕 New chat</button>
 
-      {/* Quick links to the main pages (Claude-style side nav). The current page's
-          option shows a green line underneath; the rest stay off. */}
+      {/* Quick links to the main pages (Claude-style side nav). The current page —
+          OR a sub-page of it (an open tool maps back to its gallery: a repo → Repos,
+          a slide tool → Slides) — shows a green line underneath AND a green dot on
+          the right, so you can see which group you're inside. Clicking any link
+          navigates to that group's top-level gallery. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'presrun', label: '🎬 Presentation runs' }, { v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => (
-          <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}
-            style={{ width: '100%', justifyContent: 'flex-start', textAlign: 'left', ...(app.view === n.v ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>{n.label}</button>
-        ))}
+        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'presrun', label: '🎬 Presentation runs' }, { v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, ...(app.user ? [{ v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => {
+          const isActive = activeGroup === n.v;
+          return (
+            <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', textAlign: 'left', ...(isActive ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>
+              <span>{n.label}</span>
+              {isActive && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
+            </button>
+          );
+        })}
       </div>
 
       {/* The chat-history list belongs to the Coach chat only — on the other shell
