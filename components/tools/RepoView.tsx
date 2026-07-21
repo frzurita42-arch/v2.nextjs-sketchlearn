@@ -613,6 +613,10 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
   );
 }
 
+// Per-unit colors for the nested-card guide lines — one hue per top-level unit,
+// cycled if there are more units than colors. Distinct + legible on the paper bg.
+const UNIT_LINE_COLORS = ['#d1495b', '#3a6ea5', '#2e8b57', '#e08a1e', '#7b5cd6', '#1f9e9e', '#c9518a', '#9a6a3f'];
+
 // A collection card rendered through the SAME shared CardShell used by the home
 // gallery — adapted to a repo card: title, description, cover image, a favorite
 // ★, and the attachments as footer buttons. Owner/admin edit IN PLACE: a ✎ pencil
@@ -620,7 +624,7 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 // subtitle, so you edit the thing you click. Card-level actions stay small and
 // bare: ⚙️ add a sibling, ➕ add a card inside, 🗑 delete. In rows view all nested
 // cards are shown; in grid view a card is shown alone (click it to flip to rows).
-function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx; switchToRows?: () => void; nested?: boolean; imgSize?: number }) {
+function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, unitColor }: { card: RepoCard; view: 'grid' | 'row'; ctx: ViewCtx; switchToRows?: () => void; nested?: boolean; imgSize?: number; unitColor?: string }) {
   // Hidden children vanish for normal viewers; owner/admin still see them greyed.
   const kids = (card.children || []).filter((k) => ctx.canEdit || !k.hidden);
   const links = card.links || [];
@@ -1256,8 +1260,8 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize }: 
     <div>
       {body}
       {!collapsed && (
-        <div style={{ marginLeft: 14, marginTop: 8, borderLeft: '3px solid var(--accent, #5c80bc)', paddingLeft: 10, display: 'grid', gap: 8 }}>
-          {sortKids(kids).map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested imgSize={imgSize} />)}
+        <div style={{ marginLeft: 14, marginTop: 8, borderLeft: `3px solid ${unitColor || 'var(--accent, #5c80bc)'}`, paddingLeft: 10, display: 'grid', gap: 8 }}>
+          {sortKids(kids).map((k) => <RepoCollectionCard key={k.id} card={k} view="row" ctx={ctx} nested imgSize={imgSize} unitColor={unitColor} />)}
         </div>
       )}
     </div>
@@ -1697,6 +1701,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const shownUnits = Math.min(totalUnits, Math.max(1, readUnits));
   const prunedTop = orderedTop.slice(0, shownUnits);
   const remainingUnits = totalUnits - shownUnits;
+  // Each unit's nested-card guide lines get their OWN color (red, blue, green …),
+  // shared by every level inside that unit. Keyed by the unit's stable position so
+  // the color doesn't shift as units are revealed/folded.
+  const unitColorOf = (id: string) => {
+    const i = orderedTop.findIndex((c) => c.id === id);
+    return UNIT_LINE_COLORS[(i < 0 ? 0 : i) % UNIT_LINE_COLORS.length];
+  };
   const studyCardCount = flattenCards(cards).filter((c) => c.kind !== 'section' && (isPromptCard(c) || !!String(c.text || '').trim() || !!String(c.title || '').trim())).length;
   const selectedStudyName = studyToolSlug.trim() ? ((studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug) : '';
 
@@ -1841,8 +1852,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}
-          renderGrid={(c: RepoCard, v?: { setView: (m: 'grid' | 'row') => void; imgSize?: number }) => <RepoCollectionCard card={c} view="grid" ctx={ctx} imgSize={v?.imgSize} switchToRows={() => v?.setView('row')} />}
-          renderRow={(c: RepoCard, v?: { imgSize?: number }) => <RepoCollectionCard card={c} view="row" ctx={ctx} imgSize={v?.imgSize} />}
+          renderGrid={(c: RepoCard, v?: { setView: (m: 'grid' | 'row') => void; imgSize?: number }) => <RepoCollectionCard card={c} view="grid" ctx={ctx} imgSize={v?.imgSize} unitColor={unitColorOf(c.id)} switchToRows={() => v?.setView('row')} />}
+          renderRow={(c: RepoCard, v?: { imgSize?: number }) => <RepoCollectionCard card={c} view="row" ctx={ctx} imgSize={v?.imgSize} unitColor={unitColorOf(c.id)} />}
           emptyAll="This collection is empty."
           emptyFiltered="No cards match your search."
         />
