@@ -77,6 +77,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   // remains available as a narrower view.
   const [filter, setFilter] = useState<'all' | 'fav' | 'mine'>('all');
   const [q, setQ] = useState('');
+  const [sort, setSort] = useState<'az' | 'za'>('az');   // name ascending / descending
   const [page, setPage] = useState(1);
   const [editTool, setEditTool] = useState<any>(null);
   const [thumbing, setThumbing] = useState<Record<string, boolean>>({});
@@ -177,7 +178,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return tools.filter((t) => {
+    const list = tools.filter((t) => {
       if (filter === 'fav' && !favs[t.slug]) return false;
       if (filter === 'mine' && t.owner !== app.user?.username) return false;
       if (term) {
@@ -186,7 +187,9 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
       }
       return true;
     });
-  }, [tools, filter, favs, q, app.user?.username]);
+    const dir = sort === 'az' ? 1 : -1;
+    return list.sort((a, b) => dir * String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' }));
+  }, [tools, filter, favs, q, app.user?.username, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / GALLERY_PER_PAGE));
   const shown = useMemo(() => filtered.slice((page - 1) * GALLERY_PER_PAGE, page * GALLERY_PER_PAGE), [filtered, page]);
@@ -236,11 +239,17 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
             settings form) opens from the ⚙️ gear here as a popup, not inline. */}
         <span style={filterLabel}>Filters</span>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-          <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, interest or keyword…"
-            style={{ flex: '1 1 220px', minWidth: 0 }} />
+          <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name or keyword…"
+            style={{ flex: '1 1 150px', minWidth: 0, maxWidth: 300 }} />
           {filters.map((f) => (
             <button key={f.key} className={`btn small ${filter === f.key ? 'green' : 'ghost'}`} onClick={() => setFilter(f.key)}>{f.label}</button>
           ))}
+          {/* Sort order by name — ascending / descending, on the same filter row. */}
+          <select value={sort} onChange={(e) => setSort(e.target.value as 'az' | 'za')} title="Sort by name" aria-label="Sort by name"
+            style={{ fontSize: 13, padding: '4px 6px', width: 'auto', flex: '0 0 auto', minWidth: 0 }}>
+            <option value="az">↑ A–Z</option>
+            <option value="za">↓ Z–A</option>
+          </select>
           {topSlot && (
             <button className="btn small ghost" title={topSlotLabel || 'Settings'} aria-label={topSlotLabel || 'Settings'}
               onClick={() => setSettingsOpen(true)} style={{ fontSize: 16, padding: '0 9px' }}>⚙️</button>
