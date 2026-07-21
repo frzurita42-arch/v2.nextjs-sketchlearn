@@ -31,7 +31,10 @@ export const ENGAGING_ACTIVITY_TYPES = SLIDE_ACTIVITIES.filter((a) => a.kind ===
 
 // Lesson support flags that switch on the engaging CONTENT activities (tables,
 // charts/diagrams via images, code, math). `audio` stays off (not an activity).
-export const ENGAGING_SUPPORT = { images: true, code: true, tables: true, formulas: true, geogebra: true, audio: false };
+// `geogebra` stays OFF: an interactive coordinate graph is only useful on the rare
+// slide that actually plots a function/construction, so blanket-adding it to every
+// slide just yields a generic, repeated graph. Enable it per-slide when needed.
+export const ENGAGING_SUPPORT = { images: true, code: true, tables: true, formulas: true, geogebra: false, audio: false };
 
 // Difficulty options a study tool can default to (matches the app's LEVELS).
 export const STUDY_LEVELS = ['Beginner', 'Lower Intermediate', 'Upper Intermediate', 'Advanced', 'PhD'];

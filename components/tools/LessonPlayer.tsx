@@ -7,7 +7,7 @@
  * (AI-graded) and code/text answers (AI-graded). A single, clear navigation bar
  * (Back · Check with AI · Next · Finish) drives the whole deck, with each button
  * enabled only when it applies and showing a spinner while it works. */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState } from '@/lib/app-state';
 import { useCardSize, useImgSize, cardImageProps, galleryLayout } from '@/lib/card-size';
@@ -40,6 +40,7 @@ function lessonToStudioPages(lesson: any): any[] {
 }
 import { defaultsFor, MAX_SLIDES } from '@/lib/tool-schema';
 import { ToolFields, FIELD_CONTROL_STYLE } from '@/components/tools/ToolFields';
+import { CodeEditor } from '@/components/tools/CodeEditor';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
 import { RichText } from '@/components/tools/RichText';
@@ -624,9 +625,8 @@ function CodeQuestion({ q, subject, onDone }: { q: Q; subject: string; onDone: (
   return (
     <div>
       <p style={{ fontWeight: 600, textAlign: 'center', margin: '0 0 8px' }}>⌨️ <MathText text={q.prompt || 'Write your answer'} /></p>
-      <textarea value={code} onChange={e => setCode(e.target.value)} spellCheck={false}
-        placeholder={q.language ? `Write your ${q.language} here…` : 'Write your working / answer here… (you can include proofs with comments)'}
-        style={{ width: '100%', minHeight: 200, resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 14, lineHeight: 1.5, padding: 12, borderRadius: 8, border: '2px solid var(--ink)', background: '#2d2a26', color: '#f7f3e9', boxSizing: 'border-box' }} />
+      <CodeEditor value={code} onChange={setCode}
+        placeholder={q.language ? `Write your ${q.language} here…` : 'Write your working / answer here… (you can include proofs with comments)'} />
       {q.language && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>Language: {q.language}</div>}
       <GuidePanel subject={subject} prompt={q.prompt || ''} kind="code" getAttempt={() => code} />
       <div style={{ textAlign: 'center', marginTop: 10 }}>
@@ -799,7 +799,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const galleryImgMode = useImgSize('presrun');
   const galleryCfg = galleryLayout(galleryCardSize);
   const [historyQ, setHistoryQ] = useState('');
-  const [historyFilter, setHistoryFilter] = useState<'all' | 'fav'>('fav');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'fav'>('all');
   const [historyPage, setHistoryPage] = useState(1);
   // Only moderators and admins may PLAY / generate a presentation. A normal user
   // (or a guest / an admin previewing as a user) can only VIEW the saved history.
@@ -844,14 +844,19 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const [wizardStep, setWizardStep] = useState(0);
   // Measured width of the create-card wizard, so the fields re-paginate into a
   // denser grid on a wide (full-width) card and fewer-per-page on a narrow one.
-  const wizardRef = useRef<HTMLDivElement>(null);
+  // Callback ref (not a mount-only effect): the create card can render a beat
+  // AFTER LessonPlayer mounts, so a one-shot effect may run before the wizard div
+  // exists and never measure it — leaving wizardW at 0. A callback ref re-attaches
+  // the observer whenever the node actually mounts, so the width is always read.
+  const wizardRoRef = useRef<ResizeObserver | null>(null);
   const [wizardW, setWizardW] = useState(0);
-  useEffect(() => {
-    const el = wizardRef.current; if (!el) return;
+  const wizardRef = useCallback((el: HTMLDivElement | null) => {
+    wizardRoRef.current?.disconnect();
+    if (!el) return;
     setWizardW(el.offsetWidth);
     const ro = new ResizeObserver((entries) => { for (const e of entries) setWizardW(e.contentRect.width); });
     ro.observe(el);
-    return () => ro.disconnect();
+    wizardRoRef.current = ro;
   }, []);
   useEffect(() => { setWizardStep(0); }, [wizardKey]);
   const [deckMsg, setDeckMsg] = useState('');
@@ -2000,7 +2005,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               ...formFields.map((f: any) => stepFields([f.id], true)),
               themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField, annotationField,
             ].filter((c) => c != null);
-            const perPage = wizardW >= 620 ? 4 : wizardW >= 330 ? 2 : 1;
+            // wizardW === 0 means "not measured yet" — assume the wide default (the
+            // card is full-width unless shrunk), so it opens as a 2×2 grid instead of
+            // flashing 1-per-page. A real narrow measurement still drops to 2 or 1.
+            const perPage = wizardW === 0 || wizardW >= 620 ? 4 : wizardW >= 330 ? 2 : 1;
             const gridCols = perPage >= 2 ? 2 : 1;
             const pageCount = Math.max(1, Math.ceil(cells.length / perPage));
             const goNext = () => setWizardStep((s) => Math.min(pageCount - 1, s + 1));
