@@ -30,6 +30,7 @@ import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { SetupWizardCard } from '@/components/ui/SetupWizardCard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
 import { FIELD_CONTROL_STYLE } from '@/components/tools/ToolFields';
+import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -1969,6 +1970,63 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                 Read more / Read less controls. */}
             <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '12px 0 0' }} />
           </>
+        );
+      })()}
+
+      {/* Repo cards table — every card in the tree (units + all nested cards)
+          flattened into one row each, keyed by the unit it belongs to, capturing
+          each card's saved info: title, description, study-path link, paywall,
+          attachments, status and dates. The repo-wide study tool + paywall-bypass
+          users are summarised in the caption above it. */}
+      {!editing && cards.length > 0 && (() => {
+        const fmt = (v?: string) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString(); };
+        const rows: Cell[][] = [];
+        const walk = (list: RepoCard[], unit: string, depth: number) => {
+          list.forEach((c) => {
+            const u = depth === 0 ? (c.title || 'Untitled unit') : unit;
+            const links = c.links || [];
+            const nBlue = links.filter((l) => (l.color || 'blue') === 'blue').length;
+            const nUser = links.filter((l) => l.color === 'green').length;
+            const nRef = links.filter((l) => l.color === 'ref').length;
+            const attach = [nBlue && `📎${nBlue}`, nUser && `📁${nUser}`, nRef && `📄${nRef}`].filter(Boolean).join('  ') || '—';
+            const prompt = isPromptCard(c);
+            const role = c.kind === 'section' ? 'Section'
+              : depth === 0 ? 'Unit'
+              : prompt ? '🔵 Prompt'
+              : (c.children || []).some(isPromptCard) ? 'Objective'
+              : `Sub · L${depth}`;
+            rows.push([
+              rows.length + 1,
+              u,
+              role,
+              c.title || '—',
+              String(c.text || '').trim() || '—',
+              prompt && studyMode ? (selectedStudyName || 'study path on') : '—',
+              c.paywall ? '🔒 locked' : '—',
+              attach,
+              c.mode || '—',
+              fmt(c.createdAt),
+              fmt(c.lastEdited),
+            ]);
+            if (c.children?.length) walk(c.children, u, depth + 1);
+          });
+        };
+        walk(cards, '', 0);
+        return (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', margin: '0 0 8px' }}>
+              <h3 style={{ margin: 0 }}>🗂️ All cards — table</h3>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>
+                {selectedStudyName ? `🎬 Study tool: ${selectedStudyName}` : '🎬 No study tool'} · 👥 Bypass paywall: {authorizedUsers.length ? authorizedUsers.map((u) => `@${u}`).join(', ') : 'none'}
+              </span>
+            </div>
+            <PagedTable
+              headers={['#', 'Unit', 'Role', 'Title', 'Description', 'Study path', 'Paywall', 'Attachments', 'Status', 'Created', 'Last edited']}
+              rows={rows}
+              empty="No cards yet."
+              rowsPerPage={8}
+            />
+          </div>
         );
       })()}
     </div>
