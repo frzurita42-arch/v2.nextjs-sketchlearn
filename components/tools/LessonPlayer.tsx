@@ -1545,14 +1545,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     prefetch(cur + 1);
   };
 
+  // Jump back to the top so the learner starts reading the next slide from its
+  // title, not wherever they left off after answering the question below.
+  const toTop = () => { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { /* ignore */ } };
   const goToSlide = async (nxt: number) => {
     if (nxt >= total()) return;
     // Usually prefetched -> instant. Otherwise wait for the in-flight prefetch.
-    if (slidesRef.current[nxt]) { setCur(nxt); prefetch(nxt + 1); return; }
+    if (slidesRef.current[nxt]) { setCur(nxt); toTop(); prefetch(nxt + 1); return; }
     setGenBusy(true); setErr('');
     await (prefetching.current[nxt] || prefetch(nxt));
     setGenBusy(false);
-    if (slidesRef.current[nxt]) { setCur(nxt); prefetch(nxt + 1); }
+    if (slidesRef.current[nxt]) { setCur(nxt); toTop(); prefetch(nxt + 1); }
     else setErr('Could not load the next slide. Tap Next to retry.');
   };
 
@@ -2238,9 +2241,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   return (
     <div>
       <style>{'@keyframes sl-spin{to{transform:rotate(360deg)}}'}</style>
-      {/* Top run metadata: subject/topic + current level on one centered row. */}
+      {/* Top run metadata: just the current level (the long subject/topic prompt
+          is hidden — it's not needed while playing). */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, opacity: 0.7, textAlign: 'center' }}>{label(cfg)}</span>
         <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.75, textAlign: 'center' }}>
           🎚️ Level: {slideLevel[cur] || cfg.level || cfg.difficulty || levels[0]}
         </span>
