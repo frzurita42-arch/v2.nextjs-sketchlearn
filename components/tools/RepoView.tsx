@@ -617,6 +617,24 @@ function CardEdit({ card, depth, slug, context, siblingLayout, idx, count, patch
 // cycled if there are more units than colors. Distinct + legible on the paper bg.
 const UNIT_LINE_COLORS = ['#d1495b', '#3a6ea5', '#2e8b57', '#e08a1e', '#7b5cd6', '#1f9e9e', '#c9518a', '#9a6a3f'];
 
+// A settings toggle row (icon · label · ON/OFF pill). Defined at MODULE scope (not
+// inline in the render) so React reconciles it in place instead of remounting the
+// whole list on every toggle — which would empty the 186px scroll area and snap it
+// back to the top, losing your place at the switch you just clicked.
+function SettingRow({ icon, label, hint, on, onClick }: { icon: string; label: string; hint?: string; on: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} title={hint}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '8px 11px', borderRadius: 10, border: '1.5px solid var(--ink)', background: 'rgba(0,0,0,0.02)', cursor: 'pointer' }}>
+      <span style={{ fontSize: 18, flex: '0 0 auto' }}>{icon}</span>
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{label}</span>
+        {hint && <span style={{ display: 'block', fontSize: 11, opacity: 0.55 }}>{hint}</span>}
+      </span>
+      <span style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 999, border: '1.5px solid var(--ink)', background: on ? 'var(--accent,#2d6cdf)' : 'transparent', color: on ? '#fff' : 'inherit' }}>{on ? 'ON' : 'OFF'}</span>
+    </button>
+  );
+}
+
 // A collection card rendered through the SAME shared CardShell used by the home
 // gallery — adapted to a repo card: title, description, cover image, a favorite
 // ★, and the attachments as footer buttons. Owner/admin edit IN PLACE: a ✎ pencil
@@ -1776,17 +1794,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               gear popup in the filter row). Same fixed-dimension SetupWizardCard. */}
           <div style={{ flex: `0 1 ${SETUP_CARD_WIDTH}px`, width: '100%', minWidth: 300, maxWidth: SETUP_CARD_WIDTH, boxSizing: 'border-box' }}>
             {(() => {
-              const Row = ({ icon, label, hint, on, onClick }: { icon: string; label: string; hint?: string; on: boolean; onClick: () => void }) => (
-                <button type="button" onClick={onClick} title={hint}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '8px 11px', borderRadius: 10, border: '1.5px solid var(--ink)', background: 'rgba(0,0,0,0.02)', cursor: 'pointer' }}>
-                  <span style={{ fontSize: 18, flex: '0 0 auto' }}>{icon}</span>
-                  <span style={{ minWidth: 0, flex: 1 }}>
-                    <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{label}</span>
-                    {hint && <span style={{ display: 'block', fontSize: 11, opacity: 0.55 }}>{hint}</span>}
-                  </span>
-                  <span style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 999, border: '1.5px solid var(--ink)', background: on ? 'var(--accent,#2d6cdf)' : 'transparent', color: on ? '#fff' : 'inherit' }}>{on ? 'ON' : 'OFF'}</span>
-                </button>
-              );
+              const Row = SettingRow;   // stable module-level component — no remount on toggle
               const cardsContent = (
                 <div style={{ width: '100%', display: 'grid', gap: 8, alignContent: 'start' }}>
                   <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>
