@@ -106,7 +106,9 @@ export interface RepoLink {
   url: string;
   // 'poster' (blue) — posted by the owner/admin; everyone can open/download it.
   // 'user'   (green) — uploaded by a viewer; only they (or an admin) can remove it.
-  color?: 'blue' | 'green';
+  // 'ref'          — reference material posted by the owner/admin (further reading);
+  //                  everyone can open it. Multiple allowed per card.
+  color?: 'blue' | 'green' | 'ref';
   by?: string;                // username who added this link (for the User kind)
 }
 
@@ -265,6 +267,7 @@ function cleanRepoCard(c: any, depth: number): RepoCard | null {
       url: /^data:/i.test(rawUrl) ? rawUrl.slice(0, 8_000_000) : rawUrl.slice(0, 800),
     };
     if (l?.color === 'green') link.color = 'green';
+    else if (l?.color === 'ref') link.color = 'ref';
     if (l?.by) link.by = String(l.by).slice(0, 40);
     return link;
   }).filter((l: RepoLink) => /^https?:\/\//i.test(l.url) || /^data:/i.test(l.url) || l.url.startsWith('/'));

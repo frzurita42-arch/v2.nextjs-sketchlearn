@@ -660,7 +660,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
   const [distorting, setDistorting] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
   const [attaching, setAttaching] = useState(false);
-  const [attachColor, setAttachColor] = useState<'blue' | 'green'>('blue');
+  const [attachColor, setAttachColor] = useState<'blue' | 'green' | 'ref'>('blue');
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [attachBusy, setAttachBusy] = useState(false); // 📎 file upload in progress
@@ -739,16 +739,25 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
   // enforces the permissions.
   // The single link each role's widget manages: the poster (blue) link, and MY
   // own user (green) link. The widget turns INTO this link once submitted.
-  const posterLinkIdx = (() => { for (let i = links.length - 1; i >= 0; i--) if (links[i].color !== 'green') return i; return -1; })();
+  // The Moderator (blue) slot is any link that is neither a User (green) upload nor
+  // a Reference (ref) material — so 'ref' links don't get mistaken for the turn-in.
+  const posterLinkIdx = (() => { for (let i = links.length - 1; i >= 0; i--) { const cl = links[i].color; if (cl !== 'green' && cl !== 'ref') return i; } return -1; })();
   const myUserLinkIdx = links.findIndex((l) => l.color === 'green' && l.by === ctx.me);
+  // Reference materials (📄): moderator-posted further-reading links/documents.
+  // Many per card; each carries its original array index for open / remove.
+  const refLinks = links.map((l, i) => ({ l, i })).filter((x) => x.l.color === 'ref');
+  // Card ROLE in a lesson path: the 🔵 slide-build PROMPT card is the leaf; the
+  // OBJECTIVE is the card directly above it (its child is a prompt). The turn-in
+  // slots (📎 moderator + 📁 user) belong ONLY to objective cards; the 📄 reference
+  // materials go on everything EXCEPT the prompt card.
+  const isPrompt = isPromptCard(card);
+  const isObjective = (card.children || []).some((k) => isPromptCard(k));
   // Who may EDIT each slot (open the editor to add / replace / delete):
-  //  • 📎 clip = the Moderator's shared link — owner/admin only. They may add when
-  //    the repo-wide feature is on, and may always manage one that already exists.
-  //  • 📁 folder = a user's OWN link — any signed-in person. They may add when the
-  //    feature is on, and may always manage their own existing one.
+  //  • 📎 clip = the Moderator's turn-in link — owner/admin only, OBJECTIVE cards.
+  //  • 📁 folder = a user's OWN turn-in — any signed-in person, OBJECTIVE cards.
   // A per-card override (posterOff / userOff) can turn a slot off for one card.
-  const canPoster = ctx.canEdit && !card.posterOff && (ctx.posterUpload || posterLinkIdx >= 0);
-  const canUser = !!ctx.me && !card.userOff && (ctx.userUpload || myUserLinkIdx >= 0);
+  const canPoster = ctx.canEdit && isObjective && !card.posterOff && (ctx.posterUpload || posterLinkIdx >= 0);
+  const canUser = !!ctx.me && isObjective && !card.userOff && (ctx.userUpload || myUserLinkIdx >= 0);
   const attachServer = async (payload: any) => {
     // NOTE: uploads are a real user action (turning in a document), so they work
     // even while an admin is previewing as a User/Moderator — that's how you test
@@ -759,7 +768,9 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
   const removeLinkAt = (index: number) => attachServer({ action: 'remove', index });
   // The slot the inline editor is currently managing (blue = the Moderator link,
   // green = MY own upload).
-  const slotIdx = () => (attachColor === 'green' ? myUserLinkIdx : posterLinkIdx);
+  // 'ref' (reference materials) allow MANY per card, so there is no single slot —
+  // return -1 so commitLink always APPENDS a new reference instead of replacing.
+  const slotIdx = () => (attachColor === 'ref' ? -1 : attachColor === 'green' ? myUserLinkIdx : posterLinkIdx);
   // Save a link/file into the current slot: if it already holds one, REPLACE it
   // (remove the old, add the new) so a slot only ever carries a single attachment.
   const commitLink = async (label: string, url: string) => {
@@ -769,7 +780,7 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
   };
   // Open the inline editor for a role — pre-filled with the existing values when
   // editing. Clicking the same role's icon again closes it.
-  const openAttach = (color: 'blue' | 'green', existingIdx: number) => {
+  const openAttach = (color: 'blue' | 'green' | 'ref', existingIdx: number) => {
     if (attaching && attachColor === color) { setAttaching(false); return; }
     setAttachColor(color);
     if (existingIdx >= 0) { setLinkLabel(links[existingIdx].label || ''); setLinkUrl(links[existingIdx].url || ''); }
@@ -813,28 +824,11 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
     } catch { alert('Could not attach the file.'); }
     setAttachBusy(false);
   };
-  // 📄 "File upload in editor" (docUpload): a DIRECT moderator file upload straight
-  // from the card — no editor. It writes into the card's Moderator (blue) slot and
-  // REPLACES any file already there, so the card carries a single moderator file
-  // that every viewer can then download from the green "file available" light.
-  const docFileUpload = () => {
-    const inp = document.createElement('input'); inp.type = 'file';
-    inp.onchange = async () => {
-      const f = inp.files && inp.files[0]; if (!f) return;
-      if (f.size > 25_000_000) { alert('Please pick a file under 25 MB.'); return; }
-      setAttachBusy(true);
-      try {
-        let url = '';
-        try { const up = await API.upload('/api/upload', f); if (up?.url) url = up.url; } catch { /* data-URL fallback */ }
-        if (!url) url = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
-        if (posterLinkIdx >= 0) await attachServer({ action: 'remove', index: posterLinkIdx });
-        await attachServer({ action: 'add', color: 'blue', link: { label: f.name, url } });
-      } catch { alert('Could not upload the file.'); }
-      setAttachBusy(false);
-    };
-    inp.click();
-  };
-  const removeDocFile = () => { if (posterLinkIdx >= 0) attachServer({ action: 'remove', index: posterLinkIdx }); };
+  // 📄 "File upload in editor" (docUpload) = REFERENCE materials. The moderator adds
+  // further-reading links or documents through the same inline editor (link OR a
+  // document), appended as 'ref' attachments. Many per card; each shows to every
+  // viewer as a green "reference" download pill at the card's foot.
+  const openRef = () => openAttach('ref', -1);
 
   // ---- picture controls (same feature as the tool gallery): AI-generate,
   // custom prompt / distort with a palette, or upload — right in the card's image.
@@ -1007,27 +1001,27 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
   const dlAnchor = (key: string, url: string, label: string, title: string) => (
     <a key={key} href={url} target="_blank" rel="noopener noreferrer" download title={title} onClick={stop} style={attachIcon(true)}>{label}</a>
   );
-  // Clip: everyone (moderators included) can OPEN a saved Moderator link straight
-  // from the card; ADDING/EDITING the link moved to the ⚙️ Card-settings popup.
-  if (posterLinkIdx >= 0 && !card.posterOff) activeControls.push(dlAnchor('clip', links[posterLinkIdx].url, '📎', 'Open the Moderator link'));
-  // Folder: the owner of the link (canUser) edits their own; anyone else opens it.
-  // This is a normal-user control, so it stays on the card.
-  if (canUser || myUserLinkIdx >= 0) {
-    if (canUser) activeControls.push(<button key="folder" type="button" title={myUserLinkIdx >= 0 ? 'Edit or delete your link' : 'Add your own link'} style={attachIcon(myUserLinkIdx >= 0)} onClick={eat(folderAction)}>📁</button>);
-    else if (myUserLinkIdx >= 0) activeControls.push(dlAnchor('folder', links[myUserLinkIdx].url, '📁', 'Open the link'));
+  // 📎 Moderator TURN-IN reference — only on OBJECTIVE cards. Everyone can OPEN a
+  // saved one from the card; the moderator opens the editor to add/replace/delete.
+  if (isObjective && posterLinkIdx >= 0 && !card.posterOff) {
+    if (canPoster) activeControls.push(<button key="clip" type="button" title={posterLinkIdx >= 0 ? 'Edit or delete the turn-in reference' : 'Attach a turn-in reference'} style={attachIcon(true)} onClick={eat(clipAction)}>📎</button>);
+    else activeControls.push(dlAnchor('clip', links[posterLinkIdx].url, '📎', 'Open the Moderator turn-in reference'));
+  } else if (canPoster && posterLinkIdx < 0) {
+    activeControls.push(<button key="clip" type="button" title="Attach a turn-in reference (link or document)" style={attachIcon(false)} onClick={eat(clipAction)}>📎</button>);
   }
-  // 📄 "File upload in editor" (docUpload): a direct file-upload icon shown ONLY to
-  // the moderator/admin. Uploading (or replacing) puts a file on the card that
-  // every viewer can download from the green light at the card's foot. A second
-  // 🗑 appears once a file is present so the moderator can clear it.
-  if (ctx.canEdit && ctx.docUpload && !card.posterOff) {
+  // 📁 User TURN-IN upload — only on OBJECTIVE cards. The owner of the upload edits
+  // their own; anyone else opens it.
+  if (canUser || (isObjective && myUserLinkIdx >= 0)) {
+    if (canUser) activeControls.push(<button key="folder" type="button" title={myUserLinkIdx >= 0 ? 'Edit or delete your turn-in' : 'Turn in your own file or link'} style={attachIcon(myUserLinkIdx >= 0)} onClick={eat(folderAction)}>📁</button>);
+    else if (myUserLinkIdx >= 0) activeControls.push(dlAnchor('folder', links[myUserLinkIdx].url, '📁', 'Open the turn-in'));
+  }
+  // 📄 REFERENCE materials (docUpload) — on every card EXCEPT the 🔵 prompt card.
+  // Moderator-only icon that opens the editor to add a link OR a document (many
+  // per card). Viewers never see this icon — only the green reference pills below.
+  if (ctx.canEdit && ctx.docUpload && !isPrompt) {
     activeControls.push(
-      <button key="docup" type="button" disabled={attachBusy}
-        title={posterLinkIdx >= 0 ? 'Replace the uploaded file' : 'Upload a file for this card — everyone can download it'}
-        style={attachIcon(posterLinkIdx >= 0)} onClick={eat(docFileUpload)}>{attachBusy ? '⏳' : '📄'}</button>
-    );
-    if (posterLinkIdx >= 0) activeControls.push(
-      <button key="docdel" type="button" title="Remove the uploaded file" style={iconBtn} onClick={eat(removeDocFile)}>🗑</button>
+      <button key="ref" type="button" title="Add reference material — a link or document for further reading (everyone can open it)"
+        style={attachIcon(refLinks.length > 0)} onClick={eat(openRef)}>📄</button>
     );
   }
   // 🤖 AI-question editing moved to the ⚙️ popup; these save/clear handlers back it.
@@ -1184,16 +1178,16 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
   const curSlotUrl = hasSlot ? links[slotIdx()].url : '';
   const attachForm = attaching ? (
     <div className="card alt" style={{ padding: '8px 10px', marginTop: 6, display: 'grid', gap: 6 }} onClick={stop}>
-      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — your own link or document (only you or an admin can remove it)' : '📎 Moderator — a link or document everyone can open'}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6 }}>{attachColor === 'green' ? '📁 User — your own turn-in link or document (only you or an admin can remove it)' : attachColor === 'ref' ? '📄 Reference — a link or document for further reading (everyone can open it; add as many as you like)' : '📎 Moderator — a turn-in reference link or document everyone can open'}</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={linkUrl} placeholder="Paste a link (https://…)" onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }} style={{ flex: '3 1 220px', fontSize: 13 }} />
-        {ctx.docUpload
-          ? <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file from your device">
-              {attachBusy ? 'Uploading…' : '📎 Attach a document'}
-              <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
-            </label>
-          : <button className="btn small ghost" disabled title="File uploads are off for this repository — paste a link instead (a moderator can enable file uploads)">📎 Attach a document</button>}
-        <button className={`btn small ${attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>{hasSlot ? '✓ Replace' : '✓ Submit'}</button>
+        {/* All three slots (📎 turn-in · 📁 user · 📄 reference) take a link OR a
+            document, so the attach-a-document button is always available here. */}
+        <label className="btn small ghost" style={{ cursor: 'pointer' }} title="Attach a document or file from your device">
+          {attachBusy ? 'Uploading…' : '📎 Attach a document'}
+          <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) attachUpload(f); e.currentTarget.value = ''; }} />
+        </label>
+        <button className={`btn small ${attachColor === 'ref' ? 'blue' : attachColor}`} disabled={!linkUrl.trim()} onClick={addLink}>{attachColor === 'ref' ? '✓ Add' : hasSlot ? '✓ Replace' : '✓ Submit'}</button>
         {/* 🔗 Link — a REAL anchor (not window.open, which browsers block for
             uploaded data: files) so it reliably opens/downloads what's saved. */}
         {hasSlot
@@ -1284,17 +1278,22 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
     );
   })() : null;
 
-  // 🟢 The green "file available" light at the foot of the card — shown to EVERYONE
-  // (users included) whenever the "File upload in editor" feature is on and the
-  // moderator has uploaded a file. It's a download link, so any viewer can open it.
-  // Moderators/admins upload/replace it with the 📄 icon above; users only see this.
-  const docLight = (ctx.docUpload && posterLinkIdx >= 0) ? (
-    <a href={links[posterLinkIdx].url} target="_blank" rel="noopener noreferrer" download onClick={stop}
-      title={`Download ${links[posterLinkIdx].label || 'the attached file'}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 6, padding: '3px 10px', borderRadius: 999, border: '1.5px solid #2e9e57', background: 'rgba(46,158,87,0.12)', color: '#1f7a3d', fontSize: 11.5, fontWeight: 700, textDecoration: 'none' }}>
-      <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#2e9e57', boxShadow: '0 0 5px #2e9e57', flex: '0 0 auto' }} />
-      📄 {links[posterLinkIdx].label || 'File available'}
-    </a>
+  // 🟢 REFERENCE pills at the foot of the card — one green download link per 📄
+  // reference material, shown to EVERYONE (users included) for further reading.
+  // The moderator/admin also gets a ✕ on each pill to remove it; users just open.
+  const docLight = (!isPrompt && refLinks.length > 0) ? (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+      {refLinks.map(({ l, i }) => (
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px 3px 10px', borderRadius: 999, border: '1.5px solid #2e9e57', background: 'rgba(46,158,87,0.12)' }}>
+          <a href={l.url} target="_blank" rel="noopener noreferrer" download onClick={stop} title={`Open ${l.label || 'the reference'}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#1f7a3d', fontSize: 11.5, fontWeight: 700, textDecoration: 'none' }}>
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#2e9e57', boxShadow: '0 0 5px #2e9e57', flex: '0 0 auto' }} />
+            📄 {l.label || 'Reference'}
+          </a>
+          {ctx.canEdit && <button type="button" title="Remove this reference" onClick={eat(() => removeLinkAt(i))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, opacity: 0.7, padding: 0, color: '#1f7a3d' }}>✕</button>}
+        </span>
+      ))}
+    </div>
   ) : null;
 
   // A disabled card is greyed + unclickable for viewers; a hidden card (owner/
@@ -1864,6 +1863,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
             : 'This repository is a plain collection — open a card to view its contents.'}
         </div>
       )}
+
+      {/* Dashed rule closing the settings-card + mug row, separating it from the
+          filter / cards section below. */}
+      <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '2px 0 14px' }} />
 
       {/* Body */}
       {editing ? (

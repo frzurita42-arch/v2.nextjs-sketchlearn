@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const slug = String(b.slug || '');
   const cardId = String(b.cardId || '');
   const action = b.action === 'remove' ? 'remove' : 'add';
-  const color: 'blue' | 'green' = b.color === 'green' ? 'green' : 'blue';
+  const color: 'blue' | 'green' | 'ref' = b.color === 'green' ? 'green' : b.color === 'ref' ? 'ref' : 'blue';
   if (!slug || !cardId) return NextResponse.json({ error: 'slug and cardId are required' }, { status: 400 });
 
   const tool = await getToolBySlug(slug);
@@ -46,14 +46,16 @@ export async function POST(req: Request) {
       const links = Array.isArray(c.links) ? [...c.links] : [];
       let removedGreen = false;
       if (action === 'add') {
-        if (color === 'blue' && !isOwnerAdmin) { denied = true; return c; }   // only OP/admin post
+        // POSTER (blue) turn-in reference AND REF (reference materials) are both
+        // moderator-owned — only the OP/admin may add them.
+        if ((color === 'blue' || color === 'ref') && !isOwnerAdmin) { denied = true; return c; }
         let url = String(b.link?.url || '').trim();
         if (!url) return c;
         // A bare domain gets a scheme so it resolves — but NEVER an uploaded file
         // (data: URL) or a site-relative path, or we corrupt it into "https://data:…".
         if (!/^https?:\/\//i.test(url) && !/^data:/i.test(url) && !url.startsWith('/')) url = 'https://' + url;
         const label = String(b.link?.label || 'Link').slice(0, 15) || 'Link';
-        links.push(color === 'green' ? { label, url, color: 'green', by: me } : { label, url, by: me });
+        links.push(color === 'green' ? { label, url, color: 'green', by: me } : color === 'ref' ? { label, url, color: 'ref', by: me } : { label, url, by: me });
         touched = true;
       } else {
         // Remove a specific link (by index) with per-link permission.
