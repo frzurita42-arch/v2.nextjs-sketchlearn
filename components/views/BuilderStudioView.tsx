@@ -695,16 +695,26 @@ export function BuilderStudioView() {
     catch (e: any) { setErr(e?.message || 'Could not generate the repository.'); }
     setBusy(false);
   };
-  // Publish BOTH (a lesson path): the repository first (no nav), then the
-  // presentation (which navigates to the finished tool).
+  // Publish BOTH (a lesson path). Build + publish the PRESENTATION first so we know
+  // its slug, then create the REPOSITORY pre-linked to it as the Study-path tool —
+  // so 🎬 on a 🔵 prompt card opens THIS presentation with the objective's prompt
+  // already preset in the settings. Finally navigate to the finished presentation.
   const generateBoth = async () => {
     if (busy || suggesting) return; setBusy(true); setErr('');
     try {
-      const repoDef: any = assembleDefinition(repoConfig()); repoDef.studioConfig = repoConfig();
-      await API.post('/api/tools', { definition: repoDef, visibility, aiGenerated: false });
       const presAssembled = assembleDefinition(presConfig());
       const built = await API.post('/api/tools/studio-build', { definition: presAssembled, messages, provider }, { retries: 1 });
-      await publishDef(built?.definition || presAssembled, true, presConfig());
+      const presDef: any = built?.definition || presAssembled; presDef.studioConfig = presConfig();
+      const presPub = await API.post('/api/tools', { definition: presDef, visibility, aiGenerated: true });
+      const presSlug = String(presPub?.slug || '');
+      // Create the repository, pre-linked to the presentation we just made.
+      const repoDef: any = assembleDefinition(repoConfig()); repoDef.studioConfig = repoConfig();
+      if (presSlug) { repoDef.repo = repoDef.repo || {}; repoDef.repo.studyToolSlug = presSlug; }
+      await API.post('/api/tools', { definition: repoDef, visibility, aiGenerated: false });
+      // Open the finished presentation.
+      const one = presSlug ? await API.get(`/api/tools?slug=${encodeURIComponent(presSlug)}`) : null;
+      if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
+      app.nav('tools');
     } catch (e: any) { setErr(e?.message || 'Could not generate both.'); }
     setBusy(false);
   };

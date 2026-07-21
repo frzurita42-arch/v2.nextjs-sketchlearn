@@ -1063,11 +1063,12 @@ function RepoCollectionCard({ card, view, ctx, switchToRows, nested, imgSize, un
         onClick={eat(cycleChildSort)}>🔀</button>,
     );
   }
-  // 🎬 Study — on any content card in study mode, jump to a lesson run seeded from
-  // this card's prompt/text + unit topic coverage.
-  if (ctx.studyMode && card.kind !== 'section' && (isPromptCard(card) || !!String(card.text || '').trim() || !!String(card.title || '').trim())) activeControls.push(
-    <button key="study" type="button" title="Generate slides from this card: creates a study tool if needed, then opens a presentation seeded by this card's topics."
-      style={{ ...iconBtn, fontSize: 16 }} onClick={eat(() => ctx.openStudy(promptTextOf(card), card))}>🎬</button>,
+  // 🎬 Study — on the 🔵 PROMPT card in study mode. Opens the repo's slide tool with
+  // this objective's prompt PRESET in the settings (topic + context), WITHOUT auto-
+  // generating — the learner sets level/tone, then clicks Generate slides there.
+  if (ctx.studyMode && isPrompt) activeControls.push(
+    <button key="study" type="button" title="Study this objective: opens the slide tool with this prompt preset in the settings — set the level & tone, then generate the slides."
+      style={{ ...iconBtn, fontSize: 16 }} onClick={eat(() => ctx.openStudy(promptTextOf(card), card, { autoGenerate: false }))}>🎬</button>,
   );
 
   // ── ⚙️ Card settings — ALL owner/moderator controls for this card, gathered in

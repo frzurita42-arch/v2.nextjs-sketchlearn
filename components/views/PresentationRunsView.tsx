@@ -5,7 +5,7 @@
  * working column. The presentation-specific tool — the "Make a slide presentation"
  * settings form — lives behind the ⚙️ gear in the filter row (and the CTA button),
  * opening as a popup. This is what makes it different from the Slides gallery. */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { API } from '@/lib/api';
 import { appState, LEVELS, TONES } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
@@ -126,6 +126,26 @@ export function PresentationRunsView() {
     // use, a chosen slide template (ordered components), and a free prompt.
     domain: 'General', toolTypes: ['text', 'mcq'], template: '', prompt: '',
   });
+  // Consume a study-path "slide seed" once: a repo's 🎬 prompt card prefills the
+  // create form (topic + the prompt as free instructions) so the moderator/learner
+  // just sets level & tone, then clicks Generate. We do NOT auto-generate.
+  const seedDone = useRef(false);
+  useEffect(() => {
+    if (seedDone.current) return;
+    const seed = appState.slideSeed;
+    if (!seed) return;
+    seedDone.current = true; appState.slideSeed = null;
+    const topic = String(seed.topic || '').trim();
+    const customInstructions = String(seed.customInstructions || '').trim();
+    if (!topic && !seed.slides && !customInstructions) return;
+    setForm((s) => ({
+      ...s,
+      ...(topic ? { topic } : {}),
+      ...(seed.slides ? { slides: seed.slides } : {}),
+      ...(customInstructions || topic ? { prompt: [topic, customInstructions].filter(Boolean).join('\n\n'), custom: [topic, customInstructions].filter(Boolean).join('\n\n') } : {}),
+    }));
+    setWizardStep(0);
+  }, []);
   const cardSize = useCardSize('presrun');
   const imgMode = useImgSize('presrun');
   const layout = galleryLayout(cardSize);
