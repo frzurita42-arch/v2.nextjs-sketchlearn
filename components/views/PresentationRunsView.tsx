@@ -20,6 +20,7 @@ import { avatarFor } from '@/components/social/AuthorBar';
 import { CardShell } from '@/components/ui/CardShell';
 import { PageHeaderBar } from '@/components/ui/PageHeaderBar';
 import { StorageModeBadge } from '@/components/ui/StorageModeBadge';
+import { RepoChatComposer } from '@/components/ui/RepoChatComposer';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
@@ -712,6 +713,13 @@ export function PresentationRunsView() {
     <div style={{ height: '100%', overflowY: 'auto' }}>
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey="presrun" title={pageTitle} subtitle={pageSubtitle} />
+        {/* Create-a-slide-activity chat composer directly below the title (public
+            gallery only — a specific tool's page has its own create card), closed
+            off by a dotted line, matching the Slides/Repos galleries. */}
+        {!selectedTool && (<>
+          <RepoChatComposer variant="presentation" />
+          <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '14px 0' }} />
+        </>)}
         <StorageModeBadge />
 
         {/* The owner banner + share/QR and the create card belong to a SPECIFIC

@@ -17,9 +17,9 @@ import { TITLE_MIN, TITLE_MAX, useHeaderSize, setPageTitleSize, setPageSubSize, 
 
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: 0, display: 'block' };
 const sectionRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '14px 0 0' };
-// A dashed dark rule matching the repo settings-card closing line, so the two
-// separators on a repo page look the same. Opted into via `rule="dashed"`.
-const dashedRule: React.CSSProperties = { border: 'none', borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '14px 0 0' };
+// A bold, dark DOTTED rule matching the repo page's other separators, so every
+// line on a repo page is the same thick dotted line. Opted into via `rule="dashed"`.
+const dashedRule: React.CSSProperties = { border: 'none', borderTop: '2px dotted var(--ink)', opacity: 0.4, margin: '14px 0 0' };
 
 export function PageHeaderBar({ pageKey, title, subtitle, global = false, rule = 'dotted' }: { pageKey?: string; title: React.ReactNode; subtitle?: React.ReactNode; global?: boolean; rule?: 'dotted' | 'dashed' }) {
   const app = useApp();

@@ -1889,7 +1889,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
       {/* Dashed rule closing the settings-card + mug row, separating it from the
           filter / cards section below. */}
-      <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '2px 0 14px' }} />
+      <div style={{ borderTop: '2px dotted var(--ink)', opacity: 0.4, margin: '2px 0 14px' }} />
 
       {/* Body */}
       {editing ? (
@@ -1968,7 +1968,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
             </div>
             {/* Closing dashed rule at the foot of the card section, below the
                 Read more / Read less controls. */}
-            <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.4, margin: '12px 0 0' }} />
+            <div style={{ borderTop: '2px dotted var(--ink)', opacity: 0.4, margin: '12px 0 0' }} />
           </>
         );
       })()}

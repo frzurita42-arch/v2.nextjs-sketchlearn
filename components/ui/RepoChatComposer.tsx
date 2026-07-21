@@ -22,12 +22,18 @@ const circleBtn: React.CSSProperties = {
 
 type DocItem = { name: string; text?: string; dataUrl?: string };
 
-export function RepoChatComposer() {
+export function RepoChatComposer({ variant = 'repository' }: { variant?: 'repository' | 'presentation' }) {
   const app = useApp();
+  const isRepo = variant === 'repository';
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<DocItem[]>([]);   // name + READ content
-  const [lessonPath, setLessonPath] = useState(false);   // default OFF
+  const [lessonPath, setLessonPath] = useState(false);   // default OFF (repo only)
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const heading = isRepo ? '✨ Create a repo' : '✨ Create a slide activity';
+  const placeholder = isRepo
+    ? 'Describe the repository you want to build — its sections, cards, links and access settings…'
+    : 'Describe the slide activity you want to build — its topic, level, tone and how many slides…';
+  const hint = isRepo ? 'Chat to generate a repository with its settings' : 'Chat to generate a slide presentation';
 
   // Read each attached file's CONTENT (text inline, PDF/binary as a data URL) so the
   // AI actually builds FROM the document — not just from its file name.
@@ -49,21 +55,22 @@ export function RepoChatComposer() {
     const prompt = text.trim();
     if (!prompt) return;
     if (!app.user) { app.requireLogin(); return; }
-    const note = `\n\n[Repo settings] Type: ${lessonPath ? 'Learning Path' : 'Normal Repo'}${attachments.length ? ` · Attachments: ${attachments.map((a) => a.name).join(', ')}` : ''}`;
-    const seedText = prompt + note;
     const hasDoc = attachments.length > 0;
-    // The AI decides the number of units from the prompt itself (no Units control).
-    // Auto-build when Lesson Path is on OR a document is attached (attaching a file is
-    // an explicit "build from this" intent); otherwise open an empty builder. Either
-    // way the attached documents' CONTENT is carried through so the AI builds FROM them.
+    const what = isRepo ? 'repository' : 'slide presentation';
+    const note = `\n\n[${isRepo ? 'Repo' : 'Presentation'} settings] ${isRepo ? `Type: ${lessonPath ? 'Learning Path' : 'Normal Repo'}` : 'Type: Slide activity'}${attachments.length ? ` · Attachments: ${attachments.map((a) => a.name).join(', ')}` : ''}`;
+    const seedText = prompt + note;
+    // The AI decides the details from the prompt itself. Auto-build when a document
+    // is attached (or, for repos, when Lesson Path is on) — otherwise open the
+    // builder with the prompt. The attached documents' CONTENT is carried through.
     (appState as any).builderSeed = {
-      artifact: 'repository',
+      artifact: isRepo ? 'repository' : 'presentation',
       sourcePrompt: seedText,
-      context: `${prompt}${hasDoc ? ' Base the repository strictly on the attached document(s).' : ''}${lessonPath ? ' Structure it as a learning path.' : ''}`,
+      context: `${prompt}${hasDoc ? ` Base the ${what} strictly on the attached document(s).` : ''}${isRepo && lessonPath ? ' Structure it as a learning path.' : ''}`,
       subject: prompt.slice(0, 120),
+      title: prompt.slice(0, 120),
       docs: attachments.map((a) => ({ name: a.name, text: a.text, dataUrl: a.dataUrl })),
-      autoSuggest: lessonPath || hasDoc,
-      lessonPath,   // when true, also pre-build the presentation (editable slides)
+      autoSuggest: (isRepo && lessonPath) || hasDoc,
+      ...(isRepo ? { lessonPath } : {}),   // repo only: also pre-build the presentation
     };
     app.nav('toolbuilder');
   };
@@ -77,7 +84,7 @@ export function RepoChatComposer() {
   return (
     <div style={{ margin: '2px 0 16px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.55, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 6px' }}>
-        ✨ Create a repo
+        {heading}
       </div>
 
       <div style={{
@@ -102,7 +109,7 @@ export function RepoChatComposer() {
         {/* The prompt — a real text box, borderless so it blends into the dashed card. */}
         <textarea value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); generate(); } }}
-          placeholder="Describe the repository you want to build — its sections, cards, links and access settings…"
+          placeholder={placeholder}
           rows={2}
           style={{ border: 'none', background: 'transparent', boxShadow: 'none', outline: 'none', resize: 'vertical',
             minHeight: 44, fontSize: 15, lineHeight: 1.35, padding: 0, width: '100%', fontFamily: 'inherit' }} />
@@ -117,21 +124,23 @@ export function RepoChatComposer() {
             onChange={(e) => { onFiles(e.target.files); if (e.currentTarget) e.currentTarget.value = ''; }} />
           <button type="button" title="Attach files" aria-label="Attach files" onClick={() => fileRef.current?.click()}
             style={{ ...circleBtn, width: 32, height: 32, color: 'var(--ink,#2d2a26)' }}>＋</button>
-          <span style={{ fontSize: 12, opacity: 0.5 }}>Chat to generate a repository with its settings</span>
-          <button type="button" title="Generate the editable repo" aria-label="Send" onClick={generate}
+          <span style={{ fontSize: 12, opacity: 0.5 }}>{hint}</span>
+          <button type="button" title={isRepo ? 'Generate the editable repo' : 'Generate the editable slide activity'} aria-label="Send" onClick={generate}
             style={{ ...circleBtn, marginLeft: 'auto', background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
         </div>
       </div>
 
       {/* Option row BELOW the chat, indented a tab from the left — the Lesson Path
-          toggle (off by default; the AI decides the number of units from the prompt). */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingLeft: 22, flexWrap: 'wrap' }}>
-        <button type="button" aria-pressed={lessonPath} onClick={() => setLessonPath((v) => !v)}
-          title={lessonPath ? 'Lesson Path is on — pre-builds the repo AND its presentation; 🔵 prompt cards generate lessons' : 'Lesson Path is off — opens an empty builder with your prompt; generate the repo yourself'}
-          style={pill(lessonPath)}>
-          🎬 Lesson Path
-        </button>
-      </div>
+          toggle (repo only; off by default; the AI decides the number of units). */}
+      {isRepo && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingLeft: 22, flexWrap: 'wrap' }}>
+          <button type="button" aria-pressed={lessonPath} onClick={() => setLessonPath((v) => !v)}
+            title={lessonPath ? 'Lesson Path is on — pre-builds the repo AND its presentation; 🔵 prompt cards generate lessons' : 'Lesson Path is off — opens an empty builder with your prompt; generate the repo yourself'}
+            style={pill(lessonPath)}>
+            🎬 Lesson Path
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -230,15 +230,14 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
       <div style={{ maxWidth: 880, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', padding: '18px 20px 40px', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
         <PageHeaderBar pageKey={pageKey} title={title} subtitle={`${subtitle}${tools.length ? ` — ${tools.length} total` : ''}.`} />
 
-        {/* Repos gallery only: a display-only chat composer (the future "create a
-            repository from a description" interface). Sits directly BELOW the title
-            and ABOVE the DB-mode badge. Not wired up yet — presentation only. */}
-        {kind === 'repository' && <RepoChatComposer />}
-        {/* Dotted separators between the repo gallery's sections: chat/Lesson-Path ┄
-            DB mode ┄ filters ┄ gallery. */}
-        {kind === 'repository' && <hr style={dottedRule} />}
+        {/* A "create from a description" chat composer directly BELOW the title, on
+            BOTH galleries — a repo composer on Repos, a slide-activity composer on
+            Slides — closed off by a dotted line below it. */}
+        <RepoChatComposer variant={kind === 'repository' ? 'repository' : 'presentation'} />
+        <hr style={dottedRule} />
 
         <StorageModeBadge />
+        {kind === 'repository' && <hr style={dottedRule} />}
         {kind === 'repository' && <hr style={dottedRule} />}
 
         {/* Search + favorites/mine filters. The optional topSlot (e.g. the slide
