@@ -1325,8 +1325,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const [approach, setApproach] = useState<'existing' | 'create' | 'ai'>('existing');
   // The ⚙️ repo-controls popup (owner/moderator only). All the feature toggles that
   // used to sprawl across the toolbar now live in this guided wizard modal.
-  const [controlsOpen, setControlsOpen] = useState(false);
-  const [controlsStep, setControlsStep] = useState(0);   // page in the settings wizard card
+  const [controlsStep, setControlsStep] = useState(0);   // page in the inline settings wizard card
   // Fields for a newly created slide tool.
   const [ccSubject, setCcSubject] = useState('');
   const [ccLevel, setCcLevel] = useState('Beginner');
@@ -1719,85 +1718,93 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           one-line hint. */}
       {canEdit ? (
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start', margin: '0 0 12px' }}>
-          <div style={{ flex: '1 1 320px', minWidth: 300 }}>
-            <div className="card alt" style={{ padding: '14px 16px', borderStyle: 'dashed' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                <h4 style={{ margin: 0 }}>🎬 Create a lesson from this repo</h4>
-                <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.65 }}>Cards ready: {studyCardCount}</span>
-              </div>
-              {(() => {
-                const selName = studyToolSlug.trim() ? ((studyToolList.find((t) => t.slug === studyToolSlug)?.title) || studyToolSlug) : '';
-                const fld = { fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 } as const;
-                const fieldRow = { display: 'flex', gap: 8, flexWrap: 'wrap' as const };
-                const Opt = ({ icon, title, sub, active, onClick }: { icon: string; title: string; sub: string; active: boolean; onClick: () => void }) => (
-                  <button type="button" onClick={onClick}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '8px 11px', borderRadius: 10, border: `1.5px solid ${active ? 'var(--accent,#2d6cdf)' : 'var(--ink)'}`, background: active ? 'rgba(45,108,223,0.08)' : 'rgba(0,0,0,0.02)', cursor: 'pointer' }}>
-                    <span style={{ fontSize: 20, flex: '0 0 auto' }}>{icon}</span>
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{title}</span>
-                      <span style={{ display: 'block', fontSize: 11, opacity: 0.6 }}>{sub}</span>
-                    </span>
-                  </button>
-                );
-                const steps: WizardStep[] = [
-                  { key: 'how', title: 'How to build it', render: () => (
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      <Opt icon="🔍" title="Use an existing slide tool" sub={selName ? `Selected: ${selName}` : 'Pick one of your presentations'} active={approach === 'existing'} onClick={() => setApproach('existing')} />
-                      <Opt icon="✨" title="Create a new slide tool" sub={`Build a generator with ${SLIDE_ACTIVITIES.length} activities`} active={approach === 'create'} onClick={() => setApproach('create')} />
-                      <Opt icon="🤖" title="Ask AI to build it" sub="Describe it and let the AI assemble it" active={approach === 'ai'} onClick={() => setApproach('ai')} />
+          {/* The repo-settings card, shown INLINE here (it used to open from a ⚙️
+              gear popup in the filter row). Same fixed-dimension SetupWizardCard. */}
+          <div style={{ flex: `0 1 ${SETUP_CARD_WIDTH}px`, width: '100%', minWidth: 300, maxWidth: SETUP_CARD_WIDTH, boxSizing: 'border-box' }}>
+            {(() => {
+              const Row = ({ icon, label, hint, on, onClick }: { icon: string; label: string; hint?: string; on: boolean; onClick: () => void }) => (
+                <button type="button" onClick={onClick} title={hint}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '8px 11px', borderRadius: 10, border: '1.5px solid var(--ink)', background: 'rgba(0,0,0,0.02)', cursor: 'pointer' }}>
+                  <span style={{ fontSize: 18, flex: '0 0 auto' }}>{icon}</span>
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{label}</span>
+                    {hint && <span style={{ display: 'block', fontSize: 11, opacity: 0.55 }}>{hint}</span>}
+                  </span>
+                  <span style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 999, border: '1.5px solid var(--ink)', background: on ? 'var(--accent,#2d6cdf)' : 'transparent', color: on ? '#fff' : 'inherit' }}>{on ? 'ON' : 'OFF'}</span>
+                </button>
+              );
+              const cardsContent = (
+                <div style={{ width: '100%', display: 'grid', gap: 8, alignContent: 'start' }}>
+                  <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>
+                  <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
+                  {cards.some((c) => (c.children || []).length > 0) && (
+                    <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'} onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
+                  )}
+                </div>
+              );
+              const featuresContent = (
+                <div style={{ width: '100%', display: 'grid', gap: 8, alignContent: 'start' }}>
+                  <Row icon="🏷️" label="Assignment status" hint="Show a status cycle on every card" on={assignShown} onClick={() => saveAssign(!assignShown)} />
+                  <Row icon="✅" label="Emoji approval" hint="One-tap status emoji per card" on={emojiApprove} onClick={() => saveEmojiApprove(!emojiApprove)} />
+                  <Row icon="🎬" label="Study path" hint="🔵 cards get a lesson-generate button" on={studyMode} onClick={() => saveStudyMode(!studyMode)} />
+                  <Row icon="📎" label="Moderator upload" hint="Owner/mod can attach a file to any card" on={posterUpload} onClick={() => saveUploads(!posterUpload, userUpload)} />
+                  <Row icon="📁" label="User upload" hint="Users can attach their own file per card" on={userUpload} onClick={() => saveUploads(posterUpload, !userUpload)} />
+                  <Row icon="🤖" label="AI question" hint="Each card gets an AI prompt + answer" on={aiShown} onClick={() => setAiShown((v) => !v)} />
+                  <Row icon="🖼️" label="Card picture" hint="Generate an AI picture per card" on={imageGen} onClick={() => saveImageGen(!imageGen)} />
+                  <Row icon="📄" label="File upload in editor" hint="Enable the attach-a-document button" on={docUpload} onClick={() => saveDocUpload(!docUpload)} />
+                  <Row icon="🕒" label="Show dates" hint="Show each card’s created date/time" on={showDates} onClick={() => saveShowDates(!showDates)} />
+                </div>
+              );
+              const accessContent = (
+                <div style={{ width: '100%', display: 'grid', gap: 10, alignContent: 'start' }}>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>🎬 Study-path slide tool</span>
+                    <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={{ fontSize: 12 }}>
+                      <option value="">— none picked —</option>
+                      {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
+                    </select>
+                  </label>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
+                      {authorizedUsers.map((u) => (
+                        <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
+                          @{u}
+                          <button className="btn small ghost" style={{ padding: '0 5px' }} title="Remove" onClick={() => saveAuthorized(authorizedUsers.filter((x) => x !== u))}>✕</button>
+                        </span>
+                      ))}
                     </div>
-                  ) },
-                  { key: 'cfg', title: approach === 'existing' ? 'Pick a presentation' : approach === 'create' ? 'New tool settings' : 'Build with AI', render: () => (
-                    approach === 'existing' ? (
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        <label style={{ display: 'grid', gap: 4 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700 }}>🔍 Presentation</span>
-                          <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={{ fontSize: 12 }}>
-                            <option value="">— pick a presentation —</option>
-                            {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
-                          </select>
-                        </label>
-                        {studyToolList.length === 0 && <span style={{ fontSize: 11, opacity: 0.6 }}>No presentations yet — go back and create one.</span>}
-                      </div>
-                    ) : approach === 'create' ? (
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        <label style={{ display: 'grid', gap: 3 }}><span style={{ fontSize: 12, fontWeight: 700 }}>🎯 Subject / focus</span>
-                          <input type="text" value={ccSubject} onChange={(e) => setCcSubject(e.target.value)} placeholder={def?.title || 'e.g. Cybersecurity foundations'} style={{ fontSize: 12 }} />
-                        </label>
-                        <div style={fieldRow}>
-                          <label style={fld}>🎚️ Difficulty
-                            <select value={ccLevel} onChange={(e) => setCcLevel(e.target.value)} style={{ fontSize: 12 }}>{STUDY_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
-                          </label>
-                          <label style={fld}>📄 Slides
-                            <input type="number" min={3} max={15} value={ccSlides} onChange={(e) => setCcSlides(Math.max(3, Math.min(15, parseInt(e.target.value, 10) || 8)))} style={{ fontSize: 12, width: 52 }} />
-                          </label>
-                        </div>
-                        <div style={fieldRow}>
-                          <label style={fld}>📏 Length
-                            <select value={ccLength} onChange={(e) => setCcLength(e.target.value as any)} style={{ fontSize: 12 }}>{STUDY_LENGTHS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select>
-                          </label>
-                          <label style={fld}>🎭 Tone
-                            <select value={ccTone} onChange={(e) => setCcTone(e.target.value)} style={{ fontSize: 12 }}><option value="">Default</option>{TONES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-                          </label>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: 12, opacity: 0.7 }}>Opens the tool builder with this repo as context — describe the activities you want and the AI assembles the tool.</span>
-                      </div>
-                    )
-                  ) },
-                ];
-                const finalActions = approach === 'existing'
-                  ? <button className="btn small blue" disabled={!studyToolSlug.trim()} onClick={() => openStudy('')}>🎬 Open it</button>
-                  : approach === 'create'
-                  ? <button className="btn small green" disabled={creatingTool} onClick={() => { void createStudyTool(); }}>{creatingTool ? 'Creating…' : '✨ Create the slide tool'}</button>
-                  : <button className="btn small blue" onClick={openAiBuilder}>🤖 Build the tool with AI</button>;
-                return <StepWizard steps={steps} finalActions={finalActions} bodyMinHeight={148} actionsJustify="flex-end" />;
-              })()}
-            </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {knownUsers.filter((u) => !authorizedUsers.includes(u)).length > 0 && (
+                        <select value="" onChange={(e) => { const v = e.target.value; if (v) saveAuthorized([...authorizedUsers, v]); e.currentTarget.selectedIndex = 0; }} style={{ fontSize: 12 }} title="Pick a user to authorize">
+                          <option value="">＋ Add a user…</option>
+                          {knownUsers.filter((u) => !authorizedUsers.includes(u)).map((u) => <option key={u} value={u}>@{u}</option>)}
+                        </select>
+                      )}
+                      <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username" list="repo-known-users"
+                        onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
+                        style={{ fontSize: 12, width: 130 }} />
+                      <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
+                      <button className="btn small blue" onClick={() => { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); }}>Add</button>
+                    </div>
+                  </div>
+                </div>
+              );
+              const goN = () => setControlsStep((s) => Math.min(2, s + 1));
+              const goB = () => setControlsStep((s) => Math.max(0, s - 1));
+              const steps: WizardStep[] = [
+                { key: 'cards', title: 'Cards & order', render: () => <WizardGridTemplate tall top={cardsContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'access', title: 'Access & study tool', render: () => <WizardGridTemplate tall top={accessContent} onBack={goB} backDisabled={controlsStep === 0} /> },
+              ];
+              return (
+                <SetupWizardCard title={<span style={{ fontSize: 15 }}>⚙️ 🗂️ Repo settings</span>}
+                  steps={steps} stepIndex={controlsStep} onStepChange={setControlsStep} />
+              );
+            })()}
           </div>
-          <div style={{ flex: '1 1 0', minWidth: 0, width: '50%', minHeight: 210, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ flex: '1 1 0', minWidth: 0, minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <DonationPrompt mugWidth={200} mugHeight={166} scope="lesson" />
           </div>
         </div>
@@ -1831,8 +1838,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
         {/* The cards section, styled like the top-level Repos gallery: NO section
             title / dashed rule, a BARE "Filters" row (no dashed OutlineBox, no
             "FILTERS & DISPLAY" caption, no item count), and the gallery's LAYOUT +
-            IMAGE size dropdowns (default List + Small) driving the cards. The ⚙️
-            repo-controls gear rides in that filter row via `extra`. */}
+            IMAGE size dropdowns (default List + Small) driving the cards. The repo
+            settings now live INLINE above (no ⚙️ gear here). */}
         <Collection<RepoCard>
           bareFilter hideCount
           sizePageKey={`sl_repo_size_${slug}`}
@@ -1845,10 +1852,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
              below the cards paginates instead (6 cards per click, nested count) */
           maxWidth={900}
           searchPlaceholder="🔍 search cards"
-          extra={canEdit ? (
-            <button className="btn small ghost" title="Repo controls — assignment, uploads, study path, access…" aria-label="Repo controls"
-              onClick={() => setControlsOpen(true)} style={{ fontSize: 16, padding: '0 9px' }}>⚙️</button>
-          ) : undefined}
           favs={myFavs}
           likedByAdmin={(c: RepoCard) => adminFavSet.has(c.id)}
           likedByOwner={(c: RepoCard) => ownerFavSet.has(c.id)}
@@ -1858,108 +1861,6 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           emptyFiltered="No cards match your search."
         />
 
-        {/* ⚙️ Repo controls — a guided wizard popup (owner/moderator only), opened
-            from the gear in the filter row. Same half/half card + mug look as the
-            create card, so the many feature switches read as a settings flow
-            instead of a wall of buttons. */}
-        {controlsOpen && canEdit && (
-          <div onClick={() => setControlsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '4vh 12px' }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 12, flexWrap: 'nowrap', alignItems: 'flex-start', maxWidth: 820, width: '100%', margin: '2vh 0' }}>
-              {/* The SAME fixed-dimension settings card as the builder's repo gear
-                  (photo spot, ✕ on the image corner, paginated Next/Back), plus the mug. */}
-              <div style={{ flex: `0 1 ${SETUP_CARD_WIDTH}px`, width: '100%', minWidth: 320, maxWidth: SETUP_CARD_WIDTH, boxSizing: 'border-box' }}>
-                {(() => {
-                  // A full-width settings row with an ON/OFF pill — the reusable shape
-                  // so every switch reads the same.
-                  const Row = ({ icon, label, hint, on, onClick }: { icon: string; label: string; hint?: string; on: boolean; onClick: () => void }) => (
-                    <button type="button" onClick={onClick} title={hint}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '8px 11px', borderRadius: 10, border: '1.5px solid var(--ink)', background: 'rgba(0,0,0,0.02)', cursor: 'pointer' }}>
-                      <span style={{ fontSize: 18, flex: '0 0 auto' }}>{icon}</span>
-                      <span style={{ minWidth: 0, flex: 1 }}>
-                        <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{label}</span>
-                        {hint && <span style={{ display: 'block', fontSize: 11, opacity: 0.55 }}>{hint}</span>}
-                      </span>
-                      <span style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 999, border: '1.5px solid var(--ink)', background: on ? 'var(--accent,#2d6cdf)' : 'transparent', color: on ? '#fff' : 'inherit' }}>{on ? 'ON' : 'OFF'}</span>
-                    </button>
-                  );
-                  const cardsContent = (
-                    <div style={{ width: '100%', display: 'grid', gap: 8, alignContent: 'start' }}>
-                      <button className="btn small green" title="Add a new top-level card" onClick={addTopCardSaved}>＋ New card</button>
-                      <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
-                      {cards.some((c) => (c.children || []).length > 0) && (
-                        <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'} onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
-                      )}
-                    </div>
-                  );
-                  const featuresContent = (
-                    <div style={{ width: '100%', display: 'grid', gap: 8, alignContent: 'start' }}>
-                      <Row icon="🏷️" label="Assignment status" hint="Show a status cycle on every card" on={assignShown} onClick={() => saveAssign(!assignShown)} />
-                      <Row icon="✅" label="Emoji approval" hint="One-tap status emoji per card" on={emojiApprove} onClick={() => saveEmojiApprove(!emojiApprove)} />
-                      <Row icon="🎬" label="Study path" hint="🔵 cards get a lesson-generate button" on={studyMode} onClick={() => saveStudyMode(!studyMode)} />
-                      <Row icon="📎" label="Moderator upload" hint="Owner/mod can attach a file to any card" on={posterUpload} onClick={() => saveUploads(!posterUpload, userUpload)} />
-                      <Row icon="📁" label="User upload" hint="Users can attach their own file per card" on={userUpload} onClick={() => saveUploads(posterUpload, !userUpload)} />
-                      <Row icon="🤖" label="AI question" hint="Each card gets an AI prompt + answer" on={aiShown} onClick={() => setAiShown((v) => !v)} />
-                      <Row icon="🖼️" label="Card picture" hint="Generate an AI picture per card" on={imageGen} onClick={() => saveImageGen(!imageGen)} />
-                      <Row icon="📄" label="File upload in editor" hint="Enable the attach-a-document button" on={docUpload} onClick={() => saveDocUpload(!docUpload)} />
-                      <Row icon="🕒" label="Show dates" hint="Show each card’s created date/time" on={showDates} onClick={() => saveShowDates(!showDates)} />
-                    </div>
-                  );
-                  const accessContent = (
-                    <div style={{ width: '100%', display: 'grid', gap: 10, alignContent: 'start' }}>
-                      <label style={{ display: 'grid', gap: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>🎬 Study-path slide tool</span>
-                        <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={{ fontSize: 12 }}>
-                          <option value="">— none picked —</option>
-                          {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
-                        </select>
-                      </label>
-                      <div style={{ display: 'grid', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700 }} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                          {authorizedUsers.length === 0 && <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>}
-                          {authorizedUsers.map((u) => (
-                            <span key={u} style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', borderRadius: 999, padding: '2px 4px 2px 9px' }}>
-                              @{u}
-                              <button className="btn small ghost" style={{ padding: '0 5px' }} title="Remove" onClick={() => saveAuthorized(authorizedUsers.filter((x) => x !== u))}>✕</button>
-                            </span>
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                          {knownUsers.filter((u) => !authorizedUsers.includes(u)).length > 0 && (
-                            <select value="" onChange={(e) => { const v = e.target.value; if (v) saveAuthorized([...authorizedUsers, v]); e.currentTarget.selectedIndex = 0; }} style={{ fontSize: 12 }} title="Pick a user to authorize">
-                              <option value="">＋ Add a user…</option>
-                              {knownUsers.filter((u) => !authorizedUsers.includes(u)).map((u) => <option key={u} value={u}>@{u}</option>)}
-                            </select>
-                          )}
-                          <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username" list="repo-known-users"
-                            onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
-                            style={{ fontSize: 12, width: 130 }} />
-                          <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
-                          <button className="btn small blue" onClick={() => { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); }}>Add</button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                  const goN = () => setControlsStep((s) => Math.min(2, s + 1));
-                  const goB = () => setControlsStep((s) => Math.max(0, s - 1));
-                  const doneBtn = <button className="btn small green" style={{ width: 96, height: 40, whiteSpace: 'nowrap' }} onClick={() => setControlsOpen(false)}>✓ Done</button>;
-                  const steps: WizardStep[] = [
-                    { key: 'cards', title: 'Cards & order', render: () => <WizardGridTemplate tall top={cardsContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
-                    { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
-                    { key: 'access', title: 'Access & study tool', render: () => <WizardGridTemplate tall top={accessContent} onBack={goB} backDisabled={controlsStep === 0} rightTop={doneBtn} /> },
-                  ];
-                  return (
-                    <SetupWizardCard title={<span style={{ fontSize: 15 }}>⚙️ 🗂️ Repo settings</span>} onClose={() => setControlsOpen(false)}
-                      steps={steps} stepIndex={controlsStep} onStepChange={setControlsStep} />
-                  );
-                })()}
-              </div>
-              <div style={{ flex: '1 1 0', minWidth: 0, minHeight: SETUP_CARD_GRID_HEIGHT, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <DonationPrompt mugWidth={190} mugHeight={158} scope="lesson" />
-              </div>
-            </div>
-          </div>
-        )}
        </>
       ) : (
         <div style={display === 'grid'
