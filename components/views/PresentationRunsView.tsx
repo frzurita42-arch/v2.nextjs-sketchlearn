@@ -714,38 +714,45 @@ export function PresentationRunsView() {
         <PageHeaderBar pageKey="presrun" title={pageTitle} subtitle={pageSubtitle} />
         <StorageModeBadge />
 
-        {/* Same social banner pattern used on tool pages: owner row + share/QR. */}
-        <div style={{ maxWidth: 820, margin: '0 auto 10px' }}>
-          <div className="card author-bar" style={{ padding: '12px 16px' }}>
-            <div className="author-bar__id">
-              <span aria-hidden style={{ display: 'inline-flex', flex: '0 0 auto', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: av.color, border: '2px solid var(--ink)', fontSize: 20 }}>{av.emoji}</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700 }}>@{owner}</div>
-                <div style={{ fontSize: 12, opacity: 0.65 }}>{bannerSubtitle}</div>
+        {/* The owner banner + share/QR and the create card belong to a SPECIFIC
+            tool's run gallery only. The top-level "Presentation runs" page is the
+            public gallery of every user's playable slides — no single owner made
+            it and there's nothing to create here — so both are hidden there. */}
+        {selectedTool && (
+          <>
+            <div style={{ maxWidth: 820, margin: '0 auto 10px' }}>
+              <div className="card author-bar" style={{ padding: '12px 16px' }}>
+                <div className="author-bar__id">
+                  <span aria-hidden style={{ display: 'inline-flex', flex: '0 0 auto', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: av.color, border: '2px solid var(--ink)', fontSize: 20 }}>{av.emoji}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700 }}>@{owner}</div>
+                    <div style={{ fontSize: 12, opacity: 0.65 }}>{bannerSubtitle}</div>
+                  </div>
+                </div>
+                <div className="author-bar__actions">
+                  <SharePanel shareUrl={shareUrl} title={selectedTool?.title || 'Presentation runs'} label="🔗 Share / QR" />
+                </div>
+              </div>
+              <div style={{ borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 0' }} />
+            </div>
+
+            {/* The create card spans the full page width. */}
+            <div style={{ maxWidth: 820, margin: '14px auto 12px', width: '100%' }}>
+              <div style={{ width: '100%', boxSizing: 'border-box' }}>
+                <SetupWizardCard
+                  title={createTitleNode}
+                  headerRight={<button onClick={() => setSettingsOpen(true)} title="Open full builder settings" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
+                  steps={steps}
+                  resetKey={wizardKey}
+                  stepIndex={wizardStep}
+                  onStepChange={setWizardStep}
+                />
               </div>
             </div>
-            <div className="author-bar__actions">
-              <SharePanel shareUrl={shareUrl} title={selectedTool?.title || 'Presentation runs'} label="🔗 Share / QR" />
-            </div>
-          </div>
-          <div style={{ borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 0' }} />
-        </div>
 
-        {/* The create card spans the full page width. */}
-        <div style={{ maxWidth: 820, margin: '14px auto 12px', width: '100%' }}>
-          <div style={{ width: '100%', boxSizing: 'border-box' }}>
-            <SetupWizardCard
-              title={createTitleNode}
-              headerRight={<button onClick={() => setSettingsOpen(true)} title="Open full builder settings" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
-              steps={steps}
-              resetKey={wizardKey}
-              stepIndex={wizardStep}
-              onStepChange={setWizardStep}
-            />
-          </div>
-        </div>
-
-        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '12px 0 14px' }} />
+            <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '12px 0 14px' }} />
+          </>
+        )}
 
         {/* All/Favorites filter + card-size/image menus. The ⚙️ gear opens the
             full "Make a slide presentation" form as a popup. */}
