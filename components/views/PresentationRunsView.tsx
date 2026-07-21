@@ -482,7 +482,7 @@ export function PresentationRunsView() {
           onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }} onBlur={saveTitle}
           maxLength={70} style={{ fontSize: 15, fontWeight: 700, padding: '2px 6px', border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, minWidth: 0, width: 230 }} />
       ) : (
-        <span title={createLabel} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, maxWidth: 300 }}>{createLabel}</span>
+        <span title={createLabel} style={{ display: 'inline-block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 320, verticalAlign: 'bottom' }}>{createLabel}</span>
       )}
       {isToolOwner && !editingTitle && (
         <button type="button" title="Rename this slide tool" aria-label="Rename this slide tool"
