@@ -1793,11 +1793,23 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           <div style={{ width: '100%', boxSizing: 'border-box' }}>
             {(() => {
               const Row = SettingRow;   // stable module-level component — no remount on toggle
+              // Shared field wrappers so every repo-settings control looks exactly
+              // like a slide-tool field: a title label above a fixed-width control,
+              // laid out in the same 2-column grid at the same positions.
+              const fieldWrap: React.CSSProperties = { width: '100%', margin: 0 };
+              const fieldLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', marginBottom: 4 };
+              const twoColGrid: React.CSSProperties = { width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, alignContent: 'start' };
               const cardsContent = (
-                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8, alignContent: 'start' }}>
-                  <button className={`btn small ${sortMode === 'manual' ? 'ghost' : 'blue'}`} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
+                <div style={twoColGrid}>
+                  <label className="field" style={fieldWrap}>
+                    <span style={fieldLabel}>🔀 Card order</span>
+                    <button className={`btn ${sortMode === 'manual' ? 'ghost' : 'blue'}`} style={FIELD_CONTROL_STYLE} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
+                  </label>
                   {cards.some((c) => (c.children || []).length > 0) && (
-                    <button className="btn small ghost" title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'} onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
+                    <label className="field" style={fieldWrap}>
+                      <span style={fieldLabel}>🗂️ Nested cards</span>
+                      <button className="btn ghost" style={FIELD_CONTROL_STYLE} title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'} onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
+                    </label>
                   )}
                 </div>
               );
@@ -1817,16 +1829,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               const accessContent = (
                 // Same field layout & control size as the slide-tool settings wizard:
                 // a 2-column grid whose inputs share FIELD_CONTROL_STYLE.
-                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, alignContent: 'start' }}>
-                  <label className="field" style={{ width: '100%', margin: 0 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>🎬 Study-path slide tool</span>
+                <div style={twoColGrid}>
+                  <label className="field" style={fieldWrap}>
+                    <span style={fieldLabel}>🎬 Study-path slide tool</span>
                     <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={FIELD_CONTROL_STYLE}>
                       <option value="">— none picked —</option>
                       {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
                     </select>
                   </label>
-                  <label className="field" style={{ width: '100%', margin: 0 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
+                  <label className="field" style={fieldWrap}>
+                    <span style={fieldLabel} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
                     <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username + Enter" list="repo-known-users"
                       onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
                       style={FIELD_CONTROL_STYLE} />
@@ -1847,7 +1859,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               const goN = () => setControlsStep((s) => Math.min(2, s + 1));
               const goB = () => setControlsStep((s) => Math.max(0, s - 1));
               const steps: WizardStep[] = [
-                { key: 'cards', title: 'Cards & order', render: () => <WizardGridTemplate tall top={cardsContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'cards', title: 'Cards & order', render: () => <WizardGridTemplate rowButtons top={cardsContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'access', title: 'Access & study tool', render: () => <WizardGridTemplate rowButtons top={accessContent} onBack={goB} backDisabled={controlsStep === 0} /> },
               ];
