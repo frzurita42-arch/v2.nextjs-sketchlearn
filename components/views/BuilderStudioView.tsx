@@ -197,6 +197,14 @@ const IconTrash = ({ size = 13 }: { size?: number }) => (
     <line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
   </svg>
 );
+// A textarea that GROWS to fit its content instead of scrolling inside itself, so a
+// long-input wizard page shows a SINGLE (outer) scrollbar, never a nested one.
+function GrowTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fit = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } };
+  useEffect(fit, [props.value]);
+  return <textarea ref={ref} {...props} onInput={fit} style={{ ...props.style, overflow: 'hidden', resize: 'none' }} />;
+}
 
 // One repository card in the builder — a compact Name + Link row, a roomier
 // Description, and any nested child cards (the same shape, one layer inward).
@@ -854,7 +862,7 @@ export function BuilderStudioView() {
                   );
                   const promptField = (
                     <label className="field" style={fieldWrap}><span style={labelRow}>Original prompt</span>
-                      <textarea value={dPrompt} placeholder={isRepo ? 'Describe the repository, the topics it should cover, and the structure of the cards…' : 'Describe the lesson / deck this presentation should teach…'} onChange={(e) => setDPrompt(e.target.value)} style={{ ...ctl, minHeight: 150, resize: 'vertical' }} />
+                      <GrowTextarea value={dPrompt} placeholder={isRepo ? 'Describe the repository, the topics it should cover, and the structure of the cards…' : 'Describe the lesson / deck this presentation should teach…'} onChange={(e) => setDPrompt(e.target.value)} style={{ ...ctl, minHeight: 150 }} />
                     </label>
                   );
                   // Grouped, multi-select component picker (the "Add to slide" menu).
@@ -946,13 +954,13 @@ export function BuilderStudioView() {
                   const slidePromptField = (
                     <label className="field" style={fieldWrap}><span style={labelRow}>🎬 Slide-generator prompt</span>
                       <span style={{ fontSize: 10.5, opacity: 0.6, marginBottom: 4, display: 'block' }}>How each lesson’s prompt for the slide tool is written — objectives, topics, and exercises with the components.</span>
-                      <textarea value={dSlidePrompt} onChange={(e) => setDSlidePrompt(e.target.value)} style={{ ...ctl, minHeight: 150, resize: 'vertical' }} maxLength={4000} />
+                      <GrowTextarea value={dSlidePrompt} onChange={(e) => setDSlidePrompt(e.target.value)} style={{ ...ctl, minHeight: 150 }} maxLength={4000} />
                     </label>
                   );
                   const nestPromptField = (
                     <label className="field" style={fieldWrap}><span style={labelRow}>🧱 Lesson nesting</span>
                       <span style={{ fontSize: 10.5, opacity: 0.6, marginBottom: 4, display: 'block' }}>Unit → lesson → slide-build prompt (add a subtopic layer when a lesson splits).</span>
-                      <textarea value={dNestPrompt} onChange={(e) => setDNestPrompt(e.target.value)} style={{ ...ctl, minHeight: 150, resize: 'vertical' }} maxLength={4000} />
+                      <GrowTextarea value={dNestPrompt} onChange={(e) => setDNestPrompt(e.target.value)} style={{ ...ctl, minHeight: 150 }} maxLength={4000} />
                     </label>
                   );
                   const menuField = (
@@ -962,7 +970,7 @@ export function BuilderStudioView() {
                         <button type="button" className={`btn small ${dMenuMode ? 'green' : 'ghost'}`} onClick={() => setDMenuMode((v) => !v)}>{dMenuMode ? 'On' : 'Off'}</button>
                       </div>
                       <span style={{ fontSize: 10.5, opacity: 0.6, marginBottom: 4, display: 'block' }}>When on, each item’s lesson covers origins, ingredients/tools, alternatives, nutrition, skills, future perspectives…</span>
-                      <textarea value={dMenuPrompt} disabled={!dMenuMode} onChange={(e) => setDMenuPrompt(e.target.value)} placeholder="Adaptation for a menu / services repository…" style={{ ...ctl, minHeight: 128, resize: 'vertical', opacity: dMenuMode ? 1 : 0.55 }} maxLength={4000} />
+                      <GrowTextarea value={dMenuPrompt} disabled={!dMenuMode} onChange={(e) => setDMenuPrompt(e.target.value)} placeholder="Adaptation for a menu / services repository…" style={{ ...ctl, minHeight: 128, opacity: dMenuMode ? 1 : 0.55 }} maxLength={4000} />
                     </div>
                   );
                   // Owner controls — the repo-page toggle buttons, pre-set here (persist on publish).
