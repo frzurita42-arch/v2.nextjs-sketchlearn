@@ -396,7 +396,9 @@ export function BuilderStudioView() {
   // PDF or text) plus the goal + any hand-entered cards let the AI propose /
   // extend a plan into the editable card fields below.
   type DocItem = { name: string; text?: string; dataUrl?: string };
-  const [docs, setDocs] = useState<DocItem[]>([]);
+  // Documents attached in the Repos composer arrive on the seed already read — load
+  // them so the auto-build actually generates FROM the document, not just its name.
+  const [docs, setDocs] = useState<DocItem[]>(seed?.docs && seed.docs.length ? (seed.docs as DocItem[]) : []);
   const [suggesting, setSuggesting] = useState(false);
   const [withLinks, setWithLinks] = useState(false);   // "link suggestion" toggle
   // "Next card" mode: when ON, Suggest with AI adds a SINGLE next card that

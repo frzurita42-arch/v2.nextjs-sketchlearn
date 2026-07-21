@@ -20,16 +20,27 @@ const circleBtn: React.CSSProperties = {
   fontSize: 18, lineHeight: 1, cursor: 'pointer', flex: '0 0 auto', padding: 0, background: 'transparent',
 };
 
+type DocItem = { name: string; text?: string; dataUrl?: string };
+
 export function RepoChatComposer() {
   const app = useApp();
   const [text, setText] = useState('');
-  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<DocItem[]>([]);   // name + READ content
   const [lessonPath, setLessonPath] = useState(false);   // default OFF
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const onFiles = (files: FileList | null) => {
+  // Read each attached file's CONTENT (text inline, PDF/binary as a data URL) so the
+  // AI actually builds FROM the document — not just from its file name.
+  const onFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
-    setAttachments((prev) => [...prev, ...Array.from(files).map((f) => f.name)]);
+    for (const f of Array.from(files).slice(0, 6)) {
+      if (f.size > 20_000_000) continue;
+      const item: DocItem = { name: f.name };
+      const isText = /text|json|markdown/.test(f.type) || /\.(txt|md|csv)$/i.test(f.name);
+      if (isText) item.text = await f.text();
+      else item.dataUrl = await new Promise<string>((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.readAsDataURL(f); });
+      setAttachments((prev) => [...prev, item].slice(0, 6));
+    }
   };
 
   // Hand off to the editable repo builder, preset with the typed prompt + a short
@@ -38,17 +49,20 @@ export function RepoChatComposer() {
     const prompt = text.trim();
     if (!prompt) return;
     if (!app.user) { app.requireLogin(); return; }
-    const note = `\n\n[Repo settings] Type: ${lessonPath ? 'Learning Path' : 'Normal Repo'}${attachments.length ? ` · Attachments: ${attachments.join(', ')}` : ''}`;
+    const note = `\n\n[Repo settings] Type: ${lessonPath ? 'Learning Path' : 'Normal Repo'}${attachments.length ? ` · Attachments: ${attachments.map((a) => a.name).join(', ')}` : ''}`;
     const seedText = prompt + note;
+    const hasDoc = attachments.length > 0;
     // The AI decides the number of units from the prompt itself (no Units control).
-    // Lesson Path OFF → open an EMPTY builder with the prompt in the goal box (no
-    // auto-generation). Lesson Path ON → pre-build the repo AND the presentation.
+    // Auto-build when Lesson Path is on OR a document is attached (attaching a file is
+    // an explicit "build from this" intent); otherwise open an empty builder. Either
+    // way the attached documents' CONTENT is carried through so the AI builds FROM them.
     (appState as any).builderSeed = {
       artifact: 'repository',
       sourcePrompt: seedText,
-      context: `${prompt}${lessonPath ? ' Structure it as a learning path.' : ''}`,
+      context: `${prompt}${hasDoc ? ' Base the repository strictly on the attached document(s).' : ''}${lessonPath ? ' Structure it as a learning path.' : ''}`,
       subject: prompt.slice(0, 120),
-      autoSuggest: lessonPath,
+      docs: attachments.map((a) => ({ name: a.name, text: a.text, dataUrl: a.dataUrl })),
+      autoSuggest: lessonPath || hasDoc,
       lessonPath,   // when true, also pre-build the presentation (editable slides)
     };
     app.nav('toolbuilder');
@@ -71,13 +85,13 @@ export function RepoChatComposer() {
         background: 'var(--paper,#fbf7ee)', padding: '12px 14px 10px',
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
-        {/* Attachment chips (file names captured locally — not uploaded yet). */}
+        {/* Attachment chips — the file's CONTENT is read and carried to the builder. */}
         {attachments.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {attachments.map((name, i) => (
-              <span key={`${name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700,
+            {attachments.map((doc, i) => (
+              <span key={`${doc.name}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700,
                 border: '2px solid var(--ink,#2d2a26)', borderRadius: 999, padding: '3px 6px 3px 10px', background: 'rgba(0,0,0,0.04)' }}>
-                📎 {name.length > 26 ? name.slice(0, 25) + '…' : name}
+                📎 {doc.name.length > 26 ? doc.name.slice(0, 25) + '…' : doc.name}
                 <button type="button" title="Remove" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0, opacity: 0.7 }}>✕</button>
               </span>
