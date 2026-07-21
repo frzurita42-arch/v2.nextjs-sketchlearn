@@ -875,6 +875,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const hasSaved = !!(savedDeck?.slides?.length);
   const [wizardKey, setWizardKey] = useState(0);   // bump to reset the settings wizard to step 1
   const [wizardStep, setWizardStep] = useState(0);
+  // Measured width of the create-card wizard, so the fields re-paginate into a
+  // denser grid on a wide (full-width) card and fewer-per-page on a narrow one.
+  const wizardRef = useRef<HTMLDivElement>(null);
+  const [wizardW, setWizardW] = useState(0);
+  useEffect(() => {
+    const el = wizardRef.current; if (!el) return;
+    setWizardW(el.offsetWidth);
+    const ro = new ResizeObserver((entries) => { for (const e of entries) setWizardW(e.contentRect.width); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => { setWizardStep(0); }, [wizardKey]);
   const [deckMsg, setDeckMsg] = useState('');
   const offlineOn = lesson.offlineExport !== false;   // owner/admin can turn it off
@@ -1896,7 +1907,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             via the "✏️ Edit layout & activities" button beside "New topics". */}
 
         {/* The create wizard spans the full page width. */}
-        <div style={{ width: '100%' }}>
+        <div ref={wizardRef} style={{ width: '100%' }}>
         {showGenerate && (
         <div style={{ width: '100%', boxSizing: 'border-box' }}>
           {(() => {
@@ -1904,12 +1915,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             const stepFields = (ids: string[], single?: boolean) => {
               const fs = fieldsFor(ids);
               return fs.length
-                ? <div style={{ width: 240 }}><ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} single={single} /></div>
-                : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>;
+                ? <div style={{ width: '100%' }}><ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} single={single} /></div>
+                : null;
             };
             const goPrev = () => setWizardStep((s) => Math.max(0, s - 1));
-            const goNext = () => setWizardStep((s) => Math.min(7, s + 1));
-            const fieldShell: React.CSSProperties = { width: 240, margin: 0 };
+            const fieldShell: React.CSSProperties = { width: '100%', margin: 0 };
             const controlStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 14px', fontSize: '1.05rem', lineHeight: 1.2 };
             const navSizeStyle: React.CSSProperties = {
               width: 96,
@@ -1999,56 +2009,36 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 {gateMsg && <span style={{ fontSize: 12, color: 'var(--danger,#e4572e)', textAlign: 'center' }}>{gateMsg}</span>}
               </div>
             );
-            const steps: WizardStep[] = [
-              {
-                key: 'basics',
-                title: 'Name & topic',
-                render: () => <WizardGridTemplate top={stepFields(['title'], true)} bottom={stepFields(['topic'], true)} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
-              },
-              {
-                key: 'levels',
-                title: 'Level pair',
-                render: () => {
-                  const hasLevel = !!fieldsFor(['level']).length;
-                  const hasDifficulty = !!fieldsFor(['difficulty']).length;
-                  const top = hasLevel ? stepFields(['level'], true) : stepFields(['difficulty'], true);
-                  const bottom = hasLevel && hasDifficulty
-                    ? stepFields(['difficulty'], true)
-                    : (!hasLevel && hasDifficulty ? stepFields(['level'], true) : <p style={{ fontSize: 13, opacity: 0.7 }}>Nothing to set here — press Next.</p>);
-                  return <WizardGridTemplate top={top} bottom={bottom} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />;
-                },
-              },
-              {
-                key: 'slides-tone',
-                title: 'Slides & tone',
-                render: () => <WizardGridTemplate top={stepFields(['slides'], true)} bottom={stepFields(['tone'], true)} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
-              },
-              {
-                key: 'cat-custom',
-                title: 'Category & custom',
-                render: () => <WizardGridTemplate top={stepFields(['category'], true)} bottom={stepFields(['custom'], true)} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
-              },
-              {
-                key: 'theme-density',
-                title: 'Theme & density',
-                render: () => <WizardGridTemplate top={themeField} bottom={densityField} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
-              },
-              {
-                key: 'image-pair',
-                title: 'Image style & API',
-                render: () => <WizardGridTemplate top={imageStyleField} bottom={imageApiField} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
-              },
-              {
-                key: 'text-voice',
-                title: 'Text API & voice',
-                render: () => <WizardGridTemplate top={textApiField} bottom={voiceField} onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />,
-              },
-              {
-                key: 'tooltips',
-                title: 'Tooltips',
-                render: () => <WizardGridTemplate top={tooltipsField} onBack={goPrev} backDisabled={wizardStep === 0} rightTop={finalActions} />,
-              },
-            ];
+            // Every editable field becomes a CELL — the tool's own settings (title,
+            // topic, level/difficulty, slides, tone, … whatever the schema defines)
+            // followed by the standard theme / image / API / voice / tooltip controls
+            // — then paginate them into pages whose size ADAPTS to the measured card
+            // width: a wide (full-width) card packs 4 per page in a 2-col grid; a
+            // narrow one shows fewer per page and simply adds pages.
+            const cells: React.ReactNode[] = [
+              ...formFields.map((f: any) => stepFields([f.id], true)),
+              themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField,
+            ].filter((c) => c != null);
+            const perPage = wizardW >= 620 ? 4 : wizardW >= 330 ? 2 : 1;
+            const gridCols = perPage >= 2 ? 2 : 1;
+            const pageCount = Math.max(1, Math.ceil(cells.length / perPage));
+            const goNext = () => setWizardStep((s) => Math.min(pageCount - 1, s + 1));
+            const steps: WizardStep[] = Array.from({ length: pageCount }, (_, pi) => {
+              const pageCells = cells.slice(pi * perPage, pi * perPage + perPage);
+              const isLast = pi === pageCount - 1;
+              return {
+                key: `p${pi}`,
+                title: `Settings ${pi + 1} of ${pageCount}`,
+                render: () => (
+                  <WizardGridTemplate tall
+                    top={<div style={{ width: '100%', display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, gap: 12, alignContent: 'start' }}>{pageCells.map((c, i) => <div key={i} style={{ minWidth: 0 }}>{c}</div>)}</div>}
+                    onNext={isLast ? undefined : goNext}
+                    onBack={goPrev}
+                    backDisabled={wizardStep === 0}
+                    rightTop={isLast ? finalActions : undefined} />
+                ),
+              };
+            });
             return (
               <CardShell
                 view="grid"
