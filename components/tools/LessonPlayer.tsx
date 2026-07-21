@@ -1915,7 +1915,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             const stepFields = (ids: string[], single?: boolean) => {
               const fs = fieldsFor(ids);
               return fs.length
-                ? <div style={{ width: '100%' }}><ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} single={single} /></div>
+                ? <div style={{ width: '100%' }}><ToolFields fields={fs} values={form} onChange={(id, v) => setForm(s => ({ ...s, [id]: v }))} onSuggest={suggestField} suggesting={suggestingField} single={single} fill /></div>
                 : null;
             };
             const goPrev = () => setWizardStep((s) => Math.max(0, s - 1));
@@ -2030,7 +2030,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 key: `p${pi}`,
                 title: `Settings ${pi + 1} of ${pageCount}`,
                 render: () => (
-                  <WizardGridTemplate tall
+                  <WizardGridTemplate rowButtons
                     top={<div style={{ width: '100%', display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, gap: 12, alignContent: 'start' }}>{pageCells.map((c, i) => <div key={i} style={{ minWidth: 0 }}>{c}</div>)}</div>}
                     onNext={isLast ? undefined : goNext}
                     onBack={goPrev}

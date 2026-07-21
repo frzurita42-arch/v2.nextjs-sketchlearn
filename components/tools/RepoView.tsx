@@ -1857,7 +1857,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               const steps: WizardStep[] = [
                 { key: 'cards', title: 'Cards & order', render: () => <WizardGridTemplate tall top={cardsContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
-                { key: 'access', title: 'Access & study tool', render: () => <WizardGridTemplate tall top={accessContent} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'access', title: 'Access & study tool', render: () => <WizardGridTemplate rowButtons top={accessContent} onBack={goB} backDisabled={controlsStep === 0} /> },
               ];
               return (
                 <SetupWizardCard title={<span style={{ fontSize: 15 }}>⚙️ 🗂️ Repo settings</span>}
