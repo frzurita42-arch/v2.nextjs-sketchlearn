@@ -124,7 +124,6 @@ export function ChatView() {
   const [freeOnly, setFreeOnly] = useState(false);   // recommend only free (premade) tools
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
-  const [historyTableOpen, setHistoryTableOpen] = useState(false);   // the chat-log table under the composer
   const [historyQuery, setHistoryQuery] = useState('');   // search box over the history table
   // 🎤 dictation (ElevenLabs speech-to-text): append the transcript to the input.
   const { voiceOn, recording, transcribing, toggleMic } = useDictation(
@@ -664,15 +663,17 @@ export function ChatView() {
             )}
           </div>
 
+          {/* Dotted separator between the chat input box and the history table. */}
+          <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 8px', flex: '0 0 auto' }} />
+
           {/* Chat-history log table under the composer: one row per past chat with its
-              date, time, extracted keywords and message count. Click a row to reopen it.
-              Collapsible so it never crowds the conversation above. */}
+              date, time, extracted keywords and message count. Always visible; click a
+              row to reopen that chat. */}
           <div style={{ flex: '0 0 auto', marginBottom: 12 }}>
-            <button type="button" onClick={() => setHistoryTableOpen((v) => !v)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
-              🕓 Chat history ({sessions.length}) <span style={{ fontSize: 11 }}>{historyTableOpen ? '▾' : '▸'}</span>
-            </button>
-            {historyTableOpen && (() => {
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 6px' }}>
+              🕓 Chat history ({sessions.length})
+            </div>
+            {(() => {
               // Filter rows by the search box: match date, time, keywords or any typed text.
               const q = historyQuery.trim().toLowerCase();
               const rows = [...sessions].sort((a, b) => b.ts - a.ts).filter((sn) => {
@@ -690,7 +691,7 @@ export function ChatView() {
                   <input value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)}
                     placeholder="🔍 Search your chats — keyword, date…"
                     style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', fontSize: 12.5, borderRadius: 8, border: '1.5px solid var(--line,#d9cfc0)', background: 'var(--card,#fff8ee)', font: 'inherit', marginBottom: 4 }} />
-                  <div style={{ maxHeight: '24vh', overflowY: 'auto', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 8 }}>
+                  <div style={{ maxHeight: '18vh', overflowY: 'auto', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 8 }}>
                     <table className="sketch tight" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.8rem' }}>
                       <thead>
                         <tr>
