@@ -53,6 +53,17 @@ h3 { font-size: 1.5rem; }
   padding-bottom: 8px;
 }
 
+/* Coach chat: smooth transitions between the centred welcome screen and the active
+   conversation (composer drops to the bottom). Respects reduced-motion. */
+@keyframes sl-welcome-enter { from { opacity: 0; transform: translateY(-10px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes sl-chat-enter { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes sl-msg-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.sl-welcome-enter { animation: sl-welcome-enter .34s cubic-bezier(.22,.61,.36,1) both; }
+.sl-chat-enter { animation: sl-chat-enter .4s cubic-bezier(.22,.61,.36,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .sl-welcome-enter, .sl-chat-enter { animation: none; }
+}
+
 /* ---------- ⚙️ card-settings popup tiles (repo cards) ---------- */
 .ctl-tile {
   display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left;

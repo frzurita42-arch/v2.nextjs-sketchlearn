@@ -8,7 +8,7 @@
  * whichever model made it. You can also attach images to your messages. */
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { API } from '@/lib/api';
-import { appState, initialCoachGreeting } from '@/lib/app-state';
+import { appState } from '@/lib/app-state';
 import { CoachRail } from '@/components/coach/CoachRail';
 import { PromptSettingsModal } from '@/components/coach/PromptSettingsModal';
 import { usePromptSettings, loadPromptSettings, ICON_PX } from '@/lib/prompt-settings';
@@ -109,7 +109,7 @@ export function ChatView() {
   // A brand-new chat starts every time the Coach page loads (the previous one is
   // saved to history as it was typed).
   const [sessionId, setSessionId] = useState<string>(() => newSessionId());
-  const [messages, setMessages] = useState<ChatMsg[]>([initialCoachGreeting as ChatMsg]);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);   // empty → welcome screen; first bubble is the user's
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -125,6 +125,7 @@ export function ChatView() {
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
   const [historyQuery, setHistoryQuery] = useState('');   // search box over the history table
+  const [lessonPath, setLessonPath] = useState(false);   // 🎬 Lesson Path toggle (same as the repos composer)
   // 🎤 dictation (ElevenLabs speech-to-text): append the transcript to the input.
   const { voiceOn, recording, transcribing, toggleMic } = useDictation(
     (t) => setInput((v) => (v ? v.trimEnd() + ' ' : '') + t),
@@ -178,11 +179,10 @@ export function ChatView() {
       setMessages(appState.chat as ChatMsg[]);
       setSessionId(appState.chatSessionId);
     } else {
-      const fresh = [initialCoachGreeting as ChatMsg];
+      const fresh: ChatMsg[] = [];   // start empty: the welcome screen greets; the user sends the first message
       const id = newSessionId();
       setMessages(fresh); setSessionId(id);
       appState.chat = fresh; appState.chatSessionId = id;
-      welcomePages();
     }
     // Signed-in users load their history from the DB; guests use the browser cache.
     if (username) {
@@ -221,11 +221,10 @@ export function ChatView() {
   useEffect(() => { API.get('/api/config').then((c: any) => setYoutubeOn(!!c?.youtubeEnabled)).catch(() => { /* leave off */ }); }, []);
 
   const newChat = () => {
-    const fresh = [initialCoachGreeting as ChatMsg];
+    const fresh: ChatMsg[] = [];   // back to the welcome screen; first bubble will be the user's
     const id = newSessionId();
     setMessages(fresh); setSessionId(id); appState.chat = fresh; appState.chatSessionId = id;
-    setInput(''); setAttachments([]);
-    welcomePages();
+    setInput(''); setAttachments([]); setLessonPath(false);
   };
   const openSession = (s: ChatSession) => {
     setMessages(s.messages); setSessionId(s.id); appState.chat = s.messages; appState.chatSessionId = s.id;
@@ -277,9 +276,29 @@ export function ChatView() {
     setThinking(false);
   };
 
+  // 🎬 Lesson Path: hand the prompt to the repo builder as a structured learning path
+  // (mirrors the "Lesson Path" toggle on the Repos composer) instead of chatting.
+  const startLessonPath = (promptText: string) => {
+    const prompt = promptText.trim();
+    if (!prompt) return;
+    if (!app.user) { app.requireLogin(); return; }
+    (appState as any).builderSeed = {
+      artifact: 'repository',
+      sourcePrompt: `${prompt}\n\n[Repo settings] Type: Learning Path`,
+      context: `${prompt} Structure it as a learning path.`,
+      subject: prompt.slice(0, 120),
+      title: prompt.slice(0, 120),
+      autoSuggest: true,
+      lessonPath: true,
+    };
+    setInput('');
+    app.nav('toolbuilder');
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text && !attachments.length) return;
+    if (lessonPath && text) { startLessonPath(text); return; }
     setInput('');
     const imgs = attachments; setAttachments([]);
     const userMsg: ChatMsg = { role: 'user', content: text || '(shared an image)', ...(imgs.length ? { images: imgs } : {}) };
@@ -507,7 +526,11 @@ export function ChatView() {
             style={{ ...composerCircle, width: 32, height: 32 }}>＋</button>
           <button type="button" title="ChatBot settings — tone, length, sticky-note publicity…" aria-label="Settings" onClick={() => setPromptOpen(true)}
             style={{ ...composerCircle, width: 32, height: 32, fontSize: 15 }}>⚙️</button>
-          <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto' }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : 'Chat to get a recommendation or build a lesson'}</span>
+          <button type="button" aria-label="Lesson Path" aria-pressed={lessonPath} onClick={() => setLessonPath((v) => !v)}
+            title={lessonPath ? 'Lesson Path is ON — your next send builds a structured learning path (repo + presentation)' : 'Lesson Path — turn on to build a structured learning path from your prompt'}
+            style={{ ...composerCircle, width: 32, height: 32, fontSize: 15,
+              ...(lessonPath ? { background: 'var(--green,#7fb069)', color: '#fff', borderColor: 'var(--green,#7fb069)' } : null) }}>🎬</button>
+          <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto' }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : lessonPath ? '🎬 Lesson Path on — send to build a learning path' : 'Chat to get a recommendation or build a lesson'}</span>
           {voiceOn && (
             <button type="button" aria-label="Dictate" aria-pressed={recording} disabled={transcribing} onClick={toggleMic}
               title={recording ? 'Stop & transcribe' : transcribing ? 'Transcribing…' : 'Dictate — speak instead of typing (ElevenLabs)'}
@@ -539,11 +562,11 @@ export function ChatView() {
 
         {!hasUserMsg ? (
           /* WELCOME (Kimi-style): the logo above a centred composer, plus a few quick links. */
-          <div className="chat-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 880, minWidth: 0, height: '100%', overflowY: 'auto', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+          <div className="chat-shell sl-welcome-enter" key="welcome" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 880, minWidth: 0, height: '100%', overflowY: 'auto', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
             <div style={{ width: '100%', maxWidth: 640, margin: 'auto 0' }}>
               <div style={{ textAlign: 'center', marginBottom: 18 }}>
                 <div style={{ fontSize: 46, lineHeight: 1 }}>✏️</div>
-                <div className="scribble-underline" style={{ fontSize: 30, fontWeight: 800, color: 'var(--ink)', marginTop: 2 }}>SketchLearn</div>
+                <div className="scribble-underline" style={{ display: 'inline-block', fontSize: 30, fontWeight: 800, color: 'var(--ink)', marginTop: 2 }}>SketchLearn</div>
                 <div style={{ opacity: 0.6, marginTop: 8, fontSize: 15 }}>Tell me what you want to learn — I&apos;ll steer you to a game to play or a lesson to build.</div>
               </div>
               {composerBox}
@@ -557,7 +580,7 @@ export function ChatView() {
         ) : (
         /* ACTIVE: the conversation with the composer pinned at the bottom of the screen; the
            admin-only history table sits below the fold. Two dashed vertical rules bound it. */
-        <div className="chat-shell" style={{ display: 'block', width: '100%', maxWidth: 880, minWidth: 0, height: '100%', overflowY: 'auto', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+        <div className="chat-shell sl-chat-enter" key="active" style={{ display: 'block', width: '100%', maxWidth: 880, minWidth: 0, height: '100%', overflowY: 'auto', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
           {/* First screen: the conversation + the composer pinned at its bottom. It always
               fills the viewport, so the input box sits at the bottom of the screen. The
               admin-only history table lives BELOW the fold — scroll down to reveal it. */}
