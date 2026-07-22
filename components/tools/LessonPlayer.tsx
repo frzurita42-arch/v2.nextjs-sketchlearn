@@ -2464,6 +2464,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // Only rows for slides ALREADY generated (grows as the lesson moves along) — no
     // wall of empty "not generated yet" rows. One trailing pencil row shows the next
     // slide is still being written, while more remain in the planned deck.
+    // Short origin code — reused in the details row AND on every slide row, tying each
+    // slide back to the repo it came from (or "Direct" for a stand-alone play).
+    const originCode = origin?.repoSlug ? `#${origin.repoRef || '?????'}${origin.lessonIndex != null ? ` · L${origin.lessonIndex + 1}` : ''}` : 'Direct';
     const gen = slidesRef.current;
     const lastIdx = gen.reduce((m: number, s, i) => (s ? i : m), -1);
     const planned = Math.min(MAX_SLIDES, Math.max(lastIdx + 1, total()));
@@ -2473,21 +2476,20 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       if (!d) continue;
       const ans = d.results.map((r) => r.chose).filter(Boolean).join('; ');
       const mark = d.results.length === 0 ? '' : d.results.every((r) => r.correct) ? '✅' : d.results.some((r) => !r.correct) ? '❌' : '—';
-      rowsData.push([String(i + 1), d.title || '—', d.content || '—', (d.support && d.support.length ? d.support.join(', ') : '—'), ans || '— not answered —', mark]);
+      rowsData.push([String(i + 1), originCode, d.title || '—', d.content || '—', (d.support && d.support.length ? d.support.join(', ') : '—'), ans || '— not answered —', mark]);
     }
     if (lastIdx + 1 < planned) {
-      rowsData.push([String(lastIdx + 2), { node: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.7 }}><WritingPencil size={14} /> generating…</span> }, { node: <span style={{ opacity: 0.55 }}>the next slide is being written…</span> }, '', '', '']);
+      rowsData.push([String(lastIdx + 2), originCode, { node: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.7 }}><WritingPencil size={14} /> generating…</span> }, { node: <span style={{ opacity: 0.55 }}>the next slide is being written…</span> }, '', '', '']);
     }
+    const subhead: React.CSSProperties = { fontSize: 12.5, fontWeight: 700, margin: '2px 0 5px', opacity: 0.85 };
     return (
       <div className="card alt" style={{ padding: '12px 14px', marginTop: 12, maxWidth: 900, marginInline: 'auto' }}>
-        <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
-        {/* Run details AS COLUMNS — the slide tool, who, when, elapsed, the origin repo
-            reference (short #code, or "Direct" when generated straight from the tool),
-            level, image style, slide count and score. Long values reveal via 👁. */}
+        <h4 style={{ margin: '0 0 8px' }}>📋 Run record — admin / moderator only</h4>
+        {/* Table 1 — the lesson/run details AS COLUMNS. */}
+        <div style={subhead}>📝 Lesson details</div>
         {(() => {
           const startedTime = startedAt.current ? new Date(startedAt.current).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
           const toolTitle = String(def?.title || lesson.subject || 'Slide tool');
-          const originCode = origin?.repoSlug ? `#${origin.repoRef || '?????'}${origin.lessonIndex != null ? ` · L${origin.lessonIndex + 1}` : ''}` : 'Direct';
           const detailsRow: Cell[] = [
             toolTitle,
             runDetails.student,
@@ -2500,7 +2502,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             `${runDetails.score} (${runDetails.percent}%)`,
           ];
           return (
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 12 }}>
               <PagedTable
                 headers={['Slide tool', 'Student', 'Played', 'Elapsed', 'Repo ref', 'Level', 'Image style', 'Slides', 'Score']}
                 rows={[detailsRow]}
@@ -2509,8 +2511,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             </div>
           );
         })()}
+        {/* Table 2 — one row per slide, each tagged with the same Repo ref. */}
+        <div style={subhead}>🎞️ Slides — content &amp; answers</div>
         <PagedTable
-          headers={['#', 'Slide title', 'What it taught', 'Shows', 'Student answer', '✓']}
+          headers={['#', 'Repo ref', 'Slide title', 'What it taught', 'Shows', 'Student answer', '✓']}
           rows={rowsData}
           empty="No slides yet."
           rowsPerPage={8}
