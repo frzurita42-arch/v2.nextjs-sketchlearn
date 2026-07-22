@@ -60,7 +60,6 @@ import { TTS_VOICES } from '@/lib/tts';
 import { type FilterKey } from '@/components/ui/Collection';
 import { CardShell, iconBtn, overlayIcon, delIcon } from '@/components/ui/CardShell';
 import { SharePanel } from '@/components/tools/SharePanel';
-import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
@@ -894,6 +893,46 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // just see the example centered; a manager sees a small "show" control.
   const isAdmin = API.user?.role === 'admin';
   const canManageDonation = canEdit || isAdmin;   // owner (canEdit) or admin
+
+  // ── Study-path repo association ─────────────────────────────────────────────
+  // A repository "adopts" a slide tool by pointing its studyToolSlug at that tool's
+  // slug (set in the repo's own settings). Here we surface the SAME link from the
+  // slide-tool side: find the repo that points at THIS tool (to offer an "open repo"
+  // button) and let the owner/admin pick/change which repo it belongs to.
+  const [repoList, setRepoList] = useState<any[]>([]);
+  const loadRepoLinks = useCallback(() => {
+    API.get('/api/tools?archetype=repo&limit=200').then((r: any) => setRepoList(Array.isArray(r?.tools) ? r.tools : [])).catch(() => { /* ignore */ });
+  }, []);
+  useEffect(() => { loadRepoLinks(); }, [loadRepoLinks]);
+  const linkedRepo = repoList.find((t: any) => String(t?.definition?.repo?.studyToolSlug || '') === slug) || null;
+  const editableRepos = repoList.filter((t: any) => eff.isAdmin || t.owner === app.user?.username);
+  const openRepo = async (repoSlug: string) => {
+    if (!repoSlug) return;
+    try { const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(repoSlug)}`); appState.activeTool = r?.tool || { slug: repoSlug }; }
+    catch { appState.activeTool = { slug: repoSlug }; }
+    app.nav('tool');
+  };
+  // Point a repo's studyToolSlug at this tool (or clear it). Reuses the guarded
+  // /api/tools/repo save with the repo's FULL body so nothing else is lost, and
+  // unlinks whichever repo previously pointed here so the association stays 1:1.
+  const [linking, setLinking] = useState(false);
+  const setRepoStudyTool = async (repoSlug: string, value: string) => {
+    const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(repoSlug)}`);
+    const repo = r?.tool?.definition?.repo;
+    if (!repo) throw new Error('Could not load that repository.');
+    await API.post('/api/tools/repo', { slug: repoSlug, repo: { ...repo, studyToolSlug: value } });
+  };
+  const linkStudyRepo = async (repoSlug: string) => {
+    setLinking(true);
+    try {
+      const prev = linkedRepo?.slug || '';
+      if (prev && prev !== repoSlug) await setRepoStudyTool(prev, '');   // unlink the old repo
+      if (repoSlug) await setRepoStudyTool(repoSlug, slug);              // link the chosen one
+      loadRepoLinks();
+    } catch (e: any) { alert(e?.message || 'Could not update the repo link.'); }
+    setLinking(false);
+  };
+
   const [donation, setDonation] = useState<{ address: string; collapsed: boolean }>({ address: '', collapsed: false });
   useEffect(() => { API.get(`/api/tools/donation?slug=${encodeURIComponent(slug)}`).then((r: any) => setDonation({ address: r?.address || '', collapsed: !!r?.collapsed })).catch(() => { /* ignore */ }); }, [slug]);
   const donateCollapsed = donation.collapsed;
@@ -2102,7 +2141,18 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
 
         <GalleryFilterRow q={historyQ} onQ={setHistoryQ} filter={historyFilter} onFilter={setHistoryFilter} right={<>
           <button className="btn small ghost" title="Refresh saved runs" aria-label="Refresh saved runs" onClick={() => { loadActivities(); setRecNonce((n) => n + 1); }} style={{ fontSize: 16, padding: '0 9px' }}>🔄</button>
-          <CardViewMenu pageKey="presrun" />
+          {/* Owner/admin: associate this slide tool with a repo (its study-path source). */}
+          {(canEdit || eff.isAdmin) && (
+            <select value={linkedRepo?.slug || ''} disabled={linking} title="The repository this slide tool is the study-path for"
+              onChange={(e) => linkStudyRepo(e.target.value)} style={{ ...FIELD_CONTROL_STYLE, width: 'auto', maxWidth: 200, height: 32, padding: '0 8px', fontSize: 12.5 }}>
+              <option value="">🎬 Study-path repo: none</option>
+              {editableRepos.map((t: any) => <option key={t.slug} value={t.slug}>🎬 {t.title}</option>)}
+            </select>
+          )}
+          {/* Everyone: jump to the repo this slide tool belongs to, if any. */}
+          {linkedRepo && (
+            <button className="btn small ghost" title={`Open the repository: ${linkedRepo.title}`} onClick={() => openRepo(linkedRepo.slug)} style={{ fontSize: 13, padding: '0 10px' }}>📁 Repo</button>
+          )}
         </>} />
 
         {visibleFeed.length === 0 ? (
