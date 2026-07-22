@@ -2031,6 +2031,19 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 </select>
               </label>
             );
+            // Owner/admin: the repository this slide tool is the study-path for — the
+            // "Study-path slide tool" link, from the slide side. Picking a repo points
+            // its studyToolSlug at this tool; the 📁 Repo button then returns there.
+            const repoLinkField = (canEdit || eff.isAdmin) ? (
+              <label className="field" style={fieldShell}><span style={fieldLabelStyle}>🎬 Study-path repo</span>
+                <select style={controlStyle} value={linkedRepo?.slug || ''} disabled={linking}
+                  onChange={(e) => linkStudyRepo(e.target.value)}
+                  title="The repository this slide tool originated from / belongs to. The 📁 Repo button in the runs filter returns to it.">
+                  <option value="">— none —</option>
+                  {editableRepos.map((t: any) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
+                </select>
+              </label>
+            ) : null;
             const finalActions = (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', width: 96, minWidth: 96 }}>
                 {!app.user
@@ -2054,7 +2067,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             // narrow one shows fewer per page and simply adds pages.
             const cells: React.ReactNode[] = [
               ...formFields.map((f: any) => stepFields([f.id], true)),
-              themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField, annotationField,
+              themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField, annotationField, repoLinkField,
             ].filter((c) => c != null);
             // wizardW === 0 means "not measured yet" — assume the wide default (the
             // card is full-width unless shrunk), so it opens as a 2×2 grid instead of
@@ -2141,15 +2154,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
 
         <GalleryFilterRow q={historyQ} onQ={setHistoryQ} filter={historyFilter} onFilter={setHistoryFilter} right={<>
           <button className="btn small ghost" title="Refresh saved runs" aria-label="Refresh saved runs" onClick={() => { loadActivities(); setRecNonce((n) => n + 1); }} style={{ fontSize: 16, padding: '0 9px' }}>🔄</button>
-          {/* Owner/admin: associate this slide tool with a repo (its study-path source). */}
-          {(canEdit || eff.isAdmin) && (
-            <select value={linkedRepo?.slug || ''} disabled={linking} title="The repository this slide tool is the study-path for"
-              onChange={(e) => linkStudyRepo(e.target.value)} style={{ ...FIELD_CONTROL_STYLE, width: 'auto', maxWidth: 200, height: 32, padding: '0 8px', fontSize: 12.5 }}>
-              <option value="">🎬 Study-path repo: none</option>
-              {editableRepos.map((t: any) => <option key={t.slug} value={t.slug}>🎬 {t.title}</option>)}
-            </select>
-          )}
-          {/* Everyone: jump to the repo this slide tool belongs to, if any. */}
+          {/* Everyone: jump to the repo this slide tool originated from / belongs to, if any.
+              The association itself is set in the settings card's "Study-path repo" field. */}
           {linkedRepo && (
             <button className="btn small ghost" title={`Open the repository: ${linkedRepo.title}`} onClick={() => openRepo(linkedRepo.slug)} style={{ fontSize: 13, padding: '0 10px' }}>📁 Repo</button>
           )}
