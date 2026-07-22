@@ -125,6 +125,7 @@ export function ChatView() {
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
   const [historyTableOpen, setHistoryTableOpen] = useState(false);   // the chat-log table under the composer
+  const [historyQuery, setHistoryQuery] = useState('');   // search box over the history table
   // 🎤 dictation (ElevenLabs speech-to-text): append the transcript to the input.
   const { voiceOn, recording, transcribing, toggleMic } = useDictation(
     (t) => setInput((v) => (v ? v.trimEnd() + ' ' : '') + t),
@@ -671,33 +672,55 @@ export function ChatView() {
               style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
               🕓 Chat history ({sessions.length}) <span style={{ fontSize: 11 }}>{historyTableOpen ? '▾' : '▸'}</span>
             </button>
-            {historyTableOpen && (
-              <div style={{ maxHeight: '26vh', overflowY: 'auto', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 8, marginTop: 4 }}>
-                <table className="sketch tight" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.8rem' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left' }}>Date</th>
-                      <th style={{ textAlign: 'left' }}>Time</th>
-                      <th style={{ textAlign: 'left' }}>Keywords</th>
-                      <th style={{ textAlign: 'right' }}>Msgs</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessions.length === 0 && (
-                      <tr><td colSpan={4} style={{ textAlign: 'center', opacity: 0.5, padding: '10px 0' }}>No chats yet — your conversations will be logged here.</td></tr>
-                    )}
-                    {[...sessions].sort((a, b) => b.ts - a.ts).map((sn) => (
-                      <tr key={sn.id} onClick={() => openSession(sn)} style={{ cursor: 'pointer' }} title="Open this chat">
-                        <td>{new Date(sn.ts).toLocaleDateString()}</td>
-                        <td>{new Date(sn.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                        <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sessionKeywords(sn)}</td>
-                        <td style={{ textAlign: 'right' }}>{(sn.messages || []).filter((m) => !m.building).length}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {historyTableOpen && (() => {
+              // Filter rows by the search box: match date, time, keywords or any typed text.
+              const q = historyQuery.trim().toLowerCase();
+              const rows = [...sessions].sort((a, b) => b.ts - a.ts).filter((sn) => {
+                if (!q) return true;
+                const d = new Date(sn.ts);
+                const hay = [
+                  d.toLocaleDateString(), d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  sessionKeywords(sn),
+                  (sn.messages || []).filter((m) => m.content).map((m) => m.content).join(' '),
+                ].join(' ').toLowerCase();
+                return hay.includes(q);
+              });
+              return (
+                <div style={{ marginTop: 4 }}>
+                  <input value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)}
+                    placeholder="🔍 Search your chats — keyword, date…"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', fontSize: 12.5, borderRadius: 8, border: '1.5px solid var(--line,#d9cfc0)', background: 'var(--card,#fff8ee)', font: 'inherit', marginBottom: 4 }} />
+                  <div style={{ maxHeight: '24vh', overflowY: 'auto', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 8 }}>
+                    <table className="sketch tight" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.8rem' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left' }}>Date</th>
+                          <th style={{ textAlign: 'left' }}>Time</th>
+                          <th style={{ textAlign: 'left' }}>Keywords</th>
+                          <th style={{ textAlign: 'right' }}>Msgs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessions.length === 0 && (
+                          <tr><td colSpan={4} style={{ textAlign: 'center', opacity: 0.5, padding: '10px 0' }}>No chats yet — your conversations will be logged here.</td></tr>
+                        )}
+                        {sessions.length > 0 && rows.length === 0 && (
+                          <tr><td colSpan={4} style={{ textAlign: 'center', opacity: 0.5, padding: '10px 0' }}>No chats match “{historyQuery}”.</td></tr>
+                        )}
+                        {rows.map((sn) => (
+                          <tr key={sn.id} onClick={() => openSession(sn)} style={{ cursor: 'pointer' }} title="Open this chat">
+                            <td>{new Date(sn.ts).toLocaleDateString()}</td>
+                            <td>{new Date(sn.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                            <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sessionKeywords(sn)}</td>
+                            <td style={{ textAlign: 'right' }}>{(sn.messages || []).filter((m) => !m.building).length}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
