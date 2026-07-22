@@ -1523,38 +1523,40 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const clearPlay = useCallback(() => { try { sessionStorage.removeItem(playKey); } catch { /* ignore */ } }, [playKey]);
   // Write the session whenever the meaningful play state changes.
   useEffect(() => { savePlay(); }, [savePlay, slides]);
-  // Restore ONCE on mount — but ONLY after an actual page RELOAD (F5 / browser refresh),
-  // never on ordinary in-app navigation. Otherwise merely opening the tool would force
-  // you back into the old lesson (and show the loading pencil) instead of the gallery/
-  // hub. A study-path launch (slideSeed) also takes precedence, so we skip then.
+  // On mount, CHECK for a saved play session but never auto-apply it — resuming is
+  // fully explicit via a "Resume your last run" button on the hub, so opening a tool
+  // (or coming from the gallery) never forces you back into an old lesson. A study-path
+  // launch (slideSeed) takes precedence, so we skip the offer then.
+  const [resumable, setResumable] = useState<any>(null);
   useEffect(() => {
     if (restoredPlay.current) return;
     restoredPlay.current = true;
-    if (typeof sessionStorage === 'undefined' || typeof window === 'undefined' || appState.slideSeed) return;
-    // Detect a real reload via the Navigation Timing API (fallback to the legacy flag).
-    let isReload = false;
-    try {
-      const nav = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined);
-      isReload = nav ? nav.type === 'reload' : ((performance as any).navigation?.type === 1);
-    } catch { isReload = false; }
-    if (!isReload) { try { sessionStorage.removeItem(playKey); } catch { /* ignore */ } return; }
+    if (typeof sessionStorage === 'undefined' || appState.slideSeed) return;
     try {
       const raw = sessionStorage.getItem(playKey);
       if (!raw) return;
       const p = JSON.parse(raw);
       const sl = Array.isArray(p?.slides) ? p.slides : [];
-      if (!p || (p.phase !== 'play' && p.phase !== 'done') || !sl.filter(Boolean).length) return;
-      cfgRef.current = p.cfg || {}; slidesRef.current = sl; startedAt.current = p.startedAt || Date.now();
-      if (p.origin) lessonOriginRef.current = p.origin;
-      // Mark every restored slide READY so the player shows them immediately and does
-      // NOT re-generate (which caused the long load + pencil).
-      const ready: Record<number, boolean> = {};
-      sl.forEach((s: any, i: number) => { if (s) ready[i] = true; });
-      setCfg(p.cfg || {}); setSlides(sl); setSlideReady(ready); setResults(p.results || {}); setCur(Math.max(0, Number(p.cur) || 0)); setPhase(p.phase);
-      try { window.scrollTo(0, 0); } catch { /* ignore */ }
-    } catch { /* ignore a corrupt entry */ }
+      // Only offer to resume an UNFINISHED run (phase 'play') that has real slides.
+      if (p && p.phase === 'play' && sl.filter(Boolean).length) setResumable(p);
+      else sessionStorage.removeItem(playKey);
+    } catch { try { sessionStorage.removeItem(playKey); } catch { /* ignore */ } }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Apply the saved session — slides marked READY so nothing re-generates.
+  const resumePlay = () => {
+    const p = resumable;
+    if (!p) return;
+    const sl = Array.isArray(p.slides) ? p.slides : [];
+    cfgRef.current = p.cfg || {}; slidesRef.current = sl; startedAt.current = p.startedAt || Date.now();
+    if (p.origin) lessonOriginRef.current = p.origin;
+    const ready: Record<number, boolean> = {};
+    sl.forEach((s: any, i: number) => { if (s) ready[i] = true; });
+    setCfg(p.cfg || {}); setSlides(sl); setSlideReady(ready); setResults(p.results || {}); setCur(Math.max(0, Number(p.cur) || 0)); setPhase(p.phase);
+    setResumable(null);
+    try { window.scrollTo(0, 0); } catch { /* ignore */ }
+  };
+  const dismissResume = () => { setResumable(null); clearPlay(); };
 
   // Add a preset lesson to the history WITHOUT playing it (and with no image). It
   // shows up as a fresh card in the feed whose no-photo spot carries the usual
@@ -2017,6 +2019,21 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     const showGenerate = viewMode !== 'history' || !hasSaved;
     return (
       <div>
+        {/* Explicit resume: a saved, unfinished run is offered here (never auto-applied),
+            so refreshing/opening the tool lands on the hub and YOU choose to continue. */}
+        {resumable && (
+          <div className="card" style={{ padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 20 }}>↻</span>
+            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+              <b style={{ fontSize: 14 }}>Resume your last run?</b>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                You left off at slide {(Number(resumable.cur) || 0) + 1}{Array.isArray(resumable.slides) ? ` of ${resumable.slides.filter(Boolean).length}` : ''}{resumable.cfg?.topic ? ` · ${String(resumable.cfg.topic).slice(0, 60)}` : ''}.
+              </div>
+            </div>
+            <button className="btn small green" onClick={resumePlay}>↻ Resume</button>
+            <button className="btn small ghost" onClick={dismissResume}>Dismiss</button>
+          </div>
+        )}
         {/* Inline editor for a gallery card (title/subtitle, or a custom AI-image
             prompt) — replaces the unreliable browser prompt. */}
         {cardEdit && (
