@@ -1146,6 +1146,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const cfgRef = useRef<Cfg>({});
   const prefetching = useRef<Record<number, Promise<void> | undefined>>({});
   const startedAt = useRef(0);   // when the current play began, for the end-slide time
+  const restoredPlay = useRef(false);   // guards the one-time resume-after-refresh restore
   // Per-PLAY slide order. The designed deck stores pages in a fixed order, but a
   // presentation shouldn't play identically every time: the FIRST page is always
   // the intro, and the remaining pages are SHUFFLED for each run so a middle- or
@@ -1416,6 +1417,46 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       const cfg = seededCfg;
       if (cfg) setTimeout(() => { recordAndPlay(cfg); }, 0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Resume-after-refresh ────────────────────────────────────────────────────
+  // A play session (which slide, answers so far, the generated deck) lives only in
+  // memory, so a page refresh used to drop the learner back to the create screen.
+  // Persist it per tool to sessionStorage and restore it on load, so a refresh keeps
+  // you on the SAME lesson and the SAME slide. Best-effort: if the deck (with images)
+  // is too large for the quota, we retry without the heavy image data URLs.
+  const playKey = `sl_play:${slug}`;
+  const savePlay = useCallback(() => {
+    if (typeof sessionStorage === 'undefined') return;
+    if (phase !== 'play' && phase !== 'done') return;
+    const payload = { v: 1, phase, cur, cfg: cfgRef.current, results, startedAt: startedAt.current, slides: slidesRef.current };
+    try { sessionStorage.setItem(playKey, JSON.stringify(payload)); }
+    catch {
+      // Quota hit — drop long data:/base64 media so the text + progress still persist.
+      try { sessionStorage.setItem(playKey, JSON.stringify(payload, (_k, v) => (typeof v === 'string' && v.length > 4000 && /^data:|base64/i.test(v) ? '' : v))); }
+      catch { /* give up — resume just won't be available for this deck */ }
+    }
+  }, [phase, cur, results, playKey]);
+  const clearPlay = useCallback(() => { try { sessionStorage.removeItem(playKey); } catch { /* ignore */ } }, [playKey]);
+  // Write the session whenever the meaningful play state changes.
+  useEffect(() => { savePlay(); }, [savePlay, slides]);
+  // Restore ONCE on mount (a plain refresh has no slideSeed; a study-path launch does
+  // and takes precedence, so we skip the restore then).
+  useEffect(() => {
+    if (restoredPlay.current) return;
+    restoredPlay.current = true;
+    if (typeof sessionStorage === 'undefined' || appState.slideSeed) return;
+    try {
+      const raw = sessionStorage.getItem(playKey);
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      const sl = Array.isArray(p?.slides) ? p.slides : [];
+      if (!p || (p.phase !== 'play' && p.phase !== 'done') || !sl.filter(Boolean).length) return;
+      cfgRef.current = p.cfg || {}; slidesRef.current = sl; startedAt.current = p.startedAt || Date.now();
+      setCfg(p.cfg || {}); setSlides(sl); setResults(p.results || {}); setCur(Math.max(0, Number(p.cur) || 0)); setPhase(p.phase);
+      try { window.scrollTo(0, 0); } catch { /* ignore */ }
+    } catch { /* ignore a corrupt entry */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2333,7 +2374,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         )}
         <div className="slide-actions" style={{ justifyContent: 'center', gap: 8, marginTop: 12 }}>
           {canPlay && <button className="btn green" onClick={() => play(cfg)}>↻ Replay</button>}
-          <button className="btn" onClick={() => { setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
+          <button className="btn" onClick={() => { clearPlay(); setPhase('hub'); loadActivities(); }}>← Back to lessons</button>
         </div>
         {/* The finished run is saved automatically (owner: canonical deck; everyone:
             their rendition entry) — no manual save button needed. */}
