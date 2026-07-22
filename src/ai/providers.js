@@ -902,31 +902,61 @@ async function illustrateWithClaude(slide, context) {
 // ElevenLabs text-to-speech for the language listening/spelling activities.
 // Returns { audio: base64 data URL | null, error: string | null } so the caller can
 // surface the real reason (401 bad key, 402 quota, …) instead of a silent failure.
+// Split long text into TTS-sized chunks, breaking on sentence/whitespace so a word
+// is never cut mid-syllable. Each chunk stays well under ElevenLabs' per-request
+// character limit; the chunks' audio is stitched back together into one clip.
+function splitForTts(text, size) {
+  const chunks = [];
+  let rest = String(text || '');
+  while (rest.length > size) {
+    const window = rest.slice(0, size);
+    // Prefer the last sentence end within the window, then a newline, then a space.
+    let cut = Math.max(window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '), window.lastIndexOf('\n'));
+    if (cut > 0) cut += 1;                       // keep the punctuation with its sentence
+    else cut = window.lastIndexOf(' ');
+    if (cut <= size * 0.4) cut = size;           // no good break point — hard cut
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut);
+  }
+  if (rest.trim()) chunks.push(rest.trim());
+  return chunks.filter(Boolean);
+}
+
 async function generateSpeech(text, voiceId) {
   if (!ttsEnabled) return { audio: null, error: 'ElevenLabs not configured (set ELEVENLABS_API_KEY).' };
-  const clean = String(text || '').trim().slice(0, 600);
+  // Read the WHOLE text (previously capped at 600 chars, which cut long slides off
+  // mid-sentence). A generous ceiling keeps a runaway input from burning credits.
+  const clean = String(text || '').trim().slice(0, 8000);
   if (!clean) return { audio: null, error: 'No text to speak.' };
   const key = String(ELEVENLABS_API_KEY || '').trim(); // trim stray spaces/newlines from the env value
   if (!key) return { audio: null, error: 'ELEVENLABS_API_KEY is empty.' };
   const base = String(ELEVENLABS_API_URL || 'https://api.elevenlabs.io/v1').replace(/\/+$/, '');
   // A caller-chosen voice (a valid ElevenLabs voice id) overrides the default.
   const voice = /^[A-Za-z0-9]{16,40}$/.test(String(voiceId || '')) ? String(voiceId) : ELEVENLABS_VOICE_ID;
+  const parts = splitForTts(clean, 2200);        // ≤2200 chars/request, sentence-aware
   try {
-    const res = await fetchWithTimeout(`${base}/text-to-speech/${voice}`, {
-      method: 'POST',
-      headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({ text: clean, model_id: ELEVENLABS_MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
-    }, 30000, 'ElevenLabs TTS');
-    if (!res.ok) {
-      const detail = (await res.text().catch(() => '')).slice(0, 300);
-      console.error('ElevenLabs error', res.status, detail);
-      let hint = '';
-      if (/unusual[_ ]?activity|abuse|vpn|proxy/i.test(detail)) hint = ' — ElevenLabs free tier blocks requests from cloud/server IPs (like Vercel). A paid ElevenLabs plan (even the cheapest) removes this block.';
-      else if (res.status === 401 || /unauthor|invalid.?api|missing.?api/i.test(detail)) hint = ' — key rejected: confirm ELEVENLABS_API_KEY is exact, that the key has Text-to-Speech permission (unrestricted), and that you redeployed after adding it.';
-      else if (res.status === 402 || /quota|credit|limit/i.test(detail)) hint = ' — ElevenLabs character quota/credits exhausted for this key.';
-      return { audio: null, error: `ElevenLabs ${res.status}: ${detail || 'request rejected'}${hint}` };
+    const buffers = [];
+    // Synthesize the chunks IN ORDER and concatenate the MP3 streams. Browsers play
+    // back-to-back MPEG frames as one continuous clip, so the listener hears the
+    // full text with no gap and no truncation.
+    for (const part of parts) {
+      const res = await fetchWithTimeout(`${base}/text-to-speech/${voice}`, {
+        method: 'POST',
+        headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
+        body: JSON.stringify({ text: part, model_id: ELEVENLABS_MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
+      }, 30000, 'ElevenLabs TTS');
+      if (!res.ok) {
+        const detail = (await res.text().catch(() => '')).slice(0, 300);
+        console.error('ElevenLabs error', res.status, detail);
+        let hint = '';
+        if (/unusual[_ ]?activity|abuse|vpn|proxy/i.test(detail)) hint = ' — ElevenLabs free tier blocks requests from cloud/server IPs (like Vercel). A paid ElevenLabs plan (even the cheapest) removes this block.';
+        else if (res.status === 401 || /unauthor|invalid.?api|missing.?api/i.test(detail)) hint = ' — key rejected: confirm ELEVENLABS_API_KEY is exact, that the key has Text-to-Speech permission (unrestricted), and that you redeployed after adding it.';
+        else if (res.status === 402 || /quota|credit|limit/i.test(detail)) hint = ' — ElevenLabs character quota/credits exhausted for this key.';
+        return { audio: null, error: `ElevenLabs ${res.status}: ${detail || 'request rejected'}${hint}` };
+      }
+      buffers.push(Buffer.from(await res.arrayBuffer()));
     }
-    const buf = Buffer.from(await res.arrayBuffer());
+    const buf = Buffer.concat(buffers);
     return { audio: `data:audio/mpeg;base64,${buf.toString('base64')}`, error: null };
   } catch (e) { console.error('TTS failed:', e.message); return { audio: null, error: e.message }; }
 }
