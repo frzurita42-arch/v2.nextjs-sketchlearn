@@ -2327,6 +2327,88 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   }
 
   // ---------------- DONE ----------------
+  // The admin/moderator "Run record" table — one row per slide (up to the max), each
+  // cell a JSON dictionary of that slide's content + the student's result, plus the run
+  // details. Shown UNDER every slide while playing (rows fill in as each slide loads)
+  // AND on the completion screen. Self-contained so it works in any phase. Learners
+  // never see it.
+  const runRecordTable = (compact = false) => {
+    if (!(eff.isAdmin || eff.isModerator)) return null;
+    const rList = Object.keys(results).map(Number).sort((a, b) => a - b).map((k) => results[k]);
+    const details = rList.flatMap((r) => Object.keys(r.answers).map(Number).sort((a, b) => a - b).map((k) => r.answers[k]));
+    const answered = details.length;
+    const correct = details.filter((d) => d.correct).length;
+    const pctNow = answered ? Math.round((correct / answered) * 100) : 0;
+    const secsNow = startedAt.current ? Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)) : 0;
+    const timeNow = secsNow >= 60 ? `${Math.floor(secsNow / 60)}m ${secsNow % 60}s` : `${secsNow}s`;
+    const origin = lessonOriginRef.current;
+    const runDetails = {
+      student: app.user?.username || 'guest',
+      lesson: label(cfgRef.current),
+      level: (cfgRef.current as any).level || (cfgRef.current as any).difficulty || '',
+      ...(origin?.repoSlug ? {
+        fromRepo: origin.repoTitle || origin.repoSlug,
+        fromRepoSlug: origin.repoSlug,
+        unit: origin.unitTitle || '',
+        lessonInUnit: `${(typeof origin.lessonIndex === 'number' && origin.lessonIndex >= 0 ? origin.lessonIndex + 1 : '?')} of ${origin.lessonCount || '?'}${origin.lessonTitle ? ` — ${origin.lessonTitle}` : ''}`,
+      } : {}),
+      date: startedAt.current ? new Date(startedAt.current).toLocaleDateString() : new Date().toLocaleDateString(),
+      timeTaken: timeNow,
+      timeSeconds: secsNow,
+      score: `${correct}/${answered}`,
+      percent: pctNow,
+      slidesLoaded: slidesRef.current.filter(Boolean).length,
+    };
+    const slideDict = (i: number) => {
+      const s = slidesRef.current[i];
+      if (!s) return null;
+      const r = results[i];
+      const answers = r ? Object.keys(r.answers).map(Number).sort((a, b) => a - b).map((k) => r.answers[k]) : [];
+      return {
+        slide: i + 1,
+        title: s.title || '',
+        content: s.content || '',
+        support: (s.supportPlan && s.supportPlan.length ? s.supportPlan : (s._supports || []).map((c: any) => c && c.type).filter(Boolean)),
+        questions: (s.questions || []).map((q: any) => ({ kind: q.kind, prompt: q.prompt, options: (q.options || []).map((o: any) => (o && typeof o === 'object' ? o.text : o)) })),
+        results: answers.map((a: any) => ({ prompt: a.prompt, chose: a.your, expected: a.answer, correct: !!a.correct })),
+      };
+    };
+    const ROW_COUNT = Math.max(MAX_SLIDES, slidesRef.current.length);
+    const jsonCell: React.CSSProperties = { width: '100%', boxSizing: 'border-box', minWidth: 320, height: 60, resize: 'vertical', fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: 10, lineHeight: 1.4, padding: '5px 7px', border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)', whiteSpace: 'pre', overflow: 'auto' };
+    const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, padding: '5px 7px', borderBottom: '2px solid var(--ink,#2d2a26)', background: 'var(--card,#fff8ee)', position: 'sticky', top: 0 };
+    const td: React.CSSProperties = { padding: '5px 7px', borderBottom: '1px solid var(--line,#d9cfc0)', verticalAlign: 'top' };
+    return (
+      <div className="card alt" style={{ padding: '12px 14px', marginTop: 14, maxWidth: 860, marginInline: 'auto' }}>
+        <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
+        <p style={{ fontSize: 11, opacity: 0.6, margin: '0 0 8px', lineHeight: 1.4 }}>
+          {compact ? 'Fills in as each slide loads' : 'One row per slide'} (up to {ROW_COUNT}). Each cell is a JSON dictionary of that slide’s content and the student’s result; the run details (student, origin repo/unit/lesson, time, score) are the dictionary below.
+        </p>
+        <details open={!compact} style={{ marginBottom: 8 }}>
+          <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Run details</summary>
+          <textarea readOnly value={JSON.stringify(runDetails, null, 2)} style={{ ...jsonCell, height: 148, whiteSpace: 'pre-wrap', marginTop: 4 }} />
+        </details>
+        <div style={{ overflowX: 'auto', maxHeight: compact ? 260 : undefined, overflowY: compact ? 'auto' : undefined }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead><tr><th style={{ ...th, width: 46, textAlign: 'center' }}>Slide</th><th style={th}>Content &amp; result (JSON dictionary)</th></tr></thead>
+            <tbody>
+              {Array.from({ length: ROW_COUNT }, (_, i) => {
+                const dict = slideDict(i);
+                return (
+                  <tr key={i}>
+                    <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{i + 1}</td>
+                    <td style={td}>{dict
+                      ? <textarea readOnly value={JSON.stringify(dict)} style={jsonCell} />
+                      : <span style={{ fontSize: 11, opacity: 0.4 }}>— not generated yet —</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   if (phase === 'done') {
     const list = Object.keys(results).map(k => Number(k)).sort((a, b) => a - b).map(k => results[k]);
     const allDetails = list.flatMap(r => Object.keys(r.answers).map(Number).sort((a, b) => a - b).map(k => r.answers[k]));
@@ -2413,81 +2495,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             their rendition entry) — no manual save button needed. */}
         {canEdit && deckMsg && <p style={{ fontSize: 11, opacity: 0.6, textAlign: 'center', marginTop: 8 }}>{deckMsg}</p>}
 
-        {/* Admin / moderator record of THIS run: one row per slide (up to the max),
-            each cell a JSON dictionary of the slide's content + the student's result,
-            plus the run details — a compact, saveable record. Hidden from learners. */}
-        {(eff.isAdmin || eff.isModerator) && (() => {
-          const origin = lessonOriginRef.current;
-          const runDetails = {
-            student: app.user?.username || 'guest',
-            lesson: label(cfg),
-            level: (cfg as any).level || (cfg as any).difficulty || '',
-            // Origin link — by STABLE repo slug (title may change), plus unit/lesson.
-            ...(origin?.repoSlug ? {
-              fromRepo: origin.repoTitle || origin.repoSlug,
-              fromRepoSlug: origin.repoSlug,
-              unit: origin.unitTitle || '',
-              lessonInUnit: `${(typeof origin.lessonIndex === 'number' && origin.lessonIndex >= 0 ? origin.lessonIndex + 1 : '?')} of ${origin.lessonCount || '?'}${origin.lessonTitle ? ` — ${origin.lessonTitle}` : ''}`,
-            } : {}),
-            date: startedAt.current ? new Date(startedAt.current).toLocaleDateString() : new Date().toLocaleDateString(),
-            completedAt: new Date().toLocaleString(),
-            timeTaken: timeStr,
-            timeSeconds: secs,
-            score: `${scoreCount}/${answeredCount}`,
-            percent: pct,
-            slidesGenerated: slidesRef.current.filter(Boolean).length,
-          };
-          const slideDict = (i: number) => {
-            const s = slidesRef.current[i];
-            if (!s) return null;
-            const r = results[i];
-            const answers = r ? Object.keys(r.answers).map(Number).sort((a, b) => a - b).map((k) => r.answers[k]) : [];
-            return {
-              slide: i + 1,
-              title: s.title || '',
-              content: s.content || '',
-              support: (s.supportPlan && s.supportPlan.length ? s.supportPlan : (s._supports || []).map((c: any) => c && c.type).filter(Boolean)),
-              questions: (s.questions || []).map((q: any) => ({ kind: q.kind, prompt: q.prompt, options: (q.options || []).map((o: any) => (o && typeof o === 'object' ? o.text : o)) })),
-              results: answers.map((a: any) => ({ prompt: a.prompt, chose: a.your, expected: a.answer, correct: !!a.correct })),
-            };
-          };
-          // Always render up to the max capacity (MAX_SLIDES rows) so every possible
-          // slide has a row, even when fewer were generated — and grow if a deck is longer.
-          const ROW_COUNT = Math.max(MAX_SLIDES, slidesRef.current.length);
-          const jsonCell: React.CSSProperties = { width: '100%', boxSizing: 'border-box', minWidth: 320, height: 66, resize: 'vertical', fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: 10, lineHeight: 1.4, padding: '5px 7px', border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)', whiteSpace: 'pre', overflow: 'auto' };
-          const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, padding: '5px 7px', borderBottom: '2px solid var(--ink,#2d2a26)', background: 'var(--card,#fff8ee)', position: 'sticky', top: 0 };
-          const td: React.CSSProperties = { padding: '5px 7px', borderBottom: '1px solid var(--line,#d9cfc0)', verticalAlign: 'top' };
-          return (
-            <div className="card alt" style={{ padding: '14px 16px', marginTop: 16, maxWidth: 860, marginInline: 'auto' }}>
-              <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
-              <p style={{ fontSize: 11, opacity: 0.6, margin: '0 0 8px', lineHeight: 1.4 }}>
-                One row per slide (up to {ROW_COUNT}). Each cell is a JSON dictionary of that slide’s content and the student’s result. The run details are the dictionary just below — a compact, saveable record of this generation.
-              </p>
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>Run details</div>
-                <textarea readOnly value={JSON.stringify(runDetails, null, 2)} style={{ ...jsonCell, height: 150, whiteSpace: 'pre-wrap' }} />
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                  <thead><tr><th style={{ ...th, width: 46, textAlign: 'center' }}>Slide</th><th style={th}>Content &amp; result (JSON dictionary)</th></tr></thead>
-                  <tbody>
-                    {Array.from({ length: ROW_COUNT }, (_, i) => {
-                      const dict = slideDict(i);
-                      return (
-                        <tr key={i}>
-                          <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{i + 1}</td>
-                          <td style={td}>{dict
-                            ? <textarea readOnly value={JSON.stringify(dict)} style={jsonCell} />
-                            : <span style={{ fontSize: 11, opacity: 0.4 }}>— no slide generated —</span>}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })()}
+        {/* Admin / moderator run record (one row per slide + run details). */}
+        {runRecordTable()}
 
         {/* A comment section at the end of every finished lesson. */}
         {app.user && <CommentSection targetType="tool" targetId={slug} />}
@@ -2700,6 +2709,10 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <button className="btn green" disabled={!canFinish} onClick={() => setPhase('done')}>🏁 Finish</button>
           </div>
           {!allAnswered && <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}>Answer {qList.length > 1 ? 'every question' : 'the question'} above to unlock {isLast ? 'Finish' : 'Next'}.</p>}
+
+          {/* Admin/moderator: the run-record table UNDER each slide — a row fills in as
+              each slide loads, accumulating through the whole presentation. */}
+          {runRecordTable(true)}
         </div>
       )}
     </div>
