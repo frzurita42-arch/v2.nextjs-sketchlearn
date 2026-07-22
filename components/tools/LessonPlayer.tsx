@@ -65,6 +65,7 @@ import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { PromptInspector } from '@/components/ui/PromptInspector';
 import { repoRef } from '@/lib/repo-ref';
+import { takeEntries } from '@/lib/tool-prefetch';
 import { CommentSection } from '@/components/social/CommentSection';
 
 // Subject categories every generation is filed under (feed filter + create form).
@@ -1330,7 +1331,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // Keep the server's newest-first order (do NOT shuffle) so a run the learner
     // just played reliably shows at the top of the gallery / first page, instead
     // of being scattered somewhere in the pagination.
-    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`); setActivities(Array.isArray(r?.entries) ? r.entries : []); }
+    try {
+      // Prefer a warm prefetch of these entries (the gallery kicks one off on
+      // hover before the card is even clicked) so the feed fills instantly;
+      // otherwise fetch them now.
+      const r = await (takeEntries(slug) || API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`));
+      setActivities(Array.isArray(r?.entries) ? r.entries : []);
+    }
     catch { /* ignore */ }
     finally { setActivitiesLoaded(true); }
   };

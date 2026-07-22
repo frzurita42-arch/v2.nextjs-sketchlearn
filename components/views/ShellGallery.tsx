@@ -10,6 +10,7 @@ import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { repoRef } from '@/lib/repo-ref';
+import { getTool, prefetchToolAndEntries } from '@/lib/tool-prefetch';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
@@ -219,10 +220,15 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   useEffect(() => { setPage(1); }, [filter, q]);
 
   const openTool = async (t: any) => {
-    try { const r: any = await API.get(`/api/tools?slug=${encodeURIComponent(t.slug)}`); appState.activeTool = r?.tool || t; }
+    // Consume a warm hover-prefetch of this tool's definition when one exists,
+    // so the click resolves instantly instead of waiting on a fresh round-trip.
+    try { const tool = await getTool(t.slug); appState.activeTool = tool || t; }
     catch { appState.activeTool = t; }
     app.nav('tool');
   };
+  // Warm a tool's definition + run entries the moment the pointer/focus lands on
+  // its card, so opening it a beat later has the data already in hand.
+  const warm = (t: any) => { try { prefetchToolAndEntries(t.slug); } catch { /* ignore */ } };
 
   const openBuilder = () => {
     if (!app.user) { app.requireLogin(); return; }
@@ -321,13 +327,18 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
               {shown.map((t) => {
                 const editable = canEdit(t);
                 return (
-                  <ToolCard key={t.slug} tool={t} view={layout.view} hideOpen onOpen={openTool} imageMode={imgMode}
-                    favs={isGuest ? {} : favs} onToggleFav={isGuest ? undefined : toggleFav}
-                    canEdit={editable} onEdit={editable ? setEditTool : undefined}
-                    onGenThumb={editable ? genThumb : undefined} onThumbPrompt={editable ? openImgPrompt : undefined}
-                    onUploadThumb={editable ? uploadThumb : undefined} onDice={editable ? diceThumb : undefined}
-                    thumbing={!!thumbing[t.slug]}
-                    canRemove={editable && !isExample(t)} isExample={isExample(t)} onRemove={editable ? del : undefined} />
+                  // A hover/focus/press on the card warms its data (definition +
+                  // run entries) so the subsequent click opens without a wait.
+                  <div key={t.slug} onMouseEnter={() => warm(t)} onFocusCapture={() => warm(t)} onTouchStart={() => warm(t)}
+                    style={{ display: 'contents' }}>
+                    <ToolCard tool={t} view={layout.view} hideOpen onOpen={openTool} imageMode={imgMode}
+                      favs={isGuest ? {} : favs} onToggleFav={isGuest ? undefined : toggleFav}
+                      canEdit={editable} onEdit={editable ? setEditTool : undefined}
+                      onGenThumb={editable ? genThumb : undefined} onThumbPrompt={editable ? openImgPrompt : undefined}
+                      onUploadThumb={editable ? uploadThumb : undefined} onDice={editable ? diceThumb : undefined}
+                      thumbing={!!thumbing[t.slug]}
+                      canRemove={editable && !isExample(t)} isExample={isExample(t)} onRemove={editable ? del : undefined} />
+                  </div>
                 );
               })}
             </div>

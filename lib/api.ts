@@ -15,6 +15,18 @@ class ApiClient {
   // sign-in / create-account prompt can pop up for gated actions like playing.
   onAuthRequired: (() => void) | null = null;
 
+  // Global in-flight request tracking, so a top-of-page loading bar can show while
+  // ANY API request is pending (view transitions fetch their data through here).
+  private inflight = 0;
+  private progressCbs = new Set<(active: boolean) => void>();
+  onProgress(cb: (active: boolean) => void): () => void { this.progressCbs.add(cb); return () => { this.progressCbs.delete(cb); }; }
+  private bumpInflight(delta: number) {
+    const was = this.inflight > 0;
+    this.inflight = Math.max(0, this.inflight + delta);
+    const now = this.inflight > 0;
+    if (was !== now) this.progressCbs.forEach((cb) => { try { cb(now); } catch { /* ignore */ } });
+  }
+
   private hydrate() {
     if (typeof window === 'undefined') return;
     if (this.token === null) this.token = localStorage.getItem('sl_token');
@@ -110,19 +122,22 @@ class ApiClient {
   async call(method: string, url: string, body?: any, opts?: { retries?: number }): Promise<any> {
     const maxRetries = opts?.retries ?? (method === 'GET' ? 2 : 0);
     let attempt = 0;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      try {
-        return await this.once(method, url, body);
-      } catch (err: any) {
-        if (this.isTransient(err) && attempt < maxRetries) {
-          attempt++;
-          await new Promise(r => setTimeout(r, 600 * Math.pow(2, attempt - 1))); // 600ms, 1200ms, …
-          continue;
+    this.bumpInflight(1);
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        try {
+          return await this.once(method, url, body);
+        } catch (err: any) {
+          if (this.isTransient(err) && attempt < maxRetries) {
+            attempt++;
+            await new Promise(r => setTimeout(r, 600 * Math.pow(2, attempt - 1))); // 600ms, 1200ms, …
+            continue;
+          }
+          throw err;
         }
-        throw err;
       }
-    }
+    } finally { this.bumpInflight(-1); }
   }
 
   // Multipart file upload (blob store). Returns the parsed JSON (e.g. { url }).

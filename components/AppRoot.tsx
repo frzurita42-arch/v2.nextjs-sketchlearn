@@ -9,6 +9,7 @@ import { AppContext, computeEff, type ViewName, type ViewAs } from '@/components
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Header } from '@/components/layout/Header';
 import { ViewAsBar } from '@/components/ui/ViewAsBar';
+import { TopLoadingBar } from '@/components/ui/TopLoadingBar';
 import { BootLoader } from '@/components/ui/BootLoader';
 import { Footer } from '@/components/layout/Footer';
 import { LoginView } from '@/components/views/LoginView';
@@ -370,6 +371,10 @@ export default function AppRoot() {
   return (
     <AppContext.Provider value={{ view, nav, rerender, tick, user, login, logout, viewAs, setViewAs, eff: (owner?: string) => computeEff(user, viewAs, owner), requireLogin }}>
       <div style={isShell ? { display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' } : undefined}>
+      {/* Thin top-of-page progress bar — shows during any API-backed transition
+          (opening a tool, loading a gallery, saving a run), so navigation never
+          feels frozen while data is fetched. */}
+      <TopLoadingBar />
       <Header chat={isShell} />
       {/* Sign-in / create-account overlay for guests. Dismissible so they can keep
           browsing; closes automatically once they're signed in. */}
