@@ -64,6 +64,7 @@ import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import { PromptInspector } from '@/components/ui/PromptInspector';
+import { repoRef } from '@/lib/repo-ref';
 import { CommentSection } from '@/components/social/CommentSection';
 
 // Subject categories every generation is filed under (feed filter + create form).
@@ -1421,7 +1422,28 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       const correct = all.filter((d: any) => d.correct).length;
       const pct = answered ? Math.round((correct / answered) * 100) : 0;
       const favs = Object.keys(favSlidesRef.current).map(Number).sort((a, b) => a - b);
-      const data: Cfg = { ...cfg, ...(answered ? { score: pct } : {}), ...(favs.length ? { favorites: favs } : {}) };
+      // Enrich the completed-run record (saved ONLY on reaching the end) with the
+      // fields the aggregate "all plays" tables need: elapsed time, the origin repo
+      // reference, and a compact per-slide log. Old plays simply lack these.
+      const origin = lessonOriginRef.current;
+      const genSlides = slidesRef.current.filter(Boolean) as Slide[];
+      const slidesLog = genSlides.map((s, i) => {
+        const r = results[i];
+        const a = r ? Object.values(r.answers) : [];
+        return {
+          n: i + 1, title: s.title || '',
+          summary: String(s.content || '').replace(/\s+/g, ' ').slice(0, 240),
+          shows: (s.supportPlan && s.supportPlan.length ? s.supportPlan : (s._supports || []).map((c: any) => c && c.type).filter(Boolean)),
+          answer: a.map((x: any) => x.your).filter(Boolean).join('; '),
+          correct: a.length ? a.every((x: any) => x.correct) : null,
+          seconds: slideTimeRef.current[i] || 0,
+        };
+      });
+      const data: Cfg = { ...cfg, ...(answered ? { score: pct } : {}), ...(favs.length ? { favorites: favs } : {}),
+        timeSeconds: startedAt.current ? Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)) : 0,
+        repoRef: origin?.repoRef || '', repoSlug: origin?.repoSlug || '',
+        unitTitle: origin?.unitTitle || '', lessonIndex: origin?.lessonIndex, lessonCount: origin?.lessonCount,
+        slidesLog } as any;
       API.post('/api/tools/entries', { slug, data })
         .then((r: any) => { playedEntryId.current = r?.entry?.id || null; loadActivities(); })
         .catch(() => { /* best-effort */ });
@@ -2407,6 +2429,60 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           ]]}
           empty="No slide tool information is available."
           rowsPerPage={6}
+          tight
+        />
+
+        {/* ── The SAME two run-record tables, aggregated across EVERY completed play of
+              this slide tool (all users). A play is only recorded when finished all the
+              way through. Old plays backfill what they have; new plays fill every field. */}
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
+        <h3 style={{ margin: '0 0 10px' }}>📇 Lesson details — every completed play</h3>
+        <PagedTable
+          headers={['#', 'Slide tool', 'Student', 'Played', 'Elapsed', 'Repo ref', 'Level', 'Image style', 'Slides', 'Score']}
+          rows={activities.map((e: any, idx: number) => {
+            const d = e?.data || {};
+            const secs = Number(d.timeSeconds || 0);
+            const time = secs ? (secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`) : '—';
+            const ref = d.repoRef ? `#${d.repoRef}${d.lessonIndex != null ? ` · L${d.lessonIndex + 1}` : ''}` : (d.repoSlug ? `#${repoRef(d.repoSlug)}` : 'Direct');
+            return [
+              idx + 1,
+              String(def?.title || lesson.subject || '—'),
+              String(e?.username || '—'),
+              fmtDateTime(e?.createdAt),
+              time,
+              ref,
+              String(d.level || d.difficulty || lesson.level || 'Auto'),
+              String(d.imageStyle || 'Any'),
+              String(d.slides || lesson.totalSlides || '—'),
+              typeof d.score === 'number' ? `${d.score}%` : '—',
+            ] as Cell[];
+          })}
+          empty="No completed plays yet — finish a lesson and it appears here."
+          rowsPerPage={8}
+          tight
+        />
+
+        <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
+        <h3 style={{ margin: '0 0 10px' }}>🎞️ Slides — every completed play</h3>
+        <PagedTable
+          headers={['Play', 'User', 'Repo ref', 'Slide', 'Title', 'What it taught', 'Answer', '✓']}
+          rows={activities.flatMap((e: any, idx: number) => {
+            const d = e?.data || {};
+            const ref = d.repoRef ? `#${d.repoRef}` : (d.repoSlug ? `#${repoRef(d.repoSlug)}` : 'Direct');
+            const log: any[] = Array.isArray(d.slidesLog) ? d.slidesLog : [];
+            return log.map((s: any) => [
+              `#${idx + 1}`,
+              String(e?.username || '—'),
+              ref,
+              String(s.n ?? '—'),
+              String(s.title || '—'),
+              String(s.summary || '—'),
+              String(s.answer || '—'),
+              s.correct === true ? '✅' : s.correct === false ? '❌' : '—',
+            ] as Cell[]);
+          })}
+          empty="No completed plays with recorded slides yet. (Older plays before this feature won't have per-slide data.)"
+          rowsPerPage={10}
           tight
         />
         </>)}
