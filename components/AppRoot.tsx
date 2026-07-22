@@ -122,6 +122,13 @@ export default function AppRoot() {
   const requireLogin = useCallback(() => setAuthOpen(true), []);
 
   useEffect(() => {
+    // On small screens (phones / tablets) the side rail is a fixed overlay that
+    // covers the page, so default it CLOSED there; on desktop leave it open.
+    // Only sets the initial state (railOpen undefined) — a user's manual toggle
+    // afterwards is never overridden.
+    if (appState.railOpen === undefined && typeof window !== 'undefined' && window.innerWidth < 1024) {
+      appState.railOpen = false;
+    }
     setMounted(true);
     // Hydrate the session singleton from localStorage (same keys as the legacy SPA).
     const token = localStorage.getItem('sl_token');

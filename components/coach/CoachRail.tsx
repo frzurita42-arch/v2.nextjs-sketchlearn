@@ -35,6 +35,10 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
   // Collapse state is shared via appState so it survives page switches.
   const open = appState.railOpen !== false;
   const setOpen = (v: boolean) => { appState.railOpen = v; app.rerender(); };
+  // On small screens the rail is a fixed overlay covering the page, so after a
+  // navigation collapse it back out of the way (a phone/tablet drawer). Desktop
+  // keeps it pinned open.
+  const closeIfSmall = () => { if (typeof window !== 'undefined' && window.innerWidth < 1024) setOpen(false); };
   const [expanded, setExpanded] = useState(false);
   const [ownSessions, setOwnSessions] = useState<ChatSession[]>([]);
 
@@ -72,12 +76,12 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
     <aside className="grid-bg" style={{ position: 'fixed', top: 0, left: 0, height: '100dvh', width: RAIL_W, zIndex: 60, backgroundColor: 'var(--paper,#f7f3e9)', backgroundImage: 'linear-gradient(rgba(92,128,188,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(92,128,188,.09) 1px, transparent 1px)', backgroundSize: '26px 26px', borderRight: '2px dashed var(--line,#d9cfc0)', padding: '10px 12px 10px 18px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Logo at the TOP of the side nav (with the orange line) + collapse. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-        <button className="brand scribble-underline" onClick={() => app.nav('chat')} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, color: 'var(--ink)', padding: 0 }}>✏️ SketchLearn</button>
+        <button className="brand scribble-underline" onClick={() => { app.nav('chat'); closeIfSmall(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, color: 'var(--ink)', padding: 0 }}>✏️ SketchLearn</button>
         <button title="Collapse the panel" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: 'var(--muted,#8a7f70)', padding: 0 }}>«</button>
       </div>
       {/* New chat is a plain action; the GREEN underline is reserved for the page
           indicator (it lights under whichever option is the current page). */}
-      <button className="btn small ghost" onClick={doNew}
+      <button className="btn small ghost" onClick={() => { doNew(); closeIfSmall(); }}
         style={{ width: '100%', marginBottom: 8, display: 'flex', alignItems: 'center', textAlign: 'left', ...(app.view === 'chat' ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>
         <span>💬 Chat</span>
         {app.view === 'chat' && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
@@ -94,7 +98,7 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
           ...(app.eff().isAdmin ? [{ v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, { v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => {
           const isActive = activeGroup === n.v;
           return (
-            <button key={n.v} className="btn small ghost" onClick={() => app.nav(n.v as never)}
+            <button key={n.v} className="btn small ghost" onClick={() => { app.nav(n.v as never); closeIfSmall(); }}
               style={{ width: '100%', display: 'flex', alignItems: 'center', textAlign: 'left', ...(isActive ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>
               <span>{n.label}</span>
               {isActive && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
