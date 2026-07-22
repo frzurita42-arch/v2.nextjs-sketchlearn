@@ -2426,31 +2426,41 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       };
     };
     const ROW_COUNT = Math.max(MAX_SLIDES, slidesRef.current.length);
-    const jsonCell: React.CSSProperties = { width: '100%', boxSizing: 'border-box', minWidth: 320, height: 60, resize: 'vertical', fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: 10, lineHeight: 1.4, padding: '5px 7px', border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)', whiteSpace: 'pre', overflow: 'auto' };
-    const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, padding: '5px 7px', borderBottom: '2px solid var(--ink,#2d2a26)', background: 'var(--card,#fff8ee)', position: 'sticky', top: 0 };
-    const td: React.CSSProperties = { padding: '5px 7px', borderBottom: '1px solid var(--line,#d9cfc0)', verticalAlign: 'top' };
+    const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, padding: '5px 7px', borderBottom: '2px solid var(--ink,#2d2a26)', background: 'var(--card,#fff8ee)', position: 'sticky', top: 0, whiteSpace: 'nowrap' };
+    const td: React.CSSProperties = { padding: '5px 8px', borderBottom: '1px solid var(--line,#d9cfc0)', verticalAlign: 'top', fontSize: 11.5, lineHeight: 1.4 };
     return (
-      <div className="card alt" style={{ padding: '12px 14px', marginTop: 14, maxWidth: 860, marginInline: 'auto' }}>
+      <div className="card alt" style={{ padding: '12px 14px', marginTop: 12, maxWidth: 900, marginInline: 'auto' }}>
         <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
-        <p style={{ fontSize: 11, opacity: 0.6, margin: '0 0 8px', lineHeight: 1.4 }}>
-          {compact ? 'Fills in as each slide loads' : 'One row per slide'} (up to {ROW_COUNT}). Each cell is a JSON dictionary of that slide’s content and the student’s result; the run details (student, origin repo/unit/lesson, time, score) are the dictionary below.
-        </p>
-        <details open={!compact} style={{ marginBottom: 8 }}>
-          <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Run details</summary>
-          <textarea readOnly value={JSON.stringify(runDetails, null, 2)} style={{ ...jsonCell, height: 148, whiteSpace: 'pre-wrap', marginTop: 4 }} />
-        </details>
-        <div style={{ overflowX: 'auto', maxHeight: compact ? 260 : undefined, overflowY: compact ? 'auto' : undefined }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead><tr><th style={{ ...th, width: 46, textAlign: 'center' }}>Slide</th><th style={th}>Content &amp; result (JSON dictionary)</th></tr></thead>
+        {/* One-line run summary — who, from where, score, time (fills in as you play). */}
+        <div style={{ fontSize: 12, opacity: 0.85, margin: '0 0 8px', lineHeight: 1.5 }}>
+          <b>{runDetails.student}</b> · {runDetails.score} ({runDetails.percent}%) · ⏱ {runDetails.timeTaken}
+          {origin?.repoSlug && <> · from <b>{(runDetails as any).fromRepo}</b>{(runDetails as any).unit ? ` · ${(runDetails as any).unit}` : ''}{(runDetails as any).lessonInUnit ? ` · lesson ${(runDetails as any).lessonInUnit}` : ''}</>}
+        </div>
+        <div style={{ overflowX: 'auto', maxHeight: compact ? 280 : undefined, overflowY: compact ? 'auto' : undefined }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 640 }}>
+            <thead><tr>
+              <th style={{ ...th, width: 40, textAlign: 'center' }}>#</th>
+              <th style={{ ...th, minWidth: 130 }}>Slide title</th>
+              <th style={{ ...th, minWidth: 220 }}>What it taught</th>
+              <th style={{ ...th, minWidth: 100 }}>Shows</th>
+              <th style={{ ...th, minWidth: 150 }}>Student answer</th>
+              <th style={{ ...th, width: 34, textAlign: 'center' }}>✓</th>
+            </tr></thead>
             <tbody>
               {Array.from({ length: ROW_COUNT }, (_, i) => {
-                const dict = slideDict(i);
+                const d = slideDict(i);
+                if (!d) return (<tr key={i}><td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{i + 1}</td><td style={td} colSpan={5}><span style={{ opacity: 0.4 }}>— not generated yet —</span></td></tr>);
+                const ans = d.results.map((r) => r.chose).filter(Boolean).join('; ');
+                const allCorrect = d.results.length > 0 && d.results.every((r) => r.correct);
+                const anyWrong = d.results.some((r) => !r.correct);
                 return (
                   <tr key={i}>
                     <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{i + 1}</td>
-                    <td style={td}>{dict
-                      ? <textarea readOnly value={JSON.stringify(dict)} style={jsonCell} />
-                      : <span style={{ fontSize: 11, opacity: 0.4 }}>— not generated yet —</span>}</td>
+                    <td style={td}>{d.title || '—'}</td>
+                    <td style={td}>{d.content ? d.content.slice(0, 220) + (d.content.length > 220 ? '…' : '') : '—'}</td>
+                    <td style={td}>{d.support && d.support.length ? d.support.join(', ') : '—'}</td>
+                    <td style={td}>{ans || <span style={{ opacity: 0.4 }}>— not answered —</span>}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>{d.results.length === 0 ? '' : allCorrect ? '✅' : anyWrong ? '❌' : '—'}</td>
                   </tr>
                 );
               })}
@@ -2548,6 +2558,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         {canEdit && deckMsg && <p style={{ fontSize: 11, opacity: 0.6, textAlign: 'center', marginTop: 8 }}>{deckMsg}</p>}
 
         {/* Admin / moderator run record (one row per slide + run details). */}
+        {(eff.isAdmin || eff.isModerator) && <div style={{ maxWidth: 900, margin: '16px auto 0', borderTop: '2px dashed var(--ink)', opacity: 0.45 }} />}
         {runRecordTable()}
 
         {/* A comment section at the end of every finished lesson. */}
@@ -2761,6 +2772,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <button className="btn green" disabled={!canFinish} onClick={() => setPhase('done')}>🏁 Finish</button>
           </div>
           {!allAnswered && <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}>Answer {qList.length > 1 ? 'every question' : 'the question'} above to unlock {isLast ? 'Finish' : 'Next'}.</p>}
+
+          {/* Admin/moderator run record UNDER the slide card — separated by a dotted line.
+              A row fills in as each slide loads through the presentation. */}
+          {(eff.isAdmin || eff.isModerator) && <>
+            <div style={{ maxWidth: 900, margin: '18px auto 0', borderTop: '2px dashed var(--ink)', opacity: 0.45 }} />
+            {runRecordTable(true)}
+          </>}
         </div>
       )}
     </div>
