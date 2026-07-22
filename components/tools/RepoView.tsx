@@ -1628,14 +1628,32 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     const unitTopics = unit ? uniqTopics(flattenCards([unit]).flatMap((c) => splitTopics(promptTextOf(c) || c.text || ''))).slice(0, 12) : [];
     const topics = uniqTopics([...cardTopics, ...unitTopics, ...repoTopicCoverage(sourceCard)]).slice(0, 16);
     const topic = cardPrompt || (topics.length ? topics.join(', ') : '') || cardTitle || unitTitle || repoTitle;
+
+    // Where this lesson sits in its unit, and what EARLIER lessons already taught —
+    // computed LIVE from the repo (so a renamed title never breaks the link), so the
+    // generator can build FORWARD instead of repeating the previous lesson's content.
+    const lessonCard = path && path.length > 1 ? path[1] : undefined;
+    const unitLessons = (unit?.children || []).filter(Boolean) as RepoCard[];
+    const lessonIndex = lessonCard ? unitLessons.findIndex((l) => l.id === lessonCard.id) : -1;
+    const lessonCount = unitLessons.length;
+    const lessonTitle = cardTitle || String(lessonCard?.title || '').trim();
+    const shortDesc = (c?: RepoCard) => {
+      const t = String(c?.text || '').trim() || String((c?.children && c.children[0]?.text) || '').trim() || String(c?.title || '').trim();
+      return t.replace(/\s+/g, ' ').slice(0, 160);
+    };
+    const priorLessons = lessonIndex > 0 ? unitLessons.slice(0, lessonIndex) : [];
+    const priorLine = priorLessons.map((l, i) => `Lesson ${i + 1} "${String(l.title || '').trim()}": ${shortDesc(l)}`).filter(Boolean).join(' | ');
+
     const customInstructions = [
       `Use this repository as the source of truth: ${repoTitle}.`,
       unitTitle ? `Unit to teach now: ${unitTitle}.` : '',
       cardTitle ? `Source card: ${cardTitle}.` : '',
+      (lessonCount > 1 && lessonIndex >= 0) ? `This is lesson ${lessonIndex + 1} of ${lessonCount} in this unit.` : '',
+      priorLine ? `Earlier lessons in this unit ALREADY covered the following — ASSUME the learner already knows them: do NOT re-teach or re-explain them (a brief one-line reinforcement at most), and instead build FORWARD on this lesson's own objective and new material, like a later chapter that assumes the earlier chapters were read: ${priorLine}.` : '',
       topics.length ? `Topics to cover in this lesson: ${topics.join('; ')}.` : '',
       'Keep slide sequence cohesive: introduction, core ideas, then application/check questions tied to these topics.',
     ].filter(Boolean).join(' ');
-    return { topic, topics, customInstructions };
+    return { topic, topics, customInstructions, repoTitle, unitTitle, lessonTitle, lessonIndex, lessonCount };
   };
 
   // Open the configured slide tool with card-aware seed data. If no study tool is
@@ -1643,7 +1661,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const openStudy = async (promptText: string, sourceCard?: RepoCard, opts?: { autoGenerate?: boolean }) => {
     const seed = studySeedFromCard(promptText, sourceCard);
     const autoGenerate = opts?.autoGenerate !== false;
-    appState.slideSeed = { topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions, autoGenerate };
+    // Link the generated lesson to its ORIGIN repo by the stable slug (never the title,
+    // which can change), plus the unit/lesson position — carried into the run record.
+    appState.slideSeed = {
+      topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions, autoGenerate,
+      repoSlug: slug, repoTitle: seed.repoTitle, unitTitle: seed.unitTitle,
+      lessonTitle: seed.lessonTitle, lessonIndex: seed.lessonIndex, lessonCount: seed.lessonCount,
+    };
     let s = (studyToolSlug || '').trim();
     if (!s && canEdit) {
       const made = await createStudyTool({ subject: seed.topic, topics: seed.topics, openAfterCreate: false });

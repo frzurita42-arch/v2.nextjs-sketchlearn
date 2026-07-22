@@ -1147,6 +1147,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const prefetching = useRef<Record<number, Promise<void> | undefined>>({});
   const startedAt = useRef(0);   // when the current play began, for the end-slide time
   const restoredPlay = useRef(false);   // guards the one-time resume-after-refresh restore
+  // Where this lesson came FROM — the origin repo (by stable slug) + unit/lesson —
+  // set from the 🎬 study-path seed, surfaced in the admin run record.
+  const lessonOriginRef = useRef<{ repoSlug?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number } | null>(null);
   // Per-PLAY slide order. The designed deck stores pages in a fixed order, but a
   // presentation shouldn't play identically every time: the FIRST page is always
   // the intro, and the remaining pages are SHUFFLED for each run so a middle- or
@@ -1398,6 +1401,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     const seed = appState.slideSeed;
     if (!seed) return;
     seedDone.current = true; appState.slideSeed = null;
+    // Remember the origin repo (stable slug) + unit/lesson so the run record can link back.
+    lessonOriginRef.current = {
+      repoSlug: seed.repoSlug || '', repoTitle: seed.repoTitle || '', unitTitle: seed.unitTitle || '',
+      lessonTitle: seed.lessonTitle || '', lessonIndex: seed.lessonIndex, lessonCount: seed.lessonCount,
+    };
     const topic = String(seed.topic || '').trim();
     const customInstructions = String(seed.customInstructions || '').trim();
     if (!topic && !seed.slides && !customInstructions) return;
@@ -1430,7 +1438,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const savePlay = useCallback(() => {
     if (typeof sessionStorage === 'undefined') return;
     if (phase !== 'play' && phase !== 'done') return;
-    const payload = { v: 1, phase, cur, cfg: cfgRef.current, results, startedAt: startedAt.current, slides: slidesRef.current };
+    const payload = { v: 1, phase, cur, cfg: cfgRef.current, results, startedAt: startedAt.current, slides: slidesRef.current, origin: lessonOriginRef.current };
     try { sessionStorage.setItem(playKey, JSON.stringify(payload)); }
     catch {
       // Quota hit — drop long data:/base64 media so the text + progress still persist.
@@ -1454,6 +1462,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       const sl = Array.isArray(p?.slides) ? p.slides : [];
       if (!p || (p.phase !== 'play' && p.phase !== 'done') || !sl.filter(Boolean).length) return;
       cfgRef.current = p.cfg || {}; slidesRef.current = sl; startedAt.current = p.startedAt || Date.now();
+      if (p.origin) lessonOriginRef.current = p.origin;
       setCfg(p.cfg || {}); setSlides(sl); setResults(p.results || {}); setCur(Math.max(0, Number(p.cur) || 0)); setPhase(p.phase);
       try { window.scrollTo(0, 0); } catch { /* ignore */ }
     } catch { /* ignore a corrupt entry */ }
@@ -2387,10 +2396,18 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             each cell a JSON dictionary of the slide's content + the student's result,
             plus the run details — a compact, saveable record. Hidden from learners. */}
         {(eff.isAdmin || eff.isModerator) && (() => {
+          const origin = lessonOriginRef.current;
           const runDetails = {
             student: app.user?.username || 'guest',
             lesson: label(cfg),
             level: (cfg as any).level || (cfg as any).difficulty || '',
+            // Origin link — by STABLE repo slug (title may change), plus unit/lesson.
+            ...(origin?.repoSlug ? {
+              fromRepo: origin.repoTitle || origin.repoSlug,
+              fromRepoSlug: origin.repoSlug,
+              unit: origin.unitTitle || '',
+              lessonInUnit: `${(typeof origin.lessonIndex === 'number' && origin.lessonIndex >= 0 ? origin.lessonIndex + 1 : '?')} of ${origin.lessonCount || '?'}${origin.lessonTitle ? ` — ${origin.lessonTitle}` : ''}`,
+            } : {}),
             date: startedAt.current ? new Date(startedAt.current).toLocaleDateString() : new Date().toLocaleDateString(),
             completedAt: new Date().toLocaleString(),
             timeTaken: timeStr,
