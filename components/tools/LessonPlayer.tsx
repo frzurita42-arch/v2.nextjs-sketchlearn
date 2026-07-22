@@ -828,7 +828,19 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // them unless the author overrides; tooltips default OFF.
     const d: any = defaultsFor(settings);
     // Gemini is the default TEXT API (falls back to auto if it isn't configured).
-    return { ...d, tone: 'Any (AI picks)', category: 'Any (AI picks)', tooltips: false, textProvider: 'gemini' };
+    const base: any = { ...d, tone: 'Any (AI picks)', category: 'Any (AI picks)', tooltips: false, textProvider: 'gemini' };
+    // Remember this user's LAST-USED level & slide count and pre-fill them, so their
+    // last choice sticks as the default until they generate with a different one.
+    try {
+      const u = app.user?.username;
+      if (u && typeof localStorage !== 'undefined') {
+        const lvl = localStorage.getItem(`sl_last_level:${u}`);
+        const sld = localStorage.getItem(`sl_last_slides:${u}`);
+        if (lvl) { base.level = lvl; base.difficulty = lvl; }
+        if (sld) base.slides = sld;
+      }
+    } catch { /* ignore */ }
+    return base;
   });
   // Upgrade a legacy CEFR default (A1…C2) to the new academic scale so the
   // Difficulty dropdown always presents a current option.
@@ -1304,6 +1316,16 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   };
 
   const play = (c: Cfg) => {
+    // Remember this user's chosen level & slide count so they persist as the default
+    // for the next generation (until they pick a different one).
+    try {
+      const u = app.user?.username;
+      if (u && typeof localStorage !== 'undefined') {
+        const lvl = (c as any).level || (c as any).difficulty;
+        if (lvl) localStorage.setItem(`sl_last_level:${u}`, String(lvl));
+        if ((c as any).slides) localStorage.setItem(`sl_last_slides:${u}`, String((c as any).slides));
+      }
+    } catch { /* ignore */ }
     cfgRef.current = c; slidesRef.current = []; prefetching.current = {}; startedAt.current = Date.now();
     shufflePages();   // roll a fresh slide order for this run (intro stays first)
     savedRun.current = false;   // this fresh run hasn't been auto-saved yet
@@ -2137,7 +2159,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             // The FIRST page: the topic/prompt and custom-instructions boxes as TALL
             // textareas, side by side — so the whole prompt pulled from the repo (via
             // the 🎬 study-path button) is fully visible and editable, not clipped.
-            const bigArea: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 148, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.4, padding: '8px 10px', border: '2px solid var(--ink,#2d2a26)', borderRadius: 8, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)' };
+            // Sized so the label + box fit INSIDE the fixed step height — otherwise the
+            // step's own scrollbar appears alongside the textarea's, giving two sliders.
+            const bigArea: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 118, resize: 'vertical', fontFamily: 'inherit', fontSize: 12.5, lineHeight: 1.4, padding: '7px 9px', border: '2px solid var(--ink,#2d2a26)', borderRadius: 8, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)' };
             const promptInputStep: WizardStep = {
               key: 'topic-prompt',
               title: 'Prompt & instructions',
@@ -2389,9 +2413,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             their rendition entry) — no manual save button needed. */}
         {canEdit && deckMsg && <p style={{ fontSize: 11, opacity: 0.6, textAlign: 'center', marginTop: 8 }}>{deckMsg}</p>}
 
-        {/* A comment section at the end of every finished lesson. */}
-        {app.user && <CommentSection targetType="tool" targetId={slug} />}
-
         {/* Admin / moderator record of THIS run: one row per slide (up to the max),
             each cell a JSON dictionary of the slide's content + the student's result,
             plus the run details — a compact, saveable record. Hidden from learners. */}
@@ -2467,6 +2488,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             </div>
           );
         })()}
+
+        {/* A comment section at the end of every finished lesson. */}
+        {app.user && <CommentSection targetType="tool" targetId={slug} />}
       </div>
     );
   }
