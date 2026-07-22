@@ -9,6 +9,7 @@ import { appState } from '@/lib/app-state';
 import { useApp } from '@/components/AppContext';
 import { ToolCard } from '@/components/tools/ToolCard';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
+import { repoRef } from '@/lib/repo-ref';
 import { loadLikes, saveLikes } from '@/lib/tool-likes';
 import { useCardSize, useImgSize, galleryLayout } from '@/lib/card-size';
 import { CardViewMenu } from '@/components/ui/CardViewMenu';
@@ -127,6 +128,25 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   };
 
   useEffect(() => { setFavs(loadLikes()); }, [app.user?.username]);
+
+  // Map each slide tool → the repo that adopted it (repo.studyToolSlug points at the
+  // tool), so the slides table can show which repo a lesson tool is associated with.
+  const [repoBySlideTool, setRepoBySlideTool] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (kind !== 'presentation' || !app.eff().isAdmin) return;
+    let alive = true;
+    API.get('/api/tools?archetype=repo&limit=200').then((r: any) => {
+      if (!alive) return;
+      const m: Record<string, string> = {};
+      for (const t of (Array.isArray(r?.tools) ? r.tools : [])) {
+        const st = String(t?.definition?.repo?.studyToolSlug || '').trim();
+        if (st && !m[st]) m[st] = String(t.slug || '');   // keep the first repo that points here
+      }
+      setRepoBySlideTool(m);
+    }).catch(() => { /* ignore */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, app.user?.username]);
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -214,9 +234,15 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
   const skelRec = useMemo(() => (tools.length ? tools[Math.floor(Math.random() * tools.length)] : null), [tools]);
 
   const unitLabel = kind === 'presentation' ? 'Slides' : 'Cards';
+  // Repo ref: for a slide tool, the repo that adopted it (via studyToolSlug); for a repo,
+  // its own reference code. "—" when a slide tool isn't associated with any repo.
+  const repoRefOf = (t: any): string => {
+    if (kind === 'presentation') { const rs = repoBySlideTool[t.slug]; return rs ? `#${repoRef(rs)}` : '—'; }
+    return `#${repoRef(t.slug)}`;
+  };
   const rows: Cell[][] = filtered.map((t) => [
     t.title || 'Untitled', t.owner || '—', unitCount(t, kind) || '—',
-    t.visibility || '—', t.aiGenerated ? '✦' : '', Number(t.likeCount || 0), fmtDate(t.createdAt), t.slug,
+    t.visibility || '—', t.aiGenerated ? '✦' : '', repoRefOf(t), Number(t.likeCount || 0), fmtDate(t.createdAt), t.slug,
   ]);
 
   const filters: { key: 'all' | 'fav' | 'mine'; label: string }[] = [
@@ -319,7 +345,7 @@ export function ShellGallery({ kind, title, subtitle, topSlot, topSlotLabel, pag
               <hr style={{ border: 'none', borderTop: '2px dashed var(--line,#d9cfc0)', margin: '26px 0 18px' }} />
               <h3 style={{ margin: '0 0 10px' }}>All {kind === 'presentation' ? 'slides' : 'repos'} — table</h3>
               <PagedTable
-                headers={['Title', 'Owner', unitLabel, 'Visibility', 'AI', 'Likes', 'Created', 'Slug']}
+                headers={['Title', 'Owner', unitLabel, 'Visibility', 'AI', 'Repo ref', 'Likes', 'Created', 'Slug']}
                 rows={rows}
                 empty="Nothing to show."
                 tight
