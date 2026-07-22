@@ -43,8 +43,11 @@ function promptPrefsBlock(s) {
     'Interactivity = EXPLORATORY (this OVERRIDES the "terse / no small talk / no greetings" default): be warm, curious and chatty. Have a real conversation — reply fully to greetings and tangents, ask open questions, follow the learner\'s lead — and only bring up a recommendation once it clearly fits. Do not push for subject/level up front; discover it through the chat.',
   ];
   const parts = [];
-  const maxWords = Number(s.maxWords) || 80;
-  parts.push(`- Length: keep replies under ${maxWords} words; ${BREV[Math.max(0, Math.min(4, Number(s.brevity) ?? 1))]}.`);
+  // Reply length is adaptive: match the LEARNER'S message, and treat the chosen
+  // "reply length" as the CEILING only for when a longer answer is genuinely warranted.
+  const BREV_CEIL = [25, 60, 120, 220, 400];
+  const bi = Math.max(0, Math.min(4, Number(s.brevity) ?? 1));
+  parts.push(`- Reply length: ${BREV[bi]}. IMPORTANT — always match the length to the learner's message: a short or casual message (e.g. "hi, how are you?") gets a short, natural reply, never an essay. Only write at length when the content genuinely needs it, and even then keep within about ${BREV_CEIL[bi]} words — the ceiling for the selected reply length.`);
   parts.push(`- Tone: ${TONE[s.tone] || TONE.stale}.`);
   parts.push(`- ${INTERACT[Math.max(0, Math.min(4, Number(s.interactivity) ?? 2))]}`);
   parts.push(`- Emojis: ${s.emoji ? 'a few are fine' : 'avoid emojis in prose'}.`);
