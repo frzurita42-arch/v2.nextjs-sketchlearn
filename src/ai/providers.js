@@ -892,6 +892,39 @@ async function generateSpeech(text, voiceId) {
   } catch (e) { console.error('TTS failed:', e.message); return { audio: null, error: e.message }; }
 }
 
+// ElevenLabs speech-to-text (Scribe) — transcribe a recorded audio clip into text.
+// Used by the coach chat's 🎤 dictation button. Returns { text, error } so the caller
+// can surface the real reason (401 bad key, 402 quota, cloud-IP block…). Gated on the
+// same ELEVENLABS_API_KEY as TTS; the key never reaches the browser.
+async function transcribeSpeech(buffer, mime = 'audio/webm') {
+  const key = String(ELEVENLABS_API_KEY || '').trim();
+  if (!key) return { text: '', error: 'ElevenLabs not configured (set ELEVENLABS_API_KEY).' };
+  if (!buffer || !buffer.length) return { text: '', error: 'No audio to transcribe.' };
+  const base = String(ELEVENLABS_API_URL || 'https://api.elevenlabs.io/v1').replace(/\/+$/, '');
+  try {
+    const ext = (String(mime).split('/')[1] || 'webm').split(';')[0].replace(/[^a-z0-9]/gi, '') || 'webm';
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: mime }), `speech.${ext}`);
+    form.append('model_id', 'scribe_v1');
+    const res = await fetchWithTimeout(`${base}/speech-to-text`, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, accept: 'application/json' },
+      body: form,
+    }, 45000, 'ElevenLabs STT');
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).slice(0, 300);
+      console.error('ElevenLabs STT error', res.status, detail);
+      let hint = '';
+      if (/unusual[_ ]?activity|abuse|vpn|proxy/i.test(detail)) hint = ' — ElevenLabs free tier blocks requests from cloud/server IPs (like Vercel). A paid plan removes this block.';
+      else if (res.status === 401 || /unauthor|invalid.?api|missing.?api/i.test(detail)) hint = ' — key rejected: confirm ELEVENLABS_API_KEY is exact and has Speech-to-Text permission.';
+      else if (res.status === 402 || /quota|credit|limit/i.test(detail)) hint = ' — ElevenLabs quota/credits exhausted for this key.';
+      return { text: '', error: `ElevenLabs ${res.status}: ${detail || 'request rejected'}${hint}` };
+    }
+    const data = await res.json().catch(() => ({}));
+    return { text: String(data.text || '').trim(), error: null };
+  } catch (e) { console.error('STT failed:', e.message); return { text: '', error: e.message }; }
+}
+
 const SKETCH_SVG_RULES = `SVG rules: self-contained <svg> with a viewBox (around 0 0 400 260), no external references, no scripts, no <text> smaller than 14px. Draw in a hand-sketched style: stroke-based shapes with stroke="#2d2a26" stroke-width="2.5" stroke-linecap="round", slightly irregular lines, fills only from this palette: #f9a03f (orange), #7fb069 (green), #5c80bc (blue), #e4572e (red), #f7f3e9 (paper), #fadf63 (yellow). CRITICAL: the drawing must accurately depict THIS slide's specific concept — a real diagram, labeled figure, graph, or visual metaphor of what the paragraphs explain. Label its parts with <text> so a viewer can map the picture onto the idea. A generic, decorative, or unrelated shape (a plain circle, a random zig-zag) is unacceptable; if the concept is a process show the steps, if it is a relationship show the axes/quantities, if it is a structure show and name the parts.`;
 
 // Look up CURRENT public API prices for a set of models using OpenRouter's web
@@ -948,5 +981,6 @@ module.exports = {
   generateSvgWithClaude,
   illustrateWithClaude,
   generateSpeech,
+  transcribeSpeech,
   SKETCH_SVG_RULES
 };
