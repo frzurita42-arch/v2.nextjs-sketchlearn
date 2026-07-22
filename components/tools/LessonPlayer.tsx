@@ -81,7 +81,7 @@ const TEXT_LEVELS = [
 // (which sets vocabulary/comprehension difficulty). "" = follow the level default.
 const PARA_DENSITIES = ['Low', 'Low-Medium', 'Medium', 'Medium-High', 'High'];
 // Preset slide counts offered in the (editable) dropdown for the "slides" field.
-const SLIDE_COUNTS = ['3', '4', '5', '6', '8', '10', '12', '15', '20'];
+const SLIDE_COUNTS = ['3', '4', '5', '6', '8', '10', '12', '15'];
 // Map any legacy CEFR level a tool was saved with onto the new academic scale, so
 // the Difficulty dropdown always shows a current option instead of stale "A1".
 const LEGACY_LEVEL_MAP: Record<string, string> = {
@@ -2343,9 +2343,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               results: answers.map((a: any) => ({ prompt: a.prompt, chose: a.your, expected: a.answer, correct: !!a.correct })),
             };
           };
-          // Always render up to the max capacity (fifteen rows) so every possible slide
-          // has a row, even when fewer were generated — and grow if a deck is longer.
-          const ROW_COUNT = Math.max(15, slidesRef.current.length);
+          // Always render up to the max capacity (MAX_SLIDES rows) so every possible
+          // slide has a row, even when fewer were generated — and grow if a deck is longer.
+          const ROW_COUNT = Math.max(MAX_SLIDES, slidesRef.current.length);
           const jsonCell: React.CSSProperties = { width: '100%', boxSizing: 'border-box', minWidth: 320, height: 66, resize: 'vertical', fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: 10, lineHeight: 1.4, padding: '5px 7px', border: '1.5px solid var(--ink,#2d2a26)', borderRadius: 6, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)', whiteSpace: 'pre', overflow: 'auto' };
           const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, padding: '5px 7px', borderBottom: '2px solid var(--ink,#2d2a26)', background: 'var(--card,#fff8ee)', position: 'sticky', top: 0 };
           const td: React.CSSProperties = { padding: '5px 7px', borderBottom: '1px solid var(--line,#d9cfc0)', verticalAlign: 'top' };

@@ -9,7 +9,7 @@
 // server-side (the slide route + the published definition) and mirrored in the UI
 // so a prompt/injection can never make a single presentation run away into dozens
 // of paid slide generations. Keep this the single source of truth.
-export const MAX_SLIDES = 9;
+export const MAX_SLIDES = 15;
 
 export type FieldType = 'text' | 'textarea' | 'number' | 'select' | 'select-or-custom' | 'toggle' | 'date' | 'image' | 'audio' | 'drawing';
 
