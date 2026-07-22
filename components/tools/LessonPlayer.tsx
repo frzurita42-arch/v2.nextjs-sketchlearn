@@ -1055,7 +1055,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // Whether the create/settings card is EXPANDED. Collapsed (the default) shows
   // only the essentials — topic, level, slides + Play; expanded shows every knob.
   // The choice is remembered across visits (localStorage), shared by all tools.
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Whether the create-new settings section is expanded on the page. Visible by
+  // default; the ⚙️/▾ toggle hides it (persisted) so the page can show just the gallery.
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try { return localStorage.getItem('sl_lesson_settings_open') !== '0'; } catch { return true; }
+  });
   useEffect(() => { try { setSettingsOpen(localStorage.getItem('sl_lesson_settings_open') === '1'); } catch { /* ignore */ } }, []);
   const toggleSettings = () => setSettingsOpen((o) => { const n = !o; try { localStorage.setItem('sl_lesson_settings_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   // Edit this tool's layout in the SAME Studio used to create slide tools, pre-loaded
@@ -1883,7 +1888,16 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
 
         {/* The create wizard spans the full page width. */}
         <div ref={wizardRef} style={{ width: '100%' }}>
-        {showGenerate && (
+        {/* Collapsed: a slim bar that expands the create-new settings (visible by default). */}
+        {showGenerate && !settingsOpen && (
+          <div className="card" onClick={toggleSettings} title="Show the create-new settings"
+            style={{ cursor: 'pointer', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{ opacity: 0.45, fontSize: 12 }}>▸</span>
+            <b>⚙️ Create a {lesson.subject || 'lesson'} activity</b>
+            <span style={{ marginLeft: 'auto', fontSize: 11.5, opacity: 0.6 }}>settings hidden — tap to show</span>
+          </div>
+        )}
+        {showGenerate && settingsOpen && (
         <div style={{ width: '100%', boxSizing: 'border-box' }}>
           {(() => {
             const fieldsFor = (ids: string[]) => formFields.filter((f: any) => ids.includes(f.id));
@@ -2036,9 +2050,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                       <h4 style={{ margin: 0, cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={toggleSettings}
-                        title={settingsOpen ? 'Collapse — show only the essentials' : 'Expand — show every setting'}>
-                        <span style={{ opacity: 0.45, fontSize: 12 }}>{settingsOpen ? '▾' : '▸'}</span>
-                        Create a {lesson.subject || 'lesson'} activity
+                        title="Hide the create-new settings">
+                        <span style={{ opacity: 0.45, fontSize: 12 }}>▾</span>
+                        ⚙️ Create a {lesson.subject || 'lesson'} activity
                       </h4>
                       {(canEdit || eff.isAdmin) && <button onClick={openLayoutEditor} title="Modify the proposed lesson layouts (opens the Studio)"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>⚙️</button>}
