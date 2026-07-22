@@ -2040,7 +2040,14 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                     onNext={goNext}
                     onBack={goPrev}
                     backDisabled={wizardStep === 0}
-                    rightTop={isLastSettings ? finalActions : undefined} />
+                    // On the last SETTINGS page keep a Next → (to reach the prompt window,
+                    // the true final step) AND offer Generate right here, so nothing is lost.
+                    rightTop={isLastSettings
+                      ? <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', width: 96, minWidth: 96 }}>
+                          <button className="btn small green" style={navSizeStyle} onClick={goNext} title="See the exact prompt(s) sent to the AI">Next →</button>
+                          {finalActions}
+                        </div>
+                      : undefined} />
                 ),
               };
             });
