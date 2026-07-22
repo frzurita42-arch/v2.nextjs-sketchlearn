@@ -1400,6 +1400,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // The ⚙️ repo-controls popup (owner/moderator only). All the feature toggles that
   // used to sprawl across the toolbar now live in this guided wizard modal.
   const [controlsStep, setControlsStep] = useState(0);   // page in the inline settings wizard card
+  // Whether the whole repo-settings card is expanded. Collapsible (persisted) so the
+  // owner can tuck it away — same show/hide behaviour as the slide-tool settings.
+  const [repoSettingsOpen, setRepoSettingsOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try { return localStorage.getItem('sl_repo_settings_open') !== '0'; } catch { return true; }
+  });
+  const toggleRepoSettings = () => setRepoSettingsOpen((o) => { const n = !o; try { localStorage.setItem('sl_repo_settings_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   // Fields for a newly created slide tool.
   const [ccSubject, setCcSubject] = useState('');
   const [ccLevel, setCcLevel] = useState('Beginner');
@@ -1793,7 +1800,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           {/* The repo-settings card, shown INLINE here (it used to open from a ⚙️
               gear popup). Full-width so it spans the whole page. */}
           <div style={{ width: '100%', boxSizing: 'border-box' }}>
-            {(() => {
+            {/* Collapsed: a slim bar that expands the repo settings (visible by default). */}
+            {!repoSettingsOpen && (
+              <div className="card" onClick={toggleRepoSettings} title="Show repo settings"
+                style={{ cursor: 'pointer', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ opacity: 0.45, fontSize: 12 }}>▸</span>
+                <b>⚙️ 🗂️ Repo settings</b>
+                <span style={{ marginLeft: 'auto', fontSize: 11.5, opacity: 0.6 }}>settings hidden — tap to show</span>
+              </div>
+            )}
+            {repoSettingsOpen && (() => {
               const Row = SettingRow;   // stable module-level component — no remount on toggle
               // Shared field wrappers so every repo-settings control looks exactly
               // like a slide-tool field: a title label above a fixed-width control.
@@ -1803,13 +1819,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               // so within each group the fields stack vertically to stay compact.
               const stackGrid: React.CSSProperties = { display: 'grid', gap: 12, alignContent: 'start' };
               const colHead: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', opacity: 0.55, margin: '0 0 8px' };
+              const hasNested = cards.some((c) => (c.children || []).length > 0);
+              // Card order and Nested cards sit on the SAME row (two columns) so step 1
+              // stays short — it drops to one column only when there's nothing nested.
               const cardsContent = (
-                <div style={stackGrid}>
+                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: hasNested ? 'repeat(auto-fit, minmax(200px, 1fr))' : '1fr', gap: 20, alignItems: 'start' }}>
                   <label className="field" style={fieldWrap}>
                     <span style={fieldLabel}>🔀 Card order</span>
                     <button className={`btn ${sortMode === 'manual' ? 'ghost' : 'blue'}`} style={FIELD_CONTROL_STYLE} title="Sort the cards — cycle: Manual → ↑ Oldest → ↓ Newest → 🔀 Random" onClick={cycleSort}>{SORT_LABEL[sortMode]}</button>
                   </label>
-                  {cards.some((c) => (c.children || []).length > 0) && (
+                  {hasNested && (
                     <label className="field" style={fieldWrap}>
                       <span style={fieldLabel}>🗂️ Nested cards</span>
                       <button className="btn ghost" style={FIELD_CONTROL_STYLE} title={collapseCmd.on ? 'Expand every card to show its nested cards' : 'Collapse every card — show only the top-level cards'} onClick={() => collapseAll(!collapseCmd.on)}>{collapseCmd.on ? '⊕ Expand all' : '⊖ Collapse all'}</button>
@@ -1830,31 +1849,35 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   <Row icon="🕒" label="Show dates" hint="Show each card’s created date/time" on={showDates} onClick={() => saveShowDates(!showDates)} />
                 </div>
               );
-              // Just the study-path slide-tool picker — the compact half of "access".
-              const studyToolContent = (
-                <div style={stackGrid}>
-                  <label className="field" style={fieldWrap}>
-                    <span style={fieldLabel}>🎬 Study-path slide tool</span>
-                    <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={FIELD_CONTROL_STYLE}>
-                      <option value="">— none picked —</option>
-                      {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
-                    </select>
-                  </label>
+              // Step 1 — just the card controls (order + nested), on one short row.
+              const cardsPage = (
+                <div style={{ width: '100%' }}>
+                  <div style={colHead}>🗂️ Cards &amp; order</div>
+                  {cardsContent}
                 </div>
               );
-              // The paywall bypass list — on its OWN page, because the invited-user
-              // chips can grow to fill (and scroll) the whole area when many are added.
-              const paywallContent = (
+              // Step 2 — access: the study-path slide-tool picker plus the paywall
+              // bypass list. The invited-user chips have the rest of the page to grow.
+              const accessPageContent = (
                 <div style={{ width: '100%' }}>
-                  <div style={colHead}>🔒 Paywall access</div>
-                  <label className="field" style={fieldWrap}>
-                    <span style={fieldLabel} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
-                    <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username + Enter" list="repo-known-users"
-                      onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
-                      style={FIELD_CONTROL_STYLE} />
-                    <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
-                  </label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start', marginTop: 8 }}>
+                  <div style={colHead}>🔑 Access &amp; study tool</div>
+                  <div style={{ ...stackGrid, marginBottom: 8 }}>
+                    <label className="field" style={fieldWrap}>
+                      <span style={fieldLabel}>🎬 Study-path slide tool</span>
+                      <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={FIELD_CONTROL_STYLE}>
+                        <option value="">— none picked —</option>
+                        {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
+                      </select>
+                    </label>
+                    <label className="field" style={fieldWrap}>
+                      <span style={fieldLabel} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
+                      <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username + Enter" list="repo-known-users"
+                        onKeyDown={(e) => { if (e.key === 'Enter') { const v = authInput.trim(); if (v && !authorizedUsers.includes(v)) saveAuthorized([...authorizedUsers, v]); setAuthInput(''); } }}
+                        style={FIELD_CONTROL_STYLE} />
+                      <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start' }}>
                     {authorizedUsers.length === 0
                       ? <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>
                       : authorizedUsers.map((u) => (
@@ -1866,25 +1889,18 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   </div>
                 </div>
               );
-              // Compact combined page: Cards & order (left) beside the study-tool
-              // picker (right) — both fit in the fixed area with no scrollbar. The
-              // paywall list moved to its own page. On a narrow card they stack.
-              const cardsAccessContent = (
-                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 20, alignItems: 'start' }}>
-                  <div><div style={colHead}>🗂️ Cards &amp; order</div>{cardsContent}</div>
-                  <div><div style={colHead}>🔑 Access &amp; study tool</div>{studyToolContent}</div>
-                </div>
-              );
               const goN = () => setControlsStep((s) => Math.min(3, s + 1));
               const goB = () => setControlsStep((s) => Math.max(0, s - 1));
               const steps: WizardStep[] = [
-                { key: 'main', title: 'Cards, order & study tool', render: () => <WizardGridTemplate tall top={cardsAccessContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
-                { key: 'paywall', title: 'Paywall access', render: () => <WizardGridTemplate tall top={paywallContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'main', title: 'Cards & order', render: () => <WizardGridTemplate tall top={cardsPage} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'access', title: 'Access & study tool', render: () => <WizardGridTemplate tall top={accessPageContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'prompt', title: 'How it replies — the prompt', render: () => <WizardGridTemplate tall top={<PromptInspector kind="repo" topic={def?.title || ''} />} onBack={goB} backDisabled={controlsStep === 0} /> },
               ];
               return (
-                <SetupWizardCard title={<span style={{ fontSize: 15 }}>⚙️ 🗂️ Repo settings</span>}
+                <SetupWizardCard title={<span onClick={toggleRepoSettings} title="Hide repo settings"
+                    style={{ fontSize: 15, cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ opacity: 0.45, fontSize: 12 }}>▾</span>⚙️ 🗂️ Repo settings</span>}
                   steps={steps} stepIndex={controlsStep} onStepChange={setControlsStep} />
               );
             })()}
