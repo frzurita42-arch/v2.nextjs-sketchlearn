@@ -1161,7 +1161,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const restoredPlay = useRef(false);   // guards the one-time resume-after-refresh restore
   // Where this lesson came FROM — the origin repo (by stable slug) + unit/lesson —
   // set from the 🎬 study-path seed, surfaced in the admin run record.
-  const lessonOriginRef = useRef<{ repoSlug?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number } | null>(null);
+  const lessonOriginRef = useRef<{ repoSlug?: string; repoRef?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number } | null>(null);
   // Per-slide dwell time (seconds), so the saved lesson log records time-on-each-slide.
   const slideTimeRef = useRef<Record<number, number>>({});
   const slideEnterRef = useRef(0);
@@ -1201,9 +1201,15 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       __lessonLog: true,
       playedBy: app.user?.username || 'guest',
       playedAt: new Date().toISOString(),
+      slideTool: String(def?.title || lesson.subject || ''),
+      repoRef: origin.repoRef || '',
+      repoSlug: origin.repoSlug || '',
       timeSeconds: startedAt.current ? Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)) : 0,
       score: `${correct}/${answered}`,
       percent: answered ? Math.round((correct / answered) * 100) : 0,
+      level: String((cfgRef.current as any).level || (cfgRef.current as any).difficulty || ''),
+      imageStyle: String((cfgRef.current as any).imageStyle || 'Any'),
+      slideCount: gen.length,
       unitTitle: origin.unitTitle || '',
       lessonTitle: origin.lessonTitle || '',
       lessonIndex: origin.lessonIndex,
@@ -1477,7 +1483,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     seedDone.current = true; appState.slideSeed = null;
     // Remember the origin repo (stable slug) + unit/lesson so the run record can link back.
     lessonOriginRef.current = {
-      repoSlug: seed.repoSlug || '', repoTitle: seed.repoTitle || '', unitTitle: seed.unitTitle || '',
+      repoSlug: seed.repoSlug || '', repoRef: seed.repoRef || '', repoTitle: seed.repoTitle || '', unitTitle: seed.unitTitle || '',
       lessonTitle: seed.lessonTitle || '', lessonIndex: seed.lessonIndex, lessonCount: seed.lessonCount,
     };
     const topic = String(seed.topic || '').trim();
@@ -2475,20 +2481,31 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     return (
       <div className="card alt" style={{ padding: '12px 14px', marginTop: 12, maxWidth: 900, marginInline: 'auto' }}>
         <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
-        {/* Run details — who, when, time, and the ORIGIN repo (or "Direct" when this was
-            generated & played straight from the slide tool, not launched from a repo). */}
+        {/* Run details AS COLUMNS — the slide tool, who, when, elapsed, the origin repo
+            reference (short #code, or "Direct" when generated straight from the tool),
+            level, image style, slide count and score. Long values reveal via 👁. */}
         {(() => {
           const startedTime = startedAt.current ? new Date(startedAt.current).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-          const originLabel = origin?.repoSlug
-            ? `${(runDetails as any).fromRepo}${(runDetails as any).unit ? ` · ${(runDetails as any).unit}` : ''}${(runDetails as any).lessonInUnit ? ` · lesson ${(runDetails as any).lessonInUnit}` : ''}`
-            : 'Direct — not from a repo';
+          const toolTitle = String(def?.title || lesson.subject || 'Slide tool');
+          const originCode = origin?.repoSlug ? `#${origin.repoRef || '?????'}${origin.lessonIndex != null ? ` · L${origin.lessonIndex + 1}` : ''}` : 'Direct';
+          const detailsRow: Cell[] = [
+            toolTitle,
+            runDetails.student,
+            `${runDetails.date}${startedTime ? ` · ${startedTime}` : ''}`,
+            runDetails.timeTaken,
+            { node: <span title={origin?.repoSlug ? `From repo "${origin.repoTitle || origin.repoSlug}" (slug ${origin.repoSlug})` : 'Generated & played directly — not launched from a repo'}>{originCode}</span> },
+            String((cfgRef.current as any).level || (cfgRef.current as any).difficulty || '—'),
+            String((cfgRef.current as any).imageStyle || 'Any'),
+            String((cfgRef.current as any).slides || total()),
+            `${runDetails.score} (${runDetails.percent}%)`,
+          ];
           return (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 14px', fontSize: 12, margin: '0 0 8px', opacity: 0.9, lineHeight: 1.5 }}>
-              <span>👤 <b>{runDetails.student}</b></span>
-              <span>📅 {runDetails.date}{startedTime ? ` · ${startedTime}` : ''}</span>
-              <span>🕐 {runDetails.timeTaken}</span>
-              <span>📁 {originLabel}</span>
-              <span>🏆 {runDetails.score} ({runDetails.percent}%)</span>
+            <div style={{ marginBottom: 8 }}>
+              <PagedTable
+                headers={['Slide tool', 'Student', 'Played', 'Elapsed', 'Repo ref', 'Level', 'Image style', 'Slides', 'Score']}
+                rows={[detailsRow]}
+                empty="—"
+              />
             </div>
           );
         })()}

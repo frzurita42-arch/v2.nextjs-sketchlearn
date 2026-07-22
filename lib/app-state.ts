@@ -44,7 +44,7 @@ export interface AppState {
   // A one-shot "preset the create form" seed: a study-path card can prefill
   // topic/slides/custom instructions and optionally auto-start generation.
   // Consumed once by the LessonPlayer create form on mount.
-  slideSeed?: { topic?: string; slides?: number; customInstructions?: string; autoGenerate?: boolean; repoSlug?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number } | null;
+  slideSeed?: { topic?: string; slides?: number; customInstructions?: string; autoGenerate?: boolean; repoSlug?: string; repoRef?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number } | null;
   builderDraft?: any;
   // A one-shot seed for the tool builder: prefill the artifact type + subject/
   // title from a suggested topic. Consumed once by BuilderStudioView on mount.

@@ -32,6 +32,7 @@ import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
 import { PromptInspector } from '@/components/ui/PromptInspector';
 import { FIELD_CONTROL_STYLE } from '@/components/tools/ToolFields';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
+import { repoRef } from '@/lib/repo-ref';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
 
 // Shared runtime context threaded through the read-only card tree.
@@ -1677,10 +1678,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
       if (parts.length) taught = ` PREVIOUSLY TAUGHT in this course (build on this like a later chapter — assume the learner already knows it, do NOT re-explain it): ${parts.join(' | ')}.`;
     }
     // Link the generated lesson to its ORIGIN repo by the stable slug (never the title,
-    // which can change), plus the unit/lesson position — carried into the run record.
+    // which can change) + a short reference code, plus the unit/lesson position — all
+    // carried into the run record and named inside the custom instructions.
+    const ref = repoRef(slug);
+    const originLine = ` [Origin repo #${ref} — "${seed.repoTitle}" · slug:${slug}${seed.unitTitle ? ` · unit:${seed.unitTitle}` : ''}${typeof seed.lessonIndex === 'number' ? ` · lesson ${seed.lessonIndex + 1} of ${seed.lessonCount || '?'}` : ''}]`;
     appState.slideSeed = {
-      topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions + taught, autoGenerate,
-      repoSlug: slug, repoTitle: seed.repoTitle, unitTitle: seed.unitTitle,
+      topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions + taught + originLine, autoGenerate,
+      repoSlug: slug, repoRef: ref, repoTitle: seed.repoTitle, unitTitle: seed.unitTitle,
       lessonTitle: seed.lessonTitle, lessonIndex: seed.lessonIndex, lessonCount: seed.lessonCount,
     };
     let s = (studyToolSlug || '').trim();
@@ -2110,16 +2114,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           const secs = d.timeSeconds || 0;
           const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
           const summary = (d.slides || []).map((s: any) => `${s.n}. ${s.title}${s.seconds ? ` (${s.seconds}s)` : ''}`).join('  ·  ');
-          return [String(d.playedBy || '—'), when, String(d.unitTitle || '—'), lesson, String(d.score || '—'), time, summary || '—'];
+          return [String(d.playedBy || '—'), when, String(d.slideTool || '—'), String(d.unitTitle || '—'), lesson, String(d.level || '—'), String(d.score || '—'), time, summary || '—'];
         });
         return (
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', margin: '0 0 8px' }}>
               <h3 style={{ margin: 0 }}>📊 Lesson runs — who learned what</h3>
-              <span style={{ fontSize: 12, opacity: 0.7 }}>Each play from a 🎬 prompt, logged here. The next lesson builds on these.</span>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>This repo’s reference: <b>#{repoRef(slug)}</b> · a lesson tagged with this code came from here.</span>
             </div>
             <PagedTable
-              headers={['Student', 'Played', 'Unit', 'Lesson', 'Score', 'Time', 'Slides taught (summary)']}
+              headers={['Student', 'Played', 'Slide tool', 'Unit', 'Lesson', 'Level', 'Score', 'Time', 'Slides taught (summary)']}
               rows={rows}
               empty="No lessons have been played from this repository yet — play one from a 🎬 prompt and it appears here."
               rowsPerPage={8}
