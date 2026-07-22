@@ -1861,7 +1861,9 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               const accessPageContent = (
                 <div style={{ width: '100%' }}>
                   <div style={colHead}>🔑 Access &amp; study tool</div>
-                  <div style={{ ...stackGrid, marginBottom: 8 }}>
+                  {/* Study-path picker and paywall-bypass input SIDE BY SIDE (they stack
+                      only on a narrow card), so the page stays short with no scrollbar. */}
+                  <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, alignItems: 'start', marginBottom: 8 }}>
                     <label className="field" style={fieldWrap}>
                       <span style={fieldLabel}>🎬 Study-path slide tool</span>
                       <select value={studyToolSlug} onChange={(e) => saveStudyTool(e.target.value)} style={FIELD_CONTROL_STYLE}>
