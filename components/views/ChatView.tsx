@@ -573,9 +573,9 @@ export function ChatView() {
               </div>
               {composerBox}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 2 }}>
-                {[{ v: 'slides', l: '🎞️ Slides' }, { v: 'tools', l: '📁 Repos' }, { v: 'presrun', l: '🎬 Presentation runs' }, { v: 'about', l: 'ℹ️ About us' },
-                  // Users is an admin-only page, so only admins get its quick link.
-                  ...(app.eff().isAdmin ? [{ v: 'users', l: '👥 Users' }] : [])].map((c) => (
+                {[{ v: 'slides', l: '🎞️ Slides' }, { v: 'tools', l: '📁 Repos' }, { v: 'presrun', l: '🎬 Presentation runs' },
+                  // Users is an admin-only page, so only admins get its quick link; About us comes after it.
+                  ...(app.eff().isAdmin ? [{ v: 'users', l: '👥 Users' }] : []), { v: 'about', l: 'ℹ️ About us' }].map((c) => (
                   <button key={c.v} className="btn small ghost" onClick={() => app.nav(c.v as never)}>{c.l}</button>
                 ))}
               </div>
