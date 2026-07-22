@@ -91,6 +91,18 @@ function msgToAI(m: ChatMsg): { role: 'user' | 'assistant'; content: string } {
   return { role, content: content || '(no text)' };
 }
 
+// Cheap keyword extraction for the chat-history table: the most frequent meaningful
+// words the learner typed across a session (falls back to the session title).
+const KW_STOP = new Set('the a an and or but to of in on for with is are was were be been being i you it this that these those how what when where why who do does did want need would like can could should so about just little bit more less how are you your my me we they them he she his her hello hey hi please thanks thank ok okay yeah yes no not have has had will shall may might get got give show tell find make let know think feel really very much some any all one two'.split(' '));
+function sessionKeywords(s: ChatSession): string {
+  const text = (s.messages || []).filter((m) => m.role === 'user' && m.content && !m.content.startsWith('🎨') && !m.content.startsWith('📺')).map((m) => m.content).join(' ').toLowerCase();
+  const words = text.match(/[a-záéíóúñü]{3,}/gi) || [];
+  const freq = new Map<string, number>();
+  for (const w of words) { if (KW_STOP.has(w)) continue; freq.set(w, (freq.get(w) || 0) + 1); }
+  const top = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map((e) => e[0]);
+  return top.join(', ') || (s.title || '—');
+}
+
 export function ChatView() {
   const app = useApp();
   const username = app.user?.username || null;
@@ -112,6 +124,7 @@ export function ChatView() {
   const [freeOnly, setFreeOnly] = useState(false);   // recommend only free (premade) tools
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
+  const [historyTableOpen, setHistoryTableOpen] = useState(false);   // the chat-log table under the composer
   // 🎤 dictation (ElevenLabs speech-to-text): append the transcript to the input.
   const { voiceOn, recording, transcribing, toggleMic } = useDictation(
     (t) => setInput((v) => (v ? v.trimEnd() + ' ' : '') + t),
@@ -646,6 +659,43 @@ export function ChatView() {
                 {!app.user ? 'Free mode (guest): messages recommend a tool to play — no cost. Sign in to build and generate.'
                   : noCredits && !freeOnly ? 'You’re out of credits: chat runs on a free model (or recommends a tool), and building/generating is paused until you add credits.'
                   : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
+              </div>
+            )}
+          </div>
+
+          {/* Chat-history log table under the composer: one row per past chat with its
+              date, time, extracted keywords and message count. Click a row to reopen it.
+              Collapsible so it never crowds the conversation above. */}
+          <div style={{ flex: '0 0 auto', marginBottom: 12 }}>
+            <button type="button" onClick={() => setHistoryTableOpen((v) => !v)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+              🕓 Chat history ({sessions.length}) <span style={{ fontSize: 11 }}>{historyTableOpen ? '▾' : '▸'}</span>
+            </button>
+            {historyTableOpen && (
+              <div style={{ maxHeight: '26vh', overflowY: 'auto', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 8, marginTop: 4 }}>
+                <table className="sketch tight" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.8rem' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Date</th>
+                      <th style={{ textAlign: 'left' }}>Time</th>
+                      <th style={{ textAlign: 'left' }}>Keywords</th>
+                      <th style={{ textAlign: 'right' }}>Msgs</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.length === 0 && (
+                      <tr><td colSpan={4} style={{ textAlign: 'center', opacity: 0.5, padding: '10px 0' }}>No chats yet — your conversations will be logged here.</td></tr>
+                    )}
+                    {[...sessions].sort((a, b) => b.ts - a.ts).map((sn) => (
+                      <tr key={sn.id} onClick={() => openSession(sn)} style={{ cursor: 'pointer' }} title="Open this chat">
+                        <td>{new Date(sn.ts).toLocaleDateString()}</td>
+                        <td>{new Date(sn.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sessionKeywords(sn)}</td>
+                        <td style={{ textAlign: 'right' }}>{(sn.messages || []).filter((m) => !m.building).length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
