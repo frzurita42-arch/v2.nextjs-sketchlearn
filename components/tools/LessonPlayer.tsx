@@ -2426,8 +2426,14 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       };
     };
     const ROW_COUNT = Math.max(MAX_SLIDES, slidesRef.current.length);
-    const th: React.CSSProperties = { textAlign: 'left', fontSize: 11, padding: '5px 7px', borderBottom: '2px solid var(--ink,#2d2a26)', background: 'var(--card,#fff8ee)', position: 'sticky', top: 0, whiteSpace: 'nowrap' };
-    const td: React.CSSProperties = { padding: '5px 8px', borderBottom: '1px solid var(--line,#d9cfc0)', verticalAlign: 'top', fontSize: 11.5, lineHeight: 1.4 };
+    // Rows in the SAME standard (yellow-header, fixed-height) PagedTable used elsewhere.
+    const rowsData: Cell[][] = Array.from({ length: ROW_COUNT }, (_, i) => {
+      const d = slideDict(i);
+      if (!d) return [String(i + 1), '— not generated yet —', '', '', '', ''];
+      const ans = d.results.map((r) => r.chose).filter(Boolean).join('; ');
+      const mark = d.results.length === 0 ? '' : d.results.every((r) => r.correct) ? '✅' : d.results.some((r) => !r.correct) ? '❌' : '—';
+      return [String(i + 1), d.title || '—', d.content || '—', (d.support && d.support.length ? d.support.join(', ') : '—'), ans || '— not answered —', mark];
+    });
     return (
       <div className="card alt" style={{ padding: '12px 14px', marginTop: 12, maxWidth: 900, marginInline: 'auto' }}>
         <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
@@ -2436,37 +2442,12 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           <b>{runDetails.student}</b> · {runDetails.score} ({runDetails.percent}%) · ⏱ {runDetails.timeTaken}
           {origin?.repoSlug && <> · from <b>{(runDetails as any).fromRepo}</b>{(runDetails as any).unit ? ` · ${(runDetails as any).unit}` : ''}{(runDetails as any).lessonInUnit ? ` · lesson ${(runDetails as any).lessonInUnit}` : ''}</>}
         </div>
-        <div style={{ overflowX: 'auto', maxHeight: compact ? 280 : undefined, overflowY: compact ? 'auto' : undefined }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 640 }}>
-            <thead><tr>
-              <th style={{ ...th, width: 40, textAlign: 'center' }}>#</th>
-              <th style={{ ...th, minWidth: 130 }}>Slide title</th>
-              <th style={{ ...th, minWidth: 220 }}>What it taught</th>
-              <th style={{ ...th, minWidth: 100 }}>Shows</th>
-              <th style={{ ...th, minWidth: 150 }}>Student answer</th>
-              <th style={{ ...th, width: 34, textAlign: 'center' }}>✓</th>
-            </tr></thead>
-            <tbody>
-              {Array.from({ length: ROW_COUNT }, (_, i) => {
-                const d = slideDict(i);
-                if (!d) return (<tr key={i}><td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{i + 1}</td><td style={td} colSpan={5}><span style={{ opacity: 0.4 }}>— not generated yet —</span></td></tr>);
-                const ans = d.results.map((r) => r.chose).filter(Boolean).join('; ');
-                const allCorrect = d.results.length > 0 && d.results.every((r) => r.correct);
-                const anyWrong = d.results.some((r) => !r.correct);
-                return (
-                  <tr key={i}>
-                    <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{i + 1}</td>
-                    <td style={td}>{d.title || '—'}</td>
-                    <td style={td}>{d.content ? d.content.slice(0, 220) + (d.content.length > 220 ? '…' : '') : '—'}</td>
-                    <td style={td}>{d.support && d.support.length ? d.support.join(', ') : '—'}</td>
-                    <td style={td}>{ans || <span style={{ opacity: 0.4 }}>— not answered —</span>}</td>
-                    <td style={{ ...td, textAlign: 'center' }}>{d.results.length === 0 ? '' : allCorrect ? '✅' : anyWrong ? '❌' : '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <PagedTable
+          headers={['#', 'Slide title', 'What it taught', 'Shows', 'Student answer', '✓']}
+          rows={rowsData}
+          empty="No slides yet."
+          rowsPerPage={8}
+        />
       </div>
     );
   };
@@ -2772,15 +2753,15 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <button className="btn green" disabled={!canFinish} onClick={() => setPhase('done')}>🏁 Finish</button>
           </div>
           {!allAnswered && <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}>Answer {qList.length > 1 ? 'every question' : 'the question'} above to unlock {isLast ? 'Finish' : 'Next'}.</p>}
-
-          {/* Admin/moderator run record UNDER the slide card — separated by a dotted line.
-              A row fills in as each slide loads through the presentation. */}
-          {(eff.isAdmin || eff.isModerator) && <>
-            <div style={{ maxWidth: 900, margin: '18px auto 0', borderTop: '2px dashed var(--ink)', opacity: 0.45 }} />
-            {runRecordTable(true)}
-          </>}
         </div>
       )}
+
+      {/* Admin/moderator run record — OUTSIDE the slide card, its own section below it,
+          separated by a full-width dotted line. A row fills in as each slide loads. */}
+      {(eff.isAdmin || eff.isModerator) && curReady && curSlide && <>
+        <div style={{ borderTop: '2px dashed var(--ink)', opacity: 0.45, margin: '20px 0 0' }} />
+        {runRecordTable(true)}
+      </>}
     </div>
   );
 }
