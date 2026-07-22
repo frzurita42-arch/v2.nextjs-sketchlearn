@@ -1666,7 +1666,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     const hasSlides = settings.some((f: any) => f.id === 'slides');
     const formFields = [
       // A name for THIS presentation run (shown as its card title). Always visible.
-      { id: 'title', label: '📝 Title', type: 'text', placeholder: 'Name this presentation… (optional)' },
+      { id: 'title', label: '📝 Title', type: 'text', placeholder: 'Optional — defaults to your prompt, or an AI-picked name' },
       ...settings.map(normField),
       // Core-input fallbacks: some AI-generated tools ship a SPARSE settings schema
       // (no topic / level / slides), which left those wizard steps empty. Offer the
@@ -1900,6 +1900,25 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         )}
         {showGenerate && settingsOpen && (
         <div style={{ width: '100%', boxSizing: 'border-box' }}>
+          {/* The PROMPT box — the free-text instruction the AI turns into this slide.
+              It also names the activity: whatever you type becomes the title, unless a
+              Title is set in the settings below, or you leave this blank and let the AI
+              pick one. Bound to form.topic (the field that actually drives generation),
+              so the topic control is not duplicated inside the wizard grid. */}
+          <div style={{ marginBottom: 10, border: '2px solid var(--ink,#2d2a26)', borderRadius: 12, background: 'var(--card,#fff8ee)', padding: '10px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <b style={{ fontSize: 13 }}>✍️ Prompt for this {lesson.subject || 'slide'}</b>
+              <button className="btn small ghost" style={{ marginLeft: 'auto', padding: '0 8px' }} disabled={topicsBusy}
+                onClick={() => loadTopics(true)} title="Let the AI suggest a prompt">{topicsBusy ? '…' : '🎨 Suggest'}</button>
+            </div>
+            <textarea value={(form as any).topic || ''} onChange={(e) => setForm(s => ({ ...s, topic: e.target.value }))}
+              placeholder="Describe what this activity should teach… — this becomes the title, or leave it blank and the AI will generate one."
+              style={{ width: '100%', boxSizing: 'border-box', minHeight: 64, resize: 'vertical', border: '2px solid var(--ink,#2d2a26)',
+                borderRadius: 8, padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.4, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)' }} />
+            <div style={{ fontSize: 10.8, color: 'var(--muted,#8a7f70)', marginTop: 4, lineHeight: 1.4 }}>
+              ℹ️ This is the text the AI reads to build the slides. It also names the activity — unless you set a Title in the settings below, or leave it blank to let the AI pick a title. See the exact instructions it produces on the last step (“How it’s generated — the prompt”).
+            </div>
+          </div>
           {(() => {
             const fieldsFor = (ids: string[]) => formFields.filter((f: any) => ids.includes(f.id));
             const stepFields = (ids: string[], single?: boolean) => {
@@ -2014,7 +2033,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             // width: a wide (full-width) card packs 4 per page in a 2-col grid; a
             // narrow one shows fewer per page and simply adds pages.
             const cells: React.ReactNode[] = [
-              ...formFields.map((f: any) => stepFields([f.id], true)),
+              // 'topic' is intentionally omitted — it now lives in the prompt box above,
+              // so it isn't shown twice. Every other schema field still gets a cell.
+              ...formFields.filter((f: any) => f.id !== 'topic').map((f: any) => stepFields([f.id], true)),
               themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField, annotationField,
             ].filter((c) => c != null);
             // wizardW === 0 means "not measured yet" — assume the wide default (the
