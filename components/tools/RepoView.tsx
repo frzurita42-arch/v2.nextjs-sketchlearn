@@ -1665,7 +1665,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
   // Open the configured slide tool with card-aware seed data. If no study tool is
   // configured yet and the editor has permission, auto-create one from the repo.
+  // While the 🎬 study-path button is loading the slide tool (fetch + maybe create it),
+  // show a full-screen "opening…" overlay so the click gives immediate feedback.
+  const [launchingStudy, setLaunchingStudy] = useState(false);
   const openStudy = async (promptText: string, sourceCard?: RepoCard, opts?: { autoGenerate?: boolean }) => {
+    setLaunchingStudy(true);
+    try {
+      await doOpenStudy(promptText, sourceCard, opts);
+    } finally { setLaunchingStudy(false); }
+  };
+  const doOpenStudy = async (promptText: string, sourceCard?: RepoCard, opts?: { autoGenerate?: boolean }) => {
     const seed = studySeedFromCard(promptText, sourceCard);
     const autoGenerate = opts?.autoGenerate !== false;
     // What EARLIER lessons in this unit actually taught (from saved lesson logs), so the
@@ -1839,6 +1848,16 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
 
   return (
     <div>
+      {/* Feedback while the 🎬 study-path button loads the slide tool. */}
+      {launchingStudy && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.45)', zIndex: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 15 }}>
+            <span style={{ display: 'inline-block', width: 20, height: 20, border: '3px solid var(--ink,#2d2a26)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sl-spin 0.7s linear infinite' }} />
+            Opening the slide tool…
+          </div>
+        </div>
+      )}
+      <style>{'@keyframes sl-spin{to{transform:rotate(360deg)}}'}</style>
       {/* ── Create a lesson from this repo — the SAME half/half wizard-card + mug
           used on the slide-runs page. A guided flow (pick approach → configure →
           act) replaces the old wall of buttons. Owner/admin only; viewers get a

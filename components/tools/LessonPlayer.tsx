@@ -897,6 +897,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     } catch (e: any) { if (!silent) setDeckMsg(e?.message || 'Could not save.'); }
   };
   const [activities, setActivities] = useState<any[]>([]);
+  const [activitiesLoaded, setActivitiesLoaded] = useState(false);   // false until the first entries fetch returns
   const [example, setExample] = useState<any>(null);
   const [exBusy, setExBusy] = useState(false);
   const [topicIdeas, setTopicIdeas] = useState<string[]>([]);   // 5 suggested topics for the create form
@@ -1329,7 +1330,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     // Keep the server's newest-first order (do NOT shuffle) so a run the learner
     // just played reliably shows at the top of the gallery / first page, instead
     // of being scattered somewhere in the pagination.
-    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`); setActivities(Array.isArray(r?.entries) ? r.entries : []); } catch { /* ignore */ }
+    try { const r = await API.get(`/api/tools/entries?slug=${encodeURIComponent(slug)}`); setActivities(Array.isArray(r?.entries) ? r.entries : []); }
+    catch { /* ignore */ }
+    finally { setActivitiesLoaded(true); }
   };
   const refreshExample = async () => {
     setExBusy(true);
@@ -2379,7 +2382,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           )}
         </>} />
 
-        {visibleFeed.length === 0 ? (
+        {!activitiesLoaded ? (
+          // Still fetching the played runs — show a loader instead of the "nothing yet"
+          // promo card, so an existing gallery doesn't briefly flash the empty state.
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '40px 16px', opacity: 0.75, fontSize: 14 }}>
+            <Spinner /> Loading played runs…
+          </div>
+        ) : visibleFeed.length === 0 ? (
           <GallerySkeleton cardSize={galleryCardSize} imgMode={galleryImgMode} recommended={skeletonRec}
             onBuild={() => setWizardStep(0)}
             onOpen={() => { if (canPlay) createAndPlay(); else gatedPlay(() => createAndPlay()); }}
