@@ -1162,7 +1162,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const restoredPlay = useRef(false);   // guards the one-time resume-after-refresh restore
   // Where this lesson came FROM — the origin repo (by stable slug) + unit/lesson —
   // set from the 🎬 study-path seed, surfaced in the admin run record.
-  const lessonOriginRef = useRef<{ repoSlug?: string; repoRef?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number } | null>(null);
+  const lessonOriginRef = useRef<{ repoSlug?: string; repoRef?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number; lessonSeq?: number; lessonSeqTotal?: number } | null>(null);
   // Per-slide dwell time (seconds), so the saved lesson log records time-on-each-slide.
   const slideTimeRef = useRef<Record<number, number>>({});
   const slideEnterRef = useRef(0);
@@ -1215,6 +1215,8 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       lessonTitle: origin.lessonTitle || '',
       lessonIndex: origin.lessonIndex,
       lessonCount: origin.lessonCount,
+      lessonSeq: origin.lessonSeq,
+      lessonSeqTotal: origin.lessonSeqTotal,
       topic: String((cfgRef.current as any).topic || '').replace(/\s+/g, ' ').slice(0, 400),
       slides: gen.map((s, i) => ({
         n: i + 1,
@@ -1443,6 +1445,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         timeSeconds: startedAt.current ? Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)) : 0,
         repoRef: origin?.repoRef || '', repoSlug: origin?.repoSlug || '',
         unitTitle: origin?.unitTitle || '', lessonIndex: origin?.lessonIndex, lessonCount: origin?.lessonCount,
+        lessonSeq: origin?.lessonSeq, lessonSeqTotal: origin?.lessonSeqTotal,
         slidesLog } as any;
       API.post('/api/tools/entries', { slug, data })
         .then((r: any) => { playedEntryId.current = r?.entry?.id || null; loadActivities(); })
@@ -1507,6 +1510,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     lessonOriginRef.current = {
       repoSlug: seed.repoSlug || '', repoRef: seed.repoRef || '', repoTitle: seed.repoTitle || '', unitTitle: seed.unitTitle || '',
       lessonTitle: seed.lessonTitle || '', lessonIndex: seed.lessonIndex, lessonCount: seed.lessonCount,
+      lessonSeq: seed.lessonSeq, lessonSeqTotal: seed.lessonSeqTotal,
     };
     const topic = String(seed.topic || '').trim();
     const customInstructions = String(seed.customInstructions || '').trim();
@@ -2438,12 +2442,13 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '18px 0 12px' }} />
         <h3 style={{ margin: '0 0 10px' }}>📇 Lesson details — every completed play</h3>
         <PagedTable
-          headers={['#', 'Slide tool', 'Student', 'Played', 'Elapsed', 'Repo ref', 'Level', 'Image style', 'Slides', 'Score']}
+          headers={['#', 'Slide tool', 'Student', 'Played', 'Elapsed', 'Repo ref', 'Course order', 'Level', 'Image style', 'Slides', 'Score']}
           rows={activities.map((e: any, idx: number) => {
             const d = e?.data || {};
             const secs = Number(d.timeSeconds || 0);
             const time = secs ? (secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`) : '—';
-            const ref = d.repoRef ? `#${d.repoRef}${d.lessonIndex != null ? ` · L${d.lessonIndex + 1}` : ''}` : (d.repoSlug ? `#${repoRef(d.repoSlug)}` : 'Direct');
+            const ref = d.repoRef ? `#${d.repoRef}` : (d.repoSlug ? `#${repoRef(d.repoSlug)}` : 'Direct');
+            const order = d.lessonSeq ? `${d.lessonSeq} of ${d.lessonSeqTotal || '?'}` : '—';
             return [
               idx + 1,
               String(def?.title || lesson.subject || '—'),
@@ -2451,6 +2456,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
               fmtDateTime(e?.createdAt),
               time,
               ref,
+              order,
               String(d.level || d.difficulty || lesson.level || 'Auto'),
               String(d.imageStyle || 'Any'),
               String(d.slides || lesson.totalSlides || '—'),
@@ -2566,12 +2572,14 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         {(() => {
           const startedTime = startedAt.current ? new Date(startedAt.current).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
           const toolTitle = String(def?.title || lesson.subject || 'Slide tool');
+          const orderCell = origin?.repoSlug && origin.lessonSeq ? `${origin.lessonSeq} of ${origin.lessonSeqTotal || '?'}` : '—';
           const detailsRow: Cell[] = [
             toolTitle,
             runDetails.student,
             `${runDetails.date}${startedTime ? ` · ${startedTime}` : ''}`,
             runDetails.timeTaken,
             { node: <span title={origin?.repoSlug ? `From repo "${origin.repoTitle || origin.repoSlug}" (slug ${origin.repoSlug})` : 'Generated & played directly — not launched from a repo'}>{originCode}</span> },
+            orderCell,
             String((cfgRef.current as any).level || (cfgRef.current as any).difficulty || '—'),
             String((cfgRef.current as any).imageStyle || 'Any'),
             String((cfgRef.current as any).slides || total()),
@@ -2580,7 +2588,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
           return (
             <div style={{ marginBottom: 12 }}>
               <PagedTable
-                headers={['Slide tool', 'Student', 'Played', 'Elapsed', 'Repo ref', 'Level', 'Image style', 'Slides', 'Score']}
+                headers={['Slide tool', 'Student', 'Played', 'Elapsed', 'Repo ref', 'Course order', 'Level', 'Image style', 'Slides', 'Score']}
                 rows={[detailsRow]}
                 empty="—"
               />

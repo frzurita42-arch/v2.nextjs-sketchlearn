@@ -1638,6 +1638,12 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     const lessonIndex = lessonCard ? unitLessons.findIndex((l) => l.id === lessonCard.id) : -1;
     const lessonCount = unitLessons.length;
     const lessonTitle = cardTitle || String(lessonCard?.title || '').trim();
+    // GLOBAL order across the whole course: flatten every unit's lessons in order, so a
+    // lesson gets a 1-based sequence number telling the learner which order to play them.
+    const allLessons: RepoCard[] = [];
+    for (const u of (cards || [])) for (const l of (u.children || [])) allLessons.push(l);
+    const lessonSeq = lessonCard ? (allLessons.findIndex((l) => l.id === lessonCard.id) + 1) : 0;
+    const lessonSeqTotal = allLessons.length;
     const shortDesc = (c?: RepoCard) => {
       const t = String(c?.text || '').trim() || String((c?.children && c.children[0]?.text) || '').trim() || String(c?.title || '').trim();
       return t.replace(/\s+/g, ' ').slice(0, 160);
@@ -1649,12 +1655,12 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
       `Use this repository as the source of truth: ${repoTitle}.`,
       unitTitle ? `Unit to teach now: ${unitTitle}.` : '',
       cardTitle ? `Source card: ${cardTitle}.` : '',
-      (lessonCount > 1 && lessonIndex >= 0) ? `This is lesson ${lessonIndex + 1} of ${lessonCount} in this unit.` : '',
-      priorLine ? `Earlier lessons in this unit ALREADY covered the following — ASSUME the learner already knows them: do NOT re-teach or re-explain them (a brief one-line reinforcement at most), and instead build FORWARD on this lesson's own objective and new material, like a later chapter that assumes the earlier chapters were read: ${priorLine}.` : '',
+      (lessonSeq > 0 && lessonSeqTotal > 0) ? `This is lesson ${lessonSeq} of ${lessonSeqTotal} in the course (unit lesson ${lessonIndex + 1} of ${lessonCount}).` : '',
+      priorLine ? `Earlier lessons ALREADY taught the following as THEIR main topics — the learner has already studied them: ${priorLine}. Treat this knowledge as KNOWN. You may reference it in a SINGLE short clause only when it's needed to make sense of THIS lesson's new idea — but do NOT re-teach, re-derive or re-explain it in depth (no paragraph revisiting a previous lesson's topic). Reserve the depth and detail for THIS lesson's own new topic, like a later chapter that assumes the earlier chapters were read.` : '',
       topics.length ? `Topics to cover in this lesson: ${topics.join('; ')}.` : '',
       'Keep slide sequence cohesive: introduction, core ideas, then application/check questions tied to these topics.',
     ].filter(Boolean).join(' ');
-    return { topic, topics, customInstructions, repoTitle, unitTitle, lessonTitle, lessonIndex, lessonCount };
+    return { topic, topics, customInstructions, repoTitle, unitTitle, lessonTitle, lessonIndex, lessonCount, lessonSeq, lessonSeqTotal };
   };
 
   // Open the configured slide tool with card-aware seed data. If no study tool is
@@ -1681,11 +1687,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
     // which can change) + a short reference code, plus the unit/lesson position — all
     // carried into the run record and named inside the custom instructions.
     const ref = repoRef(slug);
-    const originLine = ` [Origin repo #${ref} — "${seed.repoTitle}" · slug:${slug}${seed.unitTitle ? ` · unit:${seed.unitTitle}` : ''}${typeof seed.lessonIndex === 'number' ? ` · lesson ${seed.lessonIndex + 1} of ${seed.lessonCount || '?'}` : ''}]`;
+    const seqLabel = seed.lessonSeq > 0 ? ` · lesson ${seed.lessonSeq} of ${seed.lessonSeqTotal} in the course` : '';
+    const originLine = ` [Origin repo #${ref} — "${seed.repoTitle}" · slug:${slug}${seed.unitTitle ? ` · unit:${seed.unitTitle}` : ''}${seqLabel}]`;
     appState.slideSeed = {
       topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions + taught + originLine, autoGenerate,
       repoSlug: slug, repoRef: ref, repoTitle: seed.repoTitle, unitTitle: seed.unitTitle,
       lessonTitle: seed.lessonTitle, lessonIndex: seed.lessonIndex, lessonCount: seed.lessonCount,
+      lessonSeq: seed.lessonSeq, lessonSeqTotal: seed.lessonSeqTotal,
     };
     let s = (studyToolSlug || '').trim();
     if (!s && canEdit) {
@@ -2114,7 +2122,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
           const secs = d.timeSeconds || 0;
           const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
           const summary = (d.slides || []).map((s: any) => `${s.n}. ${s.title}${s.seconds ? ` (${s.seconds}s)` : ''}`).join('  ·  ');
-          return [String(d.playedBy || '—'), when, String(d.slideTool || '—'), String(d.unitTitle || '—'), lesson, String(d.level || '—'), String(d.score || '—'), time, summary || '—'];
+          const order = d.lessonSeq ? `${d.lessonSeq} of ${d.lessonSeqTotal || '?'}` : '—';
+          return [order, String(d.playedBy || '—'), when, String(d.slideTool || '—'), String(d.unitTitle || '—'), lesson, String(d.level || '—'), String(d.score || '—'), time, summary || '—'];
         });
         return (
           <div style={{ marginTop: 16 }}>
@@ -2123,7 +2132,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               <span style={{ fontSize: 12, opacity: 0.7 }}>This repo’s reference: <b>#{repoRef(slug)}</b> · a lesson tagged with this code came from here.</span>
             </div>
             <PagedTable
-              headers={['Student', 'Played', 'Slide tool', 'Unit', 'Lesson', 'Level', 'Score', 'Time', 'Slides taught (summary)']}
+              headers={['Course order', 'Student', 'Played', 'Slide tool', 'Unit', 'Lesson', 'Level', 'Score', 'Time', 'Slides taught (summary)']}
               rows={rows}
               empty="No lessons have been played from this repository yet — play one from a 🎬 prompt and it appears here."
               rowsPerPage={8}
