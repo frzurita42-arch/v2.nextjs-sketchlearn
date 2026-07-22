@@ -29,6 +29,7 @@ import { CardShell, iconBtn, overlayIcon } from '@/components/ui/CardShell';
 import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
 import { SetupWizardCard } from '@/components/ui/SetupWizardCard';
 import { WizardGridTemplate } from '@/components/ui/WizardGridTemplate';
+import { PromptInspector } from '@/components/ui/PromptInspector';
 import { FIELD_CONTROL_STYLE } from '@/components/tools/ToolFields';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
 import type { RepoCard, RepoLink, RepoSpec } from '@/lib/tool-schema';
@@ -1866,11 +1867,12 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   <div><div style={colHead}>🔑 Access &amp; study tool</div>{accessContent}</div>
                 </div>
               );
-              const goN = () => setControlsStep((s) => Math.min(1, s + 1));
+              const goN = () => setControlsStep((s) => Math.min(2, s + 1));
               const goB = () => setControlsStep((s) => Math.max(0, s - 1));
               const steps: WizardStep[] = [
                 { key: 'main', title: 'Cards, order & access', render: () => <WizardGridTemplate rowButtons top={cardsAccessContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'prompt', title: 'How it replies — the prompt', render: () => <WizardGridTemplate tall top={<PromptInspector kind="repo" topic={def?.title || ''} />} onBack={goB} backDisabled={controlsStep === 0} /> },
               ];
               return (
                 <SetupWizardCard title={<span style={{ fontSize: 15 }}>⚙️ 🗂️ Repo settings</span>}
