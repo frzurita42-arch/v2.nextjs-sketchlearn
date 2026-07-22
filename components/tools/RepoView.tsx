@@ -1830,7 +1830,8 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   <Row icon="🕒" label="Show dates" hint="Show each card’s created date/time" on={showDates} onClick={() => saveShowDates(!showDates)} />
                 </div>
               );
-              const accessContent = (
+              // Just the study-path slide-tool picker — the compact half of "access".
+              const studyToolContent = (
                 <div style={stackGrid}>
                   <label className="field" style={fieldWrap}>
                     <span style={fieldLabel}>🎬 Study-path slide tool</span>
@@ -1839,6 +1840,13 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                       {studyToolList.map((t) => <option key={t.slug} value={t.slug}>{t.title}</option>)}
                     </select>
                   </label>
+                </div>
+              );
+              // The paywall bypass list — on its OWN page, because the invited-user
+              // chips can grow to fill (and scroll) the whole area when many are added.
+              const paywallContent = (
+                <div style={{ width: '100%' }}>
+                  <div style={colHead}>🔒 Paywall access</div>
                   <label className="field" style={fieldWrap}>
                     <span style={fieldLabel} title="These users (plus you) can open cards you lock with the 🔒 paywall.">👥 Bypass the 🔒 paywall</span>
                     <input type="text" value={authInput} onChange={(e) => setAuthInput(e.target.value)} placeholder="type a username + Enter" list="repo-known-users"
@@ -1846,7 +1854,7 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                       style={FIELD_CONTROL_STYLE} />
                     <datalist id="repo-known-users">{knownUsers.map((u) => <option key={u} value={u} />)}</datalist>
                   </label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', minHeight: 24 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start', marginTop: 8 }}>
                     {authorizedUsers.length === 0
                       ? <span style={{ fontSize: 12, opacity: 0.6 }}>none yet — 🔒 cards stay locked for everyone but you</span>
                       : authorizedUsers.map((u) => (
@@ -1858,19 +1866,20 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
                   </div>
                 </div>
               );
-              // Compact combined page: Cards & order (left) beside Access & study
-              // tool (right) — two settings sections in the space of one, matching the
-              // side-by-side layout. On a narrow card they stack (auto-fit).
+              // Compact combined page: Cards & order (left) beside the study-tool
+              // picker (right) — both fit in the fixed area with no scrollbar. The
+              // paywall list moved to its own page. On a narrow card they stack.
               const cardsAccessContent = (
                 <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 20, alignItems: 'start' }}>
                   <div><div style={colHead}>🗂️ Cards &amp; order</div>{cardsContent}</div>
-                  <div><div style={colHead}>🔑 Access &amp; study tool</div>{accessContent}</div>
+                  <div><div style={colHead}>🔑 Access &amp; study tool</div>{studyToolContent}</div>
                 </div>
               );
-              const goN = () => setControlsStep((s) => Math.min(2, s + 1));
+              const goN = () => setControlsStep((s) => Math.min(3, s + 1));
               const goB = () => setControlsStep((s) => Math.max(0, s - 1));
               const steps: WizardStep[] = [
-                { key: 'main', title: 'Cards, order & access', render: () => <WizardGridTemplate tall top={cardsAccessContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'main', title: 'Cards, order & study tool', render: () => <WizardGridTemplate tall top={cardsAccessContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
+                { key: 'paywall', title: 'Paywall access', render: () => <WizardGridTemplate tall top={paywallContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'features', title: 'Card features', render: () => <WizardGridTemplate tall top={featuresContent} onNext={goN} onBack={goB} backDisabled={controlsStep === 0} /> },
                 { key: 'prompt', title: 'How it replies — the prompt', render: () => <WizardGridTemplate tall top={<PromptInspector kind="repo" topic={def?.title || ''} />} onBack={goB} backDisabled={controlsStep === 0} /> },
               ];
