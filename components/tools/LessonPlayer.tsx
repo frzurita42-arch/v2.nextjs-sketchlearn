@@ -1523,12 +1523,21 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   const clearPlay = useCallback(() => { try { sessionStorage.removeItem(playKey); } catch { /* ignore */ } }, [playKey]);
   // Write the session whenever the meaningful play state changes.
   useEffect(() => { savePlay(); }, [savePlay, slides]);
-  // Restore ONCE on mount (a plain refresh has no slideSeed; a study-path launch does
-  // and takes precedence, so we skip the restore then).
+  // Restore ONCE on mount — but ONLY after an actual page RELOAD (F5 / browser refresh),
+  // never on ordinary in-app navigation. Otherwise merely opening the tool would force
+  // you back into the old lesson (and show the loading pencil) instead of the gallery/
+  // hub. A study-path launch (slideSeed) also takes precedence, so we skip then.
   useEffect(() => {
     if (restoredPlay.current) return;
     restoredPlay.current = true;
-    if (typeof sessionStorage === 'undefined' || appState.slideSeed) return;
+    if (typeof sessionStorage === 'undefined' || typeof window === 'undefined' || appState.slideSeed) return;
+    // Detect a real reload via the Navigation Timing API (fallback to the legacy flag).
+    let isReload = false;
+    try {
+      const nav = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined);
+      isReload = nav ? nav.type === 'reload' : ((performance as any).navigation?.type === 1);
+    } catch { isReload = false; }
+    if (!isReload) { try { sessionStorage.removeItem(playKey); } catch { /* ignore */ } return; }
     try {
       const raw = sessionStorage.getItem(playKey);
       if (!raw) return;
@@ -1537,7 +1546,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       if (!p || (p.phase !== 'play' && p.phase !== 'done') || !sl.filter(Boolean).length) return;
       cfgRef.current = p.cfg || {}; slidesRef.current = sl; startedAt.current = p.startedAt || Date.now();
       if (p.origin) lessonOriginRef.current = p.origin;
-      setCfg(p.cfg || {}); setSlides(sl); setResults(p.results || {}); setCur(Math.max(0, Number(p.cur) || 0)); setPhase(p.phase);
+      // Mark every restored slide READY so the player shows them immediately and does
+      // NOT re-generate (which caused the long load + pencil).
+      const ready: Record<number, boolean> = {};
+      sl.forEach((s: any, i: number) => { if (s) ready[i] = true; });
+      setCfg(p.cfg || {}); setSlides(sl); setSlideReady(ready); setResults(p.results || {}); setCur(Math.max(0, Number(p.cur) || 0)); setPhase(p.phase);
       try { window.scrollTo(0, 0); } catch { /* ignore */ }
     } catch { /* ignore a corrupt entry */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
