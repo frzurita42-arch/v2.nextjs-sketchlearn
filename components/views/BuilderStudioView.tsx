@@ -715,7 +715,8 @@ export function BuilderStudioView() {
   // Publish BOTH (a lesson path). Build + publish the PRESENTATION first so we know
   // its slug, then create the REPOSITORY pre-linked to it as the Study-path tool —
   // so 🎬 on a 🔵 prompt card opens THIS presentation with the objective's prompt
-  // already preset in the settings. Finally navigate to the finished presentation.
+  // already preset in the settings. Finally land on the finished REPOSITORY — the
+  // lesson path's home — rather than the individual presentation.
   const generateBoth = async () => {
     if (busy || suggesting) return; setBusy(true); setErr('');
     try {
@@ -727,9 +728,10 @@ export function BuilderStudioView() {
       // Create the repository, pre-linked to the presentation we just made.
       const repoDef: any = assembleDefinition(repoConfig()); repoDef.studioConfig = repoConfig();
       if (presSlug) { repoDef.repo = repoDef.repo || {}; repoDef.repo.studyToolSlug = presSlug; }
-      await API.post('/api/tools', { definition: repoDef, visibility, aiGenerated: false });
-      // Open the finished presentation.
-      const one = presSlug ? await API.get(`/api/tools?slug=${encodeURIComponent(presSlug)}`) : null;
+      const repoPub = await API.post('/api/tools', { definition: repoDef, visibility, aiGenerated: false });
+      const repoSlug = String(repoPub?.slug || '');
+      // Open the finished REPOSITORY (the lesson path's home page), not the slide deck.
+      const one = repoSlug ? await API.get(`/api/tools?slug=${encodeURIComponent(repoSlug)}`) : null;
       if (one?.tool) { appState.activeTool = one.tool; app.nav('tool'); return; }
       app.nav('tools');
     } catch (e: any) { setErr(e?.message || 'Could not generate both.'); }
