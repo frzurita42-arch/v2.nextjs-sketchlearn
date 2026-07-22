@@ -289,8 +289,12 @@ export function ChatView() {
       artifact: 'repository',
       sourcePrompt: `${prompt}\n\n[Repo settings] Type: Learning Path${hasDoc ? ` · Attachments: ${atts.length}` : ''}`,
       context: `${prompt}${hasDoc ? ' Base the repository strictly on the attached file(s)/image(s).' : ''} Structure it as a learning path.`,
-      subject: prompt.slice(0, 120) || 'Learning path',
-      title: prompt.slice(0, 120) || 'Learning path',
+      // Leave the subject/title BLANK so the builder's AI names the plan in a clean,
+      // standard way (e.g. "Nutrition & Wellness") from the prompt + attachments —
+      // rather than echoing the raw command as the title. The full prompt is carried
+      // in `context`/`sourcePrompt`/`goal` above, so no information is lost.
+      subject: '',
+      title: '',
       docs: atts.map((src, i) => ({ name: `attachment-${i + 1}`, dataUrl: src })),
       autoSuggest: true,   // build immediately — no chat step
       lessonPath: true,    // also pre-build the presentation / template distribution

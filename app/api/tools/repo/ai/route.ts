@@ -210,7 +210,10 @@ export async function POST(req: Request) {
         : '6. Do NOT add links, code or images.',
       `Each card is: { "kind": "card", "title": string, "text": string${withLinks ? ', "link"?: string, "linkLabel"?: string' : ''}, "children"?: [ ...cards ] }.`,
       repoGuide ? `AUTHOR'S REPOSITORY GUIDE — follow these instructions when shaping the plan and writing the leaf slide-build prompt cards:\n${repoGuide}` : '',
-      'Return STRICT JSON: { "cards": [ ...the full ordered plan, at most 20 top-level... ] }.',
+      // Propose a clean, standard NAME for the whole plan so the tool/repo is never
+      // titled with the user's raw command ("Build a lesson that explains how…").
+      'ALSO NAME THE PLAN: include a top-level "title" and "subject". "title" is a concise, standard course/plan name in Title Case, 2–6 words, that names the SUBJECT (e.g. "Nutrition & Wellness", "Newtonian Mechanics", "Intro to Derivatives", "Italian for Beginners"). "subject" is the topic area in 1–4 words (e.g. "Nutrition", "Physics"). Derive BOTH from the CONTENT of the document/goal — NEVER echo the user\'s instruction phrasing (no "Build a…", "Create a…", "A lesson that…"), and never make the title a whole sentence. Write them in the same language as the plan.',
+      'Return STRICT JSON: { "title": string, "subject": string, "cards": [ ...the full ordered plan, at most 20 top-level... ] }.',
       SAFETY_GUARDRAILS,
     ].filter(Boolean).join('\n');
     const userText = [
@@ -227,10 +230,21 @@ export async function POST(req: Request) {
     // goal/text only). Splitting every sub-topic makes the JSON large, so give the
     // model plenty of output room or it truncates and the parse fails.
     const useGeminiDoc = binDocs.length > 0 && geminiEnabled && (provider === 'auto' || provider === 'gemini');
+    // The AI also proposes a clean plan name; capture it so the builder can adopt it
+    // when the user left the title/subject blank (instead of the raw prompt).
+    let proposedTitle = '';
+    let proposedSubject = '';
+    const captureMeta = (r: any) => {
+      if (r && !Array.isArray(r)) {
+        if (!proposedTitle && r.title) proposedTitle = String(r.title).trim().slice(0, 70);
+        if (!proposedSubject && r.subject) proposedSubject = String(r.subject).trim().slice(0, 70);
+      }
+    };
     const runStructured = async () => {
       const r: any = await generateStructured(
         [{ role: 'system', content: system }, { role: 'user', content: userText }],
         { temperature: 0.4, maxTokens: 9000, provider });
+      captureMeta(r);
       return Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
     };
     try {
@@ -242,6 +256,7 @@ export async function POST(req: Request) {
         for (let attempt = 0; attempt < 3 && out == null; attempt++) {
           try {
             const r: any = await geminiDoc(system, userText, binDocs, { maxTokens: 16000, temperature: 0.4 });
+            captureMeta(r);
             out = Array.isArray(r?.cards) ? r.cards : (Array.isArray(r) ? r : null);
           } catch (e: any) {
             lastErr = e;
@@ -277,7 +292,9 @@ export async function POST(req: Request) {
       }
       if (!out) return NextResponse.json({ error: 'The AI could not build a plan. Add a bit more detail and try again.' }, { status: 200 });
       const sliced = out.slice(0, nextOne ? 1 : 20);
-      return NextResponse.json({ cards: lessonPath ? ensurePromptLeaves(sliced) : sliced });
+      // Never let the proposed title be a raw command echo; drop it if it slipped through.
+      const cleanName = (s: string) => /^(build|create|make|generate|write|design|a lesson|an? )/i.test(s.trim()) && s.trim().split(/\s+/).length > 6 ? '' : s;
+      return NextResponse.json({ cards: lessonPath ? ensurePromptLeaves(sliced) : sliced, title: cleanName(proposedTitle), subject: cleanName(proposedSubject) });
     } catch (e: any) {
       // Surface the real reason (truncated JSON, timeout, quota…) so it's fixable.
       console.error('repo suggest failed:', e?.message || e);

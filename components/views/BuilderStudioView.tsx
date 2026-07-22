@@ -461,6 +461,11 @@ export function BuilderStudioView() {
         const mapped = mapAiCards(r?.cards || []);
         if (mapped.length) setRepoCards(mapped);
         else setErr(r?.error || 'The AI did not return a plan. Add a goal, a document, or a card or two, then try again.');
+        // Adopt the AI's clean plan NAME when the author left the title/subject blank
+        // (e.g. the Lesson Path composer passes the prompt only as the goal, so the
+        // tool gets a proper "Nutrition & Wellness" title instead of the raw command).
+        if (r?.title && !repoTitle.trim()) { setRepoTitle(String(r.title)); setPresTitle((p) => p.trim() ? p : String(r.title)); }
+        if (r?.subject && !repoSubject.trim()) { setRepoSubject(String(r.subject)); setPresSubject((p) => p.trim() ? p : String(r.subject)); }
       }
     } catch (e: any) { setErr(e?.message || 'Could not build a suggestion.'); }
     setSuggesting(false);
