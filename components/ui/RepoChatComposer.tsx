@@ -13,6 +13,7 @@
 import { useRef, useState } from 'react';
 import { useApp } from '@/components/AppContext';
 import { appState } from '@/lib/app-state';
+import { useDictation } from '@/lib/use-dictation';
 
 const circleBtn: React.CSSProperties = {
   width: 34, height: 34, borderRadius: '50%', border: '2.5px solid var(--ink,#2d2a26)',
@@ -28,7 +29,13 @@ export function RepoChatComposer({ variant = 'repository' }: { variant?: 'reposi
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<DocItem[]>([]);   // name + READ content
   const [lessonPath, setLessonPath] = useState(false);   // default OFF (repo only)
+  const [sttErr, setSttErr] = useState('');   // last dictation error (shown inline)
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // 🎤 dictation: append the transcript to the prompt (shown only when voice is on).
+  const { voiceOn, recording, transcribing, toggleMic } = useDictation(
+    (t) => { setSttErr(''); setText((v) => (v ? v.trimEnd() + ' ' : '') + t); },
+    (m) => setSttErr(m),
+  );
   const heading = isRepo ? '✨ Create a repo' : '✨ Create a slide activity';
   const placeholder = isRepo
     ? 'Describe the repository you want to build — its sections, cards, links and access settings…'
@@ -124,11 +131,23 @@ export function RepoChatComposer({ variant = 'repository' }: { variant?: 'reposi
             onChange={(e) => { onFiles(e.target.files); if (e.currentTarget) e.currentTarget.value = ''; }} />
           <button type="button" title="Attach files" aria-label="Attach files" onClick={() => fileRef.current?.click()}
             style={{ ...circleBtn, width: 32, height: 32, color: 'var(--ink,#2d2a26)' }}>＋</button>
-          <span style={{ fontSize: 12, opacity: 0.5 }}>{hint}</span>
+          {voiceOn && (
+            <button type="button" aria-label="Dictate" aria-pressed={recording} disabled={transcribing} onClick={toggleMic}
+              title={recording ? 'Stop & transcribe' : transcribing ? 'Transcribing…' : 'Dictate — speak instead of typing (ElevenLabs)'}
+              style={{ ...circleBtn, width: 32, height: 32, fontSize: 15,
+                ...(recording ? { background: 'var(--danger,#e4572e)', color: '#fff', borderColor: 'var(--danger,#e4572e)' } : { color: 'var(--ink,#2d2a26)' }) }}>
+              {transcribing ? '⏳' : recording ? '⏹' : '🎤'}
+            </button>
+          )}
+          <span style={{ fontSize: 12, opacity: 0.5 }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : hint}</span>
           <button type="button" title={isRepo ? 'Generate the editable repo' : 'Generate the editable slide activity'} aria-label="Send" onClick={generate}
             style={{ ...circleBtn, marginLeft: 'auto', background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
         </div>
       </div>
+
+      {sttErr && (
+        <div style={{ fontSize: 11, color: 'var(--danger,#e4572e)', marginTop: 6 }}>🎤 {sttErr}</div>
+      )}
 
       {/* Option row BELOW the chat, indented a tab from the left — the Lesson Path
           toggle (repo only; off by default; the AI decides the number of units). */}

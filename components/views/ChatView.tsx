@@ -12,6 +12,7 @@ import { appState, initialCoachGreeting } from '@/lib/app-state';
 import { CoachRail } from '@/components/coach/CoachRail';
 import { PromptSettingsModal } from '@/components/coach/PromptSettingsModal';
 import { usePromptSettings, loadPromptSettings, ICON_PX } from '@/lib/prompt-settings';
+import { useDictation } from '@/lib/use-dictation';
 import { AudioButton } from '@/components/ui/AudioButton';
 import { useApp } from '@/components/AppContext';
 import { estimateLessonTokens } from '@/lib/cost-estimate';
@@ -92,14 +93,11 @@ export function ChatView() {
   const [freeOnly, setFreeOnly] = useState(false);   // recommend only free (premade) tools
   const [attachments, setAttachments] = useState<string[]>([]);   // data URLs
   const [balance, setBalance] = useState<number | null>(null);
-  // 🎤 dictation (ElevenLabs speech-to-text): record a short clip and drop the
-  // transcript into the input. Shown only when voice (ELEVENLABS_API_KEY) is on.
-  const [voiceOn, setVoiceOn] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const mediaRecRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
+  // 🎤 dictation (ElevenLabs speech-to-text): append the transcript to the input.
+  const { voiceOn, recording, transcribing, toggleMic } = useDictation(
+    (t) => setInput((v) => (v ? v.trimEnd() + ' ' : '') + t),
+    (m) => setMessages((cur) => [...cur, { role: 'assistant', content: `(Could not transcribe: ${m})` }]),
+  );
   const logRef = useRef<HTMLDivElement>(null);
 
   // Debounced push of the whole history to the DB (signed-in users only — guests
@@ -188,9 +186,7 @@ export function ChatView() {
   };
   useEffect(() => { loadBalance(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [app.user?.username]);
   // Is the YouTube recommendation feature available (key configured)?
-  useEffect(() => { API.get('/api/config').then((c: any) => { setYoutubeOn(!!c?.youtubeEnabled); setVoiceOn(!!c?.voiceEnabled); }).catch(() => { /* leave off */ }); }, []);
-  // Stop any live mic track if the chat unmounts mid-recording.
-  useEffect(() => () => { try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* noop */ } }, []);
+  useEffect(() => { API.get('/api/config').then((c: any) => setYoutubeOn(!!c?.youtubeEnabled)).catch(() => { /* leave off */ }); }, []);
 
   const newChat = () => {
     const fresh = [initialCoachGreeting as ChatMsg];
@@ -219,39 +215,6 @@ export function ChatView() {
   };
   const pickFiles = () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.onchange = () => addFiles(inp.files); inp.click(); };
 
-  // 🎤 Speech-to-text (ElevenLabs Scribe): record a clip, transcribe it server-side,
-  // and append the text to the input so the learner can dictate instead of typing.
-  const stopStream = () => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; };
-  const transcribe = async (blob: Blob) => {
-    setTranscribing(true);
-    try {
-      const dataUrl: string = await new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result || '')); rd.onerror = rej; rd.readAsDataURL(blob); });
-      const r: any = await API.post('/api/ai/stt', { audio: dataUrl });
-      if (r?.text) setInput((v) => (v ? v.trimEnd() + ' ' : '') + r.text);
-      else if (r?.error) setMessages((m) => [...m, { role: 'assistant', content: `(Could not transcribe: ${r.error})` }]);
-    } catch (e: any) { setMessages((m) => [...m, { role: 'assistant', content: `(Could not transcribe: ${e.message})` }]); }
-    setTranscribing(false);
-  };
-  const startRec = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) { setMessages((m) => [...m, { role: 'assistant', content: '(This browser cannot record audio.)' }]); return; }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const MR: any = (window as any).MediaRecorder;
-      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MR?.isTypeSupported?.(t)) || '';
-      const rec: MediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      chunksRef.current = [];
-      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
-      rec.onstop = () => { stopStream(); const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' }); if (blob.size) transcribe(blob); };
-      mediaRecRef.current = rec;
-      rec.start();
-      setRecording(true);
-    } catch (e: any) { setMessages((m) => [...m, { role: 'assistant', content: `(Microphone unavailable: ${e.message})` }]); stopStream(); }
-  };
-  const toggleMic = () => {
-    if (recording) { setRecording(false); try { mediaRecRef.current?.stop(); } catch { /* noop */ } }
-    else startRec();
-  };
 
   // Free chat mode: guests, anyone with the 🆓 toggle on, or a non-admin who has run
   // out of credits. In this mode we NEVER call the paid AI chat — every message just
