@@ -125,12 +125,13 @@ export function RepoChatComposer({ variant = 'repository' }: { variant?: 'reposi
             distinct zones. */}
         <div style={{ borderTop: '1px dotted var(--ink,#2d2a26)', opacity: 0.18 }} />
 
-        {/* Controls row: ＋ (attach) on the left, send ↑ on the right. */}
+        {/* Controls row: ＋ (attach) on the left; record 🎤 beside send ↑ on the right. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input ref={fileRef} type="file" multiple style={{ display: 'none' }}
             onChange={(e) => { onFiles(e.target.files); if (e.currentTarget) e.currentTarget.value = ''; }} />
           <button type="button" title="Attach files" aria-label="Attach files" onClick={() => fileRef.current?.click()}
             style={{ ...circleBtn, width: 32, height: 32, color: 'var(--ink,#2d2a26)' }}>＋</button>
+          <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto' }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : hint}</span>
           {voiceOn && (
             <button type="button" aria-label="Dictate" aria-pressed={recording} disabled={transcribing} onClick={toggleMic}
               title={recording ? 'Stop & transcribe' : transcribing ? 'Transcribing…' : 'Dictate — speak instead of typing (ElevenLabs)'}
@@ -139,9 +140,8 @@ export function RepoChatComposer({ variant = 'repository' }: { variant?: 'reposi
               {transcribing ? '⏳' : recording ? '⏹' : '🎤'}
             </button>
           )}
-          <span style={{ fontSize: 12, opacity: 0.5 }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : hint}</span>
           <button type="button" title={isRepo ? 'Generate the editable repo' : 'Generate the editable slide activity'} aria-label="Send" onClick={generate}
-            style={{ ...circleBtn, marginLeft: 'auto', background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
+            style={{ ...circleBtn, background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
         </div>
       </div>
 
