@@ -11,6 +11,7 @@ export type PromptSettings = {
   maxWords: number;       // response length cap
   stickyFreq: number;     // 0 never .. 4 always — how often it offers a page sticky
   stickyTypes: string[];  // which page sticky types it may offer
+  interactivity: number;  // 0 direct .. 4 exploratory — how much it converses before recommending
   toolbarIcon: number;    // 0..4 — size of the chat toolbar icons (UI only)
 };
 
@@ -25,11 +26,12 @@ export const TONES = [
 ];
 export const BREVITY_LABELS = ['Terse', 'Short', 'Medium', 'Longer', 'Detailed'];
 export const FREQ_LABELS = ['Never', 'Rarely', 'Sometimes', 'Often', 'Always'];
+export const INTERACTIVITY_LABELS = ['Direct', 'Focused', 'Balanced', 'Conversational', 'Exploratory'];
 export const ICON_LABELS = ['XS', 'S', 'M', 'L', 'XL'];
 export const ICON_PX = [14, 16, 18, 22, 26];
 
 const KEY = 'sl_prompt_settings';
-export const DEFAULTS: PromptSettings = { brevity: 1, tone: 'stale', emoji: false, maxWords: 80, stickyFreq: 1, stickyTypes: STICKY_TYPES.map((s) => s.key), toolbarIcon: 2 };
+export const DEFAULTS: PromptSettings = { brevity: 1, tone: 'stale', emoji: false, maxWords: 80, stickyFreq: 1, stickyTypes: STICKY_TYPES.map((s) => s.key), interactivity: 2, toolbarIcon: 2 };
 
 export function loadPromptSettings(): PromptSettings {
   if (typeof window === 'undefined') return DEFAULTS;

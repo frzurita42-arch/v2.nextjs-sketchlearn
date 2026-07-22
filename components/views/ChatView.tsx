@@ -627,6 +627,8 @@ export function ChatView() {
                   style={{ ...composerCircle, width: 32, height: 32 }}>＋</button>
                 <button type="button" title="ChatBot settings — tone, length, sticky-note publicity…" aria-label="Settings" onClick={() => setPromptOpen(true)}
                   style={{ ...composerCircle, width: 32, height: 32, fontSize: 15 }}>⚙️</button>
+                <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto' }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : 'Chat to get a recommendation or build a lesson'}</span>
+                {/* Record + send grouped on the right, mic beside the green send button. */}
                 {voiceOn && (
                   <button type="button" aria-label="Dictate" aria-pressed={recording} disabled={transcribing} onClick={toggleMic}
                     title={recording ? 'Stop & transcribe' : transcribing ? 'Transcribing…' : 'Dictate — speak instead of typing (ElevenLabs)'}
@@ -635,9 +637,8 @@ export function ChatView() {
                     {transcribing ? '⏳' : recording ? '⏹' : '🎤'}
                   </button>
                 )}
-                <span style={{ fontSize: 12, opacity: 0.5 }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : 'Chat to get a recommendation or build a lesson'}</span>
                 <button type="button" title="Send" aria-label="Send" id="chat-send" onClick={send}
-                  style={{ ...composerCircle, marginLeft: 'auto', background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
+                  style={{ ...composerCircle, background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
               </div>
             </div>
             {freeMode && (

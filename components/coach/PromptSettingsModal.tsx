@@ -4,7 +4,7 @@
  * sticky-note "publicity", toolbar). Changes save live. */
 import { useState } from 'react';
 import {
-  usePromptSettings, TONES, STICKY_TYPES, BREVITY_LABELS, FREQ_LABELS, ICON_LABELS,
+  usePromptSettings, TONES, STICKY_TYPES, BREVITY_LABELS, FREQ_LABELS, INTERACTIVITY_LABELS, ICON_LABELS,
   type PromptSettings,
 } from '@/lib/prompt-settings';
 
@@ -18,7 +18,7 @@ function ticks(labels: string[], v: number) {
 export function PromptSettingsModal({ onClose }: { onClose: () => void }) {
   const [s, update] = usePromptSettings();
   const [page, setPage] = useState(0);
-  const pages = ['Length & tone', 'Objective & sticky-notes', 'Toolbar'];
+  const pages = ['Length & tone', 'Interactivity & sticky-notes', 'Toolbar'];
   const total = pages.length;
 
   const toggleType = (k: string) => {
@@ -61,6 +61,9 @@ export function PromptSettingsModal({ onClose }: { onClose: () => void }) {
 
         {page === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div><span style={lbl}>Interactivity — {INTERACTIVITY_LABELS[s.interactivity]}</span>{range('interactivity', INTERACTIVITY_LABELS)}
+              <p style={{ fontSize: 11.5, color: 'var(--muted,#8a7f70)', margin: '4px 0 0' }}>How much the bot chats with you before steering to a recommendation. <b>Direct</b> asks straight for the subject/level; <b>Exploratory</b> holds a real conversation and lets the recommendation emerge.</p>
+            </div>
             <div><span style={lbl}>Sticky-note publicity — {FREQ_LABELS[s.stickyFreq]}</span>{range('stickyFreq', FREQ_LABELS)}
               <p style={{ fontSize: 11.5, color: 'var(--muted,#8a7f70)', margin: '4px 0 0' }}>How often the bot nudges you toward other sections with a page sticky-note.</p>
             </div>
