@@ -1982,10 +1982,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 {!app.user
                   ? <button className="btn small green" style={navSizeStyle} onClick={() => app.requireLogin()}>▶ Sign in</button>
                   : canPlay
-                  ? <>
-                      {hasSaved && <button className="btn small green" style={navSizeStyle} title="Play the saved version" onClick={() => { recordAndPlay(savedDeck?.config || form, { replica: true }); setWizardKey((k) => k + 1); }}>▶ Play</button>}
-                      <button className="btn small green" style={navSizeStyle} onClick={() => { createAndPlay(); setWizardKey((k) => k + 1); }}>✨ Generate</button>
-                    </>
+                  ? <button className="btn small green" style={navSizeStyle} onClick={() => { createAndPlay(); setWizardKey((k) => k + 1); }}>✨ Generate</button>
                   : <button className="btn small green" style={navSizeStyle} title="You need play credits — get some from the dashboard" onClick={() => app.nav('dashboard')}>🎟 Get credits</button>}
                 {canPlay && !eff.isAdmin && (
                   <span title="Estimated credits for this generation (slides + images). Charged as it runs." style={{ fontSize: 12, opacity: 0.7, textAlign: 'center' }}>

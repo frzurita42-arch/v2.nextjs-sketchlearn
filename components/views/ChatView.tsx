@@ -276,29 +276,35 @@ export function ChatView() {
     setThinking(false);
   };
 
-  // 🎬 Lesson Path: hand the prompt to the repo builder as a structured learning path
-  // (mirrors the "Lesson Path" toggle on the Repos composer) instead of chatting.
-  const startLessonPath = (promptText: string) => {
+  // 🎬 Lesson Path: skip the chat entirely and hand the prompt AND any attachments to
+  // the repo builder as a structured learning path — it auto-builds the repo + its
+  // proposed slide-template distribution (mirrors the "Lesson Path" toggle on the Repos
+  // composer). Attachments (images/docs) are carried so the build is based on them.
+  const startLessonPath = (promptText: string, atts: string[] = []) => {
     const prompt = promptText.trim();
-    if (!prompt) return;
+    if (!prompt && !atts.length) return;
     if (!app.user) { app.requireLogin(); return; }
+    const hasDoc = atts.length > 0;
     (appState as any).builderSeed = {
       artifact: 'repository',
-      sourcePrompt: `${prompt}\n\n[Repo settings] Type: Learning Path`,
-      context: `${prompt} Structure it as a learning path.`,
-      subject: prompt.slice(0, 120),
-      title: prompt.slice(0, 120),
-      autoSuggest: true,
-      lessonPath: true,
+      sourcePrompt: `${prompt}\n\n[Repo settings] Type: Learning Path${hasDoc ? ` · Attachments: ${atts.length}` : ''}`,
+      context: `${prompt}${hasDoc ? ' Base the repository strictly on the attached file(s)/image(s).' : ''} Structure it as a learning path.`,
+      subject: prompt.slice(0, 120) || 'Learning path',
+      title: prompt.slice(0, 120) || 'Learning path',
+      docs: atts.map((src, i) => ({ name: `attachment-${i + 1}`, dataUrl: src })),
+      autoSuggest: true,   // build immediately — no chat step
+      lessonPath: true,    // also pre-build the presentation / template distribution
     };
-    setInput('');
+    setInput(''); setAttachments([]); setLessonPath(false);
     app.nav('toolbuilder');
   };
 
   const send = async () => {
     const text = input.trim();
     if (!text && !attachments.length) return;
-    if (lessonPath && text) { startLessonPath(text); return; }
+    // 🎬 Lesson Path on → skip the chat: send the prompt + attachments straight to the
+    // repo builder to create the repo and its slide-template distribution.
+    if (lessonPath && (text || attachments.length)) { startLessonPath(text, attachments); return; }
     setInput('');
     const imgs = attachments; setAttachments([]);
     const userMsg: ChatMsg = { role: 'user', content: text || '(shared an image)', ...(imgs.length ? { images: imgs } : {}) };
