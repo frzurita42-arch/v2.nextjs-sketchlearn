@@ -2425,15 +2425,23 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
         results: answers.map((a: any) => ({ prompt: a.prompt, chose: a.your, expected: a.answer, correct: !!a.correct })),
       };
     };
-    const ROW_COUNT = Math.max(MAX_SLIDES, slidesRef.current.length);
-    // Rows in the SAME standard (yellow-header, fixed-height) PagedTable used elsewhere.
-    const rowsData: Cell[][] = Array.from({ length: ROW_COUNT }, (_, i) => {
+    // Only rows for slides ALREADY generated (grows as the lesson moves along) — no
+    // wall of empty "not generated yet" rows. One trailing pencil row shows the next
+    // slide is still being written, while more remain in the planned deck.
+    const gen = slidesRef.current;
+    const lastIdx = gen.reduce((m: number, s, i) => (s ? i : m), -1);
+    const planned = Math.min(MAX_SLIDES, Math.max(lastIdx + 1, total()));
+    const rowsData: Cell[][] = [];
+    for (let i = 0; i <= lastIdx; i++) {
       const d = slideDict(i);
-      if (!d) return [String(i + 1), '— not generated yet —', '', '', '', ''];
+      if (!d) continue;
       const ans = d.results.map((r) => r.chose).filter(Boolean).join('; ');
       const mark = d.results.length === 0 ? '' : d.results.every((r) => r.correct) ? '✅' : d.results.some((r) => !r.correct) ? '❌' : '—';
-      return [String(i + 1), d.title || '—', d.content || '—', (d.support && d.support.length ? d.support.join(', ') : '—'), ans || '— not answered —', mark];
-    });
+      rowsData.push([String(i + 1), d.title || '—', d.content || '—', (d.support && d.support.length ? d.support.join(', ') : '—'), ans || '— not answered —', mark]);
+    }
+    if (lastIdx + 1 < planned) {
+      rowsData.push([String(lastIdx + 2), { node: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.7 }}><WritingPencil size={14} /> generating…</span> }, { node: <span style={{ opacity: 0.55 }}>the next slide is being written…</span> }, '', '', '']);
+    }
     return (
       <div className="card alt" style={{ padding: '12px 14px', marginTop: 12, maxWidth: 900, marginInline: 'auto' }}>
         <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
