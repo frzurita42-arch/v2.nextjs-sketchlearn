@@ -2475,11 +2475,23 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
     return (
       <div className="card alt" style={{ padding: '12px 14px', marginTop: 12, maxWidth: 900, marginInline: 'auto' }}>
         <h4 style={{ margin: '0 0 4px' }}>📋 Run record — admin / moderator only</h4>
-        {/* One-line run summary — who, from where, score, time (fills in as you play). */}
-        <div style={{ fontSize: 12, opacity: 0.85, margin: '0 0 8px', lineHeight: 1.5 }}>
-          <b>{runDetails.student}</b> · {runDetails.score} ({runDetails.percent}%) · ⏱ {runDetails.timeTaken}
-          {origin?.repoSlug && <> · from <b>{(runDetails as any).fromRepo}</b>{(runDetails as any).unit ? ` · ${(runDetails as any).unit}` : ''}{(runDetails as any).lessonInUnit ? ` · lesson ${(runDetails as any).lessonInUnit}` : ''}</>}
-        </div>
+        {/* Run details — who, when, time, and the ORIGIN repo (or "Direct" when this was
+            generated & played straight from the slide tool, not launched from a repo). */}
+        {(() => {
+          const startedTime = startedAt.current ? new Date(startedAt.current).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+          const originLabel = origin?.repoSlug
+            ? `${(runDetails as any).fromRepo}${(runDetails as any).unit ? ` · ${(runDetails as any).unit}` : ''}${(runDetails as any).lessonInUnit ? ` · lesson ${(runDetails as any).lessonInUnit}` : ''}`
+            : 'Direct — not from a repo';
+          return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 14px', fontSize: 12, margin: '0 0 8px', opacity: 0.9, lineHeight: 1.5 }}>
+              <span>👤 <b>{runDetails.student}</b></span>
+              <span>📅 {runDetails.date}{startedTime ? ` · ${startedTime}` : ''}</span>
+              <span>🕐 {runDetails.timeTaken}</span>
+              <span>📁 {originLabel}</span>
+              <span>🏆 {runDetails.score} ({runDetails.percent}%)</span>
+            </div>
+          );
+        })()}
         <PagedTable
           headers={['#', 'Slide title', 'What it taught', 'Shows', 'Student answer', '✓']}
           rows={rowsData}
