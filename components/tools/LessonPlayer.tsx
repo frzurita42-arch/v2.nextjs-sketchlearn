@@ -2030,24 +2030,17 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             const goNext = () => setWizardStep((s) => Math.min(totalPages - 1, s + 1));
             const settingsSteps: WizardStep[] = Array.from({ length: pageCount }, (_, pi) => {
               const pageCells = cells.slice(pi * perPage, pi * perPage + perPage);
-              const isLastSettings = pi === pageCount - 1;
               return {
                 key: `p${pi}`,
                 title: `Settings ${pi + 1} of ${pageCount}`,
                 render: () => (
                   <WizardGridTemplate rowButtons
                     top={<div style={{ width: '100%', display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, gap: 12, alignContent: 'start' }}>{pageCells.map((c, i) => <div key={i} style={{ minWidth: 0 }}>{c}</div>)}</div>}
+                    // Every settings page just advances with Next → (the last one goes to the
+                    // prompt window). Generate lives ONLY on that final step, never here.
                     onNext={goNext}
                     onBack={goPrev}
-                    backDisabled={wizardStep === 0}
-                    // On the last SETTINGS page keep a Next → (to reach the prompt window,
-                    // the true final step) AND offer Generate right here, so nothing is lost.
-                    rightTop={isLastSettings
-                      ? <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', width: 96, minWidth: 96 }}>
-                          <button className="btn small green" style={navSizeStyle} onClick={goNext} title="See the exact prompt(s) sent to the AI">Next →</button>
-                          {finalActions}
-                        </div>
-                      : undefined} />
+                    backDisabled={wizardStep === 0} />
                 ),
               };
             });
