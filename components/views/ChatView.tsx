@@ -512,25 +512,27 @@ export function ChatView() {
         {/* The prompt — a borderless text box that blends into the dashed card. */}
         <textarea id="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Tell me what you want to learn… I'll steer you to a game to play or a lesson to build"
+          disabled={transcribing}
+          placeholder={transcribing ? 'Please wait — audio is being transcribed…' : "Tell me what you want to learn… I'll steer you to a game to play or a lesson to build"}
           rows={2}
           style={{ border: 'none', background: 'transparent', boxShadow: 'none', outline: 'none', resize: 'vertical',
-            minHeight: 44, fontSize: 15, lineHeight: 1.35, padding: 0, width: '100%', fontFamily: 'inherit' }} />
+            minHeight: 44, fontSize: 15, lineHeight: 1.35, padding: 0, width: '100%', fontFamily: 'inherit',
+            cursor: transcribing ? 'not-allowed' : 'text', opacity: transcribing ? 0.65 : 1 }} />
 
         {/* Faint dotted rule separating the write area from the controls. */}
         <div style={{ borderTop: '1px dotted var(--ink,#2d2a26)', opacity: 0.18 }} />
 
-        {/* Controls: ＋ attach + ⚙️ settings on the left, record 🎤 beside send ↑ on the right. */}
+        {/* Controls: ＋ attach, 🎬 lesson path, ⚙️ settings on the left; record 🎤 beside send ↑ on the right. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button type="button" title="Attach images" aria-label="Attach images" onClick={pickFiles}
             style={{ ...composerCircle, width: 32, height: 32 }}>＋</button>
-          <button type="button" title="ChatBot settings — tone, length, sticky-note publicity…" aria-label="Settings" onClick={() => setPromptOpen(true)}
-            style={{ ...composerCircle, width: 32, height: 32, fontSize: 15 }}>⚙️</button>
           <button type="button" aria-label="Lesson Path" aria-pressed={lessonPath} onClick={() => setLessonPath((v) => !v)}
             title={lessonPath ? 'Lesson Path is ON — your next send builds a structured learning path (repo + presentation)' : 'Lesson Path — turn on to build a structured learning path from your prompt'}
             style={{ ...composerCircle, width: 32, height: 32, fontSize: 15,
               ...(lessonPath ? { background: 'var(--green,#7fb069)', color: '#fff', borderColor: 'var(--green,#7fb069)' } : null) }}>🎬</button>
-          <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto' }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : lessonPath ? '🎬 Lesson Path on — send to build a learning path' : 'Chat to get a recommendation or build a lesson'}</span>
+          <button type="button" title="ChatBot settings — tone, length, sticky-note publicity…" aria-label="Settings" onClick={() => setPromptOpen(true)}
+            style={{ ...composerCircle, width: 32, height: 32, fontSize: 15 }}>⚙️</button>
+          <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto', color: transcribing ? 'var(--danger,#e4572e)' : undefined, fontWeight: transcribing ? 700 : undefined }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? '⏳ Please wait — audio is being transcribed…' : lessonPath ? '🎬 Lesson Path on — send to build a learning path' : 'Chat to get a recommendation or build a lesson'}</span>
           {voiceOn && (
             <button type="button" aria-label="Dictate" aria-pressed={recording} disabled={transcribing} onClick={toggleMic}
               title={recording ? 'Stop & transcribe' : transcribing ? 'Transcribing…' : 'Dictate — speak instead of typing (ElevenLabs)'}
@@ -539,8 +541,8 @@ export function ChatView() {
               {transcribing ? '⏳' : recording ? '⏹' : '🎤'}
             </button>
           )}
-          <button type="button" title="Send" aria-label="Send" id="chat-send" onClick={send}
-            style={{ ...composerCircle, background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
+          <button type="button" title={transcribing ? 'Please wait — audio is being transcribed' : 'Send'} aria-label="Send" id="chat-send" disabled={transcribing} onClick={send}
+            style={{ ...composerCircle, background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16, opacity: transcribing ? 0.5 : 1, cursor: transcribing ? 'not-allowed' : 'pointer' }}>↑</button>
         </div>
       </div>
       {freeMode && (

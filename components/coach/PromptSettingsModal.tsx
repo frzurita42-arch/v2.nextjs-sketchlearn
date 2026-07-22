@@ -1,100 +1,86 @@
 'use client';
-/* ChatBot behaviour settings — a minimalist, paginated popup. Each window tweaks a
- * group of the directives that shape how the bot replies (length, tone, objective,
- * sticky-note "publicity", toolbar). Changes save live. */
-import { useState } from 'react';
+/* ChatBot behaviour settings — now built on the SAME shared components as the slide
+ * tool generator: a StepWizard (progress dots + step nav) whose steps render ToolFields
+ * (the labelled input grid). Because both surfaces use these components, restyling
+ * StepWizard / ToolFields restyles the chat settings AND the slide generator together.
+ * The chat's own settings are mapped into ToolField descriptors below. */
 import {
   usePromptSettings, TONES, STICKY_TYPES, BREVITY_LABELS, FREQ_LABELS, INTERACTIVITY_LABELS, ICON_LABELS,
-  type PromptSettings,
 } from '@/lib/prompt-settings';
+import { ToolFields } from '@/components/tools/ToolFields';
+import { StepWizard, type WizardStep } from '@/components/ui/StepWizard';
+import type { ToolField } from '@/lib/tool-schema';
 
-const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.3, margin: '0 0 4px', display: 'block' };
-const sel: React.CSSProperties = { width: '100%', padding: '7px 9px', fontSize: 13, borderRadius: 8, border: '1.5px solid var(--ink)', background: 'var(--card,#fff8ee)', font: 'inherit' };
-
-function ticks(labels: string[], v: number) {
-  return <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted,#8a7f70)', marginTop: 3 }}>{labels.map((l, i) => <span key={l} style={{ fontWeight: i === v ? 800 : 400, color: i === v ? 'var(--ink)' : undefined }}>{l}</span>)}</div>;
-}
+// Discrete 0–4 settings are shown as dropdowns (the slide tool uses selects too), so
+// we map an index ⇄ its label when reading/writing.
+const toLabel = (labels: string[], i: number) => labels[Math.max(0, Math.min(labels.length - 1, Number(i) || 0))];
+const toIdx = (labels: string[], l: string) => { const i = labels.indexOf(l); return i < 0 ? 0 : i; };
+const toneLabel = (k: string) => (TONES.find((t) => t.key === k)?.label) || TONES[0].label;
+const labelToTone = (l: string) => (TONES.find((t) => t.label === l)?.key) || 'stale';
 
 export function PromptSettingsModal({ onClose }: { onClose: () => void }) {
   const [s, update] = usePromptSettings();
-  const [page, setPage] = useState(0);
-  const pages = ['Length & tone', 'Interactivity & sticky-notes', 'Toolbar'];
-  const total = pages.length;
 
-  const toggleType = (k: string) => {
-    const has = s.stickyTypes.includes(k);
-    update({ stickyTypes: has ? s.stickyTypes.filter((x) => x !== k) : [...s.stickyTypes, k] });
+  // One value map + one dispatcher keyed by field id — the ToolFields contract.
+  const values: Record<string, any> = {
+    tone: toneLabel(s.tone),
+    brevity: toLabel(BREVITY_LABELS, s.brevity),
+    maxWords: s.maxWords,
+    emoji: s.emoji,
+    interactivity: toLabel(INTERACTIVITY_LABELS, s.interactivity),
+    stickyFreq: toLabel(FREQ_LABELS, s.stickyFreq),
+    toolbarIcon: toLabel(ICON_LABELS, s.toolbarIcon),
+    ...Object.fromEntries(STICKY_TYPES.map((t) => [`sticky_${t.key}`, s.stickyTypes.includes(t.key)])),
+  };
+  const onChange = (id: string, v: any) => {
+    if (id === 'tone') update({ tone: labelToTone(v) });
+    else if (id === 'brevity') update({ brevity: toIdx(BREVITY_LABELS, v) });
+    else if (id === 'maxWords') update({ maxWords: Math.max(15, Math.min(400, parseInt(v, 10) || 80)) });
+    else if (id === 'emoji') update({ emoji: !!v });
+    else if (id === 'interactivity') update({ interactivity: toIdx(INTERACTIVITY_LABELS, v) });
+    else if (id === 'stickyFreq') update({ stickyFreq: toIdx(FREQ_LABELS, v) });
+    else if (id === 'toolbarIcon') update({ toolbarIcon: toIdx(ICON_LABELS, v) });
+    else if (id.startsWith('sticky_')) {
+      const key = id.slice('sticky_'.length);
+      const has = s.stickyTypes.includes(key);
+      update({ stickyTypes: has ? s.stickyTypes.filter((x) => x !== key) : [...s.stickyTypes, key] });
+    }
   };
 
-  const range = (key: keyof PromptSettings, labels: string[]) => (
-    <>
-      <input type="range" min={0} max={labels.length - 1} step={1} value={Number(s[key])} onChange={(e) => update({ [key]: parseInt(e.target.value, 10) } as any)} style={{ width: '100%', accentColor: 'var(--green,#7fb069)' }} />
-      {ticks(labels, Number(s[key]))}
-    </>
-  );
+  const lengthTone: ToolField[] = [
+    { id: 'tone', label: 'Tone', type: 'select', options: TONES.map((t) => t.label) },
+    { id: 'brevity', label: 'Reply length', type: 'select', options: BREVITY_LABELS },
+    { id: 'maxWords', label: 'Max length (words)', type: 'number', placeholder: '80' },
+    { id: 'emoji', label: 'Allow a few emojis', type: 'toggle' },
+  ];
+  const interactStickies: ToolField[] = [
+    { id: 'interactivity', label: 'Interactivity', type: 'select', options: INTERACTIVITY_LABELS },
+    { id: 'stickyFreq', label: 'Sticky-note publicity', type: 'select', options: FREQ_LABELS },
+    ...STICKY_TYPES.map((t): ToolField => ({ id: `sticky_${t.key}`, label: `Sticky · ${t.label}`, type: 'toggle' })),
+  ];
+  const toolbar: ToolField[] = [
+    { id: 'toolbarIcon', label: 'Toolbar icon size', type: 'select', options: ICON_LABELS },
+  ];
+
+  const steps: WizardStep[] = [
+    { key: 'lengthTone', title: 'Length & tone', render: () => <ToolFields fill fields={lengthTone} values={values} onChange={onChange} /> },
+    { key: 'interact', title: 'Interactivity & sticky-notes', render: () => <ToolFields fill fields={interactStickies} values={values} onChange={onChange} /> },
+    { key: 'toolbar', title: 'Toolbar', render: () => <ToolFields fill fields={toolbar} values={values} onChange={onChange} /> },
+  ];
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,38,0.6)', zIndex: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, width: '100%', padding: '16px 18px', maxHeight: '86vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+      <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: '16px 18px', maxHeight: '88vh', overflow: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <b>🤖 ChatBot settings</b>
           <button className="btn small ghost" onClick={onClose}>✕</button>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--muted,#8a7f70)', marginBottom: 14 }}>{pages[page]}</div>
-
-        {page === 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div><span style={lbl}>Tone</span>
-              <select value={s.tone} onChange={(e) => update({ tone: e.target.value })} style={sel}>
-                {TONES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-              </select>
-            </div>
-            <div><span style={lbl}>Reply length — {BREVITY_LABELS[s.brevity]}</span>{range('brevity', BREVITY_LABELS)}</div>
-            <div><span style={lbl}>Max length (words)</span>
-              <input type="number" min={15} max={400} value={s.maxWords} onChange={(e) => update({ maxWords: Math.max(15, Math.min(400, parseInt(e.target.value, 10) || 80)) })} style={sel} />
-            </div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
-              <input type="checkbox" checked={s.emoji} onChange={(e) => update({ emoji: e.target.checked })} /> Allow a few emojis in replies
-            </label>
-          </div>
-        )}
-
-        {page === 1 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div><span style={lbl}>Interactivity — {INTERACTIVITY_LABELS[s.interactivity]}</span>{range('interactivity', INTERACTIVITY_LABELS)}
-              <p style={{ fontSize: 11.5, color: 'var(--muted,#8a7f70)', margin: '4px 0 0' }}>How much the bot chats with you before steering to a recommendation. <b>Direct</b> asks straight for the subject/level; <b>Exploratory</b> holds a real conversation and lets the recommendation emerge.</p>
-            </div>
-            <div><span style={lbl}>Sticky-note publicity — {FREQ_LABELS[s.stickyFreq]}</span>{range('stickyFreq', FREQ_LABELS)}
-              <p style={{ fontSize: 11.5, color: 'var(--muted,#8a7f70)', margin: '4px 0 0' }}>How often the bot nudges you toward other sections with a page sticky-note.</p>
-            </div>
-            <div><span style={lbl}>Sticky-note types offered</span>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 10px' }}>
-                {STICKY_TYPES.map((t) => (
-                  <label key={t.key} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, opacity: s.stickyFreq === 0 ? 0.5 : 1 }}>
-                    <input type="checkbox" disabled={s.stickyFreq === 0} checked={s.stickyTypes.includes(t.key)} onChange={() => toggleType(t.key)} /> {t.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {page === 2 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div><span style={lbl}>Toolbar icon size — {ICON_LABELS[s.toolbarIcon]}</span>{range('toolbarIcon', ICON_LABELS)}
-              <p style={{ fontSize: 11.5, color: 'var(--muted,#8a7f70)', margin: '4px 0 0' }}>Resizes the emoji buttons under the chat.</p>
-            </div>
-          </div>
-        )}
-
-        {/* Pager — dots + prev/next, uniform across windows. */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 }}>
-          <button className="btn small ghost" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>‹ Back</button>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {pages.map((_, i) => <span key={i} onClick={() => setPage(i)} style={{ width: 8, height: 8, borderRadius: '50%', cursor: 'pointer', background: i === page ? 'var(--ink)' : 'var(--line,#d9cfc0)' }} />)}
-          </div>
-          <button className="btn small ghost" disabled={page >= total - 1} onClick={() => setPage((p) => Math.min(total - 1, p + 1))}>Next ›</button>
-        </div>
+        <StepWizard
+          steps={steps}
+          finalActions={<button className="btn small green" onClick={onClose}>✓ Done</button>}
+          bodyMinHeight={150}
+          actionsJustify="flex-end"
+        />
       </div>
     </div>
   );
