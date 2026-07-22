@@ -64,6 +64,7 @@ import { CardViewMenu } from '@/components/ui/CardViewMenu';
 import { GalleryFilterRow, GalleryPager } from '@/components/ui/GalleryChrome';
 import { GallerySkeleton } from '@/components/ui/GallerySkeleton';
 import { PagedTable, type Cell } from '@/components/ui/PagedTable';
+import { PromptInspector } from '@/components/ui/PromptInspector';
 
 // Subject categories every generation is filed under (feed filter + create form).
 const GEN_CATEGORIES = ['Science', 'Technology', 'Mathematics', 'Language Learning', 'History & Geography', 'Arts & Music', 'Productivity', 'Games & Fun', 'Health & Wellbeing', 'Business & Finance'];
@@ -2022,23 +2023,39 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             const perPage = wizardW === 0 || wizardW >= 620 ? 4 : wizardW >= 330 ? 2 : 1;
             const gridCols = perPage >= 2 ? 2 : 1;
             const pageCount = Math.max(1, Math.ceil(cells.length / perPage));
-            const goNext = () => setWizardStep((s) => Math.min(pageCount - 1, s + 1));
-            const steps: WizardStep[] = Array.from({ length: pageCount }, (_, pi) => {
+            // One extra page after the settings: a read-only window showing the ACTUAL
+            // prompt(s) this tool sends to the AI — one box per output request (slide text,
+            // illustration/SVG, trust & safety). Same idea as the coach chat's "How I reply".
+            const totalPages = pageCount + 1;
+            const goNext = () => setWizardStep((s) => Math.min(totalPages - 1, s + 1));
+            const settingsSteps: WizardStep[] = Array.from({ length: pageCount }, (_, pi) => {
               const pageCells = cells.slice(pi * perPage, pi * perPage + perPage);
-              const isLast = pi === pageCount - 1;
+              const isLastSettings = pi === pageCount - 1;
               return {
                 key: `p${pi}`,
                 title: `Settings ${pi + 1} of ${pageCount}`,
                 render: () => (
                   <WizardGridTemplate rowButtons
                     top={<div style={{ width: '100%', display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, gap: 12, alignContent: 'start' }}>{pageCells.map((c, i) => <div key={i} style={{ minWidth: 0 }}>{c}</div>)}</div>}
-                    onNext={isLast ? undefined : goNext}
+                    onNext={goNext}
                     onBack={goPrev}
                     backDisabled={wizardStep === 0}
-                    rightTop={isLast ? finalActions : undefined} />
+                    rightTop={isLastSettings ? finalActions : undefined} />
                 ),
               };
             });
+            const promptStep: WizardStep = {
+              key: 'prompt',
+              title: 'How it’s generated — the prompt',
+              render: () => (
+                <WizardGridTemplate tall
+                  top={<PromptInspector kind="slide" topic={(form as any).topic || lesson.subject || ''} level={(form as any).level || (form as any).difficulty || 'Beginner'} />}
+                  onBack={goPrev}
+                  backDisabled={wizardStep === 0}
+                  rightTop={finalActions} />
+              ),
+            };
+            const steps: WizardStep[] = [...settingsSteps, promptStep];
             return (
               <CardShell
                 view="grid"

@@ -7,6 +7,8 @@ const { buildSlideSystemPrompt } = require('@/src/ai/prompts/slide');
 const { buildLearningPathPrompt } = require('@/src/ai/prompts/learning-path');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SAFETY_GUARDRAILS } = require('@/src/ai/prompts/guardrails');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { SKETCH_SVG_RULES } = require('@/src/ai/providers');
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,9 +37,21 @@ function slidePrompt(topic: string, level: string): PromptEntry {
     visualPromptRule: 'When an image is used, describe a clear, on-topic illustration.',
   });
   return {
-    label: '🎞️ Slide generation (system prompt)',
+    label: '🎞️ Slide text & structure (system prompt)',
     system,
-    footnote: 'Sent once per slide. Expected reply: strict JSON for ONE slide — a title, a summary, a list of components (text/keypoints/table/latex/code/chart/…), and a quiz with exactly 4 options (one correct).',
+    footnote: 'Sent once per slide. The Title you enter becomes the slide title; leave it blank and the AI writes one from the topic. Expected reply: strict JSON for ONE slide — a title, a summary, a list of components (text/keypoints/table/latex/code/chart/…), and a quiz with exactly 4 options (one correct).',
+  };
+}
+
+// The image / SVG request. When a slide's component set includes a hand-sketched drawing,
+// this rule block is sent to the model asking for a single self-contained <svg> that depicts
+// THIS slide's concept. It is a separate output request from the slide-text JSON above.
+function svgPrompt(topic: string): PromptEntry {
+  const t = topic || '<the topic you enter>';
+  return {
+    label: '🖼️ Illustration / SVG drawing (image request)',
+    system: `Draw a hand-sketched illustration for a slide about: ${t}\n\n${SKETCH_SVG_RULES}`,
+    footnote: 'Sent only when a slide includes an image/drawing component. Expected reply: ONE self-contained <svg> string (no scripts, no external refs) that depicts and labels this slide’s concept — not decoration.',
   };
 }
 
@@ -60,10 +74,10 @@ export async function POST(req: Request) {
   const { kind = 'slide', topic = '', level = 'Beginner' } = (await req.json().catch(() => ({}))) || {};
 
   const prompts: PromptEntry[] = [];
-  if (kind === 'slide') prompts.push(slidePrompt(topic, level));
-  else if (kind === 'learning-path' || kind === 'repo') { prompts.push(learningPathPrompt(topic)); prompts.push(slidePrompt(topic, level)); }
-  else if (kind === 'builder') { prompts.push(learningPathPrompt(topic)); prompts.push(slidePrompt(topic, level)); }
-  else prompts.push(slidePrompt(topic, level));
+  if (kind === 'slide') { prompts.push(slidePrompt(topic, level)); prompts.push(svgPrompt(topic)); }
+  else if (kind === 'learning-path' || kind === 'repo') { prompts.push(learningPathPrompt(topic)); prompts.push(slidePrompt(topic, level)); prompts.push(svgPrompt(topic)); }
+  else if (kind === 'builder') { prompts.push(learningPathPrompt(topic)); prompts.push(slidePrompt(topic, level)); prompts.push(svgPrompt(topic)); }
+  else { prompts.push(slidePrompt(topic, level)); prompts.push(svgPrompt(topic)); }
 
   // The trust/safety block is appended to every generation system prompt server-side.
   const guardrails: PromptEntry = {
