@@ -1661,10 +1661,25 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   const openStudy = async (promptText: string, sourceCard?: RepoCard, opts?: { autoGenerate?: boolean }) => {
     const seed = studySeedFromCard(promptText, sourceCard);
     const autoGenerate = opts?.autoGenerate !== false;
+    // What EARLIER lessons in this unit actually taught (from saved lesson logs), so the
+    // new lesson builds on real prior content — like a later chapter — not just the
+    // outline. Deduped to the most-recent log per earlier lesson.
+    let taught = '';
+    if (typeof seed.lessonIndex === 'number' && seed.lessonIndex > 0) {
+      const priorLogs = entries.filter((e: any) => e?.data?.__lessonLog && typeof e.data.lessonIndex === 'number' && e.data.lessonIndex < seed.lessonIndex);
+      const byLesson: Record<number, any> = {};
+      for (const e of priorLogs) { const li = e.data.lessonIndex; if (!byLesson[li] || new Date(e.data.playedAt) > new Date(byLesson[li].data.playedAt)) byLesson[li] = e; }
+      const parts = Object.keys(byLesson).map(Number).sort((a, b) => a - b).map((li) => {
+        const d = byLesson[li].data;
+        const pts = (d.slides || []).map((s: any) => s.title).filter(Boolean).slice(0, 8).join('; ');
+        return `Lesson ${li + 1}${d.lessonTitle ? ` "${d.lessonTitle}"` : ''} already taught: ${pts || d.topic || ''}`;
+      });
+      if (parts.length) taught = ` PREVIOUSLY TAUGHT in this course (build on this like a later chapter — assume the learner already knows it, do NOT re-explain it): ${parts.join(' | ')}.`;
+    }
     // Link the generated lesson to its ORIGIN repo by the stable slug (never the title,
     // which can change), plus the unit/lesson position — carried into the run record.
     appState.slideSeed = {
-      topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions, autoGenerate,
+      topic: seed.topic, slides: ccSlides, customInstructions: seed.customInstructions + taught, autoGenerate,
       repoSlug: slug, repoTitle: seed.repoTitle, unitTitle: seed.unitTitle,
       lessonTitle: seed.lessonTitle, lessonIndex: seed.lessonIndex, lessonCount: seed.lessonCount,
     };
@@ -2074,6 +2089,39 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
               headers={['#', 'Unit', 'Role', 'Title', 'Description', 'Study path', 'Paywall', 'Attachments', 'Status', 'Created', 'Last edited']}
               rows={rows}
               empty="No cards yet."
+              rowsPerPage={8}
+            />
+          </div>
+        );
+      })()}
+
+      {/* Persisted LESSON RUNS: every playable presentation generated from this repo's
+          🎬 prompts is logged back here (by the stable repo slug) — who played it, when,
+          which unit/lesson, their score, time, and a verbal summary of what was taught.
+          This is the memory the NEXT lesson builds on. Admin / moderator (each learner
+          sees only their own rows via the entries API). */}
+      {(canEdit || isAdmin) && (() => {
+        const logs = entries.filter((e: any) => e?.data?.__lessonLog)
+          .sort((a: any, b: any) => new Date(b.data?.playedAt || 0).getTime() - new Date(a.data?.playedAt || 0).getTime());
+        const rows: Cell[][] = logs.map((e: any) => {
+          const d = e.data || {};
+          const when = d.playedAt ? new Date(d.playedAt).toLocaleString() : '—';
+          const lesson = `${typeof d.lessonIndex === 'number' ? d.lessonIndex + 1 : '?'} of ${d.lessonCount || '?'}${d.lessonTitle ? ` — ${d.lessonTitle}` : ''}`;
+          const secs = d.timeSeconds || 0;
+          const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
+          const summary = (d.slides || []).map((s: any) => `${s.n}. ${s.title}${s.seconds ? ` (${s.seconds}s)` : ''}`).join('  ·  ');
+          return [String(d.playedBy || '—'), when, String(d.unitTitle || '—'), lesson, String(d.score || '—'), time, summary || '—'];
+        });
+        return (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', margin: '0 0 8px' }}>
+              <h3 style={{ margin: 0 }}>📊 Lesson runs — who learned what</h3>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>Each play from a 🎬 prompt, logged here. The next lesson builds on these.</span>
+            </div>
+            <PagedTable
+              headers={['Student', 'Played', 'Unit', 'Lesson', 'Score', 'Time', 'Slides taught (summary)']}
+              rows={rows}
+              empty="No lessons have been played from this repository yet — play one from a 🎬 prompt and it appears here."
               rowsPerPage={8}
             />
           </div>

@@ -1162,6 +1162,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // Where this lesson came FROM — the origin repo (by stable slug) + unit/lesson —
   // set from the 🎬 study-path seed, surfaced in the admin run record.
   const lessonOriginRef = useRef<{ repoSlug?: string; repoTitle?: string; unitTitle?: string; lessonTitle?: string; lessonIndex?: number; lessonCount?: number } | null>(null);
+  // Per-slide dwell time (seconds), so the saved lesson log records time-on-each-slide.
+  const slideTimeRef = useRef<Record<number, number>>({});
+  const slideEnterRef = useRef(0);
+  const prevCurRef = useRef(0);
+  const loggedRun = useRef(false);   // save the repo lesson-log once per completed run
   // Per-PLAY slide order. The designed deck stores pages in a fixed order, but a
   // presentation shouldn't play identically every time: the FIRST page is always
   // the intro, and the remaining pages are SHUFFLED for each run so a middle- or
@@ -1169,6 +1174,52 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
   // index; empty/identity when there are no designed pages to reorder.
   const pageOrderRef = useRef<number[]>([]);
   useEffect(() => { slidesRef.current = slides; }, [slides]);
+  // Track dwell time per slide (seconds) for the saved lesson log.
+  useEffect(() => {
+    const now = Date.now();
+    if (phase === 'play' && slideEnterRef.current) {
+      const p = prevCurRef.current;
+      slideTimeRef.current[p] = (slideTimeRef.current[p] || 0) + Math.max(0, Math.round((now - slideEnterRef.current) / 1000));
+    }
+    slideEnterRef.current = phase === 'play' ? now : 0;
+    prevCurRef.current = cur;
+  }, [cur, phase]);
+  // When a lesson launched FROM a repo finishes, save a compact VERBAL record to that
+  // repo (by stable slug) — what was taught, to whom, when, time-per-slide and score —
+  // so the NEXT lesson in the series can be generated building on what came before.
+  useEffect(() => {
+    if (phase !== 'done' || loggedRun.current) return;
+    const origin = lessonOriginRef.current;
+    if (!origin?.repoSlug) return;
+    const gen = slidesRef.current.filter(Boolean) as Slide[];
+    if (!gen.length) return;
+    loggedRun.current = true;
+    const details = Object.keys(results).flatMap((k) => Object.values(results[Number(k)].answers));
+    const answered = details.length;
+    const correct = details.filter((d: any) => d.correct).length;
+    const record = {
+      __lessonLog: true,
+      playedBy: app.user?.username || 'guest',
+      playedAt: new Date().toISOString(),
+      timeSeconds: startedAt.current ? Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)) : 0,
+      score: `${correct}/${answered}`,
+      percent: answered ? Math.round((correct / answered) * 100) : 0,
+      unitTitle: origin.unitTitle || '',
+      lessonTitle: origin.lessonTitle || '',
+      lessonIndex: origin.lessonIndex,
+      lessonCount: origin.lessonCount,
+      topic: String((cfgRef.current as any).topic || '').replace(/\s+/g, ' ').slice(0, 400),
+      slides: gen.map((s, i) => ({
+        n: i + 1,
+        title: s.title || '',
+        summary: String(s.content || '').replace(/\s+/g, ' ').slice(0, 320),
+        shows: (s.supportPlan && s.supportPlan.length ? s.supportPlan : (s._supports || []).map((c: any) => c && c.type).filter(Boolean)),
+        seconds: slideTimeRef.current[i] || 0,
+      })),
+    };
+    API.post('/api/tools/entries', { slug: origin.repoSlug, data: record }).catch(() => { loggedRun.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
   // Changing slide silences any audio still playing from the previous slide
   // (belt-and-braces with the AudioButton unmount cleanup) and jumps the view to
   // the top so each newly-shown card starts at the progress bar, not scrolled
@@ -1327,6 +1378,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
       }
     } catch { /* ignore */ }
     cfgRef.current = c; slidesRef.current = []; prefetching.current = {}; startedAt.current = Date.now();
+    slideTimeRef.current = {}; slideEnterRef.current = Date.now(); prevCurRef.current = 0; loggedRun.current = false;
     shufflePages();   // roll a fresh slide order for this run (intro stays first)
     savedRun.current = false;   // this fresh run hasn't been auto-saved yet
     setFavSlides({}); favSlidesRef.current = {};
@@ -2709,10 +2761,6 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             <button className="btn green" disabled={!canFinish} onClick={() => setPhase('done')}>🏁 Finish</button>
           </div>
           {!allAnswered && <p style={{ fontSize: 12, opacity: 0.6, textAlign: 'center', marginTop: 6 }}>Answer {qList.length > 1 ? 'every question' : 'the question'} above to unlock {isLast ? 'Finish' : 'Next'}.</p>}
-
-          {/* Admin/moderator: the run-record table UNDER each slide — a row fills in as
-              each slide loads, accumulating through the whole presentation. */}
-          {runRecordTable(true)}
         </div>
       )}
     </div>
