@@ -241,10 +241,10 @@ function makeFallbackRecommendation({ topic, concept, level, correct, total, sli
 function makeFallbackCoachReply(progress = []) {
   const recent = Array.isArray(progress) ? progress.slice(-3) : [];
   if (!recent.length) {
-    return 'AI is offline, but I can still point you one of two ways. To play an existing game, press "⭐ Recommend a run to play" (free). To make your own, press "🧰 Build a tool from this chat". Tell me the subject and rough level you want and I will steer you to one.';
+    return 'AI is offline, but I can still point you one of two ways: play an existing game from the Slides or Repos page, or build your own there with the builder. Tell me the subject and rough level you want and I will steer you to one.';
   }
   const latest = recent[recent.length - 1];
-  return `AI is offline, but I can still steer you. Your last activity was ${latest.topic} / ${latest.concept} at ${latest.level} (${latest.score}). Either press "⭐ Recommend a run to play" for another game near that, or "🧰 Build a tool from this chat" to make a new slide presentation or repo on it.`;
+  return `AI is offline, but I can still steer you. Your last activity was ${latest.topic} / ${latest.concept} at ${latest.level} (${latest.score}). Head to the Slides or Repos page to play another game near that, or to build a new slide presentation or repo on it.`;
 }
 
 function makeFallbackTable(slide, context = {}) {

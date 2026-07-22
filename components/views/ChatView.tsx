@@ -35,6 +35,12 @@ const PAGE_STICKIES: Record<string, { view: string; emoji: string; title: string
 // keep a transparent 3px bottom border to stay vertically aligned.
 const EMOJI_BTN: CSSProperties = { background: 'none', border: 'none', borderBottom: '3px solid transparent', cursor: 'pointer', fontSize: 'inherit', lineHeight: 1, padding: '3px 6px', borderRadius: 4, color: 'inherit' };
 const emojiBtn = (on = false): CSSProperties => (on ? { ...EMOJI_BTN, borderBottomColor: 'var(--green,#7fb069)' } : EMOJI_BTN);
+// Round icon button for the "Create a repo"-style composer (＋ attach, ⚙️ settings, ↑ send).
+const composerCircle: CSSProperties = {
+  width: 34, height: 34, borderRadius: '50%', border: '2.5px solid var(--ink,#2d2a26)',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  fontSize: 18, lineHeight: 1, cursor: 'pointer', flex: '0 0 auto', padding: 0, background: 'transparent', color: 'var(--ink,#2d2a26)',
+};
 
 // The four places the welcome message points a fresh visitor to — each is a
 // self-describing page sticky (its own view/emoji/title + a free/paid tag), so
@@ -554,50 +560,59 @@ export function ChatView() {
             )}
           </div>
 
-          {/* Attachment previews */}
-          {attachments.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
-              {attachments.map((src, k) => (
-                <div key={k} style={{ position: 'relative' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="attachment" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)' }} />
-                  <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== k))} title="Remove" style={{ position: 'absolute', top: -6, right: -6, background: '#fff', border: '1.5px solid var(--ink)', borderRadius: '50%', width: 18, height: 18, lineHeight: 1, cursor: 'pointer', fontSize: 11 }}>✕</button>
+          {/* Composer — the "Create a repo"-style card: a dashed rounded box with the
+              prompt, ＋ attach and ⚙️ settings on the left, and ↑ send on the right.
+              (Per design, the build/recommend/draw/video/history/new-chat buttons were
+              removed here; New chat & history live on the side rail, and the ⚙️ settings
+              functionality is preserved.) The message log above is unchanged. */}
+          <div style={{ margin: '6px 0 20px' }}>
+            <div style={{
+              border: '2.5px dashed var(--ink,#2d2a26)', borderRadius: 'var(--wobble-2, 16px)',
+              background: 'var(--paper,#fbf7ee)', padding: '12px 14px 10px',
+              display: 'flex', flexDirection: 'column', gap: 10,
+            }}>
+              {/* Attachment chips (the image content is carried into the chat). */}
+              {attachments.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {attachments.map((src, k) => (
+                    <span key={k} style={{ position: 'relative', display: 'inline-flex' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt="attachment" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)' }} />
+                      <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== k))} title="Remove" style={{ position: 'absolute', top: -6, right: -6, background: '#fff', border: '1.5px solid var(--ink)', borderRadius: '50%', width: 18, height: 18, lineHeight: 1, cursor: 'pointer', fontSize: 11 }}>✕</button>
+                    </span>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          <div className="chat-input-row">
-            <button className="btn small ghost" title="Attach images" onClick={pickFiles} style={{ padding: '0 10px' }}>📎</button>
-            <textarea id="chat-input" placeholder="Tell me what you want to learn… I'll help you build a lesson or repo (or tap 📎 / 🎨)"
-              value={input} onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
-            <button className="btn primary" id="chat-send" onClick={send}>Send</button>
-          </div>
-          {freeMode && (
-            <div style={{ fontSize: 11, color: 'var(--muted,#8a7f70)', marginTop: 4 }}>
-              {!app.user ? 'Free mode (guest): messages recommend a tool to play — no cost. Sign in to build and generate.'
-                : noCredits && !freeOnly ? 'You’re out of credits: chat runs on a free model (or recommends a tool), and building/generating is paused until you add credits.'
-                : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
+              {/* The prompt — a borderless text box that blends into the dashed card. */}
+              <textarea id="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder="Tell me what you want to learn… I'll steer you to a game to play or a lesson to build"
+                rows={2}
+                style={{ border: 'none', background: 'transparent', boxShadow: 'none', outline: 'none', resize: 'vertical',
+                  minHeight: 44, fontSize: 15, lineHeight: 1.35, padding: 0, width: '100%', fontFamily: 'inherit' }} />
+
+              {/* Faint dotted rule separating the write area from the controls. */}
+              <div style={{ borderTop: '1px dotted var(--ink,#2d2a26)', opacity: 0.18 }} />
+
+              {/* Controls: ＋ attach + ⚙️ settings on the left, ↑ send on the right. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button type="button" title="Attach images" aria-label="Attach images" onClick={pickFiles}
+                  style={{ ...composerCircle, width: 32, height: 32 }}>＋</button>
+                <button type="button" title="ChatBot settings — tone, length, sticky-note publicity…" aria-label="Settings" onClick={() => setPromptOpen(true)}
+                  style={{ ...composerCircle, width: 32, height: 32, fontSize: 15 }}>⚙️</button>
+                <span style={{ fontSize: 12, opacity: 0.5 }}>Chat to get a recommendation or build a lesson</span>
+                <button type="button" title="Send" aria-label="Send" id="chat-send" onClick={send}
+                  style={{ ...composerCircle, marginLeft: 'auto', background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
+              </div>
             </div>
-          )}
-          {/* Bare emoji toolbar inside a dashed box (like the repo settings panel).
-              Toggle buttons (history, free-only) light a green line at the bottom
-              when active; the others are plain tap actions. Credits float right. */}
-          <div className="slide-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginTop: 10, marginBottom: 22, gap: 4, flexWrap: 'wrap', border: '2px dashed var(--line,#d9cfc0)', borderRadius: 10, padding: '6px 10px', fontSize: iconPx }}>
-            <button style={emojiBtn(appState.railOpen !== false)} title="Show / hide chat history" aria-pressed={appState.railOpen !== false} onClick={() => { appState.railOpen = appState.railOpen === false; app.rerender(); }}>🗂</button>
-            <button style={emojiBtn()} title="Start a new chat" onClick={newChat}>🆕</button>
-            <button style={emojiBtn()} title="Build a tool from this chat (spends your credits)" disabled={building} onClick={buildTool}>{building ? '⏳' : '🧰'}</button>
-            <button style={emojiBtn()} title="Recommend an existing presentation or repo to play (free)" disabled={recommending} onClick={recommend}>{recommending ? '⏳' : '⭐'}</button>
-            <button style={emojiBtn(freeOnly)} aria-pressed={freeOnly} onClick={() => setFreeOnly((v) => !v)}
-              title={freeOnly ? 'Free only: ON — no AI is used, only free premade tools are recommended (tap to turn off)' : 'Free only: off — tap to only recommend free tools and skip the AI (no token cost)'}>🆓</button>
-            <button style={{ ...emojiBtn(), fontSize: iconPx }} title="Draw the chat: the coach's anthropomorphic take on our conversation, as a Polaroid" disabled={drawing} onClick={drawImage}>{drawing ? '⏳' : '🎨'}</button>
-            {youtubeOn && <button style={{ ...emojiBtn(), fontSize: iconPx }} title="Recommend YouTube videos for this topic (free)" disabled={recVideos} onClick={recommendVideos}>{recVideos ? '⏳' : '📺'}</button>}
-            <button style={{ ...emojiBtn(), fontSize: iconPx }} title="ChatBot settings — tone, length, sticky-note publicity…" onClick={() => setPromptOpen(true)}>⚙️</button>
-            <span style={{ flex: 1 }} />
-            {app.user && (tokenRole === 'admin'
-              ? <span title="Admin — unlimited credits" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green,#7fb069)' }}>🎟 Unlimited</span>
-              : <span title="Your remaining credits" style={{ fontSize: 18, fontWeight: 700, color: (balance ?? 0) > 0 ? 'var(--green,#7fb069)' : 'var(--danger,#e4572e)' }}>🎟 {balance == null ? '…' : balance.toLocaleString()}</span>)}
+            {freeMode && (
+              <div style={{ fontSize: 11, color: 'var(--muted,#8a7f70)', marginTop: 6 }}>
+                {!app.user ? 'Free mode (guest): messages recommend a tool to play — no cost. Sign in to build and generate.'
+                  : noCredits && !freeOnly ? 'You’re out of credits: chat runs on a free model (or recommends a tool), and building/generating is paused until you add credits.'
+                  : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
+              </div>
+            )}
           </div>
         </div>
       </div>
