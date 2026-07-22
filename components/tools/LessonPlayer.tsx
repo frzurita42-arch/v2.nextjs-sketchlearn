@@ -2034,10 +2034,11 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                 key: `p${pi}`,
                 title: `Settings ${pi + 1} of ${pageCount}`,
                 render: () => (
-                  <WizardGridTemplate rowButtons
+                  <WizardGridTemplate tall
                     top={<div style={{ width: '100%', display: 'grid', gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, gap: 12, alignContent: 'start' }}>{pageCells.map((c, i) => <div key={i} style={{ minWidth: 0 }}>{c}</div>)}</div>}
                     // Every settings page just advances with Next → (the last one goes to the
                     // prompt window). Generate lives ONLY on that final step, never here.
+                    // `tall` keeps a FIXED height so Next/Back sit in the same spot on every step.
                     onNext={goNext}
                     onBack={goPrev}
                     backDisabled={wizardStep === 0} />
