@@ -461,11 +461,23 @@ export function BuilderStudioView() {
         const mapped = mapAiCards(r?.cards || []);
         if (mapped.length) setRepoCards(mapped);
         else setErr(r?.error || 'The AI did not return a plan. Add a goal, a document, or a card or two, then try again.');
-        // Adopt the AI's clean plan NAME when the author left the title/subject blank
-        // (e.g. the Lesson Path composer passes the prompt only as the goal, so the
-        // tool gets a proper "Nutrition & Wellness" title instead of the raw command).
-        if (r?.title && !repoTitle.trim()) { setRepoTitle(String(r.title)); setPresTitle((p) => p.trim() ? p : String(r.title)); }
-        if (r?.subject && !repoSubject.trim()) { setRepoSubject(String(r.subject)); setPresSubject((p) => p.trim() ? p : String(r.subject)); }
+        // Name the repo (and its presentation) from the GENERATED CONTENT, not the
+        // prompt. A "command-like" title (the raw instruction — "Build a repo and slide
+        // tool about this course", or anything that opens with build/make/create… or is a
+        // long sentence) is replaced by: the AI's proposed clean title → its subject →
+        // the first produced unit's cleaned title. A real name the author typed is kept.
+        const isCommandLike = (t: string) => {
+          const s = String(t || '').trim();
+          return !s || /^(please\s+)?(build|create|make|generate|write|design|produce|draft|compose|a\s+lesson|an?\s+repo|the\s+|a\s+slide|make\s+a)/i.test(s) || s.split(/\s+/).length > 6;
+        };
+        const proposed = String(r?.title || '').trim();
+        const subj = String(r?.subject || '').trim();
+        const fromFirstCard = String((mapped[0] as any)?.title || (mapped[0] as any)?.name || '').replace(/^\s*(unit|module|chapter|week|part|lesson)\s*\d*\s*[:.\-–—]?\s*/i, '').trim();
+        if (isCommandLike(repoTitle)) {
+          const chosen = (!isCommandLike(proposed) && proposed) || subj || fromFirstCard;
+          if (chosen) { setRepoTitle(chosen); setPresTitle((p) => isCommandLike(p) ? chosen : p); }
+        }
+        if (subj && isCommandLike(repoSubject)) { setRepoSubject(subj); setPresSubject((p) => isCommandLike(p) ? subj : p); }
       }
     } catch (e: any) { setErr(e?.message || 'Could not build a suggestion.'); }
     setSuggesting(false);
