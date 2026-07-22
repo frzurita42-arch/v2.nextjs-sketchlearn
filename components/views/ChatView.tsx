@@ -465,18 +465,104 @@ export function ChatView() {
     return topic || text.slice(0, 200);
   };
 
+  // Welcome (Kimi-style) vs active layout: before the first user message the composer
+  // is centred with the logo above it; once a message is sent it drops to the bottom.
+  const hasUserMsg = messages.some((m) => m.role === 'user');
+
+  // The one composer, reused centred (welcome) and pinned at the bottom (active).
+  const composerBox = (
+    <div style={{ margin: '6px 0 20px' }}>
+      <div style={{
+        border: '2.5px dashed var(--ink,#2d2a26)', borderRadius: 'var(--wobble-2, 16px)',
+        background: 'var(--paper,#fbf7ee)', padding: '12px 14px 10px',
+        display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
+        {/* Attachment chips (the image content is carried into the chat). */}
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {attachments.map((src, k) => (
+              <span key={k} style={{ position: 'relative', display: 'inline-flex' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt="attachment" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)' }} />
+                <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== k))} title="Remove" style={{ position: 'absolute', top: -6, right: -6, background: '#fff', border: '1.5px solid var(--ink)', borderRadius: '50%', width: 18, height: 18, lineHeight: 1, cursor: 'pointer', fontSize: 11 }}>✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* The prompt — a borderless text box that blends into the dashed card. */}
+        <textarea id="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Tell me what you want to learn… I'll steer you to a game to play or a lesson to build"
+          rows={2}
+          style={{ border: 'none', background: 'transparent', boxShadow: 'none', outline: 'none', resize: 'vertical',
+            minHeight: 44, fontSize: 15, lineHeight: 1.35, padding: 0, width: '100%', fontFamily: 'inherit' }} />
+
+        {/* Faint dotted rule separating the write area from the controls. */}
+        <div style={{ borderTop: '1px dotted var(--ink,#2d2a26)', opacity: 0.18 }} />
+
+        {/* Controls: ＋ attach + ⚙️ settings on the left, record 🎤 beside send ↑ on the right. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" title="Attach images" aria-label="Attach images" onClick={pickFiles}
+            style={{ ...composerCircle, width: 32, height: 32 }}>＋</button>
+          <button type="button" title="ChatBot settings — tone, length, sticky-note publicity…" aria-label="Settings" onClick={() => setPromptOpen(true)}
+            style={{ ...composerCircle, width: 32, height: 32, fontSize: 15 }}>⚙️</button>
+          <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto' }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : 'Chat to get a recommendation or build a lesson'}</span>
+          {voiceOn && (
+            <button type="button" aria-label="Dictate" aria-pressed={recording} disabled={transcribing} onClick={toggleMic}
+              title={recording ? 'Stop & transcribe' : transcribing ? 'Transcribing…' : 'Dictate — speak instead of typing (ElevenLabs)'}
+              style={{ ...composerCircle, width: 32, height: 32, fontSize: 15,
+                ...(recording ? { background: 'var(--danger,#e4572e)', color: '#fff', borderColor: 'var(--danger,#e4572e)' } : null) }}>
+              {transcribing ? '⏳' : recording ? '⏹' : '🎤'}
+            </button>
+          )}
+          <button type="button" title="Send" aria-label="Send" id="chat-send" onClick={send}
+            style={{ ...composerCircle, background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
+        </div>
+      </div>
+      {freeMode && (
+        <div style={{ fontSize: 11, color: 'var(--muted,#8a7f70)', marginTop: 6 }}>
+          {!app.user ? 'Free mode (guest): messages recommend a tool to play — no cost. Sign in to build and generate.'
+            : noCredits && !freeOnly ? 'You’re out of credits: chat runs on a free model (or recommends a tool), and building/generating is paused until you add credits.'
+            : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       {/* Fills the fixed-viewport shell (see AppRoot). The shared CoachRail is the
-          full-height side-nav; only the chat log scrolls — the page never does. */}
+          full-height side-nav. Welcome state: centred composer; active: log + bottom composer. */}
       <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', justifyContent: 'center', height: '100%', width: '100%' }}>
         <CoachRail active={sessionId} sessions={sessions} onNewChat={newChat} onOpenSession={openSession} onDeleteSession={removeSession} />
 
-        {/* The working column is centred in the area to the right of the rail (and
-            re-centres when the rail collapses), bounded by two dashed vertical rules
-            that separate the workstation from the background. */}
-        <div className="chat-shell" style={{ width: '100%', maxWidth: 880, minWidth: 0, height: '100%', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
-          <div className="chat-log" id="chat-log" ref={logRef}>
+        {!hasUserMsg ? (
+          /* WELCOME (Kimi-style): the logo above a centred composer, plus a few quick links. */
+          <div className="chat-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 880, minWidth: 0, height: '100%', overflowY: 'auto', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+            <div style={{ width: '100%', maxWidth: 640, margin: 'auto 0' }}>
+              <div style={{ textAlign: 'center', marginBottom: 18 }}>
+                <div style={{ fontSize: 46, lineHeight: 1 }}>✏️</div>
+                <div className="scribble-underline" style={{ fontSize: 30, fontWeight: 800, color: 'var(--ink)', marginTop: 2 }}>SketchLearn</div>
+                <div style={{ opacity: 0.6, marginTop: 8, fontSize: 15 }}>Tell me what you want to learn — I&apos;ll steer you to a game to play or a lesson to build.</div>
+              </div>
+              {composerBox}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 2 }}>
+                {[{ v: 'slides', l: '🎞️ Slides' }, { v: 'tools', l: '📁 Repos' }, { v: 'presrun', l: '🎬 Presentation runs' }].map((c) => (
+                  <button key={c.v} className="btn small ghost" onClick={() => app.nav(c.v as never)}>{c.l}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+        /* ACTIVE: the conversation with the composer pinned at the bottom of the screen; the
+           admin-only history table sits below the fold. Two dashed vertical rules bound it. */
+        <div className="chat-shell" style={{ display: 'block', width: '100%', maxWidth: 880, minWidth: 0, height: '100%', overflowY: 'auto', padding: '0 16px', boxSizing: 'border-box', borderLeft: '2px dashed var(--line,#d9cfc0)', borderRight: '2px dashed var(--line,#d9cfc0)' }}>
+          {/* First screen: the conversation + the composer pinned at its bottom. It always
+              fills the viewport, so the input box sits at the bottom of the screen. The
+              admin-only history table lives BELOW the fold — scroll down to reveal it. */}
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div className="chat-log" id="chat-log" ref={logRef} style={{ flex: 1, minHeight: 0 }}>
             {messages.map((m, i) => {
               if (m.building) return (
                 <div key={i} className="msg ai">
@@ -599,70 +685,10 @@ export function ChatView() {
             )}
           </div>
 
-          {/* Composer — the "Create a repo"-style card: a dashed rounded box with the
-              prompt, ＋ attach and ⚙️ settings on the left, and ↑ send on the right.
-              (Per design, the build/recommend/draw/video/history/new-chat buttons were
-              removed here; New chat & history live on the side rail, and the ⚙️ settings
-              functionality is preserved.) The message log above is unchanged. */}
-          <div style={{ margin: '6px 0 20px' }}>
-            <div style={{
-              border: '2.5px dashed var(--ink,#2d2a26)', borderRadius: 'var(--wobble-2, 16px)',
-              background: 'var(--paper,#fbf7ee)', padding: '12px 14px 10px',
-              display: 'flex', flexDirection: 'column', gap: 10,
-            }}>
-              {/* Attachment chips (the image content is carried into the chat). */}
-              {attachments.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {attachments.map((src, k) => (
-                    <span key={k} style={{ position: 'relative', display: 'inline-flex' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src} alt="attachment" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, border: '2px solid var(--ink)' }} />
-                      <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== k))} title="Remove" style={{ position: 'absolute', top: -6, right: -6, background: '#fff', border: '1.5px solid var(--ink)', borderRadius: '50%', width: 18, height: 18, lineHeight: 1, cursor: 'pointer', fontSize: 11 }}>✕</button>
-                    </span>
-                  ))}
-                </div>
-              )}
+          {composerBox}
+          </div>{/* end first screen — composer sits at its bottom = bottom of the viewport */}
 
-              {/* The prompt — a borderless text box that blends into the dashed card. */}
-              <textarea id="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder="Tell me what you want to learn… I'll steer you to a game to play or a lesson to build"
-                rows={2}
-                style={{ border: 'none', background: 'transparent', boxShadow: 'none', outline: 'none', resize: 'vertical',
-                  minHeight: 44, fontSize: 15, lineHeight: 1.35, padding: 0, width: '100%', fontFamily: 'inherit' }} />
-
-              {/* Faint dotted rule separating the write area from the controls. */}
-              <div style={{ borderTop: '1px dotted var(--ink,#2d2a26)', opacity: 0.18 }} />
-
-              {/* Controls: ＋ attach + ⚙️ settings on the left, ↑ send on the right. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button type="button" title="Attach images" aria-label="Attach images" onClick={pickFiles}
-                  style={{ ...composerCircle, width: 32, height: 32 }}>＋</button>
-                <button type="button" title="ChatBot settings — tone, length, sticky-note publicity…" aria-label="Settings" onClick={() => setPromptOpen(true)}
-                  style={{ ...composerCircle, width: 32, height: 32, fontSize: 15 }}>⚙️</button>
-                <span style={{ fontSize: 12, opacity: 0.5, marginRight: 'auto' }}>{recording ? 'Recording… tap ⏹ to transcribe' : transcribing ? 'Transcribing your speech…' : 'Chat to get a recommendation or build a lesson'}</span>
-                {/* Record + send grouped on the right, mic beside the green send button. */}
-                {voiceOn && (
-                  <button type="button" aria-label="Dictate" aria-pressed={recording} disabled={transcribing} onClick={toggleMic}
-                    title={recording ? 'Stop & transcribe' : transcribing ? 'Transcribing…' : 'Dictate — speak instead of typing (ElevenLabs)'}
-                    style={{ ...composerCircle, width: 32, height: 32, fontSize: 15,
-                      ...(recording ? { background: 'var(--danger,#e4572e)', color: '#fff', borderColor: 'var(--danger,#e4572e)' } : null) }}>
-                    {transcribing ? '⏳' : recording ? '⏹' : '🎤'}
-                  </button>
-                )}
-                <button type="button" title="Send" aria-label="Send" id="chat-send" onClick={send}
-                  style={{ ...composerCircle, background: 'var(--green,#7fb069)', color: '#fff', fontSize: 16 }}>↑</button>
-              </div>
-            </div>
-            {freeMode && (
-              <div style={{ fontSize: 11, color: 'var(--muted,#8a7f70)', marginTop: 6 }}>
-                {!app.user ? 'Free mode (guest): messages recommend a tool to play — no cost. Sign in to build and generate.'
-                  : noCredits && !freeOnly ? 'You’re out of credits: chat runs on a free model (or recommends a tool), and building/generating is paused until you add credits.'
-                  : 'Free mode: no credits are spent — you’ll get a free-model reply or a tool recommendation. Building/generating still needs credits.'}
-              </div>
-            )}
-          </div>
-
+          {app.eff().isAdmin && (<>
           {/* Dotted separator between the chat input box and the history table. */}
           <hr style={{ border: 'none', borderTop: '2px dotted var(--line,#d9cfc0)', margin: '10px 0 8px', flex: '0 0 auto' }} />
 
@@ -723,7 +749,9 @@ export function ChatView() {
               );
             })()}
           </div>
+          </>)}{/* end admin-only history table */}
         </div>
+        )}{/* end welcome / active layout branch */}
       </div>
       {promptOpen && <PromptSettingsModal onClose={() => setPromptOpen(false)} />}
     </>
