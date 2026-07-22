@@ -39,7 +39,7 @@ export function WizardGridTemplate({
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'stretch' }}>
         <div style={{ minHeight: 200, minWidth: 0 }}>{top}</div>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'stretch' }}>
-          <div>{rightTop ?? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button>}</div>
+          <div>{rightTop ?? (onNext ? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button> : null)}</div>
           <button className="btn small ghost" style={navBtnStyle} disabled={!!backDisabled} onClick={onBack}>← Back</button>
         </div>
       </div>
@@ -55,7 +55,7 @@ export function WizardGridTemplate({
         {/* Same two-slot button column as the non-tall pages: Next in the top slot,
             Back in the bottom slot — identical positions across all steps. */}
         <div style={{ display: 'grid', gridTemplateRows: '88px 88px', gap: 10 }}>
-          <div style={slotStyle}>{rightTop ?? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button>}</div>
+          <div style={slotStyle}>{rightTop ?? (onNext ? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button> : null)}</div>
           <div style={slotStyle}><button className="btn small ghost" style={navBtnStyle} disabled={!!backDisabled} onClick={onBack}>← Back</button></div>
         </div>
       </div>
@@ -66,7 +66,7 @@ export function WizardGridTemplate({
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'end' }}>
         <div style={slotStyle}>{top}</div>
         <div style={slotStyle}>
-          {rightTop ?? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button>}
+          {rightTop ?? (onNext ? <button className="btn small green" style={navBtnStyle} onClick={onNext}>Next →</button> : null)}
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'end' }}>

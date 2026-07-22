@@ -2067,7 +2067,9 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             // width: a wide (full-width) card packs 4 per page in a 2-col grid; a
             // narrow one shows fewer per page and simply adds pages.
             const cells: React.ReactNode[] = [
-              ...formFields.map((f: any) => stepFields([f.id], true)),
+              // 'topic' and 'custom' get their OWN first page (tall textareas, side by
+              // side) so the full repo prompt is visible — so leave them out here.
+              ...formFields.filter((f: any) => f.id !== 'topic' && f.id !== 'custom').map((f: any) => stepFields([f.id], true)),
               themeField, densityField, imageStyleField, imageApiField, textApiField, voiceField, tooltipsField, annotationField, repoLinkField,
             ].filter((c) => c != null);
             // wizardW === 0 means "not measured yet" — assume the wide default (the
@@ -2079,8 +2081,35 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
             // One extra page after the settings: a read-only window showing the ACTUAL
             // prompt(s) this tool sends to the AI — one box per output request (slide text,
             // illustration/SVG, trust & safety). Same idea as the coach chat's "How I reply".
-            const totalPages = pageCount + 1;
+            // Pages: [prompt & instructions] + settings pages + [the prompt window].
+            const totalPages = pageCount + 2;
             const goNext = () => setWizardStep((s) => Math.min(totalPages - 1, s + 1));
+            // The FIRST page: the topic/prompt and custom-instructions boxes as TALL
+            // textareas, side by side — so the whole prompt pulled from the repo (via
+            // the 🎬 study-path button) is fully visible and editable, not clipped.
+            const bigArea: React.CSSProperties = { width: '100%', boxSizing: 'border-box', height: 148, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.4, padding: '8px 10px', border: '2px solid var(--ink,#2d2a26)', borderRadius: 8, background: 'var(--paper,#fffdf7)', color: 'var(--ink,#2d2a26)' };
+            const promptInputStep: WizardStep = {
+              key: 'topic-prompt',
+              title: 'Prompt & instructions',
+              render: () => (
+                <WizardGridTemplate tall
+                  top={
+                    <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, alignContent: 'start' }}>
+                      <label className="field" style={fieldShell}>
+                        <span style={fieldLabelStyle}>🎯 Topic / prompt{suggestBtn('topic', 'Topic', topicIdeas)}</span>
+                        <textarea value={(form as any).topic || ''} onChange={(e) => setForm((s) => ({ ...s, topic: e.target.value }))}
+                          placeholder="The prompt this lesson is built from — pulled from the repo, or write your own." style={bigArea} />
+                      </label>
+                      <label className="field" style={fieldShell}>
+                        <span style={fieldLabelStyle}>✍️ Custom instructions (optional)</span>
+                        <textarea value={(form as any).custom || ''} onChange={(e) => setForm((s) => ({ ...s, custom: e.target.value }))}
+                          placeholder="Anything extra to weave into every slide…" style={bigArea} />
+                      </label>
+                    </div>
+                  }
+                  onNext={goNext} onBack={goPrev} backDisabled={wizardStep === 0} />
+              ),
+            };
             const settingsSteps: WizardStep[] = Array.from({ length: pageCount }, (_, pi) => {
               const pageCells = cells.slice(pi * perPage, pi * perPage + perPage);
               return {
@@ -2109,7 +2138,7 @@ export function LessonPlayer({ def, slug, canEdit = false, onImmersiveChange }: 
                   rightTop={finalActions} />
               ),
             };
-            const steps: WizardStep[] = [...settingsSteps, promptStep];
+            const steps: WizardStep[] = [promptInputStep, ...settingsSteps, promptStep];
             return (
               <CardShell
                 view="grid"

@@ -1400,13 +1400,10 @@ export function RepoView({ def, slug, canEdit, owner }: { def: any; slug: string
   // The ⚙️ repo-controls popup (owner/moderator only). All the feature toggles that
   // used to sprawl across the toolbar now live in this guided wizard modal.
   const [controlsStep, setControlsStep] = useState(0);   // page in the inline settings wizard card
-  // Whether the whole repo-settings card is expanded. Collapsible (persisted) so the
-  // owner can tuck it away — same show/hide behaviour as the slide-tool settings.
-  const [repoSettingsOpen, setRepoSettingsOpen] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    try { return localStorage.getItem('sl_repo_settings_open') !== '0'; } catch { return true; }
-  });
-  const toggleRepoSettings = () => setRepoSettingsOpen((o) => { const n = !o; try { localStorage.setItem('sl_repo_settings_open', n ? '1' : '0'); } catch { /* ignore */ } return n; });
+  // Whether the whole repo-settings card is expanded. It starts HIDDEN every time the
+  // page loads — the owner reveals it with the "Repo settings" bar when they need it.
+  const [repoSettingsOpen, setRepoSettingsOpen] = useState(false);
+  const toggleRepoSettings = () => setRepoSettingsOpen((o) => !o);
   // Fields for a newly created slide tool.
   const [ccSubject, setCcSubject] = useState('');
   const [ccLevel, setCcLevel] = useState('Beginner');
