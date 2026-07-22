@@ -11,7 +11,8 @@ const {
   REPLICATE_API_TOKEN, REPLICATE_MODEL, replicateEnabled,
   POLLINATIONS_BASE, POLLINATIONS_MODEL, pollinationsEnabled,
   ANTHROPIC_API_KEY, ANTHROPIC_API_URL, ANTHROPIC_MODEL, claudeSvgEnabled,
-  ELEVENLABS_API_KEY, ELEVENLABS_API_URL, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled
+  ELEVENLABS_API_KEY, ELEVENLABS_API_URL, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL, ttsEnabled,
+  YOUTUBE_API_KEY, YOUTUBE_API_BASE, youtubeEnabled
 } = require('../config');
 const { sanitizeSvg } = require('../slides/sanitize');
 const { fallbackImageDataUrl } = require('../slides/visual-policy');
@@ -327,6 +328,44 @@ async function geminiSearchVideos(query, limit = 4) {
     if (out.length >= want) break;
   }
   return out;
+}
+
+// Real video recommendations via the YouTube Data API v3 (YOUTUBE_API_KEY). With a
+// `query` it searches that topic; with NO query it returns what's most popular right
+// now (a personal "feed" needs the viewer's OAuth, which the platform doesn't have —
+// so most-popular stands in for it). Returns [{ videoId, title, channel, desc, thumb,
+// url, embed }] — same shape as the grounded search, plus a short description so the
+// coach can say what a video is about.
+async function youtubeDataVideos(query, limit = 4) {
+  const key = String(YOUTUBE_API_KEY || '').trim();
+  if (!key) throw new Error('YOUTUBE_API_KEY is not configured.');
+  const base = String(YOUTUBE_API_BASE || 'https://www.googleapis.com/youtube/v3').replace(/\/+$/, '');
+  const want = Math.max(1, Math.min(10, Number(limit) || 4));
+  const q = String(query || '').replace(/\s+/g, ' ').trim();
+  let rows = [];
+  if (q) {
+    const u = `${base}/search?part=snippet&type=video&videoEmbeddable=true&safeSearch=moderate&order=relevance&maxResults=${want}&q=${encodeURIComponent(q)}&key=${key}`;
+    const res = await fetchWithTimeout(u, {}, 15000, 'YouTube search');
+    if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`YouTube ${res.status}: ${t.slice(0, 200)}`); }
+    const data = await res.json();
+    rows = (data.items || []).map((it) => ({ id: it.id && it.id.videoId, sn: it.snippet }));
+  } else {
+    // Most popular right now (default region). Stands in for a personal feed.
+    const u = `${base}/videos?part=snippet&chart=mostPopular&maxResults=${want}&key=${key}`;
+    const res = await fetchWithTimeout(u, {}, 15000, 'YouTube mostPopular');
+    if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`YouTube ${res.status}: ${t.slice(0, 200)}`); }
+    const data = await res.json();
+    rows = (data.items || []).map((it) => ({ id: it.id, sn: it.snippet }));
+  }
+  return rows.filter((r) => r.id).slice(0, want).map(({ id, sn }) => ({
+    videoId: id,
+    title: String((sn && sn.title) || '').slice(0, 160),
+    channel: String((sn && sn.channelTitle) || '').slice(0, 100),
+    desc: String((sn && sn.description) || '').replace(/\s+/g, ' ').trim().slice(0, 240),
+    thumb: (sn && sn.thumbnails && (sn.thumbnails.medium || sn.thumbnails.default || {}).url) || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+    url: `https://www.youtube.com/watch?v=${id}`,
+    embed: `https://www.youtube-nocookie.com/embed/${id}`,
+  }));
 }
 
 // Gemini with an attached DOCUMENT (a PDF or text file, base64) — Gemini reads
@@ -966,6 +1005,7 @@ module.exports = {
   generateText,
   generateStructured, geminiDoc,
   geminiSearchVideos,
+  youtubeDataVideos,
   generateVisionJSON,
   generateImage,
   generateImageWithMeta,

@@ -72,6 +72,25 @@ function replyToMessages(reply: string, provider?: string): ChatMsg[] {
   return out;
 }
 
+// Turn a chat message into what the AI should SEE. A normal message passes its text;
+// a sticky (a recommended video / tool / page) becomes a short note so the coach
+// REMEMBERS what it already offered and can answer follow-ups like "what was that
+// video about?". Attachments are noted too. This is how the chat gets its memory.
+function stickySummary(s: Sticky): string {
+  if (!s) return '';
+  if (s.kind === 'video') return `[Earlier I recommended a YouTube video — "${s.title}"${s.channel ? ` by ${s.channel}` : ''}${s.desc ? `. It is about: ${s.desc}` : ''}${s.url ? ` (${s.url})` : ''}.]`;
+  if (s.kind === 'page') return `[I suggested the ${s.title} page.]`;
+  const kind = s.kind === 'repo' ? 'repo pathway' : 'slide presentation';
+  return `[I ${s.recommended ? 'recommended' : 'built'} a ${kind} — "${s.title}"${s.reason ? `: ${s.reason}` : ''}.]`;
+}
+function msgToAI(m: ChatMsg): { role: 'user' | 'assistant'; content: string } {
+  const role = m.role === 'assistant' ? 'assistant' : 'user';
+  let content = (m.content || '').trim();
+  if (m.sticky) content = (content ? content + ' ' : '') + stickySummary(m.sticky);
+  if (m.images?.length) content += `${content ? ' ' : ''}[attached ${m.images.length} image(s)]`;
+  return { role, content: content || '(no text)' };
+}
+
 export function ChatView() {
   const app = useApp();
   const username = app.user?.username || null;
@@ -267,7 +286,7 @@ export function ChatView() {
         setThinking(true);
         try {
           const r: any = await API.post('/api/ai/chat', {
-            messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content })),
+            messages: next.filter((m) => !m.building).map(msgToAI),
             recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
             free: true, promptSettings: loadPromptSettings(),
           });
@@ -281,7 +300,7 @@ export function ChatView() {
     setThinking(true);
     try {
       const r = await API.post('/api/ai/chat', {
-        messages: next.filter((m) => !m.sticky && !m.building).map((m) => ({ role: m.role, content: m.content + (m.images?.length ? ` [attached ${m.images.length} image(s)]` : '') })),
+        messages: next.filter((m) => !m.building).map(msgToAI),
         images: imgs,
         recentChats: sessions.filter((s) => s.id !== sessionId).slice(0, 12).map((s) => s.title).filter(Boolean),
         promptSettings: loadPromptSettings(),
@@ -402,7 +421,7 @@ export function ChatView() {
       } else {
         const intro: ChatMsg = { role: 'assistant', content: `Here ${vids.length === 1 ? 'is a video' : 'are some videos'} to learn about that — play them right here:` };
         const stickies: ChatMsg[] = vids.map((v) => ({ role: 'assistant', content: '', sticky: {
-          slug: v.videoId, kind: 'video', runCost: 0, title: v.title, channel: v.channel, thumb: v.thumb, url: v.url, embed: v.embed, reason: v.channel, free: true,
+          slug: v.videoId, kind: 'video', runCost: 0, title: v.title, channel: v.channel, thumb: v.thumb, url: v.url, embed: v.embed, reason: v.channel, desc: v.desc, free: true,
         } }));
         setMessages([...base, intro, ...stickies]);
       }

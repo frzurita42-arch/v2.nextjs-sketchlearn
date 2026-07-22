@@ -78,7 +78,7 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
       {/* New chat is a plain action; the GREEN underline is reserved for the page
           indicator (it lights under whichever option is the current page). */}
       <button className="btn small ghost" onClick={doNew}
-        style={{ width: '100%', marginBottom: 8, ...(app.view === 'chat' ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>🆕 New chat</button>
+        style={{ width: '100%', marginBottom: 8, ...(app.view === 'chat' ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>💬 Chat</button>
 
       {/* Quick links to the main pages (Claude-style side nav). The current page —
           OR a sub-page of it (an open tool maps back to its gallery: a repo → Repos,

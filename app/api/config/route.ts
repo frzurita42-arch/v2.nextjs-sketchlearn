@@ -1,6 +1,6 @@
 import '@/lib/legacy-env';
 import { NextResponse } from 'next/server';
-import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled, grokEnabled, leonardoEnabled, replicateEnabled, pollinationsEnabled, IMAGE_API_KEY } from '@/src/config';
+import { deepseekEnabled, elevenlabsEnabled, geminiEnabled, imageEnabled, dbEnabled, dbPooled, hasConfiguredKey, openrouterEnabled, moonshotEnabled, grokEnabled, leonardoEnabled, replicateEnabled, pollinationsEnabled, IMAGE_API_KEY, youtubeEnabled as youtubeApiEnabled } from '@/src/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,8 +33,9 @@ export async function GET() {
         pollinationsEnabled && { id: 'pollinations', label: 'Pollinations · free' },
       ].filter(Boolean),
       voiceEnabled: !!elevenlabsEnabled,
-      // YouTube video recommendations use Gemini + Google Search grounding.
-      youtubeEnabled: !!geminiEnabled,
+      // YouTube video recommendations: the YouTube Data API (YOUTUBE_API_KEY) if set,
+      // otherwise Gemini + Google Search grounding.
+      youtubeEnabled: !!(youtubeApiEnabled || geminiEnabled),
       dbEnabled: !!dbEnabled,
       dbPooled: !!dbPooled,
       // Capability flags for the Studio catalog (a component is selectable only

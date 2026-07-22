@@ -29,7 +29,7 @@ export const ICON_LABELS = ['XS', 'S', 'M', 'L', 'XL'];
 export const ICON_PX = [14, 16, 18, 22, 26];
 
 const KEY = 'sl_prompt_settings';
-export const DEFAULTS: PromptSettings = { brevity: 1, tone: 'stale', emoji: false, maxWords: 80, stickyFreq: 3, stickyTypes: STICKY_TYPES.map((s) => s.key), toolbarIcon: 2 };
+export const DEFAULTS: PromptSettings = { brevity: 1, tone: 'stale', emoji: false, maxWords: 80, stickyFreq: 1, stickyTypes: STICKY_TYPES.map((s) => s.key), toolbarIcon: 2 };
 
 export function loadPromptSettings(): PromptSettings {
   if (typeof window === 'undefined') return DEFAULTS;
