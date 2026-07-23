@@ -442,8 +442,8 @@ export default function AppRoot() {
                     </div>
                 : lv === 'appsettings' ? <AppSettingsView />
                 : lv === 'presrun' ? <PresentationRunsView />
-                : lv === 'slides' ? <ShellGallery pageKey="slides" kind="presentation" title="🎞️ Slides gallery" subtitle="Every slide tool on the site" />
-                : lv === 'tools' ? <ShellGallery pageKey="tools" kind="repository" title="📁 Repos gallery" subtitle="Every repository on the site" />
+                : lv === 'slides' ? <ShellGallery pageKey="slides" kind="presentation" title="🎞️ Slides gallery" subtitle="Slide generators — lessons, showcases and presentations" />
+                : lv === 'tools' ? <ShellGallery pageKey="tools" kind="repository" title="📁 Repos gallery" subtitle="Courses, catalogs and collections — teach anything or showcase items and services" />
                 // Moderators & Users self-manage their shell column; Dashboard scrolls in a wrapper.
                 : lv === 'moderators' ? views.moderators
                 : lv === 'users' ? views.users

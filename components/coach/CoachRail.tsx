@@ -1,7 +1,9 @@
 'use client';
-/* The shared Coach side-rail (Claude-style full-height left nav). It carries the
- * logo, New chat, the main page links, and the chat-history list, and it publishes
- * its width as the `--chat-rail` CSS var so the thin app header can indent past it.
+/* The shared Coach side-rail (full-height left nav) — styled as a sleek DARK
+ * panel (bold brand, flat rounded nav items with hover/active states) against
+ * the app's paper-sketch content area. It carries the logo, New chat, the main
+ * page links, and the chat-history list, and it publishes its width as the
+ * `--chat-rail` CSS var so the thin app header can indent past it.
  *
  * It runs in two modes:
  *  • CONTROLLED (on the Coach chat page) — ChatView passes the live sessions +
@@ -16,6 +18,11 @@ import { type ChatSession, loadSessions, deleteSession, relTime } from '@/lib/ch
 
 export const RAIL_W = 250;
 const COLLAPSED_COUNT = 6;
+
+// The dark-rail palette, kept together so the whole panel retunes from one spot.
+const RAIL_BG = '#141519';
+const RAIL_TEXT = '#cfcdc6';
+const RAIL_MUTED = 'rgba(255,255,255,0.4)';
 
 export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSession, onDeleteSession }: {
   active?: string;
@@ -76,35 +83,47 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
 
   if (!open) {
     return (
-      <button title="Show the history panel" onClick={() => setOpen(true)}
-        style={{ position: 'fixed', top: 8, left: 8, zIndex: 60, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--ink)', borderRadius: 8, cursor: 'pointer', fontSize: 16, padding: '5px 9px', lineHeight: 1 }}>🗂 »</button>
+      <button title="Show the navigation panel" onClick={() => setOpen(true)}
+        style={{ position: 'fixed', top: 8, left: 8, zIndex: 60, background: RAIL_BG, color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, cursor: 'pointer', fontSize: 16, padding: '5px 10px', lineHeight: 1 }}>🗂 »</button>
     );
   }
 
+  const sectionLabel: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, color: RAIL_MUTED, textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 3px' };
+
   return (
-    <aside className="grid-bg" style={{ position: 'fixed', top: 0, left: 0, height: '100dvh', width: RAIL_W, zIndex: 60, backgroundColor: 'var(--paper,#f7f3e9)', backgroundImage: 'linear-gradient(rgba(92,128,188,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(92,128,188,.09) 1px, transparent 1px)', backgroundSize: '26px 26px', borderRight: '2px dashed var(--line,#d9cfc0)', padding: '10px 12px 10px 18px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* Logo at the TOP of the side nav (with the orange line) + collapse. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-        <button className="brand scribble-underline" onClick={() => { app.nav('chat'); closeIfSmall(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, color: 'var(--ink)', padding: 0 }}>✏️ SketchLearn</button>
-        <button title="Collapse the panel" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: 'var(--muted,#8a7f70)', padding: 0 }}>«</button>
+    <aside style={{ position: 'fixed', top: 0, left: 0, height: '100dvh', width: RAIL_W, zIndex: 60, background: RAIL_BG, color: RAIL_TEXT, borderRight: '1px solid rgba(255,255,255,0.08)', padding: '12px 10px', display: 'flex', flexDirection: 'column', minHeight: 0, boxSizing: 'border-box' }}>
+      {/* Flat, rounded nav items with hover + active states (needs real CSS, not
+          inline styles). Scoped by the sl-rail- prefix so nothing leaks out. */}
+      <style>{`
+        .sl-rail-link{display:flex;align-items:center;gap:2px;width:100%;text-align:left;background:transparent;border:none;color:${RAIL_TEXT};font:inherit;font-size:13.5px;font-weight:600;padding:8px 10px;border-radius:10px;cursor:pointer;transition:background 120ms ease,color 120ms ease;}
+        .sl-rail-link:hover{background:rgba(255,255,255,0.08);color:#fff;}
+        .sl-rail-link.active{background:rgba(127,176,105,0.18);color:#fff;}
+        .sl-rail-card{position:relative;width:100%;min-width:0;text-align:left;cursor:pointer;padding:7px 26px 7px 10px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);font:inherit;color:${RAIL_TEXT};transition:background 120ms ease;}
+        .sl-rail-card:hover{background:rgba(255,255,255,0.1);color:#fff;}
+        .sl-rail-card.active{border-color:rgba(127,176,105,0.7);background:rgba(127,176,105,0.14);color:#fff;}
+      `}</style>
+
+      {/* Bold brand at the top + collapse. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12, padding: '0 4px' }}>
+        <button onClick={() => { app.nav('chat'); closeIfSmall(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', fontSize: 19, fontWeight: 800, color: '#fff', padding: 0, letterSpacing: 0.2 }}>✏️ SketchLearn</button>
+        <button title="Collapse the panel" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, lineHeight: 1, color: RAIL_MUTED, padding: 0 }}>«</button>
       </div>
-      {/* New chat is a plain action; the GREEN underline is reserved for the page
-          indicator (it lights under whichever option is the current page). */}
-      <button className="btn small ghost" onClick={() => { doNew(); closeIfSmall(); }}
-        style={{ width: '100%', marginBottom: 8, display: 'flex', alignItems: 'center', textAlign: 'left', ...(app.view === 'chat' ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>
+
+      {/* Chat — the home action, framed as a bordered pill so it reads as the
+          primary "start here" button; the green fill marks it while you're on it. */}
+      <button className={`sl-rail-link${app.view === 'chat' ? ' active' : ''}`} onClick={() => { doNew(); closeIfSmall(); }}
+        style={{ border: '1px solid rgba(255,255,255,0.18)', marginBottom: 6 }}>
         <span>💬 Chat</span>
-        {app.view === 'chat' && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
+        {app.view === 'chat' && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 8, height: 8, borderRadius: '50%', background: 'var(--green,#7fb069)' }} />}
       </button>
 
-      {/* Quick links to the main pages (Claude-style side nav), GROUPED by purpose
-          so learner pages aren't mixed in with management tools. The current page —
-          OR a sub-page of it (an open tool maps back to its gallery: a repo → Repos,
-          a slide tool → Slides) — shows a green line underneath AND a green dot on
-          the right, so you can see which group you're inside. Clicking any link
-          navigates to that group's top-level gallery. The Admin group is collapsible
-          (remembered across visits) and auto-opens while you're ON an admin page so
-          the active indicator is never hidden. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+      {/* Quick links GROUPED by purpose so learner pages aren't mixed in with
+          management tools. The current page — OR a sub-page of it (an open tool
+          maps back to its gallery: a repo → Repos, a slide tool → Slides) — gets
+          the filled active state + a green dot. The Admin group is collapsible
+          (remembered across visits) and auto-opens while you're ON an admin page
+          so the active indicator is never hidden. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
         {([
           { name: 'Learn', items: [{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }] },
           { name: 'Explore', items: [{ v: 'presrun', label: '🎬 Presentation runs' }, { v: 'about', label: 'ℹ️ About us' }] },
@@ -119,19 +138,18 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
             <div key={g.name}>
               {g.collapsible ? (
                 <button onClick={() => setAdminOpenPersist(!adminOpen)} aria-expanded={!collapsed}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0 2px', width: '100%', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--muted,#8a7f70)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                  style={{ ...sectionLabel, background: 'none', border: 'none', cursor: 'pointer', width: '100%', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span>{collapsed ? '▸' : '▾'}</span><span>{g.name}</span>
                 </button>
               ) : (
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted,#8a7f70)', textTransform: 'uppercase', letterSpacing: 0.4, padding: '4px 0 2px' }}>{g.name}</div>
+                <div style={sectionLabel}>{g.name}</div>
               )}
               {!collapsed && g.items.map((n) => {
                 const isActive = activeGroup === n.v;
                 return (
-                  <button key={n.v} className="btn small ghost" onClick={() => { app.nav(n.v as never); closeIfSmall(); }}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', textAlign: 'left', marginBottom: 4, ...(isActive ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>
+                  <button key={n.v} className={`sl-rail-link${isActive ? ' active' : ''}`} onClick={() => { app.nav(n.v as never); closeIfSmall(); }}>
                     <span>{n.label}</span>
-                    {isActive && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
+                    {isActive && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 8, height: 8, borderRadius: '50%', background: 'var(--green,#7fb069)' }} />}
                   </button>
                 );
               })}
@@ -141,28 +159,27 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
       </div>
 
       {/* The chat-history list belongs to the Coach chat only — on the other shell
-          pages (Slides/Repos/…) the rail shows just the logo, New chat + nav links. */}
+          pages (Slides/Repos/…) the rail shows just the logo, Chat + nav links. */}
       {app.view === 'chat' && (<>
-      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted,#8a7f70)', margin: '2px 0 6px', textTransform: 'uppercase', letterSpacing: 0.4 }}>Chat history</div>
+      <div style={{ ...sectionLabel, padding: '2px 10px 6px' }}>Chat history</div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {sessions.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted,#8a7f70)' }}>No past chats yet. Say something and it’ll show up here.</p>}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {sessions.length === 0 && <p style={{ fontSize: 12, color: RAIL_MUTED, padding: '0 10px' }}>No past chats yet. Say something and it’ll show up here.</p>}
         {visible.map((s) => {
           const isActive = s.id === active;
           return (
-            <button key={s.id} onClick={() => doOpen(s)} title={s.title || 'New chat'}
-              style={{ position: 'relative', width: '100%', minWidth: 0, textAlign: 'left', cursor: 'pointer', padding: '6px 26px 6px 8px', borderRadius: 8, background: 'var(--card,#fff8ee)', border: '1.5px solid var(--line,#e5dccb)', borderBottom: isActive ? '3px solid var(--green,#7fb069)' : '1.5px solid var(--line,#e5dccb)', font: 'inherit', color: 'inherit' }}>
+            <button key={s.id} className={`sl-rail-card${isActive ? ' active' : ''}`} onClick={() => doOpen(s)} title={s.title || 'New chat'}>
               <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title || 'New chat'}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--muted,#8a7f70)' }}>{relTime(s.ts)}</div>
+              <div style={{ fontSize: 10.5, color: RAIL_MUTED }}>{relTime(s.ts)}</div>
               <span role="button" tabIndex={0} aria-label="Delete chat" title="Delete chat"
                 onClick={(e) => { e.stopPropagation(); doDelete(s.id); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); doDelete(s.id); } }}
-                style={{ position: 'absolute', top: 6, right: 6, cursor: 'pointer', fontSize: 13, lineHeight: 1, color: 'var(--muted,#8a7f70)' }}>🗑</span>
+                style={{ position: 'absolute', top: 7, right: 8, cursor: 'pointer', fontSize: 13, lineHeight: 1, color: RAIL_MUTED }}>🗑</span>
             </button>
           );
         })}
         {sessions.length > COLLAPSED_COUNT && (
-          <button className="btn small ghost" onClick={() => setExpanded((v) => !v)} style={{ alignSelf: 'flex-start', marginTop: 2, fontSize: 12 }}>
+          <button className="sl-rail-link" onClick={() => setExpanded((v) => !v)} style={{ fontSize: 12, width: 'auto', alignSelf: 'flex-start' }}>
             {expanded ? '▲ Read less' : `▼ Read more (${sessions.length - COLLAPSED_COUNT})`}
           </button>
         )}

@@ -820,3 +820,138 @@ input.ll-count::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0;
 /* Click-to-pronounce: each word in a language reading is tappable to hear it. */
 .sl-word { cursor: pointer; border-radius: 3px; padding: 0 1px; transition: background 0.12s ease; }
 .sl-word:hover { background: var(--yellow, #fadf63); text-decoration: underline dotted; }
+
+/* ================================================================
+   SLEEK DARK THEME — the bold, modern redesign.
+   Appended as an override layer: everything above defines the classic
+   paper look; this block retunes the variables and restyles the named
+   components for a dark workspace with bold type and flat, rounded
+   controls. Delete this block (or the branch has the original) to get
+   the classic sketch theme back.
+   ================================================================ */
+:root {
+  --ink: #e9e7e2;                     /* primary text: near-white */
+  --paper: #101114;                   /* page background: near-black */
+  --paper-2: #1b1d22;                 /* raised surfaces / cards */
+  --card: #1b1d22;                    /* components' var(--card, …) fallback target */
+  --line: rgba(255, 255, 255, 0.14);  /* hairline borders & dashed guides */
+  --muted: #9b998f;                   /* secondary text */
+  --orange: #f9a03f;
+  --green: #7fb069;
+  --blue: #6c93d6;
+  --red: #e4572e;
+  --yellow: #f3d34e;
+  --shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  /* wobbly corners → uniform rounded = sleek */
+  --wobble: 14px;
+  --wobble-2: 14px;
+  --font-hand: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-title: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+}
+
+body {
+  font-size: 15.5px;
+  /* flat dark surface with a whisper of dot-grid texture */
+  background-color: var(--paper);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+/* Bold, tight headings for the sans face. */
+h1 { font-size: clamp(1.9rem, 4.5vw, 2.6rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.4rem, 3.2vw, 1.9rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+
+/* ---- surfaces ---- */
+.card, .slide {
+  border-width: 1px;
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+.slide h2, .activity-heading, .quiz-box { border-color: var(--line); }
+.topbar { border-bottom: 1px solid var(--line); }
+.topbar button:hover { background: rgba(255, 255, 255, 0.08); }
+.home-footer, .site-footer { border-top-color: var(--line); }
+
+/* ---- controls: flat, rounded, quietly bordered; color = the accent ---- */
+.btn {
+  background: #26282e;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+  border-radius: 10px;
+  box-shadow: none;
+  font-weight: 600;
+}
+.btn:hover { transform: translateY(-1px); background: #2d3037; }
+.btn:active { transform: translateY(0); box-shadow: none; }
+.btn.primary { background: var(--orange); border-color: var(--orange); color: #1d1405; }
+.btn.green { background: var(--green); border-color: var(--green); color: #0e1a09; }
+.btn.blue { background: var(--blue); border-color: var(--blue); color: #0b1424; }
+.btn.ghost { background: transparent; }
+.ctl-tile { border: 1px solid var(--line); background: var(--paper-2); }
+.ctl-tile:hover:not(:disabled) { background: #2d3037; box-shadow: none; }
+
+input[type=text], input[type=password], input[type=number], input[type=email], input[type=date], textarea, select {
+  background: #17181d;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  color: var(--ink);
+}
+input:focus, textarea:focus, select:focus { background: #1d1f25; border-color: var(--green); }
+input:not([type]), input[type=search] { color: var(--ink); }
+
+.chip { background: var(--paper-2); border: 1px solid var(--line); box-shadow: none; }
+.chip:hover { background: #2d3037; transform: none; }
+.chip.selected { background: var(--orange); color: #1d1405; }
+.concept-card { background: var(--paper-2); border: 1px solid var(--line); box-shadow: none; }
+.concept-card:hover { background: #2d3037; transform: none; }
+
+/* ---- chat bubbles ---- */
+.msg { border: 1px solid var(--line); }
+.msg.user { background: #2c3a2a; }
+.msg.ai { background: var(--paper-2); }
+
+/* ---- quiz ---- */
+.quiz-opt { background: #22242a; border: 1px solid rgba(255, 255, 255, 0.16); color: var(--ink); }
+.quiz-opt:hover:not(:disabled) { background: #2d3037; }
+.quiz-opt.picked-correct { background: var(--green); color: #0e1a09; }
+.quiz-opt.picked-wrong { background: var(--red); color: #fff; }
+.quiz-opt.reveal-correct { background: rgba(127, 176, 105, 0.25); }
+.quiz-feedback { background: var(--paper-2); border: 1px solid var(--line); }
+.quiz-feedback.good { background: rgba(127, 176, 105, 0.2); }
+.quiz-feedback.bad { background: rgba(228, 87, 46, 0.18); }
+.progress-track { background: #17181d; border: 1px solid var(--line); }
+
+/* ---- teaching components: AI-drawn ink stays on light "document chips" ----
+   Charts, SVG diagrams and formulas are generated with dark ink, so they sit on
+   light paper insets — crisp documents on the dark desk. Their text is forced
+   dark so nothing inherits the page's light ink onto a light chip. */
+.comp-chart, .comp-latex, .comp-svg {
+  background: #f4f1e8;
+  color: #2d2a26;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.comp-chart .chart-title { color: #2d2a26; font-weight: 700; }
+.comp-definition, .comp-example { background: #22242a; border: 1px dashed var(--line); }
+.comp-sticky { color: #3a3320; }   /* sticky notes stay bold color pops */
+.comp-table figcaption, .comp-chart figcaption, .comp-svg figcaption { opacity: 0.8; }
+
+/* ---- tables: yellow headers stay as the bold accent, dark rows ---- */
+table.sketch { background: var(--paper-2); border: 1px solid var(--line); }
+table.sketch th, table.sketch td { border: 1px solid rgba(255, 255, 255, 0.12); }
+table.sketch th { background: var(--yellow); color: #2d2a26; font-weight: 700; }
+table.sketch tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.stats-row:hover td { background: rgba(255, 255, 255, 0.07); }
+.stat-tile { background: var(--paper-2); border: 1px solid var(--line); box-shadow: none; }
+.share-box, .summary-card { background: var(--paper-2); border: 1px solid var(--line); }
+
+/* ---- loading / skeleton shimmer tuned for dark ---- */
+.loading-bar, .countdown-bar { background: #17181d; border: 1px solid var(--line); }
+.sl-skeleton { background: rgba(255, 255, 255, 0.05); }
+.sl-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); }
+.sl-word:hover { background: rgba(249, 160, 63, 0.3); }
+
+/* ---- demo banner keeps its warning look but sits on the dark page ---- */
+.demo-banner { box-shadow: none; }

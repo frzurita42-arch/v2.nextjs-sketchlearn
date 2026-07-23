@@ -15,11 +15,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* Hand-drawn theme fonts (degrade to system fonts if the CDN is blocked). */}
+        {/* Theme fonts: Inter for the sleek UI, JetBrains Mono for code, and the
+            legacy hand-drawn faces kept for accents (degrade to system fonts if
+            the CDN is blocked). */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Caveat:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Patrick+Hand&family=Caveat:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap"
           rel="stylesheet"
         />
       </head>
