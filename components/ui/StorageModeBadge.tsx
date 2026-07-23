@@ -22,18 +22,16 @@ export function StorageModeBadge() {
     return () => { alive = false; };
   }, []);
 
-  if (state === 'loading') {
-    return <div style={{ margin: '6px 0 10px', fontSize: 12, opacity: 0.6 }}>Storage mode: checking…</div>;
-  }
-
-  if (state === 'unknown') {
-    return <div style={{ margin: '6px 0 10px', fontSize: 12, opacity: 0.55 }}>Storage mode: unavailable.</div>;
-  }
+  // Nothing useful to say yet (still checking) or nothing to show (guests can't
+  // read the health endpoint) — stay hidden instead of printing status noise.
+  if (state === 'loading' || state === 'unknown') return null;
 
   const jsonMode = state === 'json';
   return (
     <div
-      title={detail || (jsonMode ? 'Using local JSON/file storage.' : 'Using live database storage.')}
+      title={detail || (jsonMode
+        ? 'Content is being saved to a local file on the server (no external database connected). Everything works — repos, slides and plays are stored in the app’s own JSON files.'
+        : 'Content is being saved to the connected live database.')}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -46,8 +44,7 @@ export function StorageModeBadge() {
         background: jsonMode ? 'rgba(228,87,46,0.1)' : 'rgba(127,176,105,0.14)',
       }}
     >
-      <span>{jsonMode ? 'JSON mode' : 'DB mode'}</span>
-      {jsonMode ? <span style={{ opacity: 0.75 }}>fallback active</span> : <span style={{ opacity: 0.75 }}>live</span>}
+      <span>{jsonMode ? '💾 Saving to local files' : '🗄️ Saving to database'}</span>
     </div>
   );
 }

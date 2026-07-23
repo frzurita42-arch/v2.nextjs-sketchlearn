@@ -41,6 +41,15 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
   const closeIfSmall = () => { if (typeof window !== 'undefined' && window.innerWidth < 1024) setOpen(false); };
   const [expanded, setExpanded] = useState(false);
   const [ownSessions, setOwnSessions] = useState<ChatSession[]>([]);
+  // The Admin nav group folds away so learner pages stay front and center; the
+  // choice is remembered across visits (and it force-opens on an admin page).
+  const [adminOpen, setAdminOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('sl_nav_admin_open') !== '0'; } catch { return true; }
+  });
+  const setAdminOpenPersist = (v: boolean) => {
+    setAdminOpen(v);
+    try { localStorage.setItem('sl_nav_admin_open', v ? '1' : '0'); } catch { /* ignore */ }
+  };
 
   // Publish the rail width so the header indents past it (0 when collapsed).
   useEffect(() => {
@@ -87,22 +96,46 @@ export function CoachRail({ active, sessions: sessionsProp, onNewChat, onOpenSes
         {app.view === 'chat' && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
       </button>
 
-      {/* Quick links to the main pages (Claude-style side nav). The current page —
+      {/* Quick links to the main pages (Claude-style side nav), GROUPED by purpose
+          so learner pages aren't mixed in with management tools. The current page —
           OR a sub-page of it (an open tool maps back to its gallery: a repo → Repos,
           a slide tool → Slides) — shows a green line underneath AND a green dot on
           the right, so you can see which group you're inside. Clicking any link
-          navigates to that group's top-level gallery. */}
+          navigates to that group's top-level gallery. The Admin group is collapsible
+          (remembered across visits) and auto-opens while you're ON an admin page so
+          the active indicator is never hidden. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-        {[{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }, { v: 'presrun', label: '🎬 Presentation runs' }, { v: 'about', label: 'ℹ️ About us' },
-          // Admin-only pages (management / internal): only an admin sees these links.
-          ...(app.eff().isAdmin ? [{ v: 'moderators', label: '🛡️ Moderators' }, { v: 'users', label: '👥 Users' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' }, { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, { v: 'dashboard', label: '🧑‍🏫 Dashboard' }] : [])].map((n) => {
-          const isActive = activeGroup === n.v;
+        {([
+          { name: 'Learn', items: [{ v: 'slides', label: '🎞️ Slides' }, { v: 'tools', label: '📁 Repos' }] },
+          { name: 'Explore', items: [{ v: 'presrun', label: '🎬 Presentation runs' }, { v: 'about', label: 'ℹ️ About us' }] },
+          ...(app.eff().isAdmin ? [{ name: 'Admin', collapsible: true, items: [
+            { v: 'dashboard', label: '🧑‍🏫 Dashboard' }, { v: 'users', label: '👥 Users' }, { v: 'moderators', label: '🛡️ Moderators' },
+            { v: 'comments', label: '💬 Comments' }, { v: 'appsettings', label: '⚙️ Settings' }, { v: 'sandbox', label: '🧪 Sandbox' }, { v: 'empty', label: '📭 Empty' },
+          ] }] : []),
+        ] as { name: string; collapsible?: boolean; items: { v: string; label: string }[] }[]).map((g) => {
+          const holdsActive = g.items.some((n) => activeGroup === n.v);
+          const collapsed = !!g.collapsible && !adminOpen && !holdsActive;
           return (
-            <button key={n.v} className="btn small ghost" onClick={() => { app.nav(n.v as never); closeIfSmall(); }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', textAlign: 'left', ...(isActive ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>
-              <span>{n.label}</span>
-              {isActive && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
-            </button>
+            <div key={g.name}>
+              {g.collapsible ? (
+                <button onClick={() => setAdminOpenPersist(!adminOpen)} aria-expanded={!collapsed}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0 2px', width: '100%', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--muted,#8a7f70)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                  <span>{collapsed ? '▸' : '▾'}</span><span>{g.name}</span>
+                </button>
+              ) : (
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted,#8a7f70)', textTransform: 'uppercase', letterSpacing: 0.4, padding: '4px 0 2px' }}>{g.name}</div>
+              )}
+              {!collapsed && g.items.map((n) => {
+                const isActive = activeGroup === n.v;
+                return (
+                  <button key={n.v} className="btn small ghost" onClick={() => { app.nav(n.v as never); closeIfSmall(); }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', textAlign: 'left', marginBottom: 4, ...(isActive ? { borderBottom: '3px solid var(--green,#7fb069)' } : null) }}>
+                    <span>{n.label}</span>
+                    {isActive && <span aria-hidden title="You’re on this section" style={{ marginLeft: 'auto', flex: '0 0 auto', width: 9, height: 9, borderRadius: '50%', background: 'var(--green,#7fb069)', boxShadow: '0 0 0 2px var(--paper,#f7f3e9)' }} />}
+                  </button>
+                );
+              })}
+            </div>
           );
         })}
       </div>
