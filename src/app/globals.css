@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+/* SketchLearn dark-studio theme — near-black canvas, soft charcoal panels,
+   crisp 1px borders, a pencil-yellow brand accent and a green "live" accent. */
+
+@theme {
+  --color-bg: #0d0d0f;
+  --color-panel: #151518;
+  --color-panel2: #1b1b20;
+  --color-raise: #222228;
+  --color-line: #27272e;
+  --color-line2: #34343c;
+  --color-ink: #ededf2;
+  --color-mut: #94949e;
+  --color-dim: #6b6b76;
+  --color-brand: #f2c14e;
+  --color-live: #34d399;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
+  --color-chart1: #3987e5;
+  --color-chart2: #d95926;
+  --color-chart3: #199e70;
+  --color-chart4: #c98500;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-brand) 35%, transparent);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line2);
+  border-radius: 8px;
+  border: 2px solid var(--color-bg);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Thin top progress bar shown during any data fetch. */
+@keyframes sl-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+.sl-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 100;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sl-progress::after {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--color-brand), transparent);
+  animation: sl-progress 1s ease-in-out infinite;
+}
+
+/* Sketchy sticky note */
+.sl-sticky {
+  background: color-mix(in oklab, var(--color-brand) 14%, var(--color-panel2));
+  border: 1px dashed color-mix(in oklab, var(--color-brand) 55%, transparent);
+  border-radius: 10px;
+  transform: rotate(-0.4deg);
+}
+
+/* KaTeX on dark */
+.katex { color: var(--color-ink); }
+.katex-display { margin: 0.35rem 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+
+@keyframes sl-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.sl-fade-up { animation: sl-fade-up 0.28s ease both; }
+
+@keyframes sl-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.sl-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-live);
+  animation: sl-pulse-dot 2.2s ease-in-out infinite;
+}
